@@ -937,6 +937,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/stop-alternate-timing-evidence.json",
       "replay_ready": true,
       "reason": "Exact first D1Stop249loss839, separate D2loss996, runtime/source clocks"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-stream-validation-r19",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/stream-validation-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact slow alternates D1854/source182 and D2836/source145; original first moving failure requests972/1071; native before/after and same-world architectures"
     }
   ],
   "experiments": [
@@ -7270,6 +7276,244 @@
       "production_impact": "Additional bounded observation only; no solver, input, model, authority, rate or safety-policy change",
       "deleted_code": [],
       "revisit_condition": "Obtain exact overrun request in freshdev2-r19and deterministic cost reproduction before runtime-policy changes"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-integrated-r19",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Baseline slow-observer build achieves integrated acceptance",
+      "changed_dimension": "Observation only",
+      "result": "rejected",
+      "reason": "D1moving Emergency972/1.92mps and D2later1071/1.16mps; p99 and adjacent overruns fail. Exact slow requests captured.",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-persistent-a-1",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: persistent-a",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=5140380784155599907 solver=solved solve_ms=125.026 terminal_progress=2.82959 terminal_velocity=1.43534 lateral_reserve=0.837739 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-stateless-left-b-2",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: stateless-left-b",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "accepted",
+      "reason": "arm=stateless-left-b stage=accepted candidate=8224761522533779856 solver=solved solve_ms=140.29 terminal_progress=2.80824 terminal_velocity=1.43306 lateral_reserve=0.837739 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-stateless-right-b-3",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: stateless-right-b",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "rejected",
+      "reason": "arm=stateless-right-b stage=solver-rejected candidate=12046489737674932670 solver=solve-rejected solve_ms=180.533 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.796634, dua_res=2278.08, failed_iterate_row=578, value=0.197148, bounds=[-inf,-2.94782], violation=3.14497, tolerance=0.00394782, normalized=796.634, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000000854-a72dba976480c1be-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-rough-left-c-4",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: rough-left-c",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "accepted",
+      "reason": "arm=rough-left-c stage=accepted candidate=2272321011658362776 solver=solved solve_ms=123.093 terminal_progress=3.04892 terminal_velocity=1.28536 lateral_reserve=0.837743 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=20 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=20 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=0/attempts=20/accepted; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-rough-right-c-5",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: rough-right-c",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "rejected",
+      "reason": "arm=rough-right-c stage=solver-rejected candidate=1503655145391665830 solver=solve-rejected solve_ms=118.232 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=2.25008e-05, dua_res=0.177734, failed_iterate_row=382, value=-0.714254, bounds=[-0.714215,0.714215], violation=3.85713e-05, tolerance=0.00171425, normalized=0.0225003, row_semantic=input-box/stage=1/element=1, first_vtheta=coupled/inconclusive/declared:[0,9.46367]/implied:[0,9.46367]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000854-14de0e6355c232a6-cruise-side-negative-initial-solve-rejected/snapshot.yaml; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-offline-left-d-6",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: offline-left-d",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "accepted",
+      "reason": "arm=offline-left-d stage=accepted candidate=2272321011658362776 solver=solved solve_ms=181.708 terminal_progress=4.00955 terminal_velocity=1.62403 lateral_reserve=0.83771 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=20 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=20 sqp_depth=3 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=3/attempts=20/accepted, progress_wall=accepted/applied=1/solved=1/mismatch=15.9312m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1705/cache_hits=16/cache_misses=84/cache_scanned=7127/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, physical_dynamic_sqp_audit=applied/solved=1/limit=3/count=3/detail=bounded dynamics/obstacle/wall SQP solved; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-offline-right-d-7",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: offline-right-d",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "rejected",
+      "reason": "arm=offline-right-d stage=solver-rejected candidate=1503655145391665830 solver=solve-rejected solve_ms=43.7753 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=2.25008e-05, dua_res=0.177734, failed_iterate_row=382, value=-0.714254, bounds=[-0.714215,0.714215], violation=3.85713e-05, tolerance=0.00171425, normalized=0.0225003, row_semantic=input-box/stage=1/element=1, first_vtheta=coupled/inconclusive/declared:[0,9.46367]/implied:[0,9.46367]/limit_state:[-1,-1]; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-production-left-g-8",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: production-left-g",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "accepted",
+      "reason": "arm=production-left-g stage=accepted candidate=8224761522533779856 solver=solved solve_ms=139.359 terminal_progress=2.80824 terminal_velocity=1.43306 lateral_reserve=0.837739 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=1 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/candidate=direct-side; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-architecture-production-right-g-9",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: production-right-g",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "rejected",
+      "reason": "arm=production-right-g stage=solver-rejected candidate=12046489737674932670 solver=solve-rejected solve_ms=101.3 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.796634, dua_res=2278.08, failed_iterate_row=578, value=0.197148, bounds=[-inf,-2.94782], violation=3.14497, tolerance=0.00394782, normalized=796.634, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=12001305819349324255 solver=solve-rejected solve_ms=108.816 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.106389, dua_res=0.0451971, failed_iterate_row=397, value=-0.89659, bounds=[-0.714215,0.714215], violation=0.182374, tolerance=0.00189659, normalized=96.1591, row_semantic=input-box/stage=6/element=1, first_vtheta=coupled/inconclusive/declared:[0,9.46367]/implied:[0,9.46367]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000854-a68d340e9b2511df-cruise-side-neutral-initial-solve-rejected/snapshot.yaml; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-complete-rest-current-world-complete-rest-y-2",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Same frozen r19D1854world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Mission/candidate/refinement architecture only; unchanged world/model/hard requirements",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=58715772021749175 solver=solved solve_ms=27.366 terminal_progress=5.68467 terminal_velocity=0 lateral_reserve=0.837759 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.90989,1.27719]/mean=0.358415/bounds=0 steer_rate=[-0.694767,0.573626]/mean=-0.0717742/bounds=0/sign_changes=6 sequence=[0.25:0.684619:-0.52681;0.25:1.27719:-0.377365;0.25:1.15394:-0.574789;0.25:1.20106:-0.694767;0.25:1.04654:-0.24811;0.25:1.10074:0.132742;0.25:1.14947:0.572733;0.25:1.14662:0.499091;0.25:1.10556:0.160618;0.25:0.962999:-0.504724;0.25:0.90123:-0.537774;0.25:0.939387:0.360111;0.25:0.892309:0.573626;0.25:0.902626:-0.0358941;0.25:0.840637:-0.465171;0.25:0.719211:-0.19518;0.25:-0.637816:0.295902;0.25:-2.52918:0.361449;0.25:-2.77895:-0.0682631;0.25:-2.90989:-0.162909] detail=accepted; NOMINAL ONLY, no applied proof/publication/25ms guarantee",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-stream-only",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "Rejecting at first failed required sample removes useless future prediction",
+      "changed_dimension": "Physical-check evaluation order",
+      "result": "accepted",
+      "reason": "Exact rejection/time preserved; native r85D1=27.85–29.27ms/D2=23.20–25.51ms. Still duplicate solved-suffix evaluation and no integrated acceptance.",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stream-validation-r19-stream-and-deduplicate",
+      "baseline_commit": "4eb199976abac75d7936a7d7e98cbbf6d76fbe15",
+      "snapshot_ids": [
+        "20260911-nine-state-stream-validation-r19"
+      ],
+      "hypothesis": "An already solved Stop suffix is independent of alternate lateral reference",
+      "changed_dimension": "Evaluation order and removal of identical second proof",
+      "result": "accepted",
+      "reason": "Exact rejection/time preserved; native r86D1=13.97–15.09ms/D2=11.81–13.08ms. Solved-suffix flag true; distinct reference branch retained. Buildr43/testsr36 and positive/negative/source API regressions pass.",
+      "production_impact": "Same certified authority and physical requirements; early necessary-check rejection and duplicate solved-suffix elimination only",
+      "deleted_code": [
+        "Full future prediction after a necessary physical check has already failed",
+        "Repeating identical solved Stop suffix with unused alternate lateral reference"
+      ],
+      "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
     }
   ]
 }

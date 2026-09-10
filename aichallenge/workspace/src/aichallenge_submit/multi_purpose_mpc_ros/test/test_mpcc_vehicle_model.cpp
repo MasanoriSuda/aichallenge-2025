@@ -526,3 +526,68 @@ TEST(MpccAppliedInput, PacketUnionEnclosesIndependentChannelResponsesAndAllSigns
     EXPECT_DOUBLE_EQ(state.yaw_rate_radps, 0);
   }
 }
+
+TEST(MpccAppliedInput, ValidatorRejectsWithoutReturningAPartialStopTube)
+{
+  const auto observation = applied_observation();
+  const auto program = stop_program(observation.now_sec);
+  const auto p = vehicle_model();
+  std::size_t calls = 0;
+  const auto at_publication = vehicle::predict_applied_inputs_to_rest(
+    observation, program, applied_profile(), p,
+    [&](const vehicle::BodyRanges &, double begin, double end) {
+      ++calls;
+      EXPECT_DOUBLE_EQ(begin, observation.now_sec);
+      EXPECT_DOUBLE_EQ(end, observation.now_sec);
+      return false;
+    });
+  EXPECT_EQ(at_publication.reason, vehicle::AppliedInputRejectReason::ValidationRejected);
+  EXPECT_FALSE(at_publication.tube);
+  EXPECT_EQ(calls, 1U);
+  calls = 0;
+  const auto after_publication = vehicle::predict_applied_inputs_to_rest(
+    observation, program, applied_profile(), p,
+    [&](const vehicle::BodyRanges &, double begin, double end) {
+      ++calls;
+      EXPECT_GE(begin, observation.now_sec);
+      EXPECT_GE(end, begin);
+      return calls < 4U;
+    });
+  EXPECT_EQ(after_publication.reason, vehicle::AppliedInputRejectReason::ValidationRejected);
+  EXPECT_FALSE(after_publication.tube);
+  EXPECT_EQ(calls, 4U);
+}
+
+TEST(MpccAppliedInput, AcceptingValidatorPreservesEveryOriginalSampleAndCompleteRest)
+{
+  const auto observation = multi_purpose_mpc_ros::test::resting_packet_observation();
+  const auto program = multi_purpose_mpc_ros::test::resting_packet_program();
+  const auto p = vehicle_model();
+  const auto original = vehicle::predict_applied_inputs_to_rest(
+    observation, program, applied_profile(), p);
+  ASSERT_TRUE(original.tube);
+  std::vector<const vehicle::AppliedInputSample *> expected;
+  for (const auto & sample : original.tube->source_to_rest)
+    if (sample.begin_sec >= observation.now_sec) expected.push_back(&sample);
+  std::size_t calls = 0;
+  const auto checked = vehicle::predict_applied_inputs_to_rest(
+    observation, program, applied_profile(), p,
+    [&](const vehicle::BodyRanges & ranges, double begin, double end) {
+      const auto * sample = calls == 0 ? nullptr : expected.at(calls - 1);
+      const auto & wanted = sample ? sample->swept_body : original.tube->publication_body;
+      EXPECT_DOUBLE_EQ(begin, sample ? sample->begin_sec : observation.now_sec);
+      EXPECT_DOUBLE_EQ(end, sample ? sample->end_sec : observation.now_sec);
+      for (std::size_t i = 0; i < ranges.size(); ++i) {
+        EXPECT_DOUBLE_EQ(ranges[i].lower, wanted[i].lower);
+        EXPECT_DOUBLE_EQ(ranges[i].upper, wanted[i].upper);
+      }
+      ++calls;
+      return true;
+    });
+  ASSERT_TRUE(checked.tube);
+  EXPECT_EQ(calls, expected.size() + 1U);
+  EXPECT_EQ(checked.tube->source_to_rest.size(), original.tube->source_to_rest.size());
+  EXPECT_EQ(checked.tube->context_fingerprint, original.tube->context_fingerprint);
+  EXPECT_DOUBLE_EQ(checked.tube->rest_sec, original.tube->rest_sec);
+  EXPECT_DOUBLE_EQ(checked.tube->source_to_rest.back().endpoint_body[3].upper, 0);
+}

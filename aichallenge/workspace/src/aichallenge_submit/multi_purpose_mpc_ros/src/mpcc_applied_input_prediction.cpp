@@ -261,6 +261,15 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
                                const PublishedInputProgram &program,
                                const InputApplicationProfile &profile,
                                const Parameters &parameters) noexcept {
+  return predict_applied_inputs_to_rest(observation, program, profile, parameters, {});
+}
+
+AppliedInputPrediction
+predict_applied_inputs_to_rest(const ObservationProvenance &observation,
+                               const PublishedInputProgram &program,
+                               const InputApplicationProfile &profile,
+                               const Parameters &parameters,
+                               const AppliedInputValidator &validator) noexcept {
   using Reason = AppliedInputRejectReason;
   if (!valid(parameters) || !parameters.nominal_settled_contact)
     return {Reason::InvalidModel, {}};
@@ -340,8 +349,11 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
           parameters.steering_wire_gain;
       for (auto &state : population)
         state[kernel::Desired] = desired;
-      if (stamp == observation.now_sec)
+      if (stamp == observation.now_sec) {
         tube.publication_body = body_ranges(numerical::joined(population));
+        if (validator && !validator(tube.publication_body, stamp, stamp))
+          return {Reason::ValidationRejected, {}};
+      }
       numerical::Box swept;
       population = numerical::advance_partitioned_inputs(
           std::move(population), accelerations, parameters, duration, &swept);
@@ -351,6 +363,9 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
       tube.source_to_rest.push_back({stamp, end, duration, *inputs,
                                      body_ranges(swept),
                                      body_ranges(endpoint)});
+      if (stamp >= observation.now_sec && validator &&
+        !validator(tube.source_to_rest.back().swept_body, stamp, end))
+        return {Reason::ValidationRejected, {}};
       stamp = end;
       if (stamp == observation.now_sec)
         tube.publication_body = body_ranges(endpoint);

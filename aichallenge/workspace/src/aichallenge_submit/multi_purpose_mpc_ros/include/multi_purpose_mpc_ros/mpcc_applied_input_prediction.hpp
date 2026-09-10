@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -67,6 +68,11 @@ struct AppliedInputBounds {
 /// usual COM/body definitions. No observation/model error bound is implied.
 using BodyRanges = std::array<ScalarRange, 8>;
 
+/// Publication body (begin == end), then each subsequent swept body in order.
+/// Rejecting a sample aborts prediction; accepting does not bypass full rest.
+using AppliedInputValidator =
+  std::function<bool(const BodyRanges &, double begin_sec, double end_sec)>;
+
 struct AppliedInputSample {
   double begin_sec{};
   double end_sec{};
@@ -100,6 +106,7 @@ enum class AppliedInputRejectReason {
   HistoryUnavailable,
   NumericalFailure,
   StepLimit,
+  ValidationRejected,
 };
 
 struct AppliedInputPrediction {
@@ -132,5 +139,13 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
                                const PublishedInputProgram &program,
                                const InputApplicationProfile &profile,
                                const Parameters &parameters) noexcept;
+
+/// Same numerical domain and clocks; rejection returns no partial tube.
+AppliedInputPrediction
+predict_applied_inputs_to_rest(const ObservationProvenance &observation,
+                               const PublishedInputProgram &program,
+                               const InputApplicationProfile &profile,
+                               const Parameters &parameters,
+                               const AppliedInputValidator &validator) noexcept;
 
 } // namespace multi_purpose_mpc_ros::mpcc_vehicle_model

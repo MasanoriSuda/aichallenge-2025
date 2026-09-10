@@ -1,23 +1,23 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。2c3d8d7cのdev2-r18は走行中Emergency・25msとも未達。**
+**全体は未完。直近dev2-r19は走行中Emergency・25ms未達。**
 
-- D1の代替停止候補838/source241が約230ms、callback約256ms。実送信に約260msの空白。
-- 次の839/source249は元の250ms入力前提を満たさず、保存入力でも履歴欠落で拒否。
-  最初の走行中Emergencyは843、0.12m/s。時刻・指令を改変して合格にはしない。
-- 遅い候補の元入力が未保存だったため、有限の専用記録枠と処理内訳を追加した。
-  候補・制御・認証・周期は変更なし。実送信時刻と名目時刻も区別して監査する。
-- buildr42:26package。testsr35:2430記録/62group、error/failure/skip0。
-  初回r34のソース解析テスト失敗は、同じ認証境界の検査を保って修正・再検証した。
-- 次は観測用dev2-r19で遅い候補を保存し、同一入力の再生から処理コストを修正する。
-- D2の996/source497には別の相手車距離による拒否があり、保存済み。
+- r19で遅い停止候補D1854/source182、D2836/source145を正確に保存した。
+- 必要な物理条件の失敗後も全停止予測を続け、同じ解済み停止列を再検証していた。
+  同じ検査を逐次実行し、無効候補の後続計算と同じ停止列の重複検証を除去した。
+- 再生は約135→14ms、89→12ms。元の拒否理由・最初の拒否時刻は同じ。
+  部分証明は返さず、合格時には従来どおり全入力応答の完全停止が必要。
+- buildr43:26package。testsr36:2432記録/62group、error/failure/skip0。
+  r17合格指令・引き継ぎ、r16符号付き元観測、r18本当の履歴欠落拒否、4入力の数値APIも確認。
+- r19はD1972で1.92m/s、D21071で1.16m/sのEmergency。保存要求は壁/相手車条件で拒否。
+  この修正でこれらの拒否を解除したとは扱わない。新規dev2-r20へ進む。
 
-[監査と観測設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/stop-alternate-timing-design.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/stop-alternate-timing-evidence.json)、
+[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/stream-validation-design.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/stream-validation-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
+実送信と認証時刻の整合、M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
+同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
 モデル誤差・接触・輸送の保証は未検証。安全余裕・合格基準は維持する。
 
 ## Superseded checkpoint and historical evidence

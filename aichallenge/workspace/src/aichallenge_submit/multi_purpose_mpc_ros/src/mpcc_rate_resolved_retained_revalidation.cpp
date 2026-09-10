@@ -1698,7 +1698,12 @@ Result evaluate(const Request & request)
   // Latest-state feedback preserves SteeringUnreachable as its outer failure
   // label. Use the proof stage itself, rather than that presentation label,
   // to distinguish a terminal-reference failure from a failed command join.
-  if (!normal_path.terminal_stop_attempted || normal_path.terminal_stop_certified) {
+  if (!normal_path.terminal_stop_attempted || normal_path.terminal_stop_certified ||
+    normal_path.terminal_stop_uses_solved_suffix)
+  {
+    // A complete solved Stop suffix never consulted either lateral reference.
+    // Its applied-input rejection cannot change by selecting the track
+    // reference and repeating the identical controls/world/proof a second time.
     return normal_path;
   }
   // Stop is a feasibility obligation. The solved lateral prefix and its

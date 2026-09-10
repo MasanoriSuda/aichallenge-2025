@@ -38,6 +38,7 @@ int main(int argc, char ** argv)
     row["terminal_reason"] = static_cast<int>(result.terminal_stop_reason);
     row["terminal_exact_reason"] = static_cast<int>(result.terminal_stop_exact_reason);
     row["terminal_reference_attempts"] = result.terminal_stop_reference_attempts;
+    row["terminal_uses_solved_suffix"] = result.terminal_stop_uses_solved_suffix;
     const auto & r = result.runtime;
     auto runtime = row["runtime_ms"];
     runtime["pre"] = r.pre_continuation_ms;

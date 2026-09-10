@@ -113,6 +113,14 @@ D1 decision1020の停止認証は、実送信加速度−3/+1.329596の間を一
 遅い候補の再生、実送信時刻と認証時刻の整合、再発進・周期・完走は未解決。
 [停止再検証の時刻監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/stop-alternate-timing-design.md)を参照。
 
+2026-09-11のdev2-r19で遅い停止候補の元入力を保存した。必要な物理条件を全停止予測後に
+検査し、既に無効な候補の将来計算を続けていた。各予測サンプルで同じ検査を実行し、
+不合格時は部分証明を返さず中止する。参照経路を使わない解済み停止列の重複検証も除去した。
+同じ入力の拒否理由・時刻を保ち、再生時間は約135→14ms、89→12ms。
+合格時の完全停止・全入力応答・壁・相手車・Follow・指令同一性の条件は維持する。
+buildr43=26、testsr36=2432記録/62groupで失敗0。r19の走行中の壁・相手車拒否は未解決で、
+実走の25ms・再発進・全受入れは未達。[逐次検証設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/stream-validation-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

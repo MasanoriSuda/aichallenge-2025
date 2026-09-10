@@ -277,14 +277,6 @@ Result certify_terminal_stop(const retained::Request &request,
     result.reason = Reason::ProgramUnavailable;
     return result;
   }
-  const auto prediction = vehicle::predict_applied_inputs_to_rest(
-      request.publication_prefix->observation, prepared.prepared->program,
-      profile, execution.vehicle_model);
-  result.prediction_reason = prediction.reason;
-  if (!prediction.tube) {
-    result.reason = Reason::InputPredictionRejected;
-    return result;
-  }
   if (!request.obstacles.current ||
       !mpcc_rate_resolved_dynamic_proof::observation_valid(request.obstacles) ||
       request.obstacles.observed_sec > request.now_sec ||
@@ -302,13 +294,17 @@ Result certify_terminal_stop(const retained::Request &request,
   auto certificate = std::shared_ptr<Certificate>(new Certificate);
   certificate->nominal_fingerprint_ = nominal_fingerprint(nominal);
   certificate->prepared_ = *prepared.prepared;
-  certificate->tube_ = *prediction.tube;
   certificate->request_ = std::make_shared<const retained::Request>(request);
-  const auto &tube = certificate->tube_;
-  if (!certificate->matches(nominal))
+  const auto & observation = request.publication_prefix->observation;
+  // Authenticate the immutable input context before running physical checks.
+  // This private object cannot escape until prediction reaches full rest.
+  certificate->tube_.profile = profile;
+  certificate->tube_.context_fingerprint = vehicle::applied_input_context_fingerprint(
+    observation, prepared.prepared->program, profile, execution.vehicle_model);
+  if (certificate->tube_.context_fingerprint != 0 && !certificate->matches(nominal))
     return result;
   const auto to_world = [&](const recovery::Pose2D &local) {
-    const auto &origin = tube.coordinate_origin;
+    const auto &origin = observation.initial.state;
     return recovery::Pose2D{origin.x_m + std::cos(origin.yaw_rad) * local.x_m -
                                 std::sin(origin.yaw_rad) * local.y_m,
                             origin.y_m + std::sin(origin.yaw_rad) * local.x_m +
@@ -357,7 +353,7 @@ Result certify_terminal_stop(const retained::Request &request,
     }
     if (request.follow_target) {
       const auto ego_progress = course_progress(
-          state, tube.coordinate_origin, physical_source.course_frame_knots);
+          state, observation.initial.state, physical_source.course_frame_knots);
       const auto target = retained::follow_target_progress_at(
           *request.follow_target, begin - request.now_sec);
       if (!ego_progress || !target)
@@ -372,21 +368,25 @@ Result certify_terminal_stop(const retained::Request &request,
     ++certificate->checked_samples_;
     return Reason::Accepted;
   };
-  try {
-    result.reason =
-        check(tube.publication_body, request.now_sec, request.now_sec);
-    if (result.reason != Reason::Accepted)
-      return result;
-    for (const auto &sample : tube.source_to_rest) {
-      if (sample.begin_sec < request.now_sec)
-        continue;
-      result.reason =
-          check(sample.swept_body, sample.begin_sec, sample.end_sec);
-      if (result.reason != Reason::Accepted)
-        return result;
-    }
-  } catch (const std::exception &) {
-    result.reason = Reason::InvalidWorld;
+  auto prediction = vehicle::predict_applied_inputs_to_rest(
+    observation, prepared.prepared->program, profile, execution.vehicle_model,
+    [&](const vehicle::BodyRanges & ranges, double begin, double end) {
+      try {
+        result.reason = check(ranges, begin, end);
+      } catch (const std::exception &) {
+        result.reason = Reason::InvalidWorld;
+      }
+      return result.reason == Reason::Accepted;
+    });
+  result.prediction_reason = prediction.reason;
+  if (!prediction.tube) {
+    if (prediction.reason != vehicle::AppliedInputRejectReason::ValidationRejected)
+      result.reason = Reason::InputPredictionRejected;
+    return result;
+  }
+  certificate->tube_ = std::move(*prediction.tube);
+  if (!certificate->matches(nominal)) {
+    result.reason = Reason::InvalidNominalProof;
     return result;
   }
   result.rejected_sec = std::numeric_limits<double>::quiet_NaN();

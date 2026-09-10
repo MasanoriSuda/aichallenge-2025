@@ -76,6 +76,16 @@ using BodyRanges = std::array<ScalarRange, 8>;
 using AppliedInputValidator =
   std::function<bool(const BodyRanges &, double begin_sec, double end_sec)>;
 
+/// Four rigid vertex XY pairs in world axes, relative to the observation XY
+/// origin. Unlike BodyRanges, these positions are not in the initial heading
+/// frame. Local offsets include the caller's complete physical clearance.
+using FootprintRanges = std::array<ScalarRange, 8>;
+struct AppliedFootprintValidation {
+  FootprintRanges local_offsets;
+  std::function<bool(const BodyRanges &, const FootprintRanges &,
+                     double begin_sec, double end_sec)> validate;
+};
+
 struct AppliedInputSample {
   double begin_sec{};
   double end_sec{};
@@ -85,6 +95,8 @@ struct AppliedInputSample {
   AppliedInputBounds inputs;
   BodyRanges swept_body;
   BodyRanges endpoint_body;
+  std::optional<FootprintRanges> swept_footprint{};
+  std::optional<FootprintRanges> endpoint_footprint{};
 };
 
 struct AppliedInputTube {
@@ -95,6 +107,7 @@ struct AppliedInputTube {
   InputApplicationProfile profile;
   State coordinate_origin;
   BodyRanges publication_body;
+  std::optional<FootprintRanges> publication_footprint{};
   std::vector<AppliedInputSample> source_to_rest;
   double rest_sec{};
   std::size_t maximum_body_partitions{};
@@ -150,5 +163,15 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
                                const InputApplicationProfile &profile,
                                const Parameters &parameters,
                                const AppliedInputValidator &validator) noexcept;
+
+/// Additional rigid-vertex enclosure from the same map and original body
+/// population. Both validators, when supplied, must accept every sample.
+AppliedInputPrediction
+predict_applied_inputs_to_rest(const ObservationProvenance &observation,
+                               const PublishedInputProgram &program,
+                               const InputApplicationProfile &profile,
+                               const Parameters &parameters,
+                               const AppliedInputValidator &validator,
+                               const AppliedFootprintValidation *footprint) noexcept;
 
 } // namespace multi_purpose_mpc_ros::mpcc_vehicle_model

@@ -276,6 +276,16 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
                                const InputApplicationProfile &profile,
                                const Parameters &parameters,
                                const AppliedInputValidator &validator) noexcept {
+  return predict_applied_inputs_to_rest(observation, program, profile, parameters, validator, nullptr);
+}
+
+AppliedInputPrediction
+predict_applied_inputs_to_rest(const ObservationProvenance &observation,
+                               const PublishedInputProgram &program,
+                               const InputApplicationProfile &profile,
+                               const Parameters &parameters,
+                               const AppliedInputValidator &validator,
+                               const AppliedFootprintValidation *footprint) noexcept {
   using Reason = AppliedInputRejectReason;
   if (!valid(parameters) || !parameters.nominal_settled_contact)
     return {Reason::InvalidModel, {}};
@@ -305,14 +315,35 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
     initial.y_m = 0;
     initial.yaw_rad = 0;
     std::vector<numerical::Box> population{numerical::point(initial)};
+    std::optional<numerical::CornerPopulation> corners;
+    if (footprint) {
+      if (!footprint->validate) return {Reason::NumericalFailure, {}};
+      numerical::Box offsets, seed;
+      for (size_t i = 0; i < offsets.size(); ++i) {
+        const auto &value = footprint->local_offsets[i];
+        if (!std::isfinite(value.lower) || !std::isfinite(value.upper) || value.lower > value.upper)
+          return {Reason::NumericalFailure, {}};
+        offsets[i] = {value.lower, value.upper};
+      }
+      const double yaw = observation.initial.state.yaw_rad;
+      const auto co = numerical::cosine(numerical::I(yaw));
+      const auto so = numerical::sine(numerical::I(yaw));
+      for (size_t i = 0; i < offsets.size(); i += 2) {
+        seed[i] = co * offsets[i] - so * offsets[i + 1];
+        seed[i + 1] = so * offsets[i] + co * offsets[i + 1];
+      }
+      corners = numerical::CornerPopulation{{offsets, yaw}, {seed}, seed};
+    }
     tube.maximum_body_partitions = 1;
     const double prefix_duration = observation.now_sec - observation.initial.source_sec;
     const auto prefix_steps = integration_steps(prefix_duration, parameters.maximum_step_sec);
     if (prefix_duration > 0 && prefix_steps == 0) return {Reason::StepLimit, {}};
     const double prefix_dt = prefix_steps == 0 ? 0 : prefix_duration / prefix_steps;
     double stamp = observation.initial.source_sec;
-    if (stamp == observation.now_sec)
+    if (stamp == observation.now_sec) {
       tube.publication_body = body_ranges(population.front());
+      if (corners) tube.publication_footprint = body_ranges(corners->states.front());
+    }
     // Even an already stationary member may still receive a positive packet.
     // Every explicitly scheduled packet owns one complete publisher interval,
     // even if the body is already stationary before that interval ends.
@@ -359,22 +390,38 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
         tube.publication_body = body_ranges(numerical::joined(population));
         if (validator && !validator(tube.publication_body, stamp, stamp))
           return {Reason::ValidationRejected, {}};
+        if (corners) {
+          tube.publication_footprint = body_ranges(numerical::joined(corners->states));
+          if (!footprint->validate(tube.publication_body, *tube.publication_footprint, stamp, stamp))
+            return {Reason::ValidationRejected, {}};
+        }
       }
       numerical::Box swept;
       population = numerical::advance_partitioned_inputs(
-          std::move(population), accelerations, parameters, duration, &swept);
+          std::move(population), accelerations, parameters, duration, &swept,
+          corners ? &*corners : nullptr);
       const auto endpoint = numerical::joined(population);
       tube.maximum_body_partitions =
           std::max(tube.maximum_body_partitions, population.size());
       tube.source_to_rest.push_back({stamp, end, duration, *inputs,
                                      body_ranges(swept),
                                      body_ranges(endpoint)});
+      if (corners) {
+        tube.source_to_rest.back().swept_footprint = body_ranges(corners->swept);
+        tube.source_to_rest.back().endpoint_footprint = body_ranges(numerical::joined(corners->states));
+      }
       if (stamp >= observation.now_sec && validator &&
         !validator(tube.source_to_rest.back().swept_body, stamp, end))
         return {Reason::ValidationRejected, {}};
+      if (stamp >= observation.now_sec && footprint &&
+        !footprint->validate(tube.source_to_rest.back().swept_body,
+          *tube.source_to_rest.back().swept_footprint, stamp, end))
+        return {Reason::ValidationRejected, {}};
       stamp = end;
-      if (stamp == observation.now_sec)
+      if (stamp == observation.now_sec) {
         tube.publication_body = body_ranges(endpoint);
+        if (corners) tube.publication_footprint = tube.source_to_rest.back().endpoint_footprint;
+      }
       if (stamp > observation.now_sec && stamp > rest_not_before &&
           numerical::at_rest(endpoint)) {
         tube.rest_sec = stamp;

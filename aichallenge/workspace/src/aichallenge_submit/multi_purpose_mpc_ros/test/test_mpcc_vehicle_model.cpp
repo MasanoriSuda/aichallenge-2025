@@ -703,3 +703,190 @@ TEST(MpccVehicleModel, SeparatingPlaneRejectsContactUncertainRotationAndInvalidI
   EXPECT_THROW(num::separating_circle_clearance(
     box, original, origin, enclosure, 5, 0, 1), std::runtime_error);
 }
+
+
+namespace
+{
+vehicle::AppliedFootprintValidation corner_validation()
+{
+  const auto offsets = vehicle::numerical::footprint_vertex_offsets(
+    {1.615, .51, .768, .768, .2});
+  vehicle::AppliedFootprintValidation result;
+  for (size_t i = 0; i < offsets.size(); ++i)
+    result.local_offsets[i] = {offsets[i].lo, offsets[i].hi};
+  result.validate = [](const auto &, const auto &, double, double) {return true;};
+  return result;
+}
+}  // namespace
+
+TEST(MpccAppliedInput, CornerPropagationPreservesBodyPopulationAndFullProgram)
+{
+  const auto observation = applied_observation();
+  const auto program = stop_program(observation.now_sec);
+  const auto original = vehicle::predict_applied_inputs_to_rest(
+    observation, program, applied_profile(), vehicle_model());
+  ASSERT_TRUE(original.tube);
+  auto context = corner_validation();
+  const auto extra = vehicle::predict_applied_inputs_to_rest(
+    observation, program, applied_profile(), vehicle_model(), {}, &context);
+  ASSERT_TRUE(extra.tube);
+  EXPECT_EQ(extra.tube->context_fingerprint, original.tube->context_fingerprint);
+  EXPECT_EQ(extra.tube->rest_sec, original.tube->rest_sec);
+  EXPECT_EQ(extra.tube->maximum_body_partitions, original.tube->maximum_body_partitions);
+  ASSERT_EQ(extra.tube->source_to_rest.size(), original.tube->source_to_rest.size());
+  ASSERT_TRUE(extra.tube->publication_footprint);
+  for (size_t k = 0; k < original.tube->source_to_rest.size(); ++k) {
+    const auto & a = original.tube->source_to_rest[k];
+    const auto & b = extra.tube->source_to_rest[k];
+    EXPECT_EQ(a.begin_sec, b.begin_sec); EXPECT_EQ(a.end_sec, b.end_sec);
+    ASSERT_TRUE(b.swept_footprint); ASSERT_TRUE(b.endpoint_footprint);
+    for (size_t i = 0; i < 8; ++i) {
+      EXPECT_EQ(a.endpoint_body[i].lower, b.endpoint_body[i].lower);
+      EXPECT_EQ(a.endpoint_body[i].upper, b.endpoint_body[i].upper);
+      EXPECT_EQ(a.swept_body[i].lower, b.swept_body[i].lower);
+      EXPECT_EQ(a.swept_body[i].upper, b.swept_body[i].upper);
+      EXPECT_EQ(original.tube->publication_body[i].lower, extra.tube->publication_body[i].lower);
+      EXPECT_EQ(original.tube->publication_body[i].upper, extra.tube->publication_body[i].upper);
+    }
+  }
+}
+
+TEST(MpccAppliedInput, CornersEncloseNativeEndpointsAndContinuousPoseSweeps)
+{
+  namespace num = vehicle::numerical;
+  const auto p = vehicle_model();
+  const auto offsets = num::footprint_vertex_offsets({1.615, .51, .768, .768, .2});
+  std::mt19937_64 random(20260912);
+  std::uniform_real_distribution<double> unit(0, 1);
+  size_t checked = 0;
+  bool rest_seen = false, launch_seen = false, reverse_seen = false;
+  for (double yaw : {-2.9, -.3, 0., 1.7, 3.1}) {
+    for (double u : {-.05, -.01, 0., .01, .05, 2.}) {
+      vehicle::State initial{0, 0, 0, u, .01, -.05, 0, .04};
+      std::vector<num::Box> population{num::point(initial)};
+      num::Box seed;
+      const auto co = num::cosine(num::I(yaw)), so = num::sine(num::I(yaw));
+      for (size_t k = 0; k < 8; k += 2) {
+        seed[k] = co * offsets[k] - so * offsets[k+1];
+        seed[k+1] = so * offsets[k] + co * offsets[k+1];
+      }
+      num::CornerPopulation corners{{offsets, yaw}, {seed}, seed};
+      std::vector<vehicle::State> oracles(32, initial);
+      for (size_t step = 0; step < 30; ++step) {
+        const std::vector<num::I> arms = step < 12 ?
+          std::vector<num::I>{{-3, -.0001}, {0}, {.0001, 1.37}} :
+          std::vector<num::I>{{-3, -3}};
+        const double limit = p.maximum_wire_steering_rad / p.steering_wire_gain;
+        const num::I steer(-limit, limit);
+        for (auto & body : population) body[6] = steer;
+        num::Box swept;
+        population = num::advance_partitioned_inputs(
+          std::move(population), arms, p, .005, &swept, &corners);
+        const auto endpoint = num::joined(corners.states);
+        for (size_t arm = 0; arm < oracles.size(); ++arm) {
+          auto & state = oracles[arm]; const auto before = state;
+          const auto & acceleration = arms[arm % arms.size()];
+          const double af = arm < 12 ? double((arm / arms.size()) % 2) : unit(random);
+          const double sf = arm < 12 ? double((arm / (2 * arms.size())) % 2) : unit(random);
+          state.desired_steering_rad = steer.lo + sf * (steer.hi - steer.lo);
+          const auto next = vehicle::advance(state,
+            {acceleration.lo + af * (acceleration.hi - acceleration.lo), 0}, p, .005);
+          ASSERT_TRUE(next); state = next->state;
+          rest_seen |= state.forward_velocity_mps == 0;
+          launch_seen |= before.forward_velocity_mps == 0 && state.forward_velocity_mps > 0;
+          reverse_seen |= state.forward_velocity_mps < 0;
+          // Independent scalar model endpoints; the existing physical segment
+          // sweep linearly interpolates body XY and yaw between these endpoints.
+          for (int part = 0; part <= 8; ++part) {
+            const double f = part / 8.;
+            const double bx = before.x_m + f * (state.x_m - before.x_m);
+            const double by = before.y_m + f * (state.y_m - before.y_m);
+            const double angle = yaw + before.yaw_rad + f * (state.yaw_rad - before.yaw_rad);
+            for (size_t k = 0; k < 8; k += 2) {
+              const double x = (offsets[k].lo + offsets[k].hi) / 2;
+              const double y = (offsets[k+1].lo + offsets[k+1].hi) / 2;
+              const double X = std::cos(yaw)*bx - std::sin(yaw)*by + std::cos(angle)*x - std::sin(angle)*y;
+              const double Y = std::sin(yaw)*bx + std::cos(yaw)*by + std::sin(angle)*x + std::cos(angle)*y;
+              ASSERT_GE(X, corners.swept[k].lo); ASSERT_LE(X, corners.swept[k].hi);
+              ASSERT_GE(Y, corners.swept[k+1].lo); ASSERT_LE(Y, corners.swept[k+1].hi);
+              if (part == 8) {
+                ASSERT_GE(X, endpoint[k].lo); ASSERT_LE(X, endpoint[k].hi);
+                ASSERT_GE(Y, endpoint[k+1].lo); ASSERT_LE(Y, endpoint[k+1].hi);
+              }
+              checked += 2;
+            }
+          }
+        }
+      }
+    }
+  }
+  EXPECT_EQ(checked, 2073600U);
+  EXPECT_TRUE(rest_seen); EXPECT_TRUE(launch_seen); EXPECT_TRUE(reverse_seen);
+}
+
+TEST(MpccAppliedInput, InvalidCornerContextAndEitherValidatorFailClosed)
+{
+  namespace num = vehicle::numerical;
+  const auto o = applied_observation(); const auto p = vehicle_model();
+  auto context = corner_validation();
+  context.local_offsets[3].lower = NAN;
+  auto result = vehicle::predict_applied_inputs_to_rest(o, stop_program(o.now_sec),
+    applied_profile(), p, {}, &context);
+  EXPECT_EQ(result.reason, vehicle::AppliedInputRejectReason::NumericalFailure);
+  EXPECT_FALSE(result.tube);
+  context = corner_validation(); context.validate = {};
+  result = vehicle::predict_applied_inputs_to_rest(o, stop_program(o.now_sec),
+    applied_profile(), p, {}, &context);
+  EXPECT_EQ(result.reason, vehicle::AppliedInputRejectReason::NumericalFailure);
+  EXPECT_FALSE(result.tube);
+  for (bool reject_body : {false, true}) {
+    size_t calls = 0;
+    context = corner_validation();
+    context.validate = [&](const auto &, const auto &, double, double) {return reject_body || ++calls < 4;};
+    result = vehicle::predict_applied_inputs_to_rest(o, stop_program(o.now_sec),
+      applied_profile(), p, [&](const auto &, double, double) {return !reject_body;}, &context);
+    EXPECT_EQ(result.reason, vehicle::AppliedInputRejectReason::ValidationRejected);
+    EXPECT_FALSE(result.tube);
+    EXPECT_EQ(calls, reject_body ? 0U : 4U);
+  }
+  num::CornerImage image; num::CornerProbe probe{}; num::Box body{}, vertices{};
+  EXPECT_THROW(num::centered_step(body, num::I(-3), p, .005, true,
+    &probe, nullptr, &image), std::runtime_error);
+  probe.origin_yaw = NAN;
+  EXPECT_THROW(num::centered_step(body, num::I(-3), p, .005, true,
+    &probe, &vertices, &image), std::runtime_error);
+  probe.origin_yaw = 0; vertices[0] = {1, -1};
+  EXPECT_THROW(num::centered_step(body, num::I(-3), p, .005, true,
+    &probe, &vertices, &image), std::runtime_error);
+}
+
+TEST(MpccVehicleModel, CornerCellSeparationRejectsContactTangencyAndInvalidGeometry)
+{
+  namespace num = vehicle::numerical;
+  namespace rec = multi_purpose_mpc_ros::recovery_footprint;
+  rec::OccupancyGrid grid;
+  grid.width = grid.height = 20; grid.resolution_m = .25;
+  grid.cells.assign(400, rec::CellState::Unknown);
+  const size_t cell = 10 * grid.width + 10;
+  grid.y_axis = rec::YAxisConvention::RowZeroAtMaximumY;
+  const auto c = grid.grid_to_world(10, 10); ASSERT_TRUE(c);
+  for (auto state : {rec::CellState::Unknown, rec::CellState::Occupied}) {
+    grid.cells[cell] = state;
+    for (double offset : {0., .125, .125 + 1e-9}) {
+      num::Box vertices;
+      for (size_t k = 0; k < 8; k += 2) {
+        vertices[k] = num::I(offset); vertices[k+1] = num::I(0);
+      }
+      EXPECT_FALSE(num::separating_cell_clearance(vertices, grid, cell, *c));
+      vertices[0] = num::I(NAN);
+      EXPECT_FALSE(num::separating_cell_clearance(vertices, grid, cell, *c));
+    }
+  }
+  num::Box clear;
+  for (size_t k = 0; k < 8; k += 2) {clear[k] = num::I(.125 + 1e-6); clear[k+1] = num::I(0);}
+  EXPECT_TRUE(num::separating_cell_clearance(clear, grid, cell, *c));
+  EXPECT_FALSE(num::separating_cell_clearance(clear, grid, 400, *c));
+  EXPECT_FALSE(num::separating_cell_clearance(clear, grid, cell, {NAN, 0}));
+  grid.resolution_m = 0;
+  EXPECT_FALSE(num::separating_cell_clearance(clear, grid, cell, *c));
+}

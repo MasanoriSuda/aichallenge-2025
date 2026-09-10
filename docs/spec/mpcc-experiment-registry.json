@@ -967,6 +967,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-stop-evidence.json",
       "replay_ready": true,
       "reason": "Exact first D11018/source316, separate previous1017/source342; original terminal programme controls and source-horizon comparison"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-corner-displacement-r24",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/corner-displacement-evidence.json",
+      "replay_ready": true,
+      "reason": "Original firstD1947/source245 and separate previous946/source249; exact input population/wall/body/corner diagnosis"
     }
   ],
   "experiments": [
@@ -9362,6 +9368,406 @@
         "Immediate braking as the only constant-steering Stop hypothesis"
       ],
       "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-integrated-r24",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Source-horizon programme closes moving authority",
+      "changed_dimension": "Fresh same-build dev2",
+      "result": "rejected",
+      "reason": "FirstD1947/1.60mpsEmergency; callback151.007ms. D2later990 followsD1by1.506s. P99/adjacentoverruns fail.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-exact-r116",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Native replay reproduces the first actual rejection",
+      "changed_dimension": "Original request zero-solve replay",
+      "result": "accepted",
+      "reason": "Exact245terminalwall10.684999773; previous946actual249 fullproof accepts. Final steering label is not the underlying terminal physical failure.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-persistent-a-1",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: persistent-a",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=18221029042772910789 solver=solved solve_ms=33.2501 terminal_progress=4.9571 terminal_velocity=2.85981 lateral_reserve=0.333178 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-stateless-left-b-2",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: stateless-left-b",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "accepted",
+      "reason": "arm=stateless-left-b stage=accepted candidate=15392165004378127451 solver=solved solve_ms=156.439 terminal_progress=5.04849 terminal_velocity=2.77799 lateral_reserve=0.333178 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-stateless-right-b-3",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: stateless-right-b",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "rejected",
+      "reason": "arm=stateless-right-b stage=solver-rejected candidate=12169914446001589705 solver=solve-rejected solve_ms=189.583 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.893565, dua_res=13477.9, failed_iterate_row=587, value=0.565738, bounds=[-inf,-3.08006], violation=3.6458, tolerance=0.00408006, normalized=893.565, row_semantic=dynamic-obstacle-physical-plane/stage=10/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000000947-a8e438b5acd1cdc9-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-rough-left-c-4",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: rough-left-c",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "accepted",
+      "reason": "arm=rough-left-c stage=accepted candidate=7368678794811589405 solver=solved solve_ms=61.684 terminal_progress=4.92796 terminal_velocity=2.95812 lateral_reserve=0.333174 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=19 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=19 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=0/attempts=19/accepted; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-rough-right-c-5",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: rough-right-c",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "rejected",
+      "reason": "arm=rough-right-c stage=solver-rejected candidate=2798220699442645450 solver=solve-rejected solve_ms=78.5132 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.9509, dua_res=59.4936, failed_iterate_row=578, value=0.678761, bounds=[-inf,-5.54252], violation=6.22128, tolerance=0.00654252, normalized=950.9, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-offline-left-d-6",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: offline-left-d",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "accepted",
+      "reason": "arm=offline-left-d stage=accepted candidate=7368678794811589405 solver=solved solve_ms=172.163 terminal_progress=4.87177 terminal_velocity=2.98176 lateral_reserve=0.333175 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=19 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=19 sqp_depth=3 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=3/attempts=19/accepted, progress_wall=accepted/applied=1/solved=1/mismatch=14.0352m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1749/cache_hits=4/cache_misses=96/cache_scanned=8395/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, physical_dynamic_sqp_audit=applied/solved=1/limit=3/count=3/detail=bounded dynamics/obstacle/wall SQP solved; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-offline-right-d-7",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: offline-right-d",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "rejected",
+      "reason": "arm=offline-right-d stage=solver-rejected candidate=2798220699442645450 solver=solve-rejected solve_ms=78.7762 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.9509, dua_res=59.4936, failed_iterate_row=578, value=0.678761, bounds=[-inf,-5.54252], violation=6.22128, tolerance=0.00654252, normalized=950.9, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-production-left-g-8",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: production-left-g",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "accepted",
+      "reason": "arm=production-left-g stage=accepted candidate=15392165004378127451 solver=solved solve_ms=155.765 terminal_progress=5.04849 terminal_velocity=2.77799 lateral_reserve=0.333178 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=1 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/candidate=direct-side; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-architecture-production-right-g-9",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: production-right-g",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "rejected",
+      "reason": "arm=production-right-g stage=solver-rejected candidate=12169914446001589705 solver=solve-rejected solve_ms=114.595 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.893565, dua_res=13477.9, failed_iterate_row=587, value=0.565738, bounds=[-inf,-3.08006], violation=3.6458, tolerance=0.00408006, normalized=893.565, row_semantic=dynamic-obstacle-physical-plane/stage=10/element=-1; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Same-world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Candidate/solver architecture with original hard world",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=15015109479429580061 solver=solved solve_ms=13.8848 terminal_progress=0.745478 terminal_velocity=0 lateral_reserve=0.333177 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.93795,-2.8517]/mean=-2.86299/bounds=0 steer_rate=[-0.710751,0.696961]/mean=-0.0236985/bounds=2/sign_changes=3 sequence=[0.04:-2.90987:-0.649938;0.04:-2.85967:-0.656261;0.04:-2.85923:-0.666603;0.04:-2.85879:-0.677043;0.04:-2.85837:-0.686561;0.04:-2.85799:-0.694634;0.04:-2.85763:-0.170954;0.04:-2.8573:0.668303;0.04:-2.85699:0.679988;0.04:-2.85668:0.688035;0.04:-2.85636:0.693001;0.04:-2.856:0.695479;0.04:-2.85559:0.696168;0.04:-2.85512:0.696266;0.04:-2.85459:0.696961;0.04:-2.854:-0.521717;0.04:-2.85333:-0.710751;0.04:-2.85256:-0.707709;0.04:-2.8517:0.0689166;0.04:-2.93795:0.0850801] detail=accepted; No full applied certificate or authority; all-method failure cannot establish infeasibility.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r118-immediate",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "One existing terminal arm certifies",
+      "changed_dimension": "Original terminal arm isolated, exact source loaded",
+      "result": "rejected",
+      "reason": "{\"elapsed_ms\": 7.834227, \"reason\": \"steering-unreachable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 6, \"prepare_reason\": 0, \"prediction_reason\": 8, \"rejected_sec\": 10.979999773, \"peer\": \"\", \"nominal_wall_clear\": true, \"continuation_stages\": 1}",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r118-source-horizon",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "One existing terminal arm certifies",
+      "changed_dimension": "Original terminal arm isolated, exact source loaded",
+      "result": "rejected",
+      "reason": "{\"elapsed_ms\": 2.923688, \"reason\": \"steering-unreachable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 1, \"prepare_reason\": 1, \"prediction_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"nominal_wall_clear\": false, \"continuation_stages\": 1}",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r118-normal-path",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "One existing terminal arm certifies",
+      "changed_dimension": "Original terminal arm isolated, exact source loaded",
+      "result": "rejected",
+      "reason": "{\"elapsed_ms\": 6.541606, \"reason\": \"steering-unreachable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 6, \"prepare_reason\": 0, \"prediction_reason\": 8, \"rejected_sec\": 10.809999773, \"peer\": \"\", \"nominal_wall_clear\": true, \"continuation_stages\": 1}",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r118-track",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "One existing terminal arm certifies",
+      "changed_dimension": "Original terminal arm isolated, exact source loaded",
+      "result": "rejected",
+      "reason": "{\"elapsed_ms\": 5.928016, \"reason\": \"steering-unreachable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 6, \"prepare_reason\": 0, \"prediction_reason\": 8, \"rejected_sec\": 10.684999773, \"peer\": \"\", \"nominal_wall_clear\": true, \"continuation_stages\": 1}",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r119-prior-program",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Keeping the actually published programme is sufficient",
+      "changed_dimension": "Actual previous programme rebound to current observation without relabeling",
+      "result": "rejected",
+      "reason": "Remaining original−3/.009417254packet still rejects wall10.969999773 before fullrest11.179999773. Native64samples clear but do not prove safety.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r120-pose-samples",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Individual poses explain enclosing-wall contact",
+      "changed_dimension": "Original first-contact body box pose sampling",
+      "result": "inconclusive",
+      "reason": "132endpointXY/yaw poses have0contacts; finite sampling only.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r121-support",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Exact original corner support closes every enclosing-rectangle contact",
+      "changed_dimension": "128outward interval separating directions against whole original cell squares",
+      "result": "rejected",
+      "reason": "First39contactcells are468057; first+.019678576m separates but later11.054999773fails, minimum−.012405141m.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r122-world-axes",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "World-axis integration improves original wall population",
+      "changed_dimension": "Equivalent integration coordinate frame, same model/inputs",
+      "result": "rejected",
+      "reason": "First enclosingcontact10.654999773; supportfirst10.734999773,min−.110312126m: worse.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r123-compile",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Extra-corner diagnostic can be evaluated",
+      "changed_dimension": "Initial isolated diagnostic implementation",
+      "result": "inconclusive",
+      "reason": "Compilation failed: interval trig names used on Jet. Original build.log and driver preserved; no numerical conclusion.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r124",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Carry extra rigid-corner displacement bounds",
+      "changed_dimension": "Additional enclosure; original model/inputs/body bounds/hybrid population retained",
+      "result": "rejected",
+      "reason": "Single corner AABB still rejects209steps; {\"authority\": false, \"meaning\": \"Diagnostic extra footprint-corner displacement enclosures; original body population, input arms, hybrid bins, model and margins unchanged. Endpoint body bounds must match original exactly, and independent native corner samples must remain enclosed.\", \"first_box\": [-1.9327678892463442, 1.0783980839464422, -1.0455337005328909, 1.9766484190035278], \"first_corner_box_contact\": 10.129999773, \"contact_steps\": 209, \"native_corner_checks\": 111616, \"unchanged_body_component_checks\": 1744, \"rest_sec\": 11.174999773}",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r125",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Carry extra rigid-corner displacement bounds",
+      "changed_dimension": "Additional enclosure; original model/inputs/body bounds/hybrid population retained",
+      "result": "rejected",
+      "reason": "Intersection with old wall shape still rejects39steps; {\"authority\": false, \"meaning\": \"Diagnostic extra footprint-corner displacement enclosures used jointly with the original oriented enclosure; original body population, input arms, hybrid bins, model and margins unchanged. Endpoint body bounds must match original exactly, and independent native corner samples must remain enclosed.\", \"first_box\": [-3.250222224016598, 0.9360651876291249, -0.9130341473850572, 3.275229622145552], \"first_corner_box_contact\": 10.979999773, \"contact_steps\": 39, \"native_corner_checks\": 111616, \"unchanged_body_component_checks\": 1744, \"rest_sec\": 11.174999773}",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-r126",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Carry extra rigid-corner displacement bounds",
+      "changed_dimension": "Additional enclosure; original model/inputs/body bounds/hybrid population retained",
+      "result": "accepted",
+      "reason": "Stable trig differences separate all original contacts through rest; body1744components exact and111616nativecornerchecks enclosed; {\"authority\": false, \"meaning\": \"Diagnostic extra footprint-corner displacement enclosures used jointly with the original oriented enclosure; original body population, input arms, hybrid bins, model and margins unchanged. Endpoint body bounds must match original exactly, and independent native corner samples must remain enclosed.\", \"first_corner_box_contact\": null, \"contact_steps\": 0, \"native_corner_checks\": 111616, \"unchanged_body_component_checks\": 1744, \"rest_sec\": 11.174999773}",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-corner-displacement-r24-production-local",
+      "baseline_commit": "e53e3791330e96bf82043025064d8d1a6af80af8",
+      "snapshot_ids": [
+        "20260911-nine-state-corner-displacement-r24"
+      ],
+      "hypothesis": "Shared extra-corner map repairs exact947 through all gates",
+      "changed_dimension": "Integrated numerical enclosure and wall proof, immutable original physical context",
+      "result": "accepted",
+      "reason": "Fullbuild/package/freshnative positive+negative regressions. Exact947fullproof/production/materialization/join accepts; realr18historygap rejects.",
+      "production_impact": "Additional numerical footprint enclosure under original physical/context/final gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Wall rejection based solely on the unused corner of one enclosing rectangle"
+      ],
+      "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
     }
   ]
 }

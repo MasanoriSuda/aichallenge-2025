@@ -152,6 +152,17 @@ buildr47=26、testsr39=2437記録/62groupで失敗0。実走25ms・再発進・�
 buildr51=26、testsr41=2441記録/62groupで失敗0。実走25ms・再発進・完走は未検証。
 [元の解の時間範囲を使う停止候補](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-stop-design.md)を参照。
 
+2026-09-11のdev2-r24ではD1decision947が全応答の壁認証を失った。
+元の車体状態の範囲に加え、余裕を含む四隅の変位を同じnative計算で囲む。
+旋回の差は同値の三角関数式で計算し、姿勢と位置の依存関係の喪失による過大評価を抑える。
+既存の外接矩形が接触と判定したセルについて、追加範囲がセル全体との正の隙間を
+示せる場合だけ分離を認める。既存のmap外・無効値・実接触の拒否、全状態・相手車・
+Follow・完全停止・元source・最終指令の照合は維持する。元の車体境界も変更しない。
+追加範囲は既存の区間内姿勢補間を覆い、連続実プラントの保証を追加するものではない。
+buildr52=26、testsr42=2447記録/62groupで失敗0。保存947の全認証・公開候補・停止格納・
+再検証は通過した。新規2台走行と実走25ms、M4–M6は未完。
+[四隅の変位範囲と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/corner-displacement-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

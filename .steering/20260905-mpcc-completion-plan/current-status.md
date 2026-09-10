@@ -1,19 +1,20 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。直近dev2-r23はD11018、2.90m/sでEmergency・25ms未達。**
+**全体は未完。直近dev2-r24（e53e3791）はD1947、1.60m/sでEmergency・25ms未達。**
 
-- 元の解の残り時間を使う停止候補を追加。最初の同じ指令列の後に既存最大制動で停止する。
-- 元の速度上限を全応答と後続Stopに保持し、同じ壁・相手車・Follow・状態・入力認証を要求する。
-  通常権限の1周期と、停止列の全区間認証は別々に維持する。
-- buildr51:26package、testsr41:2441記録/62group、error/failure/skip0。
-  保存形式v2は速度上限を必須とし、旧v1のfingerprintを維持する。
-- 次は新規dev2-r24。ローカル再生時間を実走25msの合格には扱わない。
+元の車体境界を保ち、余裕を含む四隅の変位範囲を同じ計算で追う修正を実装した。
+保存947は壁・全応答停止・公開候補・停止格納・再検証まで通過した。
 
-[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-stop-design.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-stop-evidence.json)、
+- buildr52:26package、testsr42:2447記録/62group、error/failure/skip0。
+- 207万3600値の独立四隅・区間内姿勢検査、元の車体境界一致、実接触・map外・欠落拒否を検証。
+- 元947の再生は10.73ms。過去の正常ケースを保ち、実履歴欠損と後続の他車拒否は維持する。
+- 次は新規dev2-r25。再生の時間は実走25msの合格には数えない。
+
+[設計と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/corner-displacement-design.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/corner-displacement-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-相手車モデルの更新、実送信と認証時刻の整合、M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
+実送信と認証時刻の整合、M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
 同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
 モデル誤差・接触・輸送の保証は未検証。安全余裕・合格基準は維持する。
 

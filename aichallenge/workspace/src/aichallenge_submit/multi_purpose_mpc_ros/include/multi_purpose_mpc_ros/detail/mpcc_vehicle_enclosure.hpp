@@ -184,6 +184,15 @@ inline void intersect(I &a, I b) {
 inline void intersect(J &a, I b) { intersect(a.v, b); }
 using JS = std::array<J, 8>;
 using Box = std::array<I, 8>;
+// Four rigid footprint vertices, XY pairs in world axes relative to the
+// observation XY origin. Body boxes retain their original heading frame.
+struct CornerProbe { Box offsets; double origin_yaw{}; };
+struct CornerImage { Box endpoint; Box swept; };
+struct CornerPopulation {
+  CornerProbe probe;
+  std::vector<Box> states;
+  Box swept;
+};
 // Only nonsmooth scalar/set arithmetic differs. All wheel, body and tire
 // equations below come from the same kernel as the production native model.
 template <class T> struct Arithmetic {
@@ -226,12 +235,13 @@ inline I tire_bounds(I desired, I tire, const model::Parameters &p, double dt) {
 template <class T>
 inline std::array<T, 8> map(std::array<T, 8> s, T a, const model::Parameters &p,
                             double dt, bool rest,
-                            bool *discontinuous = nullptr) {
+                            bool *discontinuous = nullptr, T *yaw_increment = nullptr) {
   const Arithmetic<T> arithmetic{discontinuous};
   const auto tire = tire_bounds(bounds(s[6]), bounds(s[7]), p, dt);
   model::kernel::update_tire(s, p, dt, arithmetic);
   intersect(s[7], tire);
   if (rest) {
+    if (yaw_increment) *yaw_increment = T(0);
     s[3] = T(0);
     s[4] = T(0);
     s[5] = T(0);
@@ -239,12 +249,77 @@ inline std::array<T, 8> map(std::array<T, 8> s, T a, const model::Parameters &p,
   }
   const auto d1 = model::kernel::derivative(s, a, p, dt, arithmetic);
   const auto mid = model::kernel::body_increment(s, d1, .5 * dt);
-  return model::kernel::body_increment(
-      s, model::kernel::derivative(mid, a, p, dt, arithmetic), dt);
+  const auto rates = model::kernel::derivative(mid, a, p, dt, arithmetic);
+  if (yaw_increment) *yaw_increment = rates[model::kernel::Yaw] * T(dt);
+  return model::kernel::body_increment(s, rates, dt);
 }
+
+inline CornerImage advance_corners(
+    const CornerProbe &probe, const Box &previous, const JS &range,
+    const Box &point, const JS &inputs, const Box &center,
+    const std::array<I, N> &offsets, const J &delta, I point_delta,
+    bool discontinuous) {
+  const auto enclose = [&](const J &value, I midpoint) {
+    I image = midpoint;
+    for (size_t j = 0; j < N; ++j) image = image + value.d[j] * offsets[j];
+    if (discontinuous) image = value.v;
+    else intersect(image, value.v);
+    return image;
+  };
+  const I co = cosine(I(probe.origin_yaw)), so = sine(I(probe.origin_yaw));
+  const J half_delta = delta / 2;
+  const J mid_angle = J(I(probe.origin_yaw)) + inputs[2] + half_delta;
+  // Preserve the common angle in both values and interval derivatives.
+  const J dc = J(-2) * sin(mid_angle) * sin(half_delta);
+  const J ds = J(2) * cos(mid_angle) * sin(half_delta);
+  const I point_mid = I(probe.origin_yaw) + center[2] + point_delta / 2;
+  const I pdc = I(-2) * sine(point_mid) * sine(point_delta / 2);
+  const I pds = I(2) * cosine(point_mid) * sine(point_delta / 2);
+  const I turn = enclose(delta, point_delta);
+  const double max_turn = std::max(std::abs(turn.lo), std::abs(turn.hi));
+  CornerImage out;
+  for (size_t k = 0; k < 8; k += 2) {
+    const I x = probe.offsets[k], y = probe.offsets[k + 1];
+    const J dx = J(co) * range[0] - J(so) * range[1] + J(x) * dc - J(y) * ds;
+    const J dy = J(so) * range[0] + J(co) * range[1] + J(x) * ds + J(y) * dc;
+    const I px = co * point[0] - so * point[1] + x * pdc - y * pds;
+    const I py = so * point[0] + co * point[1] + x * pds + y * pdc;
+    out.endpoint[k] = previous[k] + enclose(dx, px);
+    out.endpoint[k + 1] = previous[k + 1] + enclose(dy, py);
+    const I radius2 = I(std::max(std::abs(x.lo), std::abs(x.hi))) *
+                       I(std::max(std::abs(x.lo), std::abs(x.hi))) +
+                     I(std::max(std::abs(y.lo), std::abs(y.hi))) *
+                       I(std::max(std::abs(y.lo), std::abs(y.hi)));
+    const double radius = up(std::sqrt(radius2.hi));
+    const double sag = (I(radius) * I(max_turn) * I(max_turn) * I(.125)).hi;
+    out.swept[k] = hull(previous[k], out.endpoint[k]) + I(-sag, sag);
+    out.swept[k + 1] = hull(previous[k + 1], out.endpoint[k + 1]) + I(-sag, sag);
+  }
+  for (const auto *values : {&out.endpoint, &out.swept})
+    for (const auto &value : *values)
+      if (!std::isfinite(value.lo) || !std::isfinite(value.hi) || value.lo > value.hi)
+        throw std::runtime_error("invalid corner enclosure");
+  return out;
+}
+
 inline Box centered_step(const Box &b, I acceleration,
-                         const model::Parameters &p, double dt, bool rest) {
+                         const model::Parameters &p, double dt, bool rest,
+                         const CornerProbe *probe = nullptr,
+                         const Box *previous_corners = nullptr,
+                         CornerImage *corner_image = nullptr) {
+  if ((probe != nullptr) != (previous_corners != nullptr) ||
+      (probe != nullptr) != (corner_image != nullptr))
+    throw std::runtime_error("incomplete corner context");
+  if (probe) {
+    if (!std::isfinite(probe->origin_yaw))
+      throw std::runtime_error("invalid corner origin");
+    for (const auto *values : {&probe->offsets, previous_corners})
+      for (const auto &value : *values)
+        if (!std::isfinite(value.lo) || !std::isfinite(value.hi) || value.lo > value.hi)
+          throw std::runtime_error("invalid corner context");
+  }
   if (rest) {
+    if (corner_image) *corner_image = {*previous_corners, *previous_corners};
     // The selected native rest branch preserves pose and desired angle,
     // zeros body motion and updates only the tire. Its exact interval image
     // needs no body Jacobian or centered subtraction/readdition. Reuse the
@@ -273,8 +348,12 @@ inline Box centered_step(const Box &b, I acceleration,
   a.d[6] = I(1);
   offsets[6] = acceleration - I(ac);
   bool discontinuous = false;
-  const auto range = map(inputs, a, p, dt, rest, &discontinuous);
-  const auto point = map(center, I(ac), p, dt, rest);
+  J yaw_delta;
+  I point_yaw_delta;
+  const auto range = map(inputs, a, p, dt, rest, &discontinuous,
+                         corner_image ? &yaw_delta : nullptr);
+  const auto point = map(center, I(ac), p, dt, rest, nullptr,
+                         corner_image ? &point_yaw_delta : nullptr);
   Box result;
   for (size_t i = 0; i < 8; ++i) {
     I delta;
@@ -292,10 +371,19 @@ inline Box centered_step(const Box &b, I acceleration,
       throw std::runtime_error("unbounded numerical enclosure");
   }
   intersect(result[7], tire_bounds(b[6], b[7], p, dt));
+  if (corner_image)
+    *corner_image = advance_corners(*probe, *previous_corners, range, point,
+      inputs, center, offsets, yaw_delta, point_yaw_delta, discontinuous);
   return result;
 }
 inline std::vector<Box> step_parts(const Box &b, I a,
-                                   const model::Parameters &p, double dt) {
+                                   const model::Parameters &p, double dt,
+                                   const CornerProbe *probe = nullptr,
+                                   const Box *previous_corners = nullptr,
+                                   std::vector<CornerImage> *corner_images = nullptr) {
+  if ((probe != nullptr) != (previous_corners != nullptr) ||
+      (probe != nullptr) != (corner_images != nullptr))
+    throw std::runtime_error("incomplete corner branches");
   if (!model::valid(p) || !p.nominal_settled_contact || dt <= 0 ||
       model::integration_steps(dt, p.maximum_step_sec) != 1)
     throw std::runtime_error("unsupported enclosure context");
@@ -305,7 +393,10 @@ inline std::vector<Box> step_parts(const Box &b, I a,
     q[3] = {std::max(b[3].lo, low), std::min(b[3].hi, high)};
     if (q[3].lo > q[3].hi || wire.lo > wire.hi)
       return;
-    parts.push_back(centered_step(q, wire, p, dt, rest));
+    CornerImage image;
+    parts.push_back(centered_step(q, wire, p, dt, rest, probe, previous_corners,
+                                 corner_images ? &image : nullptr));
+    if (corner_images) corner_images->push_back(image);
   };
   if (a.lo <= 0) {
     const I wire(a.lo, std::min(0., a.hi));
@@ -341,12 +432,16 @@ inline Box step(const Box &b, I a, const model::Parameters &p, double dt) {
 inline std::vector<Box> advance_partitioned_inputs(std::vector<Box> states,
                                             const std::vector<I> & inputs,
                                             const model::Parameters &p,
-                                            double duration, Box *swept) {
+                                            double duration, Box *swept,
+                                            CornerPopulation *corners = nullptr) {
+  if (corners && corners->states.size() != states.size())
+    throw std::runtime_error("corner population mismatch");
   const auto count = model::integration_steps(duration, p.maximum_step_sec);
   if (count == 0 || inputs.empty())
     throw std::runtime_error("invalid partitioned duration");
   if (swept)
     *swept = joined(states);
+  if (corners) corners->swept = joined(corners->states);
   const auto merge = [](std::optional<Box> &to, const Box &from) {
     if (!to)
       to = from;
@@ -358,30 +453,46 @@ inline std::vector<Box> advance_partitioned_inputs(std::vector<Box> states,
     // Rest is a separate hybrid mode. Merging it with moving states before
     // the next map invents combinations of zero u and moving vy/r, which can
     // make a valid enclosure useless. Splitting/merging changes no trajectory.
-    std::array<std::optional<Box>, 5> bins;
+    std::array<std::optional<Box>, 5> bins, corner_bins;
     const std::array<double, 5> boundaries{-INFINITY, -p.sleep_speed_mps, 0,
                                            p.sleep_speed_mps, INFINITY};
     // Each input arm is evaluated before merging body modes. Convexifying
     // across absent acceleration signs here invents new hybrid responses.
     for (const auto & a : inputs)
-      for (const auto &state : states)
-        for (const auto &next : step_parts(state, a, p, duration / count)) {
+      for (size_t state_index = 0; state_index < states.size(); ++state_index) {
+        std::vector<CornerImage> images;
+        const auto parts = step_parts(states[state_index], a, p, duration / count,
+          corners ? &corners->probe : nullptr,
+          corners ? &corners->states[state_index] : nullptr,
+          corners ? &images : nullptr);
+        for (size_t part_index = 0; part_index < parts.size(); ++part_index) {
+          const auto &next = parts[part_index];
+          if (corners)
+            for (size_t i = 0; i < 8; ++i)
+              corners->swept[i] = hull(corners->swept[i], images[part_index].swept[i]);
           if (at_rest(next)) {
             merge(bins[0], next);
+            if (corners) merge(corner_bins[0], images[part_index].endpoint);
             continue;
           }
           for (size_t j = 0; j < 4; ++j) {
             Box clipped = next;
             clipped[3] = {std::max(next[3].lo, boundaries[j]),
                           std::min(next[3].hi, boundaries[j + 1])};
-            if (clipped[3].lo <= clipped[3].hi)
+            if (clipped[3].lo <= clipped[3].hi) {
               merge(bins[j + 1], clipped);
+              if (corners) merge(corner_bins[j + 1], images[part_index].endpoint);
+            }
           }
         }
+      }
     states.clear();
-    for (const auto &bin : bins)
-      if (bin)
-        states.push_back(*bin);
+    if (corners) corners->states.clear();
+    for (size_t i = 0; i < bins.size(); ++i)
+      if (bins[i]) {
+        states.push_back(*bins[i]);
+        if (corners) corners->states.push_back(*corner_bins[i]);
+      }
     if (swept) {
       const auto all = joined(states);
       for (size_t i = 0; i < 8; ++i)

@@ -269,3 +269,19 @@ is relabelledpass. See intent-stop-design.md and intent-stop-evidence.json.
 2026-09-11:5f673517dev2-r22 fails firstD11024/2.73mps/WP35. Capturedsource338lastreferencewall12.999999729; commonprogramme wallclear but peer d2reject13.559999729. Previousactual1023source365 is separate; its original remainingprogramme also peer-rejects after worldupdate. D21083failure is later, after D1Emergency. Sameworld persistentA nominal passes, B/C/D/G missingtarget inconclusive; complete-restY firstsolverreject thenaccepts. r106full original pose-box support separates despite inflated-rectangle overlap; r107one nearest-rectangle direction suffices. r108isolated fullproof/production/materialization/join accepts exactD1; D2rejectunchanged. Productiongeometry preserves allinputs/margins/CA1/state/world/identity; r46newtestlinkfailure corrected, buildr47=26/testsr39=2437/62groups/0errors-fails-skips and fresh native regressions pass. Freshdev2-r23next. FullM4–M6/25ms/recursiveStopremainopen.
 
 2026-09-11:749a871cdev2-r23 fails firstD11018/source316/2.90mps/WP35; previousactual1017source342 is separate. Common immediate Stop peer rejects13.889999723; final reference rejects13.519999723. More geometry directions and original-bound braking/steering variants do not certify. Malformed sparse delayed r113is inconclusive; dense r114passes at .2/.4/.8s. Original source-horizon r115passes .275s/11positive packets and all gates, with cap reported only. Production now derives that programme and enforces exact original source speed cap through nominal/fullresponse/materialized successors and v2provenance. Rear-peer heuristic only ranks candidates. Buildr48missingtype definition fixed;r49warning fixed;r50passes. New test r40confused normal25ms authority with separate fullterminal proof; corrected with extra normal/source/fullproof and missing/truncated proof rejection checks, then buildr51=26/testsr41=2441/62groups/0errors-fails-skips. Automatic review initially rejected the test correction, accepted after code/proof-range evidence; no approval pending. Freshnative r116/r117 and committeddev2-r24 follow; M4–M6and actual25ms remainopen.
+
+2026-09-11:e53e3791dev2-r24 fails firstD1947/source245/1.60mps/WP31; actualprevious946source249 is separate. Callback151ms; r116underlyingwall10.684999773 reproduced. All4existing terminal arms rejected; complete-restYandA/Bleft/Cleft/Dleft/Gleft nominal pass but fullapplied not established. R119prioractualprogramme stillwallreject10.969999773; finite64nativepaths clear. R120132posesinfirstboxclear. R121wholebox/wholecellsupport separates earlyrectanglecontact butfailslater11.054999773,min−.012405141m. Puregeometryorretentionaloneinsufficient. No productionchanges; see receiver-input-enclosure/r24-wall-audit.md. Continue numerical enclosure/root-cause and remainingM4–M6.
+
+2026-09-11: Extra rigid-corner displacement enclosure repairs originalr24D1947wall
+population, retaining every body bound/input/hybrid branch/margin. R119previous
+programme alone fails; r120finite pose sample inconclusive; r121support alone
+failsbefore rest; r122worldaxes worse; r123compilefail; r124singleextraAABB fails209;
+r125rawtrigdifferences fails39; r126stable equivalent differences close all39
+contacts while1744bodycomponents exact/111616nativecornervalues enclosed.
+Production shares the native midpoint map/Jacobian and adds outward chord-sagitta
+sweeps. Buildr52=26/5min;testsr42=2447/62groups/0errors-fails-skips/29.32s,including
+2073600nativecorner/sweepvalues and captured/truecontact/invalidcontext tests.
+Freshr127/r128 closes947fullproof-production-materialization-join10.725639ms,
+rest11.174999773,2commands/210samples; past positives retained, realr18gap rejects5,
+later r24D2990 and r22D21083peerreject remain. Registry188snapshots/584experiments,
+305evidencefiles. Commit thenfreshdev2-r25; M4–M6 and live25ms remainopen.

@@ -40,6 +40,52 @@ inline FootprintBox footprint(const Box &states,
     throw std::runtime_error("invalid enclosed footprint");
   return out;
 }
+// Rigid vertices include the original physical and wall-clearance margin
+// before propagation; no rounded-down double sum may shrink that footprint.
+inline Box footprint_vertex_offsets(const recovery::FootprintExtents &original) {
+  if (!original.valid()) throw std::runtime_error("invalid corner footprint");
+  Box offsets;
+  size_t i = 0;
+  for (const I x : {I(original.front_extent_m) + I(original.margin_m),
+                   -I(original.rear_extent_m) - I(original.margin_m)})
+    for (const I y : {I(original.left_extent_m) + I(original.margin_m),
+                     -I(original.right_extent_m) - I(original.margin_m)}) {
+      offsets[i++] = x;
+      offsets[i++] = y;
+    }
+  return offsets;
+}
+
+// A rigid rectangle is the convex hull of its four vertices. These additional
+// displacement ranges enclose all of them, independently of the body-pose box.
+// A contact square excluded by either enclosure cannot intersect the vehicle.
+inline std::optional<double> separating_cell_clearance(
+    const Box &vertices, const recovery::OccupancyGrid &grid, size_t cell_index,
+    const recovery::Point2D &origin) {
+  if (!grid.valid() || cell_index >= grid.cells.size() ||
+      !std::isfinite(origin.x_m) || !std::isfinite(origin.y_m)) return std::nullopt;
+  const auto center = grid.grid_to_world(cell_index / grid.width, cell_index % grid.width);
+  if (!center) return std::nullopt;
+  double xmin = INFINITY, xmax = -INFINITY, ymin = INFINITY, ymax = -INFINITY;
+  for (size_t i = 0; i < vertices.size(); ++i)
+    if (!std::isfinite(vertices[i].lo) || !std::isfinite(vertices[i].hi) ||
+        vertices[i].lo > vertices[i].hi) return std::nullopt;
+  for (size_t i = 0; i < vertices.size(); i += 2) {
+    xmin = std::min(xmin, vertices[i].lo);
+    xmax = std::max(xmax, vertices[i].hi);
+    ymin = std::min(ymin, vertices[i + 1].lo);
+    ymax = std::max(ymax, vertices[i + 1].hi);
+  }
+  // Include the whole occupied/unknown square and sample_footprint's existing
+  // 1e-9 contact epsilon. A tangent or unproved direction remains a rejection.
+  const I half = I(grid.resolution_m) * I(.5) + I(1e-9);
+  const I x = I(center->x_m) - I(origin.x_m);
+  const I y = I(center->y_m) - I(origin.y_m);
+  const double gap = std::max({(I(xmin) - x - half).lo, (x - half - I(xmax)).lo,
+                              (I(ymin) - y - half).lo, (y - half - I(ymax)).lo});
+  return std::isfinite(gap) && gap > 0 ? std::optional<double>{gap} : std::nullopt;
+}
+
 // A second enclosure can separate a circle from the entire pose population
 // even when the enclosing rectangle's unused corners overlap it. The normal
 // from that rectangle's nearest point is only a candidate direction. Authority

@@ -334,8 +334,9 @@ Result certify_terminal_stop(const retained::Request &request,
                                 std::cos(origin.yaw_rad) * local.y_m,
                             origin.yaw_rad + local.yaw_rad};
   };
-  const auto check = [&](const vehicle::BodyRanges &ranges, const double begin,
-                         const double end) {
+  const auto check = [&](const vehicle::BodyRanges &ranges,
+                         const vehicle::FootprintRanges &corners,
+                         const double begin, const double end) {
     result.rejected_sec = begin;
     const auto state = box(ranges);
     const double tolerance =
@@ -356,8 +357,11 @@ Result certify_terminal_stop(const retained::Request &request,
     const auto wall = numeric::footprint(state, *wall_footprint);
     const auto cells = recovery::sample_footprint(
         *request.current_wall_grid, wall.extents, to_world(wall.pose));
-    if (!cells.valid || cells.out_of_map || !cells.contact_cells.empty())
-      return Reason::WallRejected;
+    if (!cells.valid || cells.out_of_map) return Reason::WallRejected;
+    for (const auto cell : cells.contact_cells)
+      if (!numeric::separating_cell_clearance(box(corners), *request.current_wall_grid,
+            cell, {observation.initial.state.x_m, observation.initial.state.y_m}))
+        return Reason::WallRejected;
     const auto ego = numeric::footprint(state, request.current_footprint);
     for (const auto &obstacle : request.obstacles.obstacles) {
       auto circle = obstacle.circle;
@@ -402,16 +406,22 @@ Result certify_terminal_stop(const retained::Request &request,
     ++certificate->checked_samples_;
     return Reason::Accepted;
   };
+  vehicle::AppliedFootprintValidation footprint_validation;
+  const auto vertices = numeric::footprint_vertex_offsets(*wall_footprint);
+  for (size_t i = 0; i < vertices.size(); ++i)
+    footprint_validation.local_offsets[i] = {vertices[i].lo, vertices[i].hi};
+  footprint_validation.validate = [&](const vehicle::BodyRanges &ranges,
+      const vehicle::FootprintRanges &corners, double begin, double end) {
+    try {
+      result.reason = check(ranges, corners, begin, end);
+    } catch (const std::exception &) {
+      result.reason = Reason::InvalidWorld;
+    }
+    return result.reason == Reason::Accepted;
+  };
   auto prediction = vehicle::predict_applied_inputs_to_rest(
     observation, prepared.prepared->program, profile, execution.vehicle_model,
-    [&](const vehicle::BodyRanges & ranges, double begin, double end) {
-      try {
-        result.reason = check(ranges, begin, end);
-      } catch (const std::exception &) {
-        result.reason = Reason::InvalidWorld;
-      }
-      return result.reason == Reason::Accepted;
-    });
+    {}, &footprint_validation);
   result.prediction_reason = prediction.reason;
   if (!prediction.tube) {
     if (prediction.reason != vehicle::AppliedInputRejectReason::ValidationRejected)

@@ -2779,3 +2779,88 @@ TEST(MpccRateResolvedRetainedRevalidation, SignedObservationNeedsTheCompleteAppl
   EXPECT_FALSE(production::build(reverse).authority);
   EXPECT_EQ(reverse.applied_program_reason, applied::Reason::StateBoundRejected);
 }
+
+
+TEST(MpccAppliedProgram, CapturedCornerDisplacementSeparatesTheWholeOriginalStop)
+{
+  namespace vm = multi_purpose_mpc_ros::mpcc_vehicle_model;
+  namespace num = vm::numerical;
+  namespace fixture = multi_purpose_mpc_ros::test;
+  const auto observation = fixture::corner_packet_observation();
+  const auto program = fixture::corner_packet_program();
+  const auto grid = fixture::wall_packet_grid();
+  const auto footprint = physical::resolve_clearance_footprint({1.615, .51, .768, .768, .05}, .2);
+  ASSERT_TRUE(footprint);
+  const auto & origin = observation.initial.state;
+  const auto offsets = num::footprint_vertex_offsets(*footprint);
+  vm::AppliedFootprintValidation context;
+  for (size_t i = 0; i < 8; ++i) context.local_offsets[i] = {offsets[i].lo, offsets[i].hi};
+  size_t old_contacts = 0, checked = 0;
+  double first_old_contact = NAN;
+  context.validate = [&](const vm::BodyRanges &body, const vm::FootprintRanges &corners,
+      double begin, double) {
+    num::Box box, vertices;
+    for (size_t i = 0; i < 8; ++i) {
+      box[i] = {body[i].lower, body[i].upper};
+      vertices[i] = {corners[i].lower, corners[i].upper};
+    }
+    const auto enclosed = num::footprint(box, *footprint);
+    const auto & p = enclosed.pose;
+    const double co = std::cos(origin.yaw_rad), so = std::sin(origin.yaw_rad);
+    const recovery::Pose2D world{origin.x_m + co*p.x_m - so*p.y_m,
+      origin.y_m + so*p.x_m + co*p.y_m, origin.yaw_rad + p.yaw_rad};
+    const auto cells = recovery::sample_footprint(grid, enclosed.extents, world);
+    EXPECT_TRUE(cells.valid); EXPECT_FALSE(cells.out_of_map);
+    if (!cells.valid || cells.out_of_map) return false;
+    ++checked;
+    if (!cells.contact_cells.empty()) {
+      if (!std::isfinite(first_old_contact)) first_old_contact = begin;
+      ++old_contacts;
+    }
+    for (const auto cell : cells.contact_cells)
+      if (!num::separating_cell_clearance(vertices, grid, cell, {origin.x_m, origin.y_m})) return false;
+    return true;
+  };
+  const auto prediction = vm::predict_applied_inputs_to_rest(observation, program,
+    {"awsim-2025-empirical-receiver-age-250ms-v1", .25, .25, .1},
+    fixture::vehicle_model(), {}, &context);
+  ASSERT_TRUE(prediction.tube) << static_cast<int>(prediction.reason);
+  EXPECT_EQ(old_contacts, 39U);
+  EXPECT_NEAR(first_old_contact, 10.979999773, 1e-12);
+  EXPECT_GT(checked, 200U);
+  EXPECT_NEAR(prediction.tube->rest_sec, 11.174999773, 1e-12);
+  for (size_t index : {3U, 4U, 5U}) {
+    EXPECT_EQ(prediction.tube->source_to_rest.back().endpoint_body[index].lower, 0);
+    EXPECT_EQ(prediction.tube->source_to_rest.back().endpoint_body[index].upper, 0);
+  }
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, ExtraCornersCannotAuthorizeRealWallsOrMapExit)
+{
+  const auto original = applied_request();
+  const auto nominal = retained::evaluate(original);
+  ASSERT_TRUE(nominal.proof);
+  const vehicle::InputApplicationProfile profile{"test-receiver", .25, .25, .02};
+  for (auto state : {recovery::CellState::Occupied, recovery::CellState::Unknown}) {
+    auto request = original;
+    auto grid = std::make_shared<recovery::OccupancyGrid>();
+    grid->width = request.current_wall_grid->width;
+    grid->height = request.current_wall_grid->height;
+    grid->resolution_m = request.current_wall_grid->resolution_m;
+    grid->origin_x_m = request.current_wall_grid->origin_x_m;
+    grid->origin_y_m = request.current_wall_grid->origin_y_m;
+    grid->y_axis = request.current_wall_grid->y_axis;
+    grid->cells.assign(grid->width * grid->height, state);
+    request.current_wall_grid = grid;
+    const auto result = applied::certify_terminal_stop(request, *nominal.proof, profile);
+    EXPECT_EQ(result.reason, applied::Reason::WallRejected);
+    EXPECT_FALSE(result.certificate);
+  }
+  auto request = original;
+  auto grid = std::make_shared<recovery::OccupancyGrid>(*request.current_wall_grid);
+  grid->origin_x_m += 1000;
+  request.current_wall_grid = grid;
+  const auto result = applied::certify_terminal_stop(request, *nominal.proof, profile);
+  EXPECT_EQ(result.reason, applied::Reason::WallRejected);
+  EXPECT_FALSE(result.certificate);
+}

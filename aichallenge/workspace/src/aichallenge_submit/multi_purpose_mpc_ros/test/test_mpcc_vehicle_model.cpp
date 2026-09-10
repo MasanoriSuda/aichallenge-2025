@@ -890,3 +890,37 @@ TEST(MpccVehicleModel, CornerCellSeparationRejectsContactTangencyAndInvalidGeome
   grid.resolution_m = 0;
   EXPECT_FALSE(num::separating_cell_clearance(clear, grid, cell, *c));
 }
+
+
+TEST(MpccVehicleModel, ForwardPartitionCoversNativeBoundaryAndUnsplittablePopulations)
+{
+  namespace num = vehicle::numerical;
+  const auto p = vehicle_model();
+  for (const double speed : {-2., -p.sleep_speed_mps, 0., p.sleep_speed_mps, 2.}) {
+    for (bool point : {false, true}) {
+      auto state = vehicle::State{0, 0, 0, speed, 0, 0, 0, 0};
+      auto body = num::point(state);
+      if (!point) body[3] = {speed - .03, speed + .03};
+      num::Box swept;
+      const std::vector<num::I> inputs{{-3, -.0001}, {0}, {.0001, 1.37}};
+      const auto parts = num::advance_partitioned_inputs({body}, inputs, p, .005, &swept);
+      ASSERT_FALSE(parts.empty()); EXPECT_LE(parts.size(), 6U);
+      for (const auto &input : inputs) {
+        for (double u : {body[3].lo, speed, body[3].hi}) {
+          for (double a : {input.lo, (input.lo+input.hi)/2, input.hi}) {
+            state.forward_velocity_mps = u;
+            const auto next = vehicle::advance(state, {a, 0}, p, .005);
+            ASSERT_TRUE(next);
+            const auto values = num::values(next->state);
+            const bool contained = std::any_of(parts.begin(), parts.end(), [&](const auto &part) {
+              for (size_t i = 0; i < 8; ++i)
+                if (values[i] < part[i].lo || values[i] > part[i].hi) return false;
+              return true;
+            });
+            ASSERT_TRUE(contained) << "speed=" << u << " input=" << a;
+          }
+        }
+      }
+    }
+  }
+}

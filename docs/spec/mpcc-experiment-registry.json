@@ -973,6 +973,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/corner-displacement-evidence.json",
       "replay_ready": true,
       "reason": "Original firstD1947/source245 and separate previous946/source249; exact input population/wall/body/corner diagnosis"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-speed-partition-r25",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/speed-partition-evidence.json",
+      "replay_ready": true,
+      "reason": "Original964world/current source observation, distinct inspected212 and actual263publication/clock; moving-speed dependence audit"
     }
   ],
   "experiments": [
@@ -9768,6 +9774,406 @@
         "Wall rejection based solely on the unused corner of one enclosing rectangle"
       ],
       "revisit_condition": "A changed numerical representation, original world/input population, or independent counterexample establishes a new causal comparison. No margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-integrated-r25",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Corner displacement enclosure closes integrated authority",
+      "changed_dimension": "Fresh same-build dev2",
+      "result": "rejected",
+      "reason": "D1964/1.86mps firstEmergency,124.676ms callback;D2later1161. Live25ms andraceacceptance fail.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-exact-pair",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Captured inspected212and separate previous263 can be replayed",
+      "changed_dimension": "Unmodified captured requests",
+      "result": "accepted",
+      "reason": "212cursor expired; previous963/source263 fullproof/materialization/join passes12.720047ms.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-persistent-a-1",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: persistent-a",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=10212526088509474296 solver=solved solve_ms=47.975 terminal_progress=5.05632 terminal_velocity=3.06098 lateral_reserve=0.35114 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-stateless-left-b-2",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: stateless-left-b",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "accepted",
+      "reason": "arm=stateless-left-b stage=accepted candidate=3291650150522767798 solver=solved solve_ms=44.0075 terminal_progress=5.23625 terminal_velocity=3.06165 lateral_reserve=0.351148 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-stateless-right-b-3",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: stateless-right-b",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=stateless-right-b stage=solver-rejected candidate=5356786471317294172 solver=solve-rejected solve_ms=125.912 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved relinearized QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=2.72387e-06, dua_res=0.022723, failed_iterate_row=441, value=-0.108925, bounds=[-0.108922,0.591634], violation=3.02055e-06, tolerance=0.00110892, normalized=0.00272386, row_semantic=steering-rate-prefix/stage=3/element=1, architecture_snapshot=mpcc_architecture_snapshots/000000000964-4a5720ea087c4c5c-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-rough-left-c-4",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: rough-left-c",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "accepted",
+      "reason": "arm=rough-left-c stage=accepted candidate=13825226404404079151 solver=solved solve_ms=30.0101 terminal_progress=5.03994 terminal_velocity=3.06357 lateral_reserve=0.351151 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=5 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=5 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=0/attempts=5/accepted; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-rough-right-c-5",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: rough-right-c",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=rough-right-c stage=solver-rejected candidate=6266164290711382782 solver=solve-rejected solve_ms=140.522 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.960093, dua_res=17.1926, failed_iterate_row=578, value=0.736753, bounds=[-inf,-5.59647], violation=6.33323, tolerance=0.00659647, normalized=960.093, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000000964-56f5e3390c16eafe-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-offline-left-d-6",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: offline-left-d",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "accepted",
+      "reason": "arm=offline-left-d stage=accepted candidate=13825226404404079151 solver=solved solve_ms=72.0506 terminal_progress=5.07007 terminal_velocity=3.13191 lateral_reserve=0.351222 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=5 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=5 sqp_depth=3 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=3/attempts=5/accepted, progress_wall=accepted/applied=1/solved=1/mismatch=13.9221m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1757/cache_hits=7/cache_misses=93/cache_scanned=8160/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, physical_dynamic_sqp_audit=applied/solved=1/limit=3/count=3/detail=bounded dynamics/obstacle/wall SQP solved; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-offline-right-d-7",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: offline-right-d",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=offline-right-d stage=solver-rejected candidate=6266164290711382782 solver=solve-rejected solve_ms=67.1809 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.960093, dua_res=17.1926, failed_iterate_row=578, value=0.736753, bounds=[-inf,-5.59647], violation=6.33323, tolerance=0.00659647, normalized=960.093, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-production-left-g-8",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: production-left-g",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "accepted",
+      "reason": "arm=production-left-g stage=accepted candidate=3291650150522767798 solver=solved solve_ms=42.9112 terminal_progress=5.23625 terminal_velocity=3.06165 lateral_reserve=0.351148 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=1 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/candidate=direct-side; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-architecture-production-right-g-9",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: production-right-g",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=production-right-g stage=solver-rejected candidate=5356786471317294172 solver=solve-rejected solve_ms=54.6359 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved relinearized QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=2.72387e-06, dua_res=0.022723, failed_iterate_row=441, value=-0.108925, bounds=[-0.108922,0.591634], violation=3.02055e-06, tolerance=0.00110892, normalized=0.00272386, row_semantic=steering-rate-prefix/stage=3/element=1; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Same-world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=7282209487549063380 solver=solved solve_ms=14.7439 terminal_progress=0.678833 terminal_velocity=0 lateral_reserve=0.35108 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.95068,-2.68307]/mean=-2.78369/bounds=0 steer_rate=[-0.714204,0.712168]/mean=0.286283/bounds=3/sign_changes=5 sequence=[0.045:-2.78851:0.712168;0.045:-2.68307:0.198849;0.045:-2.69016:-0.714074;0.045:-2.69704:0.483574;0.045:-2.70384:0.493983;0.045:-2.71107:0.508787;0.045:-2.71945:0.526757;0.045:-2.72925:0.546385;0.045:-2.74044:0.566631;0.045:-2.82532:0.586757;0.045:-2.7664:0.606187;0.045:-2.78071:0.624497;0.045:-2.7956:0.641241;0.045:-2.81074:0.656083;0.045:-2.82603:0.664879;0.045:-2.84132:-0.103075;0.045:-2.85604:-0.62078;0.045:-2.87106:-0.714204;0.045:-2.8871:0.0973628;0.045:-2.95068:-0.0363445] detail=accepted; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r129-actual",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Using actual263instead of expired212 suffices",
+      "changed_dimension": "Explicit node-equivalent rebind; identity associations kept distinct",
+      "result": "rejected",
+      "reason": "Original semantic observation and exact published clock reconstruct263normal wall rejection and nominalStop->fullwall join rejection. {\"authority\": false, \"decision\": 964, \"meaning\": \"Original current source observation, immutable world, actual publication artifact/clock; explicitly reconstructed node-equivalent prospective requests. Not the original inspected-plan request.\", \"actual_published_normal\": {\"elapsed_ms\": 49.843304, \"source\": 263, \"reason\": \"steering-unreachable\", \"applied_reason\": 6, \"program_reason\": 0, \"prediction_reason\": 8, \"rejected_sec\": 11.284999763, \"rejected_peer\": \"\", \"terminal_attempts\": 4, \"production\": \"retained-proof-unavailable\", \"packet\": [10.584999763, 1.3295961618423462, -0.43684491515159607]}, \"published_stop\": \"accepted\", \"bundle\": \"available\", \"actual_stop_join\": {\"elapsed_ms\": 8.155762, \"source\": 100964, \"reason\": \"applied-program-unavailable\", \"applied_reason\": 6, \"program_reason\": 0, \"prediction_reason\": 8, \"rejected_sec\": 11.499999763000002, \"rejected_peer\": \"\", \"terminal_attempts\": 0, \"production\": \"retained-proof-unavailable\", \"packet\": [10.584999763, -3, -0.4039126932621002]}}",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r130-compile",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Full corner audit is executable",
+      "changed_dimension": "Initial diagnostic file placement",
+      "result": "inconclusive",
+      "reason": "Relocated driver cannot resolve relative include; compile log preserved, no numerical conclusion.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r131-native-sampling",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "A sampled native response falsifies wall clearance",
+      "changed_dimension": "Exact original Stop programme, original body/corner tube, independent native scalar paths",
+      "result": "inconclusive",
+      "reason": "All128responses clear;1505280values enclosed. Production extra-corner proof still fails57steps,firstcell476325. Sampling does not certify population.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r132-branch-only",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Checking existing branches before joining is sufficient",
+      "changed_dimension": "Physical check placement only, original numerical population",
+      "result": "rejected",
+      "reason": "Same57steps fail,first11.499999763.1960originalbodycomponents identical.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r133-split2",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Preserving forward-speed dependence eliminates wall overestimation",
+      "changed_dimension": "Closed speed-interval subdivisions before future propagation; all input responses retained",
+      "result": "accepted",
+      "reason": "{\"nominal\": \"accepted\", \"first_cells\": [476325], \"first_branch_wall\": null, \"branch_contact_steps\": 0, \"body_component_matches\": 1960, \"first_wall\": 11.499999763000002, \"contact_steps\": 57, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1505280, \"rest_sec\": 11.784999763}; Geometry diagnostic only. Misnamed body_component_matches counts finite values; native values must remain enclosed.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r133-split4",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Preserving forward-speed dependence eliminates wall overestimation",
+      "changed_dimension": "Closed speed-interval subdivisions before future propagation; all input responses retained",
+      "result": "accepted",
+      "reason": "{\"nominal\": \"accepted\", \"first_cells\": [476325], \"first_branch_wall\": null, \"branch_contact_steps\": 0, \"body_component_matches\": 1960, \"first_wall\": 11.499999763000002, \"contact_steps\": 57, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1505280, \"rest_sec\": 11.784999763}; Geometry diagnostic only. Misnamed body_component_matches counts finite values; native values must remain enclosed.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r133-split8",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Preserving forward-speed dependence eliminates wall overestimation",
+      "changed_dimension": "Closed speed-interval subdivisions before future propagation; all input responses retained",
+      "result": "accepted",
+      "reason": "{\"nominal\": \"accepted\", \"first_cells\": [476325], \"first_branch_wall\": null, \"branch_contact_steps\": 0, \"body_component_matches\": 1960, \"first_wall\": 11.499999763000002, \"contact_steps\": 57, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1505280, \"rest_sec\": 11.784999763}; Geometry diagnostic only. Misnamed body_component_matches counts finite values; native values must remain enclosed.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r134-split2",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Preserving forward-speed dependence eliminates wall overestimation",
+      "changed_dimension": "Closed speed-interval subdivisions before future propagation; all input responses retained",
+      "result": "accepted",
+      "reason": "{\"nominal\": \"accepted\", \"first_cells\": [476325], \"joined_first_wall\": null, \"joined_contact_steps\": 0, \"max_parts\": 4, \"first_branch_wall\": null, \"branch_contact_steps\": 0, \"body_component_matches\": 1960, \"first_wall\": 11.499999763000002, \"contact_steps\": 57, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1505280, \"rest_sec\": 11.784999763}; Geometry diagnostic only. Misnamed body_component_matches counts finite values; native values must remain enclosed.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r134-split4",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Preserving forward-speed dependence eliminates wall overestimation",
+      "changed_dimension": "Closed speed-interval subdivisions before future propagation; all input responses retained",
+      "result": "accepted",
+      "reason": "{\"nominal\": \"accepted\", \"first_cells\": [476325], \"joined_first_wall\": null, \"joined_contact_steps\": 0, \"max_parts\": 6, \"first_branch_wall\": null, \"branch_contact_steps\": 0, \"body_component_matches\": 1960, \"first_wall\": 11.499999763000002, \"contact_steps\": 57, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1505280, \"rest_sec\": 11.784999763}; Geometry diagnostic only. Misnamed body_component_matches counts finite values; native values must remain enclosed.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r134-split8",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Preserving forward-speed dependence eliminates wall overestimation",
+      "changed_dimension": "Closed speed-interval subdivisions before future propagation; all input responses retained",
+      "result": "accepted",
+      "reason": "{\"nominal\": \"accepted\", \"first_cells\": [476325], \"joined_first_wall\": null, \"joined_contact_steps\": 0, \"max_parts\": 10, \"first_branch_wall\": null, \"branch_contact_steps\": 0, \"body_component_matches\": 1960, \"first_wall\": 11.499999763000002, \"contact_steps\": 57, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1505280, \"rest_sec\": 11.784999763}; Geometry diagnostic only. Misnamed body_component_matches counts finite values; native values must remain enclosed.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r135-full-native",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Two forward-speed intervals close actual263fullauthority",
+      "changed_dimension": "Generated alternative numerical header/prediction implementation, original complete production gates",
+      "result": "accepted",
+      "reason": "Normal21.961207ms/oneattempt andStopjoin20.290395ms pass. No production edits in this isolated diagnostic; not live25ms.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-r136-historical-box",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Old geometry regression can remain frozen after representation improves",
+      "changed_dimension": "Historical numeric output becomes immutable test input; no physical test disabled",
+      "result": "accepted",
+      "reason": "Freeze exactr24firstcontact body/corners; test still detects original468057rectangle contact and verifies the independent corner separation.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-speed-partition-r25-production-local",
+      "baseline_commit": "13be2d8753dbb9939ff65a37c79da5b9e3f707e3",
+      "snapshot_ids": [
+        "20260911-nine-state-speed-partition-r25"
+      ],
+      "hypothesis": "Shared2partition representation preserves all gates",
+      "changed_dimension": "Shared numerical representation, bounded storage, source-backed regression fixtures",
+      "result": "accepted",
+      "reason": "Buildr53=26/testsr43=2449/62groups;native137-139allpriorpositivepasses. Actual263normal18.28586ms,materializedjoin16.089412ms,publishedStop16.308743ms. R18actualhistorygaprejects5; true wall/peer/Follow tests pass. Later r24D2990 now accepts tighter peer bounds, r22D21083stillpeerreject.",
+      "production_impact": "One additional numerical forward-speed partition, all original physical and final identity gates; no integrated acceptance claimed.",
+      "deleted_code": [
+        "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
+      ],
+      "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
     }
   ]
 }

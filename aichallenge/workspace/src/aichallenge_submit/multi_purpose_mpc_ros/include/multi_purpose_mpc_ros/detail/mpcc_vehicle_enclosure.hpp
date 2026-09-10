@@ -430,7 +430,7 @@ inline Box step(const Box &b, I a, const model::Parameters &p, double dt) {
   return joined(step_parts(b, a, p, dt));
 }
 inline std::vector<Box> advance_partitioned_inputs(std::vector<Box> states,
-                                            const std::vector<I> & inputs,
+                                            const std::vector<I> &inputs,
                                             const model::Parameters &p,
                                             double duration, Box *swept,
                                             CornerPopulation *corners = nullptr) {
@@ -439,68 +439,87 @@ inline std::vector<Box> advance_partitioned_inputs(std::vector<Box> states,
   const auto count = model::integration_steps(duration, p.maximum_step_sec);
   if (count == 0 || inputs.empty())
     throw std::runtime_error("invalid partitioned duration");
-  if (swept)
-    *swept = joined(states);
+  if (swept) *swept = joined(states);
   if (corners) corners->swept = joined(corners->states);
   const auto merge = [](std::optional<Box> &to, const Box &from) {
-    if (!to)
-      to = from;
-    else
-      for (size_t i = 0; i < 8; ++i)
-        (*to)[i] = hull((*to)[i], from[i]);
+    if (!to) to = from;
+    else for (size_t i = 0; i < 8; ++i) (*to)[i] = hull((*to)[i], from[i]);
   };
-  for (size_t k = 0; k < count; ++k) {
-    // Rest is a separate hybrid mode. Merging it with moving states before
-    // the next map invents combinations of zero u and moving vy/r, which can
-    // make a valid enclosure useless. Splitting/merging changes no trajectory.
-    std::array<std::optional<Box>, 5> bins, corner_bins;
-    const std::array<double, 5> boundaries{-INFINITY, -p.sleep_speed_mps, 0,
-                                           p.sleep_speed_mps, INFINITY};
-    // Each input arm is evaluated before merging body modes. Convexifying
-    // across absent acceleration signs here invents new hybrid responses.
-    for (const auto & a : inputs)
-      for (size_t state_index = 0; state_index < states.size(); ++state_index) {
-        std::vector<CornerImage> images;
-        const auto parts = step_parts(states[state_index], a, p, duration / count,
+  for (size_t step = 0; step < count; ++step) {
+    std::vector<Box> parts;
+    std::vector<CornerImage> images;
+    parts.reserve(states.size() * inputs.size() * 4);
+    if (corners) images.reserve(parts.capacity());
+    double forward_low = INFINITY, forward_high = -INFINITY;
+    // Evaluate every original input arm and native hybrid branch first.
+    for (const auto &a : inputs)
+      for (size_t j = 0; j < states.size(); ++j) {
+        std::vector<CornerImage> branch_images;
+        const auto next = step_parts(states[j], a, p, duration / count,
           corners ? &corners->probe : nullptr,
-          corners ? &corners->states[state_index] : nullptr,
-          corners ? &images : nullptr);
-        for (size_t part_index = 0; part_index < parts.size(); ++part_index) {
-          const auto &next = parts[part_index];
-          if (corners)
-            for (size_t i = 0; i < 8; ++i)
-              corners->swept[i] = hull(corners->swept[i], images[part_index].swept[i]);
-          if (at_rest(next)) {
-            merge(bins[0], next);
-            if (corners) merge(corner_bins[0], images[part_index].endpoint);
-            continue;
-          }
-          for (size_t j = 0; j < 4; ++j) {
-            Box clipped = next;
-            clipped[3] = {std::max(next[3].lo, boundaries[j]),
-                          std::min(next[3].hi, boundaries[j + 1])};
-            if (clipped[3].lo <= clipped[3].hi) {
-              merge(bins[j + 1], clipped);
-              if (corners) merge(corner_bins[j + 1], images[part_index].endpoint);
-            }
+          corners ? &corners->states[j] : nullptr,
+          corners ? &branch_images : nullptr);
+        for (size_t i = 0; i < next.size(); ++i) {
+          parts.push_back(next[i]);
+          if (corners) images.push_back(branch_images[i]);
+          if (!at_rest(next[i]) && next[i][3].hi > p.sleep_speed_mps) {
+            forward_low = std::min(forward_low,
+              std::max(p.sleep_speed_mps, next[i][3].lo));
+            forward_high = std::max(forward_high, next[i][3].hi);
           }
         }
       }
+    // Keeping rest alone is insufficient: merging all forward velocities
+    // loses velocity/pose dependence before the next nonlinear map. Split
+    // that interval at its midpoint. Both closed sides retain the boundary;
+    // no speed, input, or physical model branch is excluded or changed.
+    std::array<double, 6> cuts{-INFINITY, -p.sleep_speed_mps, 0,
+                               p.sleep_speed_mps, INFINITY, INFINITY};
+    size_t cut_count = 5;
+    if (forward_high > forward_low) {
+      const double midpoint = forward_low + (forward_high - forward_low) / 2;
+      if (!std::isfinite(midpoint)) throw std::runtime_error("invalid forward partition");
+      if (midpoint > forward_low && midpoint < forward_high) {
+        cuts[4] = midpoint;
+        cut_count = 6;
+      }
+    }
+    std::array<std::optional<Box>, 6> bins, corner_bins;
+    for (size_t i = 0; i < parts.size(); ++i) {
+      const auto &next = parts[i];
+      if (corners)
+        for (size_t k = 0; k < 8; ++k)
+          corners->swept[k] = hull(corners->swept[k], images[i].swept[k]);
+      if (at_rest(next)) {
+        merge(bins[0], next);
+        if (corners) merge(corner_bins[0], images[i].endpoint);
+        continue;
+      }
+      for (size_t j = 0; j + 1 < cut_count; ++j) {
+        Box clipped = next;
+        clipped[3] = {std::max(next[3].lo, cuts[j]),
+                      std::min(next[3].hi, cuts[j + 1])};
+        if (clipped[3].lo <= clipped[3].hi) {
+          merge(bins[j + 1], clipped);
+          if (corners) merge(corner_bins[j + 1], images[i].endpoint);
+        }
+      }
+    }
     states.clear();
     if (corners) corners->states.clear();
-    for (size_t i = 0; i < bins.size(); ++i)
+    for (size_t i = 0; i < cut_count; ++i)
       if (bins[i]) {
         states.push_back(*bins[i]);
         if (corners) corners->states.push_back(*corner_bins[i]);
       }
     if (swept) {
       const auto all = joined(states);
-      for (size_t i = 0; i < 8; ++i)
-        (*swept)[i] = hull((*swept)[i], all[i]);
+      for (size_t i = 0; i < 8; ++i) (*swept)[i] = hull((*swept)[i], all[i]);
     }
   }
   return states;
 }
+
 inline std::vector<Box> advance_partitioned(std::vector<Box> states, I a,
                                             const model::Parameters &p,
                                             double duration, Box *swept) {

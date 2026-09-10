@@ -285,3 +285,17 @@ Freshr127/r128 closes947fullproof-production-materialization-join10.725639ms,
 rest11.174999773,2commands/210samples; past positives retained, realr18gap rejects5,
 later r24D2990 and r22D21083peerreject remain. Registry188snapshots/584experiments,
 305evidencefiles. Commit thenfreshdev2-r25; M4–M6 and live25ms remainopen.
+
+2026-09-11:13be2d87dev2-r25 failsD1964/1.86mps/124.676ms. Original inspected212cursor is expired; actual263and current semantic observation remain separately available. R129reconstructs actual263normal wall failure and nominalStop->materializedStopfullwall failure11.499999763. R130compilefail preserved; r131128native paths clear/1505280values enclosed; r132per-branchcheckingalonefails57steps. R133/R1342/4/8forward-speed subdivisions all close wall, including joined new boxes; original inputs preserved. R135isolated2split fullnormal1attempt21.961207ms and publishedStop20.290395ms both accept. No production edits yet; r25-speed-partition-design is active. Registry addition pending with validation. M4–M6remainopen.
+
+2026-09-11: Forward-speed partition production integrated: midpoint of existing
+moving positive next-state interval, overlapping closed cuts, max6bins, all
+original inputs/modes and physical/provenance/final gates retained. Buildr53=26/
+26.2s,testsr43=2449/62groups/0errors-fails-skips/29.44s. R24historical geometry
+frozenbyr136beforechange; current fullwall/native/rest checks retained. Newr25
+fixture clears with all128nativepaths and >1millionbody/cornervalues enclosed.
+Freshnative137-139:actual263normal18.28586ms,normalmaterializedjoin16.089412ms,
+publishedStop16.308743ms accept; earlierpositives pass, signedr16pass, realr18gap
+reject5. Later r24D2990nowpeer-clearsunder tighterbodybounds; r22D21083stillrejects.
+Registry189snapshots/609experiments,315evidencefiles. Commit thenfreshdev2-r26;
+actualpublicationclock and25ms/allM4–M6remainopen.

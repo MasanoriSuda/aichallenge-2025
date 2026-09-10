@@ -15,6 +15,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <random>
 #include <stdexcept>
 
 TEST(MpccAppliedProgram, CapturedMovingStopRemainsClearOfOriginalWallThroughRest)
@@ -2795,10 +2796,25 @@ TEST(MpccAppliedProgram, CapturedCornerDisplacementSeparatesTheWholeOriginalStop
   const auto offsets = num::footprint_vertex_offsets(*footprint);
   vm::AppliedFootprintValidation context;
   for (size_t i = 0; i < 8; ++i) context.local_offsets[i] = {offsets[i].lo, offsets[i].hi};
-  size_t old_contacts = 0, checked = 0;
-  double first_old_contact = NAN;
+  // The previous enclosure is a frozen input. Its contact is not a required
+  // property of a later, tighter numerical representation.
+  const auto old = fixture::corner_packet_checkpoint();
+  num::Box old_body, old_corners;
+  for (size_t i = 0; i < 8; ++i) {
+    old_body[i] = {old.body[i].lower, old.body[i].upper};
+    old_corners[i] = {old.corners[i].lower, old.corners[i].upper};
+  }
+  const auto old_box = num::footprint(old_body, *footprint);
+  const auto & op = old_box.pose;
+  const double co = std::cos(origin.yaw_rad), so = std::sin(origin.yaw_rad);
+  const auto old_cells = recovery::sample_footprint(grid, old_box.extents,
+    {origin.x_m + co*op.x_m - so*op.y_m, origin.y_m + so*op.x_m + co*op.y_m,
+      origin.yaw_rad + op.yaw_rad});
+  ASSERT_EQ(old_cells.contact_cells, std::vector<size_t>{468057U});
+  ASSERT_TRUE(num::separating_cell_clearance(old_corners, grid, 468057U, {origin.x_m, origin.y_m}));
+  size_t checked = 0;
   context.validate = [&](const vm::BodyRanges &body, const vm::FootprintRanges &corners,
-      double begin, double) {
+      double, double) {
     num::Box box, vertices;
     for (size_t i = 0; i < 8; ++i) {
       box[i] = {body[i].lower, body[i].upper};
@@ -2813,10 +2829,6 @@ TEST(MpccAppliedProgram, CapturedCornerDisplacementSeparatesTheWholeOriginalStop
     EXPECT_TRUE(cells.valid); EXPECT_FALSE(cells.out_of_map);
     if (!cells.valid || cells.out_of_map) return false;
     ++checked;
-    if (!cells.contact_cells.empty()) {
-      if (!std::isfinite(first_old_contact)) first_old_contact = begin;
-      ++old_contacts;
-    }
     for (const auto cell : cells.contact_cells)
       if (!num::separating_cell_clearance(vertices, grid, cell, {origin.x_m, origin.y_m})) return false;
     return true;
@@ -2825,10 +2837,9 @@ TEST(MpccAppliedProgram, CapturedCornerDisplacementSeparatesTheWholeOriginalStop
     {"awsim-2025-empirical-receiver-age-250ms-v1", .25, .25, .1},
     fixture::vehicle_model(), {}, &context);
   ASSERT_TRUE(prediction.tube) << static_cast<int>(prediction.reason);
-  EXPECT_EQ(old_contacts, 39U);
-  EXPECT_NEAR(first_old_contact, 10.979999773, 1e-12);
   EXPECT_GT(checked, 200U);
-  EXPECT_NEAR(prediction.tube->rest_sec, 11.174999773, 1e-12);
+  EXPECT_GT(prediction.tube->rest_sec, observation.now_sec + .25);
+  EXPECT_LE(prediction.tube->rest_sec, 11.174999773 + 1e-12);
   for (size_t index : {3U, 4U, 5U}) {
     EXPECT_EQ(prediction.tube->source_to_rest.back().endpoint_body[index].lower, 0);
     EXPECT_EQ(prediction.tube->source_to_rest.back().endpoint_body[index].upper, 0);
@@ -2863,4 +2874,104 @@ TEST(MpccRateResolvedRetainedRevalidation, ExtraCornersCannotAuthorizeRealWallsO
   const auto result = applied::certify_terminal_stop(request, *nominal.proof, profile);
   EXPECT_EQ(result.reason, applied::Reason::WallRejected);
   EXPECT_FALSE(result.certificate);
+}
+
+
+TEST(MpccAppliedProgram, CapturedMovingSpeedDependenceStaysClearForEveryInputThroughRest)
+{
+  namespace vm = multi_purpose_mpc_ros::mpcc_vehicle_model;
+  namespace num = vm::numerical;
+  namespace fixture = multi_purpose_mpc_ros::test;
+  const auto observation = fixture::speed_partition_observation();
+  const auto program = fixture::speed_partition_program();
+  const auto model = fixture::vehicle_model();
+  const auto grid = fixture::wall_packet_grid();
+  const auto footprint = physical::resolve_clearance_footprint({1.615, .51, .768, .768, .05}, .2);
+  ASSERT_TRUE(footprint);
+  const auto & origin = observation.initial.state;
+  const double co = std::cos(origin.yaw_rad), so = std::sin(origin.yaw_rad);
+  const auto world = [&](const recovery::Pose2D &p) {
+    return recovery::Pose2D{origin.x_m + co*p.x_m - so*p.y_m,
+      origin.y_m + so*p.x_m + co*p.y_m, origin.yaw_rad + p.yaw_rad};
+  };
+  const auto old = fixture::speed_partition_checkpoint();
+  num::Box old_body, old_corners;
+  for (size_t i = 0; i < 8; ++i) {
+    old_body[i] = {old.body[i].lower, old.body[i].upper};
+    old_corners[i] = {old.corners[i].lower, old.corners[i].upper};
+  }
+  const auto old_box = num::footprint(old_body, *footprint);
+  const auto old_cells = recovery::sample_footprint(grid, old_box.extents, world(old_box.pose));
+  ASSERT_NE(std::find(old_cells.contact_cells.begin(), old_cells.contact_cells.end(), 476325U),
+    old_cells.contact_cells.end());
+  ASSERT_FALSE(num::separating_cell_clearance(old_corners, grid, 476325U, {origin.x_m, origin.y_m}));
+  const auto offsets = num::footprint_vertex_offsets(*footprint);
+  vm::AppliedFootprintValidation context;
+  for (size_t i = 0; i < 8; ++i) context.local_offsets[i] = {offsets[i].lo, offsets[i].hi};
+  size_t checked = 0;
+  context.validate = [&](const auto &body, const auto &corners, double, double) {
+    num::Box box, vertices;
+    for (size_t i = 0; i < 8; ++i) {
+      box[i] = {body[i].lower, body[i].upper}; vertices[i] = {corners[i].lower, corners[i].upper};
+    }
+    const auto b = num::footprint(box, *footprint);
+    const auto cells = recovery::sample_footprint(grid, b.extents, world(b.pose));
+    if (!cells.valid || cells.out_of_map) return false;
+    for (auto cell : cells.contact_cells)
+      if (!num::separating_cell_clearance(vertices, grid, cell, {origin.x_m, origin.y_m})) return false;
+    ++checked; return true;
+  };
+  const auto prediction = vm::predict_applied_inputs_to_rest(observation, program,
+    {"awsim-2025-empirical-receiver-age-250ms-v1", .25, .25, .1}, model, {}, &context);
+  ASSERT_TRUE(prediction.tube) << static_cast<int>(prediction.reason);
+  EXPECT_GT(checked, 200U);
+  EXPECT_LE(prediction.tube->maximum_body_partitions, 6U);
+  EXPECT_GT(prediction.tube->rest_sec, program.commands.back().published_sec + .025);
+  auto initial = origin; initial.x_m = initial.y_m = initial.yaw_rad = 0;
+  std::vector<vm::State> oracles(128, initial);
+  std::mt19937_64 random(20260912); std::uniform_real_distribution<double> unit(0, 1);
+  size_t values_checked = 0, step = 0;
+  for (const auto &s : prediction.tube->source_to_rest) {
+    ASSERT_TRUE(s.swept_footprint); ASSERT_TRUE(s.endpoint_footprint);
+    std::vector<vm::ScalarRange> groups;
+    for (const auto &g : s.inputs.acceleration_sign_groups) if (g) groups.push_back(*g);
+    ASSERT_FALSE(groups.empty());
+    for (size_t arm = 0; arm < oracles.size(); ++arm) {
+      auto &state = oracles[arm]; const auto before = state;
+      const auto &g = groups[arm % groups.size()];
+      const double af = arm < 4 ? double(arm % 2) : arm < 8 ? double((step+arm)%2) : unit(random);
+      const double sf = arm < 4 ? double(arm / 2) : arm < 8 ? double((step+arm/2)%2) : unit(random);
+      state.desired_steering_rad = (s.inputs.wire_steering_rad.lower + sf *
+        (s.inputs.wire_steering_rad.upper - s.inputs.wire_steering_rad.lower)) / model.steering_wire_gain;
+      const auto next = vm::advance(state, {g.lower + af * (g.upper-g.lower), 0}, model, s.duration_sec);
+      ASSERT_TRUE(next); state = next->state;
+      const auto values = num::values(state);
+      for (size_t i = 0; i < 8; ++i) {
+        ASSERT_GE(values[i], s.endpoint_body[i].lower); ASSERT_LE(values[i], s.endpoint_body[i].upper);
+        ++values_checked;
+      }
+      for (int part = 0; part <= 4; ++part) {
+        const double f = part / 4.;
+        const double bx = before.x_m + f*(state.x_m-before.x_m), by = before.y_m + f*(state.y_m-before.y_m);
+        const double angle = origin.yaw_rad + before.yaw_rad + f*(state.yaw_rad-before.yaw_rad);
+        for (size_t k = 0; k < 8; k += 2) {
+          const double x = (offsets[k].lo+offsets[k].hi)/2, y = (offsets[k+1].lo+offsets[k+1].hi)/2;
+          const double X = co*bx-so*by+std::cos(angle)*x-std::sin(angle)*y;
+          const double Y = so*bx+co*by+std::sin(angle)*x+std::cos(angle)*y;
+          ASSERT_GE(X, (*s.swept_footprint)[k].lower); ASSERT_LE(X, (*s.swept_footprint)[k].upper);
+          ASSERT_GE(Y, (*s.swept_footprint)[k+1].lower); ASSERT_LE(Y, (*s.swept_footprint)[k+1].upper);
+          values_checked += 2;
+        }
+      }
+    }
+    ++step;
+  }
+  EXPECT_GT(values_checked, 1000000U);
+  for (const auto &s : oracles) {
+    EXPECT_EQ(s.forward_velocity_mps, 0); EXPECT_EQ(s.lateral_velocity_mps, 0); EXPECT_EQ(s.yaw_rate_radps, 0);
+  }
+  for (size_t i : {3U, 4U, 5U}) {
+    EXPECT_EQ(prediction.tube->source_to_rest.back().endpoint_body[i].lower, 0);
+    EXPECT_EQ(prediction.tube->source_to_rest.back().endpoint_body[i].upper, 0);
+  }
 }

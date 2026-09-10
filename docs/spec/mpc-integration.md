@@ -163,6 +163,16 @@ buildr52=26、testsr42=2447記録/62groupで失敗0。保存947の全認証・�
 再検証は通過した。新規2台走行と実走25ms、M4–M6は未完。
 [四隅の変位範囲と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/corner-displacement-design.md)を参照。
 
+2026-09-11のdev2-r25ではD1decision964、実公開元263が停止の壁認証を失った。
+静止・符号の分岐だけでは前進速度と位置の依存関係を保持できないため、次状態の
+前進速度範囲を中点で二分してから後続計算へ進む。両区間に境界を含め、元の入力・
+逆向き状態・静止分岐を全件残す。最大6区間の数値表現であり、速度閾値・受信profile・
+物理モデル・安全余裕・試行数設定は変えない。全区間の壁・全他車・Follow・全応答停止・
+最終指令の照合を維持する。範囲が狭まった場合の停止時刻は、残した全応答から再計算する。
+buildr53=26、testsr43=2449記録/62groupで失敗0。実公開元263の同じ指令は通常認証・
+停止格納・再検証まで通過した。新規実走25msとM4–M6は未完。
+[前進速度の数値区間と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r25-speed-partition-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

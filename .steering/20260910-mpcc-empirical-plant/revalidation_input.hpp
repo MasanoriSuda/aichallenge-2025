@@ -1,5 +1,6 @@
 #pragma once
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
+#include "multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp"
 #include <yaml-cpp/yaml.h>
 #include <filesystem>
 #include <fstream>
@@ -69,6 +70,31 @@ inline m::mpcc_rate_resolved_retained_revalidation::Request read_request(
     target.elapsed_time_sec=f["elapsed_time_sec"].as<std::vector<double>>();
     target.target_progress_from_current_origin_m=f["target_progress_from_current_origin_m"].as<std::vector<double>>();
     target.current=f["current"].as<bool>();r.follow_target=target;
+  }
+  r.publication_prefix_required=n["publication_prefix_required"] && n["publication_prefix_required"].as<bool>();
+  if(n["prospective_publication"]) {
+    const auto binding=n["prospective_publication"],o=binding["observation"];
+    if(binding["schema"].as<std::string>()!="mpcc-prospective-publication/v1")throw std::runtime_error("unknown publication prefix schema");
+    const auto parameters=m::mpcc_vehicle_model::decode_parameters(binding["vehicle_model"]);
+    if(!parameters || m::mpcc_vehicle_model::fingerprint(*parameters)!=binding["vehicle_model_fingerprint"].as<std::uint64_t>())throw std::runtime_error("publication model mismatch");
+    const auto state=o["initial_x_y_yaw_u_vy_r_desired_tire"].as<std::vector<double>>();
+    if(state.size()!=8)throw std::runtime_error("invalid publication observation state");
+    m::mpcc_vehicle_model::ObservationProvenance observed;
+    observed.initial={o["pose_source_sec"].as<double>(),{state[0],state[1],state[2],state[3],state[4],state[5],state[6],state[7]}};
+    observed.velocity_source_sec=o["velocity_source_sec"].as<double>();
+    observed.yaw_rate_source_sec=o["yaw_rate_source_sec"].as<double>();
+    observed.tire_source_sec=o["tire_source_sec"].as<double>();
+    observed.now_sec=o["now_sec"].as<double>();observed.control_origin_sec=o["control_origin_sec"].as<double>();
+    observed.acceleration_delay_sec=o["nominal_acceleration_application_delay_sec"].as<double>();
+    observed.steering_delay_sec=o["nominal_steering_application_delay_sec"].as<double>();
+    for(const auto & item:o["published_time_wire_acceleration_wire_steering"]) {
+      if(item.size()!=3)throw std::runtime_error("invalid published history");
+      observed.commands.push_back({item[0].as<double>(),item[1].as<double>(),item[2].as<double>()});
+    }
+    const auto packet=binding["proposed_time_wire_acceleration_wire_steering"].as<std::vector<double>>();
+    if(packet.size()!=3)throw std::runtime_error("invalid proposed packet");
+    r.publication_prefix=m::mpcc_vehicle_model::predict_prospective_publication(observed,{packet[0],packet[1],packet[2]},*parameters);
+    if(!r.publication_prefix)throw std::runtime_error("publication prefix native replay rejected");
   }
   const auto g=n["current_wall_grid"];
   if(g["available"].as<bool>()) {

@@ -46,6 +46,30 @@ struct PublishedPrediction
   std::vector<TimedState> current_to_control;
 };
 
+/// Proposed serialized packet, distinct from every already published input.
+/// The epoch is the nominal publication time used by this candidate's proof.
+struct ProspectivePublicationPrediction
+{
+  ObservationProvenance observation;
+  PublishedCommand proposed_packet;
+  State current;
+  State control_origin;
+  std::vector<TimedState> current_to_control;
+  std::uint64_t vehicle_model_fingerprint{};
+};
+
+bool publication_packet_matches(
+  const ProspectivePublicationPrediction & prediction, double publication_sec,
+  double wire_acceleration_mps2, double physical_steering_rad,
+  double steering_wire_gain) noexcept;
+
+/// Bind the observation-to-control prefix to the packet being considered now.
+/// Historical provenance is retained unchanged; it never claims the proposed
+/// packet was already sent. Channel delays remain nominal model assumptions.
+std::optional<ProspectivePublicationPrediction> predict_prospective_publication(
+  const ObservationProvenance & observation, const PublishedCommand & proposed_packet,
+  const Parameters & parameters) noexcept;
+
 /// Piecewise held, already serialized inputs. Channel delays are nominal
 /// scheduling assumptions, not acknowledgements or transport guarantees.
 /// The tire dynamics begin after the steering channel's delay exactly once.

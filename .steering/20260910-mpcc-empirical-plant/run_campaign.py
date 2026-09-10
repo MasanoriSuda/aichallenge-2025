@@ -24,9 +24,9 @@ domains = [f'd{i}' for i in range(1, vehicle_count + 1)]
 projects = [str(i) for i in range(1, vehicle_count + 1)]
 root = Path('output/20260910-nine-state-'+mode+'-'+attempt)
 assert not subprocess.check_output(['docker', 'ps', '-q']).strip(), 'Other containers running'
-test_log = Path('/tmp/mpcc-nine-state-tests-r15.log')
-build_log = Path('/tmp/mpcc-nine-state-build-r19.log')
-assert 'Summary: 2397 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
+test_log = Path('/tmp/mpcc-nine-state-tests-r17.log')
+build_log = Path('/tmp/mpcc-nine-state-build-r21.log')
+assert 'Summary: 2401 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
 assert 'Summary: 26 packages finished' in build_log.read_text()
 original_dll = Path('aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll')
 assert hashlib.sha256(original_dll.read_bytes()).hexdigest() == '703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172'

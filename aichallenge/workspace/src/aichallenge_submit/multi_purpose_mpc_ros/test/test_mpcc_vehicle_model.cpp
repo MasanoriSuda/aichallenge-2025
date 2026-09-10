@@ -96,3 +96,59 @@ TEST(MpccVehiclePrediction, SeparatesChannelDelayFromMechanicalTireResponse)
   history = {{1, -3, .2}};
   EXPECT_FALSE(vehicle::predict_published_history(initial, 1, 1.2, history, p, 0, .1));
 }
+
+TEST(MpccVehiclePrediction, NewPacketCannotBorrowTheOldBrakingPrefix)
+{
+  const auto parameters = vehicle_model();
+  const vehicle::ObservationProvenance observation{
+    {1, {0, 0, 0, 3.9, 0, 0, 0, 0}}, 1, 1, 1, 1, 1.2, 0, .1,
+    {{0, -3, 0}, {1, -3, 0}}};
+  const vehicle::PublishedCommand proposal{1, 1, .2};
+  const auto prediction = vehicle::predict_prospective_publication(
+    observation, proposal, parameters);
+  ASSERT_TRUE(prediction);
+  const auto first = vehicle::advance(observation.initial.state, {1, 0}, parameters, .1);
+  ASSERT_TRUE(first);
+  auto steering_applied = first->state;
+  steering_applied.desired_steering_rad = static_cast<float>(.2) / parameters.steering_wire_gain;
+  const auto second = vehicle::advance(steering_applied, {1, 0}, parameters, .1);
+  ASSERT_TRUE(second);
+  EXPECT_NEAR(prediction->control_origin.x_m, second->state.x_m, 1e-12);
+  EXPECT_NEAR(prediction->control_origin.yaw_rate_radps, second->state.yaw_rate_radps, 1e-12);
+  EXPECT_NEAR(prediction->control_origin.forward_velocity_mps,
+    second->state.forward_velocity_mps, 1e-12);
+  const auto old_prefix = vehicle::predict_published_history(
+    observation.initial, 1, 1.2, observation.commands, parameters, 0, .1);
+  ASSERT_TRUE(old_prefix);
+  EXPECT_GT(prediction->control_origin.forward_velocity_mps,
+    old_prefix->control_origin.forward_velocity_mps + .4);
+  ASSERT_EQ(prediction->observation.commands.size(), 2U);
+  EXPECT_DOUBLE_EQ(prediction->observation.commands.back().wire_acceleration_mps2, -3);
+  EXPECT_DOUBLE_EQ(prediction->proposed_packet.wire_acceleration_mps2, 1);
+  EXPECT_DOUBLE_EQ(prediction->proposed_packet.wire_steering_rad, static_cast<float>(.2));
+  EXPECT_DOUBLE_EQ(prediction->current.forward_velocity_mps, 3.9);
+  EXPECT_TRUE(vehicle::publication_packet_matches(
+    *prediction, 1, 1, .2 / parameters.steering_wire_gain, parameters.steering_wire_gain));
+  EXPECT_FALSE(vehicle::publication_packet_matches(
+    *prediction, 1, -3, .2 / parameters.steering_wire_gain, parameters.steering_wire_gain));
+  EXPECT_FALSE(vehicle::publication_packet_matches(
+    *prediction, 1.01, 1, .2 / parameters.steering_wire_gain, parameters.steering_wire_gain));
+}
+
+TEST(MpccVehiclePrediction, ProspectivePacketRequiresTheCapturedPublicationEpoch)
+{
+  const auto parameters = vehicle_model();
+  const vehicle::ObservationProvenance observation{
+    {1, {0, 0, 0, 3.9, 0, 0, 0, 0}}, 1, 1, 1, 1, 1.13, 0, .1,
+    {{0, -3, 0}}};
+  EXPECT_FALSE(vehicle::predict_prospective_publication(observation, {1.01, 1, 0}, parameters));
+  EXPECT_FALSE(vehicle::predict_prospective_publication(observation, {.99, 1, 0}, parameters));
+  EXPECT_FALSE(vehicle::predict_prospective_publication(observation, {1, NAN, 0}, parameters));
+  auto missing = observation;
+  missing.commands.clear();
+  EXPECT_FALSE(vehicle::predict_prospective_publication(missing, {1, -3, 0}, parameters));
+  auto regressed = observation;
+  regressed.now_sec = .9;
+  EXPECT_FALSE(vehicle::predict_prospective_publication(regressed, {.9, -3, 0}, parameters));
+  EXPECT_FALSE(vehicle::predict_prospective_publication(observation, {1, -3, 0}, {}));
+}

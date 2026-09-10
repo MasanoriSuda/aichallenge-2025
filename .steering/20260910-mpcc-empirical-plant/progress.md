@@ -165,3 +165,13 @@ SQP also certifies this world, so it is not physically impossible. Publication
 input binding is reopened within M1–M3; see publication-prefix-design.md.
 Next: complete candidate/packet-bound native proof, implement shared prospective
 prefix binding across normal/Stop/artifact/async, regress/build/run and M4–M6.
+
+2026-09-10: prospective publication candidate implemented under existing autonomous
+M1–M6 authorization. Shared native prefix is bound to each actual float packet,
+including Stop materialization and final common candidate conversion; Follow ego
+origin is updated against the unchanged canonical peer. Buildr21:26packagespass;
+testsr17:2401records,0errors/failures/skips. Earlier testsr16 source-layout failure
+is preserved. Native r8 replay rejects accelerating command under braking prefix;
+matching Stop passes materialization/join/packet and snapshot roundtrip at+0.909311m.
+See publication-prefix-design.md and publication-prefix-evidence.json. Fresh
+committed dev2-r9 next; no integrated or M4–M6 completion claimed yet.

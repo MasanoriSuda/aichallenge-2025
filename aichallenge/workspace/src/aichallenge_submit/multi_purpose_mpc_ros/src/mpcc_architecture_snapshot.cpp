@@ -2412,6 +2412,18 @@ static YAML::Node revalidation_evidence_node(
   value["now_sec"] = r.now_sec;
   value["control_origin_sec"] = r.control_origin_sec;
   value["current_intent"] = contract::to_string(r.current_intent);
+  value["publication_prefix_required"] = r.publication_prefix_required;
+  if (r.publication_prefix && r.plan && r.plan->execution_artifact) {
+    const auto & bound = *r.publication_prefix;
+    auto prefix = value["prospective_publication"];
+    prefix["schema"] = "mpcc-prospective-publication/v1";
+    prefix["observation"] = observation_provenance_node(bound.observation);
+    prefix["vehicle_model"] = mpcc_vehicle_model::encode_parameters(r.plan->execution_artifact->vehicle_model);
+    prefix["vehicle_model_fingerprint"] = bound.vehicle_model_fingerprint;
+    prefix["proposed_time_wire_acceleration_wire_steering"] = std::vector<double>{
+      bound.proposed_packet.published_sec, bound.proposed_packet.wire_acceleration_mps2,
+      bound.proposed_packet.wire_steering_rad};
+  }
   using Clock = mpcc_rate_resolved_retained_revalidation::ExecutionClockKind;
   const char * clock = "unknown";
   switch (r.execution_clock.kind) {

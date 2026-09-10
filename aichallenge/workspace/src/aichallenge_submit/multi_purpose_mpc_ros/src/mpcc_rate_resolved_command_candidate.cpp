@@ -49,6 +49,16 @@ Result build(const retained::Result & retained_result) noexcept
     return result;
   }
   const auto & actuation = proof.actuation;
+  if ((proof.publication_prefix_required && !proof.publication_prefix) ||
+    (proof.publication_prefix &&
+    (proof.publication_prefix->vehicle_model_fingerprint != identity.source_context.vehicle_model_fingerprint ||
+    !mpcc_vehicle_model::publication_packet_matches(
+      *proof.publication_prefix, proof.observation_origin_sec, actuation.acceleration_mps2,
+      actuation.steering_rad, artifact.vehicle_model.steering_wire_gain))))
+  {
+    result.reason = Reason::InvalidActuation;
+    return result;
+  }
   if (proof.decision_id == 0U || !proof.cursor.available ||
     proof.cursor.sequence != identity.sequence ||
     actuation.sequence != identity.sequence ||

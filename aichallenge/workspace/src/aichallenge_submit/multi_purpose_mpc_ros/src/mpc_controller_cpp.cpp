@@ -26509,7 +26509,8 @@ struct MPC
     std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan,
     const mpcc_contract::ControlIntent intent,
     const double now_sec,
-    const rate_resolved_retained::ExecutionClock execution_clock) const
+    const rate_resolved_retained::ExecutionClock execution_clock,
+    const bool stop_successor_packet = false) const
   {
     if (
       model == nullptr || model->reference_path == nullptr ||
@@ -26597,6 +26598,46 @@ struct MPC
     request.stop_lateral_policy = stop_path_tracking_policy();
     request.minimum_acceleration_mps2 = cfg.a_min;
     request.maximum_acceleration_mps2 = cfg.a_max;
+    request.publication_prefix_required = true;
+    if (!vehicle_observation_provenance_ ||
+      vehicle_observation_provenance_->now_sec != now_sec ||
+      vehicle_observation_provenance_->control_origin_sec != request.control_origin_sec ||
+      !request.plan || !request.plan->execution_artifact ||
+      mpcc_vehicle_model::fingerprint(request.plan->execution_artifact->vehicle_model) !=
+      mpcc_vehicle_model::fingerprint(cfg.vehicle_model))
+    {
+      return request;
+    }
+    const auto packet = stop_successor_packet ?
+      std::optional<mpcc_vehicle_model::PublishedCommand>{mpcc_vehicle_model::PublishedCommand{
+        now_sec, static_cast<float>(cfg.a_min),
+        static_cast<float>(request.previous_published_steering_rad * cfg.vehicle_model.steering_wire_gain)}} :
+      rate_resolved_retained::prospective_artifact_packet(request);
+    if (!packet) return request;
+    auto predicted = mpcc_vehicle_model::predict_prospective_publication(
+      *vehicle_observation_provenance_, *packet, cfg.vehicle_model);
+    if (!predicted) return request;
+    const auto & origin = predicted->control_origin;
+    const auto progress = model->physical_course_progress(
+      TemporalState{origin.x_m, origin.y_m, origin.yaw_rad});
+    if (!progress) return std::nullopt;
+    request.control_origin_physical_progress_m = *progress;
+    request.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+    request.current_speed_mps = predicted->current.forward_velocity_mps;
+    request.control_origin_speed_mps = origin.forward_velocity_mps;
+    request.current_time_steering_rad = predicted->current.tire_steering_rad;
+    request.current_steering_rad = origin.desired_steering_rad;
+    request.current_response_steering_rad = origin.tire_steering_rad;
+    request.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+    request.current_yaw_rate_radps = origin.yaw_rate_radps;
+    request.measured_to_control_path.clear();
+    request.measured_to_control_elapsed_sec.clear();
+    for (const auto & item : predicted->current_to_control) {
+      request.measured_to_control_path.push_back(
+        {item.state.x_m, item.state.y_m, item.state.yaw_rad});
+      request.measured_to_control_elapsed_sec.push_back(item.source_sec - now_sec);
+    }
+    request.publication_prefix = std::move(predicted);
     return request;
   }
 
@@ -26639,13 +26680,25 @@ struct MPC
       follow.valid && follow.target_id == target_id &&
       follow.target_observation_generation == current_world.obstacles.generation)
     {
+      const int origin_waypoint_id = problem.progress_stage_geometry.tracking_waypoint;
+      if (origin_waypoint_id < 0 || origin_waypoint_id >= model->reference_path->n_waypoints) {
+        return std::nullopt;
+      }
+      const auto & origin = model->reference_path->get_waypoint(origin_waypoint_id);
+      const auto bound_ego = mpcc_contract::project_planar_pose_to_frenet(
+        {current_world.control_pose.x_m, current_world.control_pose.y_m, current_world.control_pose.yaw_rad},
+        {origin.x, origin.y, origin.psi});
+      if (!bound_ego) return std::nullopt;
+      // Keep the canonical peer projection on its original course branch.
+      // Only the ego origin changes when the proposed packet changes its prefix.
+      const double ego_shift = bound_ego->lag_m - follow.current_ego_progress_offset_m;
       return rate_resolved_retained::build_follow_target_observation(
         rate_resolved_retained::FollowTargetObservationBuildRequest{
           follow.target_id,
           follow.target_observation_generation,
           current_world.obstacles.observed_sec,
-          follow.current_target_gap_m,
-          follow.current_ego_progress_offset_m,
+          follow.current_target_gap_m - ego_shift,
+          bound_ego->lag_m,
           follow.hard_gap_m,
           follow.target_speed_mps,
           std::move(stage_duration_sec),
@@ -26708,8 +26761,8 @@ struct MPC
       v2x_overtake_core::ForwardCourseProjectionRequest{
         static_cast<std::size_t>(std::max(0, problem.tracking_wp_id)),
         model->reference_path->circular,
-        model->temporal_state.x,
-        model->temporal_state.y,
+        current_world.control_pose.x_m,
+        current_world.control_pose.y_m,
         target->circle.x_m,
         target->circle.y_m,
         target->circle.velocity_x_mps,
@@ -26735,8 +26788,8 @@ struct MPC
       origin_waypoint_id);
     const auto ego_frenet = mpcc_contract::project_planar_pose_to_frenet(
       mpcc_contract::PlanarPose{
-        model->temporal_state.x, model->temporal_state.y,
-        model->temporal_state.psi},
+        current_world.control_pose.x_m, current_world.control_pose.y_m,
+        current_world.control_pose.yaw_rad},
       mpcc_contract::PlanarPose{
         origin_waypoint.x, origin_waypoint.y, origin_waypoint.psi});
     if (!ego_frenet.has_value()) {
@@ -30095,7 +30148,7 @@ struct MPC
           rate_resolved_retained::ExecutionClock{
             rate_resolved_retained::ExecutionClockKind::PublishedPlan,
             published.publication_control_origin_sec,
-            published.publication_artifact_elapsed_sec});
+            published.publication_artifact_elapsed_sec}, true);
         if (request.has_value()) {
           result = rate_resolved_retained::evaluate_stop_successor(
             request.value());

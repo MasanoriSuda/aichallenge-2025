@@ -6,8 +6,10 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 
 namespace
 {
@@ -1981,6 +1983,97 @@ TEST(
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::ContinuationRejected);
   EXPECT_FALSE(result.proof.has_value());
+}
+
+retained::Request bind_test_packet(
+  retained::Request request,
+  const multi_purpose_mpc_ros::mpcc_vehicle_model::PublishedCommand & packet)
+{
+  namespace vehicle = multi_purpose_mpc_ros::mpcc_vehicle_model;
+  const auto & parameters = request.plan->execution_artifact->vehicle_model;
+  vehicle::ObservationProvenance observed{
+    {request.now_sec,
+      {request.control_pose.x_m, request.control_pose.y_m, request.control_pose.yaw_rad,
+        request.current_speed_mps, 0, 0, request.previous_published_steering_rad,
+        request.current_response_steering_rad}},
+    request.now_sec, request.now_sec, request.now_sec,
+    request.now_sec, request.control_origin_sec, 0, .02,
+    {{0, -3, request.previous_published_steering_rad * parameters.steering_wire_gain}}};
+  const auto predicted = vehicle::predict_prospective_publication(observed, packet, parameters);
+  if (!predicted) throw std::runtime_error("invalid synthetic publication fixture");
+  const auto & origin = predicted->control_origin;
+  request.publication_prefix_required = true;
+  request.publication_prefix = predicted;
+  request.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+  request.control_origin_physical_progress_m = origin.x_m;
+  request.current_speed_mps = predicted->current.forward_velocity_mps;
+  request.control_origin_speed_mps = origin.forward_velocity_mps;
+  request.current_steering_rad = origin.desired_steering_rad;
+  request.current_response_steering_rad = origin.tire_steering_rad;
+  request.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+  request.current_yaw_rate_radps = origin.yaw_rate_radps;
+  request.measured_to_control_path.clear();
+  request.measured_to_control_elapsed_sec.clear();
+  for (const auto & item : predicted->current_to_control) {
+    request.measured_to_control_path.push_back({item.state.x_m, item.state.y_m, item.state.yaw_rad});
+    request.measured_to_control_elapsed_sec.push_back(item.source_sec - request.now_sec);
+  }
+  return request;
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, NormalPacketOwnsItsPrefixAcrossStageAdvance)
+{
+  auto original = accepted_request(certified_plan());
+  original.control_origin_sec = 1.09;
+  const auto packet = retained::prospective_artifact_packet(original);
+  ASSERT_TRUE(packet);
+  auto request = bind_test_packet(original, *packet);
+  auto result = retained::evaluate(request);
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof);
+  EXPECT_TRUE(result.proof->publication_stage_advanced);
+  EXPECT_TRUE(production::build(result).authority);
+
+  auto brake = *packet;
+  brake.wire_acceleration_mps2 = -3;
+  const auto mismatched = retained::evaluate(bind_test_packet(original, brake));
+  EXPECT_EQ(mismatched.reason, retained::Reason::PublicationPacketMismatch);
+  EXPECT_FALSE(production::build(mismatched).authority);
+
+  auto missing = request;
+  missing.publication_prefix.reset();
+  EXPECT_EQ(retained::evaluate(missing).reason, retained::Reason::PublicationPrefixUnavailable);
+  auto changed_path = request;
+  changed_path.measured_to_control_path[1].x_m += .1;
+  EXPECT_EQ(retained::evaluate(changed_path).reason, retained::Reason::PublicationPrefixUnavailable);
+  result.proof->publication_prefix->proposed_packet.wire_acceleration_mps2 = -3;
+  EXPECT_FALSE(production::build(result).authority);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, StopPacketPrefixSurvivesMaterializationAndPublication)
+{
+  auto original = accepted_request(certified_plan());
+  original.control_origin_sec = 1.09;
+  const auto & parameters = original.plan->execution_artifact->vehicle_model;
+  auto request = bind_test_packet(original,
+    {original.now_sec, -3, static_cast<float>(original.previous_published_steering_rad * parameters.steering_wire_gain)});
+  const auto stop = retained::evaluate_stop_successor(request);
+  ASSERT_TRUE(stop.accepted()) << retained::to_string(stop.reason);
+  const auto built = stop_bundle::build(request, stop, 1001U);
+  ASSERT_TRUE(built.plan) << stop_bundle::to_string(built.reason);
+  request.plan = built.plan;
+  request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto joined = retained::evaluate(request);
+  ASSERT_EQ(joined.reason, retained::Reason::Accepted);
+  const auto output = production::build(joined);
+  ASSERT_TRUE(output.authority);
+  EXPECT_DOUBLE_EQ(output.authority->command.acceleration_mps2, -3);
+  EXPECT_TRUE(multi_purpose_mpc_ros::mpcc_vehicle_model::publication_packet_matches(
+    *request.publication_prefix, request.now_sec, output.authority->command.acceleration_mps2,
+    output.authority->command.steering_tire_angle_rad, parameters.steering_wire_gain));
+  auto mutated = joined;
+  mutated.proof->publication_prefix->proposed_packet.wire_steering_rad += .02;
+  EXPECT_FALSE(production::build(mutated).authority);
 }
 
 }  // namespace

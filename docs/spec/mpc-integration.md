@@ -4289,6 +4289,21 @@ dev2-r2の正常軌道388を生成時の情報で再生すると、等速予測�
 
 ### 2026-09-10 認証された停止入力列の公開と保持
 
+追加の送信境界契約: 通常候補と停止候補は、今回送るwire指令を含めた予測prefixで
+control originの状態を作り、同じ入力で壁・全車・停止端を再証明する。既に公開した
+履歴と今回の提案指令は分けて保存し、提案を「公開済み」に混ぜない。前周期の制動を
+継続すると仮定した状態で今回の加速を認証することを禁止する。実送信と同じfloat化・
+操舵gainで照合し、異なるpacketへの認証流用を指令candidate生成時に拒否する。
+元の未来予測は求解用の初期推定であり、送信する候補の証明は別途この対応付けを通す。
+Followでは正本の相手投影を保ち、候補による自車原点の差だけをgap/offsetへ反映する。
+通常のcursor境界更新・操舵到達性と、prefixに使う指令の選択は共通実装とする。
+
+診断snapshotのRequestには `publication_prefix_required` と
+`prospective_publication`（公開履歴、提案wire packet、モデルfingerprint）を追加する。
+過去snapshotの欠落フィールドは旧診断として読めるが、現行producerからの通常指令は
+対応付けを必須とする。nominalな入力遅延・モデル係数・安全余裕は変更しない。
+因果比較と統合検証の状態は[送信prefixの設計](../../.steering/20260910-mpcc-empirical-plant/publication-prefix-design.md)を参照。
+
 Stopとして採用する現在状態の再証明が、元の解の完全停止suffixではなく、生成した
 terminal contingencyを根拠とする場合、その正確な入力列と軌道を新しいimmutable
 artifactへ格納する。新artifactを同じ観測・制御時刻で再証明し、完全停止suffixと

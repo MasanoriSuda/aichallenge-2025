@@ -5,6 +5,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp"
+#include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -151,7 +152,16 @@ struct Request
   double maximum_acceleration_mps2{};
   double current_lateral_velocity_mps{};
   double current_yaw_rate_radps{};
+  /// Production requests require their complete future prefix to be bound to
+  /// the proposed serialized packet. Absence remains readable for old replays.
+  bool publication_prefix_required{false};
+  std::optional<mpcc_vehicle_model::ProspectivePublicationPrediction> publication_prefix;
 };
+
+/// Select exactly the same publisher interval and reachable steering used by
+/// evaluate(), before predicting its packet-dependent control-origin state.
+std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
+  const Request & request) noexcept;
 
 enum class Reason
 {
@@ -173,6 +183,8 @@ enum class Reason
   DynamicPathBlocked,
   StaticWorldMismatch,
   InvalidCurrentState,
+  PublicationPrefixUnavailable,
+  PublicationPacketMismatch,
   CourseFrameUnavailable,
   ActuationRejected,
   SteeringUnreachable,
@@ -212,6 +224,8 @@ const char * to_string(DynamicObstacleProofScope scope) noexcept;
 
 struct Proof
 {
+  bool publication_prefix_required{false};
+  std::optional<mpcc_vehicle_model::ProspectivePublicationPrediction> publication_prefix;
   std::shared_ptr<const certified::CertifiedPlan> plan;
   /// True when the source artifact's first steering sample could not join the
   /// actually serialized predecessor and this proof instead owns the exact

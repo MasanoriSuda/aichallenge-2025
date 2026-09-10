@@ -3597,19 +3597,20 @@ def test_latest_state_feedback_bundle_uses_common_proof_and_publisher() -> None:
     feedback_call = retained_source.index(
         "mpcc_latest_state_feedback::solve(", steering_reject
     )
-    shadow_mode = retained_source.index(
-        "feedback_shadow_mode = true;", feedback_call
-    )
     failed_connection_stays_rejected = retained_source.index(
-        "result.reason = Reason::SteeringUnreachable;", shadow_mode
+        "result.reason = Reason::SteeringUnreachable;", feedback_call
+    )
+    shadow_mode = retained_source.index(
+        "const bool feedback_shadow_mode = result.feedback_shadow_attempted;",
+        failed_connection_stays_rejected,
     )
     bundle_classification = retained_source.index(
         "proof.latest_state_feedback_bundle = feedback_shadow_mode;",
         failed_connection_stays_rejected,
     )
     proof_authority = retained_source.index("result.proof = std::move(proof);")
-    assert feedback_call < shadow_mode < failed_connection_stays_rejected
-    assert failed_connection_stays_rejected < bundle_classification < proof_authority
+    assert feedback_call < failed_connection_stays_rejected < shadow_mode
+    assert shadow_mode < bundle_classification < proof_authority
     assert "return complete_continuation_proof(Reason::Accepted);" not in retained_source
 
     controller = SOURCE

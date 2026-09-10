@@ -1,7 +1,8 @@
 # Bind each new command to its own prospective input prefix
 
-Investigation baseline/rollback: `3ab839fa`. Continue the existing autonomous
-M1–M6 authorization. No production change is made by this diagnostic slice.
+Investigation baseline/rollback: `3ab839fa`; diagnostic commit `da5eac7c`.
+Continue the existing autonomous M1–M6 authorization. The diagnostic and
+following production slice share this causal record.
 
 ## First failure and exact reproduction
 
@@ -125,3 +126,54 @@ duplicates10/10 and maximum gap80ms need attribution; the aggregate includes
 startup/finish and the final incomplete telemetry window is absent. Short-run
 timing improvement does not close fixed-campaign timing or stale execution.
 Buildr19/testsr15 remain valid for3ab839fa's unchanged production source.
+
+## Production candidate and verification
+
+`predict_prospective_publication` keeps original observation/history separate
+from the proposed float packet and runs the shared plant with nominal channel
+delays. `prospective_artifact_packet` and retained evaluation share the existing
+stage-advance/reachable-steering selector. Every production current-world
+Request requires a matching prefix, recomputes physical course progress and
+the complete body state/path, and shifts Follow's ego offset without moving
+the canonical peer branch. The maximum-braking Stop API binds its own first
+packet. Materialized Stop is rejoined through the same normal path. All these
+paths converge on the common command candidate, which rejects a different
+final wire acceleration/steering or model identity. No new authority, rate,
+grace interval, margin, objective or solver budget is introduced.
+
+Retired producer: using the history-only future prefix as the production
+candidate's authority input. The history-only predictor remains the causal
+initial model/solver observation; execution must reprove its own proposal.
+Legacy snapshots keep their explicit original semantics for diagnostics only.
+New snapshots retain both original inputs and the separate proposal so replay
+reconstructs the exact native prefix and checks it against the saved Request.
+
+Buildr20 succeeds (26packages,4m46s). Testsr16 records2401test entries with one
+actual source-layout assertion failing (reported twice by colcon aggregation):
+the feedback selector moved into its shared helper. All four new behavior
+cases pass. The existing source contract is updated to check the same rejection
+and proof ordering at its new location; no behavioral condition is removed.
+Float normalization now occurs inside the common predictor, with an independent
+two-channel native calculation using the serialized steering value.
+
+Final buildr21 succeeds (26packages,8.82s); testsr17 passes2401entries,
+62CTest groups,0errors/failures/skips in29.38s. Existing setuptools deprecation
+is the only build stderr. Relevant pre-commit hooks pass (prefix-quality-r1).
+Added behavior cases cover delay asymmetry, unmodified history, nonfuture
+epochs/reset rejection, actual float conversion, stage advancement, missing
+or modified prefix, wrong final packet, Stop materialization and publication.
+Existing async/context/intent and full package regressions also pass.
+
+Native toolr19 on sealed r8decision2144 uses the new production binding API,
+zero solves. Exact legacy and correctly bound acceleration remain rejected;
+the accelerating normal packet under a braking prefix now rejects with
+`publication-packet-mismatch`. Correctly bound Stop accepts, materializes,
+rejoins and converts to acceleration−3, steering−0.0168138783983, with
+clearance0.909311163m; serialization/reconstruction also accepts and preserves
+the original historical input count/last epoch. A separately labelled course
+projection sensitivity passes at0.909921247m. The runtime model's exact current
+waypoint is not separately captured in r8, so neither diagnostic is mislabelled
+as a fresh integrated controller run. Evidence: prefix-binding-r1/result.yaml.
+
+Next is fresh dev2-r9 on the committed candidate, then all remaining M4–M6
+acceptance. Local regressions and replay do not establish six-lap completion.

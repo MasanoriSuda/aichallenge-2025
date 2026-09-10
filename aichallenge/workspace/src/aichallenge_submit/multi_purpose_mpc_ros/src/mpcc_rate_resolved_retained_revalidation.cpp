@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
 {
@@ -449,6 +450,8 @@ const char * to_string(const Reason reason) noexcept
     case Reason::DynamicPathBlocked: return "dynamic-path-blocked";
     case Reason::StaticWorldMismatch: return "static-world-mismatch";
     case Reason::InvalidCurrentState: return "invalid-current-state";
+    case Reason::PublicationPrefixUnavailable: return "publication-prefix-unavailable";
+    case Reason::PublicationPacketMismatch: return "publication-packet-mismatch";
     case Reason::CourseFrameUnavailable: return "course-frame-unavailable";
     case Reason::ActuationRejected: return "actuation-rejected";
     case Reason::SteeringUnreachable: return "steering-unreachable";
@@ -551,6 +554,166 @@ const char * to_string(const DynamicObstacleProofScope scope) noexcept
       return "publisher-interval-prefix";
   }
   return "unknown";
+}
+
+static std::optional<std::pair<artifact::Cursor, artifact::Actuation>>
+select_publication_actuation(
+  const Request & request, const artifact::Cursor & source_cursor, Result & result)
+{
+  const auto & execution = *request.plan->execution_artifact;
+  auto command_cursor = source_cursor;
+  const double cursor_tolerance = std::max(
+    kIdentityTolerance, execution.physical_global_tolerance);
+  while (
+    command_cursor.control_stage_index < execution.control_stages.size())
+  {
+    const auto & stage =
+      execution.control_stages[command_cursor.control_stage_index];
+    const double remaining_sec = stage.duration_sec -
+      command_cursor.stage_elapsed_sec;
+    if (
+      std::isfinite(remaining_sec) &&
+      remaining_sec + cursor_tolerance >= execution.publication_interval_sec)
+    {
+      break;
+    }
+    if (
+      !std::isfinite(remaining_sec) || remaining_sec <= 0.0 ||
+      command_cursor.control_stage_index + 1U >=
+      execution.control_stages.size())
+    {
+      result.continuation_reason =
+        mpcc_rate_resolved_physical_adapter::ContinuationRejectReason::
+        InvalidCursor;
+      result.reason = Reason::ContinuationRejected;
+      return std::nullopt;
+    }
+    command_cursor.elapsed_sec += remaining_sec;
+    ++command_cursor.control_stage_index;
+    command_cursor.remaining_control_stage_count =
+      execution.control_stages.size() - command_cursor.control_stage_index;
+    command_cursor.stage_elapsed_sec = 0.0;
+    result.publication_stage_advanced = true;
+  }
+  result.command_control_stage_index = command_cursor.control_stage_index;
+  result.publication_stage_advance_sec =
+    command_cursor.elapsed_sec - source_cursor.elapsed_sec;
+
+  const auto actuation = artifact::extract_actuation(
+    execution, command_cursor);
+  result.actuation_reason = actuation.reason;
+  if (!actuation.actuation.has_value()) {
+    result.reason = Reason::ActuationRejected;
+    return std::nullopt;
+  }
+  result.expected_speed_mps = actuation.actuation->predicted_speed_mps;
+  result.expected_steering_rad = actuation.actuation->steering_rad;
+
+  // The QP owns one serialized command trajectory.  Revalidate its executable
+  // sample against the last command over the actual publication age.  The
+  // measured physical angle belongs to response prediction; making it a
+  // second command origin re-bases the rate integral every cycle and produces
+  // a command trajectory different from the one certified by the QP.
+  const double steering_reachability_duration_sec =
+    request.previous_published_command_age_sec;
+  const double maximum_steering_step_rad =
+    execution.maximum_abs_steering_rate_radps *
+    steering_reachability_duration_sec + execution.physical_global_tolerance;
+  const double steering_difference_rad =
+    actuation.actuation->steering_rad -
+    request.previous_published_steering_rad;
+  const double reachable_steering_lower_rad = std::max(
+    -execution.maximum_abs_steering_rad,
+    request.previous_published_steering_rad - maximum_steering_step_rad);
+  const double reachable_steering_upper_rad = std::min(
+    execution.maximum_abs_steering_rad,
+    request.previous_published_steering_rad + maximum_steering_step_rad);
+  result.steering_difference_rad = steering_difference_rad;
+  result.maximum_steering_step_rad = maximum_steering_step_rad;
+  result.reachable_steering_lower_rad = reachable_steering_lower_rad;
+  result.reachable_steering_upper_rad = reachable_steering_upper_rad;
+  result.steering_reachability_duration_sec =
+    steering_reachability_duration_sec;
+  double continuation_initial_steering_rad =
+    actuation.actuation->steering_rad;
+  if (
+    actuation.actuation->steering_rad < reachable_steering_lower_rad ||
+    actuation.actuation->steering_rad > reachable_steering_upper_rad)
+  {
+    result.feedback_shadow_attempted = true;
+    const auto feedback = mpcc_latest_state_feedback::solve(
+      mpcc_latest_state_feedback::Request{
+        request.previous_published_steering_rad,
+        actuation.actuation->steering_rad,
+        execution.maximum_abs_steering_rad,
+        execution.maximum_abs_steering_rate_radps,
+        steering_reachability_duration_sec,
+        execution.physical_global_tolerance});
+    result.feedback_shadow_reason = feedback.reason;
+    result.feedback_shadow_steering_rad = feedback.feedback_steering_rad;
+    result.feedback_shadow_correction_rad = feedback.correction_rad;
+    if (!feedback.available()) {
+      result.reason = Reason::SteeringUnreachable;
+      return std::nullopt;
+    }
+    continuation_initial_steering_rad = feedback.feedback_steering_rad;
+  }
+  auto selected = actuation.actuation.value();
+  selected.steering_rad = continuation_initial_steering_rad;
+  return std::make_pair(command_cursor, selected);
+}
+
+std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
+  const Request & request) noexcept
+{
+  if (!request.plan || !request.plan->execution_artifact ||
+    !std::isfinite(request.previous_published_steering_rad) ||
+    !std::isfinite(request.previous_published_command_age_sec) ||
+    request.previous_published_command_age_sec < 0.0) return std::nullopt;
+  const auto & execution = *request.plan->execution_artifact;
+  const auto cursor = resolve_execution_cursor(
+    execution, request.control_origin_sec, request.execution_clock);
+  if (!cursor.available) return std::nullopt;
+  Result diagnostic;
+  const auto selected = select_publication_actuation(request, cursor, diagnostic);
+  if (!selected) return std::nullopt;
+  return mpcc_vehicle_model::PublishedCommand{
+    request.now_sec,
+    static_cast<float>(selected->second.acceleration_mps2),
+    static_cast<float>(selected->second.steering_rad * execution.vehicle_model.steering_wire_gain)};
+}
+
+static bool publication_prefix_consistent(const Request & request)
+{
+  if (!request.publication_prefix) return !request.publication_prefix_required;
+  if (!request.plan || !request.plan->execution_artifact) return false;
+  const auto & bound = *request.publication_prefix;
+  const auto & observed = bound.observation;
+  const auto & origin = bound.control_origin;
+  if (!mpcc_vehicle_model::valid(observed) ||
+    bound.vehicle_model_fingerprint !=
+    mpcc_vehicle_model::fingerprint(request.plan->execution_artifact->vehicle_model) ||
+    observed.now_sec != request.now_sec || observed.control_origin_sec != request.control_origin_sec ||
+    bound.proposed_packet.published_sec != request.now_sec ||
+    std::max(observed.acceleration_delay_sec, observed.steering_delay_sec) >
+    request.control_origin_sec - request.now_sec + kIdentityTolerance ||
+    origin.x_m != request.control_pose.x_m || origin.y_m != request.control_pose.y_m ||
+    origin.yaw_rad != request.control_pose.yaw_rad ||
+    origin.forward_velocity_mps != request.control_origin_speed_mps ||
+    origin.lateral_velocity_mps != request.current_lateral_velocity_mps ||
+    origin.yaw_rate_radps != request.current_yaw_rate_radps ||
+    origin.tire_steering_rad != request.current_response_steering_rad ||
+    bound.current.forward_velocity_mps != request.current_speed_mps ||
+    bound.current_to_control.size() != request.measured_to_control_path.size() ||
+    bound.current_to_control.size() != request.measured_to_control_elapsed_sec.size()) return false;
+  for (std::size_t i = 0; i < bound.current_to_control.size(); ++i) {
+    const auto & item = bound.current_to_control[i];
+    const auto & pose = request.measured_to_control_path[i];
+    if (item.state.x_m != pose.x_m || item.state.y_m != pose.y_m ||
+      item.state.yaw_rad != pose.yaw_rad ||
+      item.source_sec - request.now_sec != request.measured_to_control_elapsed_sec[i]) return false;
+  }
+  return true;
 }
 
 static Result evaluate_with_stop_profile(
@@ -849,104 +1012,26 @@ static Result evaluate_with_stop_profile(
   // next sealed stage and prove that command from the same fresh physical
   // state.  This is a stateless Bundle; skipped source time is never claimed
   // as executed artifact history.
-  auto command_cursor = source_cursor;
-  const double cursor_tolerance = std::max(
-    kIdentityTolerance, execution.physical_global_tolerance);
-  while (
-    command_cursor.control_stage_index < execution.control_stages.size())
-  {
-    const auto & stage =
-      execution.control_stages[command_cursor.control_stage_index];
-    const double remaining_sec = stage.duration_sec -
-      command_cursor.stage_elapsed_sec;
-    if (
-      std::isfinite(remaining_sec) &&
-      remaining_sec + cursor_tolerance >= execution.publication_interval_sec)
-    {
-      break;
-    }
-    if (
-      !std::isfinite(remaining_sec) || remaining_sec <= 0.0 ||
-      command_cursor.control_stage_index + 1U >=
-      execution.control_stages.size())
-    {
-      result.continuation_reason =
-        mpcc_rate_resolved_physical_adapter::ContinuationRejectReason::
-        InvalidCursor;
-      result.reason = Reason::ContinuationRejected;
-      return result;
-    }
-    command_cursor.elapsed_sec += remaining_sec;
-    ++command_cursor.control_stage_index;
-    command_cursor.remaining_control_stage_count =
-      execution.control_stages.size() - command_cursor.control_stage_index;
-    command_cursor.stage_elapsed_sec = 0.0;
-    result.publication_stage_advanced = true;
-  }
-  result.command_control_stage_index = command_cursor.control_stage_index;
-  result.publication_stage_advance_sec =
-    command_cursor.elapsed_sec - source_cursor.elapsed_sec;
-
-  const auto actuation = artifact::extract_actuation(
-    execution, command_cursor);
-  result.actuation_reason = actuation.reason;
-  if (!actuation.actuation.has_value()) {
-    result.reason = Reason::ActuationRejected;
+  const auto selected_publication = select_publication_actuation(request, source_cursor, result);
+  if (!selected_publication) return result;
+  const auto & command_cursor = selected_publication->first;
+  const auto & selected_actuation = selected_publication->second;
+  const bool feedback_shadow_mode = result.feedback_shadow_attempted;
+  const double continuation_initial_steering_rad = selected_actuation.steering_rad;
+  const double steering_reachability_duration_sec = result.steering_reachability_duration_sec;
+  const double maximum_steering_step_rad = result.maximum_steering_step_rad;
+  const double reachable_steering_lower_rad = result.reachable_steering_lower_rad;
+  const double reachable_steering_upper_rad = result.reachable_steering_upper_rad;
+  if (!publication_prefix_consistent(request)) {
+    result.reason = Reason::PublicationPrefixUnavailable;
     return result;
   }
-  result.expected_speed_mps = actuation.actuation->predicted_speed_mps;
-  result.expected_steering_rad = actuation.actuation->steering_rad;
-
-  // The QP owns one serialized command trajectory.  Revalidate its executable
-  // sample against the last command over the actual publication age.  The
-  // measured physical angle belongs to response prediction; making it a
-  // second command origin re-bases the rate integral every cycle and produces
-  // a command trajectory different from the one certified by the QP.
-  const double steering_reachability_duration_sec =
-    request.previous_published_command_age_sec;
-  const double maximum_steering_step_rad =
-    execution.maximum_abs_steering_rate_radps *
-    steering_reachability_duration_sec + execution.physical_global_tolerance;
-  const double steering_difference_rad =
-    actuation.actuation->steering_rad -
-    request.previous_published_steering_rad;
-  const double reachable_steering_lower_rad = std::max(
-    -execution.maximum_abs_steering_rad,
-    request.previous_published_steering_rad - maximum_steering_step_rad);
-  const double reachable_steering_upper_rad = std::min(
-    execution.maximum_abs_steering_rad,
-    request.previous_published_steering_rad + maximum_steering_step_rad);
-  result.steering_difference_rad = steering_difference_rad;
-  result.maximum_steering_step_rad = maximum_steering_step_rad;
-  result.reachable_steering_lower_rad = reachable_steering_lower_rad;
-  result.reachable_steering_upper_rad = reachable_steering_upper_rad;
-  result.steering_reachability_duration_sec =
-    steering_reachability_duration_sec;
-  bool feedback_shadow_mode = false;
-  double continuation_initial_steering_rad =
-    actuation.actuation->steering_rad;
-  if (
-    actuation.actuation->steering_rad < reachable_steering_lower_rad ||
-    actuation.actuation->steering_rad > reachable_steering_upper_rad)
+  if (request.publication_prefix && !mpcc_vehicle_model::publication_packet_matches(
+      *request.publication_prefix, request.now_sec, selected_actuation.acceleration_mps2,
+      selected_actuation.steering_rad, execution.vehicle_model.steering_wire_gain))
   {
-    result.feedback_shadow_attempted = true;
-    const auto feedback = mpcc_latest_state_feedback::solve(
-      mpcc_latest_state_feedback::Request{
-        request.previous_published_steering_rad,
-        actuation.actuation->steering_rad,
-        execution.maximum_abs_steering_rad,
-        execution.maximum_abs_steering_rate_radps,
-        steering_reachability_duration_sec,
-        execution.physical_global_tolerance});
-    result.feedback_shadow_reason = feedback.reason;
-    result.feedback_shadow_steering_rad = feedback.feedback_steering_rad;
-    result.feedback_shadow_correction_rad = feedback.correction_rad;
-    if (!feedback.available()) {
-      result.reason = Reason::SteeringUnreachable;
-      return result;
-    }
-    feedback_shadow_mode = true;
-    continuation_initial_steering_rad = feedback.feedback_steering_rad;
+    result.reason = Reason::PublicationPacketMismatch;
+    return result;
   }
   const auto complete_continuation_proof = [&] (const Reason reason) {
       if (feedback_shadow_mode) {
@@ -965,7 +1050,7 @@ static Result evaluate_with_stop_profile(
   // stays explicitly unavailable. Current-world physical replay owns the
   // retained command; the old-versus-current speed remains diagnostic.
   result.velocity_difference_mps =
-    actuation.actuation->predicted_speed_mps - request.current_speed_mps;
+    result.expected_speed_mps - request.current_speed_mps;
   result.velocity_reachability_duration_sec =
     velocity_reachability_duration_sec;
 
@@ -976,7 +1061,7 @@ static Result evaluate_with_stop_profile(
   // the discrepancy and historical reachability envelope as diagnostics,
   // then build one current-world command from the fresh control-origin speed
   // and the artifact's still-certified control inputs.
-  auto current_world_actuation = actuation.actuation.value();
+  auto current_world_actuation = selected_actuation;
   current_world_actuation.predicted_speed_mps =
     request.control_origin_speed_mps;
   if (feedback_shadow_mode) {
@@ -1480,6 +1565,8 @@ static Result evaluate_with_stop_profile(
   }
 
   Proof proof;
+  proof.publication_prefix_required = request.publication_prefix_required;
+  proof.publication_prefix = request.publication_prefix;
   proof.plan = request.plan;
   proof.latest_state_feedback_bundle = feedback_shadow_mode;
   proof.publication_stage_advanced = result.publication_stage_advanced;
@@ -1661,6 +1748,14 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
   }
   const auto & execution = *request.plan->execution_artifact;
   const auto & source = *request.plan->physical_snapshot;
+  if (!publication_prefix_consistent(request) ||
+    (request.publication_prefix && !mpcc_vehicle_model::publication_packet_matches(
+      *request.publication_prefix, request.now_sec, request.minimum_acceleration_mps2,
+      request.current_steering_rad, execution.vehicle_model.steering_wire_gain)))
+  {
+    result.reason = StopSuccessorReason::InvalidCurrentWorld;
+    return result;
+  }
   result.source_sequence = execution.identity.sequence;
   if (
     request.decision_id == 0U ||

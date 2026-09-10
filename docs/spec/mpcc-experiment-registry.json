@@ -805,6 +805,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r8-diagnostics-evidence.json",
       "replay_ready": true,
       "reason": "Exact paired2143/2144requests and certified1673, current2144public body/history provenance; prior2143original body provenance is not separately captured"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-prospective-publication-candidate",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/publication-prefix-evidence.json",
+      "replay_ready": true,
+      "reason": "Native candidate packet binding and snapshot roundtrip using sealed r8 original public provenance, exact legacy baseline and labelled projection sensitivity"
     }
   ],
   "experiments": [
@@ -5650,6 +5656,24 @@
       "production_impact": "Observation only; publication schedule contract reopened before new production repair",
       "deleted_code": [],
       "revisit_condition": "Prospective publication binding or changed immutable world"
+    },
+    {
+      "experiment_id": "20260910-nine-state-prospective-publication-candidate",
+      "baseline_commit": "da5eac7ce4841c74d6a3ba1b3041caa23c0f328d",
+      "snapshot_ids": [
+        "20260910-nine-state-prospective-publication-candidate",
+        "20260910-nine-state-dev2-r8-publication-prefix"
+      ],
+      "hypothesis": "Binding each proposed wire packet to its own native prefix removes braking-prefix/accelerating-command inconsistency",
+      "changed_dimension": "Shared prospective native predictor, shared actuation selector, required production Request/proof/candidate binding; no physical margin or solver budget change",
+      "result": "accepted",
+      "reason": "Build26,tests2401pass. Wrong prefix rejected; bound Stop materializes and publishes same wire command with +0.909311163m and roundtrip accepted. Offline only; fixed dev2-r9 and M4–M6 still pending.",
+      "production_impact": "Candidate is integrated through existing single certified normal command authority; fresh dynamic acceptance required",
+      "deleted_code": [
+        "Duplicated inline actuation selector; replaced by one shared selector",
+        "Production authority use of history-only held future input prefix"
+      ],
+      "revisit_condition": "New same-world binding failure or fresh integrated counterexample"
     }
   ]
 }

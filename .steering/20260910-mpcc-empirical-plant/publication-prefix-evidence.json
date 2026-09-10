@@ -1,0 +1,122 @@
+{
+  "baseline_commit": "da5eac7ce4841c74d6a3ba1b3041caa23c0f328d",
+  "rollback_commit": "3ab839fa",
+  "production_candidate": true,
+  "integrated_acceptance": false,
+  "files": [
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/publication-prefix-design.md",
+      "sha256": "4a39748f18f4fc1654077cfc36025a8de2347d79f52c85943f41d78ca4445a09",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/.steering/20260910-mpcc-empirical-plant/publication-prefix-design.md"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/publication-prefix-diagnostic/compile_replay.py",
+      "sha256": "d4131efb77b150f9629caf474938b0f8ee020a740d77f10f9dfad1f19cf5b7a6",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/.steering/20260910-mpcc-empirical-plant/publication-prefix-diagnostic/compile_replay.py"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/publication-prefix-diagnostic/replay_revalidation.cpp",
+      "sha256": "ef95f6b27477facfbec1b2890a17b2f9308acc7518f6ba9375f94177ace2d2c7",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/.steering/20260910-mpcc-empirical-plant/publication-prefix-diagnostic/replay_revalidation.cpp"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/revalidation_input.hpp",
+      "sha256": "4757304bfe80bd03b36078b9321f7c69c9214f6ef3595128d2af473faaa4655d",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/.steering/20260910-mpcc-empirical-plant/revalidation_input.hpp"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/run_campaign.py",
+      "sha256": "e37b193fbcde789732644917b7553472ae847c0391c677a2d233f3b679ada21e",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/.steering/20260910-mpcc-empirical-plant/run_campaign.py"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "23347b5ca2e19ef08427625f5c06b8e0105f0f8cb461f7966e89b1203cd8375d",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp",
+      "sha256": "797a0146d6493b8cfa023d0f0c315dba21d58c4369b8dbbcc43b9a17de2bf1a2",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "bac21471aa09e613cc67c33b7ecbc77206e6cd23d5da29933eade43d215c27d7",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "19a71f2e1c780b2b677e7cd461359b67ad0f94189b18ac7bdd47825b6e5dbccc",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp",
+      "sha256": "9c77e82d87d5f939cf1736440bb88f950f9d4a90d325c3ad83f3b5382492c9ef",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "b9b571a247ad6e49f5073362063980c6a209da13efed114b11ee7198c3f1a639",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp",
+      "sha256": "fc8b07a8853a6718fd267bbd76f13392656b959c956fbe83531c4ded6fb6e6e7",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "83d20a2477dfe8772f34a5cfa76426c00ad9dec29cbbd353637956ef0719c0f5",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_vehicle_model.cpp",
+      "sha256": "aa81c47d25ae25d876c221b94d3cc8ed81868f22ef896deb338a987340579be6",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_vehicle_model.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "sha256": "42b4d53474e1fc77b4a6ba5e2abc59a8585b5883eccf7471e5dfd77c16aa91b6",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py"
+    },
+    {
+      "path": "docs/spec/mpc-integration.md",
+      "sha256": "23521c9fdefad32b27dcc3e91ffd1569e82cf0445051c1a48b36387f0e48cdac",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/sources/docs/spec/mpc-integration.md"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r19/replay",
+      "sha256": "0dc78043f371c3095a48f8cad336362a38272464f91190eec3ffc1d94084e94f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r19/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r19/manifest.json",
+      "sha256": "82237d738e756ba5f2e81ff8d62bf33466bdcfc22f7794ec362c22e6c453ca1f"
+    },
+    {
+      "path": "output/20260910-nine-state-prefix-binding-r1/result.yaml",
+      "sha256": "c5061edfea6a6149c6e05486c7c160922c54990e165676cbe7435ea6a936f6eb"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/replay_certified_plan.cpp",
+      "sha256": "fa0a9f3949345e2455228e31d3f932deb50c15b64b213d4133693154d4d7037b",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/driver-includes/replay_certified_plan.cpp"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/revalidation_input.hpp",
+      "sha256": "4757304bfe80bd03b36078b9321f7c69c9214f6ef3595128d2af473faaa4655d",
+      "preserved": "output/20260910-nine-state-prefix-candidate-evidence/driver-includes/revalidation_input.hpp"
+    }
+  ],
+  "checks": {
+    "build_r20": "26 packages pass",
+    "tests_r16": "one relocated source-layout assertion failed; all four new behavioral cases pass",
+    "build_r21": "26 packages pass",
+    "tests_r17": "2401 records pass, 62 CTest groups, zero errors/failures/skips",
+    "same_world_replay": "wrong prefix rejected; matching Stop +0.909311163m, materialized/joined/converted and serialized roundtrip accepted; course projection sensitivity separately labelled",
+    "pre_commit": "pass"
+  }
+}

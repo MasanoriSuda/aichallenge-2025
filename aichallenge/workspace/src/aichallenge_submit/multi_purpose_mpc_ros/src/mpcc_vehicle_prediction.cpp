@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace multi_purpose_mpc_ros::mpcc_vehicle_model
 {
@@ -28,6 +29,58 @@ bool valid(const ObservationProvenance & v) noexcept
     previous = command.published_sec;
   }
   return true;
+}
+
+std::optional<ProspectivePublicationPrediction> predict_prospective_publication(
+  const ObservationProvenance & observation, const PublishedCommand & packet,
+  const Parameters & parameters) noexcept
+{
+  if (!valid(observation) || !valid(parameters) ||
+    packet.published_sec != observation.now_sec ||
+    !std::isfinite(packet.wire_acceleration_mps2) ||
+    !std::isfinite(packet.wire_steering_rad) ||
+    !std::isfinite(static_cast<float>(packet.wire_acceleration_mps2)) ||
+    !std::isfinite(static_cast<float>(packet.wire_steering_rad)))
+  {
+    return std::nullopt;
+  }
+  // This local schedule includes the proposal; the returned observation keeps
+  // only the original historical inputs, even at a repeated clock timestamp.
+  const PublishedCommand serialized{
+    packet.published_sec, static_cast<float>(packet.wire_acceleration_mps2),
+    static_cast<float>(packet.wire_steering_rad)};
+  auto schedule = observation.commands;
+  if (schedule.back().published_sec == packet.published_sec) {
+    schedule.back() = serialized;
+  } else {
+    schedule.push_back(serialized);
+  }
+  auto prediction = predict_published_history(
+    observation.initial, observation.now_sec, observation.control_origin_sec,
+    schedule, parameters, observation.acceleration_delay_sec,
+    observation.steering_delay_sec);
+  if (!prediction) return std::nullopt;
+  return ProspectivePublicationPrediction{
+    observation, serialized, prediction->current, prediction->control_origin,
+    std::move(prediction->current_to_control), fingerprint(parameters)};
+}
+
+bool publication_packet_matches(
+  const ProspectivePublicationPrediction & prediction, const double publication_sec,
+  const double acceleration, const double steering, const double gain) noexcept
+{
+  const auto & packet = prediction.proposed_packet;
+  const float acceleration_wire = static_cast<float>(acceleration);
+  const float steering_wire = static_cast<float>(steering * gain);
+  return std::isfinite(publication_sec) && publication_sec == packet.published_sec &&
+         publication_sec == prediction.observation.now_sec &&
+         std::isfinite(acceleration) && std::isfinite(steering) &&
+         std::isfinite(gain) && gain > 0.0 &&
+         std::isfinite(packet.wire_acceleration_mps2) &&
+         std::isfinite(packet.wire_steering_rad) &&
+         std::isfinite(acceleration_wire) && std::isfinite(steering_wire) &&
+         acceleration_wire == static_cast<float>(packet.wire_acceleration_mps2) &&
+         steering_wire == static_cast<float>(packet.wire_steering_rad);
 }
 
 std::optional<PublishedPrediction> predict_published_history(

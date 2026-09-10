@@ -283,6 +283,7 @@ Result build(const retained::Result & retained_result) noexcept
   }
 
   Authority authority;
+  authority.applied_program = proof.applied_program;
   authority.problem = source_context;
   authority.solution = solution;
   authority.command = command_result.command.value();

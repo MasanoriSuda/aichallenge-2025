@@ -27,9 +27,9 @@ run_kind = 'application-' if application_diagnostic else ''
 root = Path('output/20260910-nine-state-'+run_kind+mode+'-'+attempt)
 host_duration_sec = 120 if application_diagnostic else 840
 assert not subprocess.check_output(['docker', 'ps', '-q']).strip(), 'Other containers running'
-test_log = Path('/tmp/mpcc-nine-state-tests-r28.log')
-build_log = Path('/tmp/mpcc-nine-state-build-r33.log')
-assert 'Summary: 2410 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
+test_log = Path('/tmp/mpcc-nine-state-tests-r31.log')
+build_log = Path('/tmp/mpcc-nine-state-build-r39.log')
+assert 'Summary: 2425 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
 assert 'Summary: 26 packages finished' in build_log.read_text()
 original_dll = Path('aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll')
 assert hashlib.sha256(original_dll.read_bytes()).hexdigest() == '703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172'
@@ -85,8 +85,8 @@ for kind, log in [('build', build_log), ('package', test_log)]:
 shutil.copy2(original_dll, root/'binaries/Assembly-CSharp-original.dll')
 patch = subprocess.check_output(['git','diff','--','aichallenge/workspace/src/aichallenge_submit'])
 (root/'mpcc-source.patch').write_bytes(patch)
-manifest['control_baseline'] = '6b0f1880'
-manifest['scope'] = 'Shared nine-state COM/tire/body model, causal public velocity/IMU/tire and serialized input history, model-bound QP/nonlinear/Stop/artifact/async, terminal rest proof. Fixed 2025 empirical parameters. No physical margin/tolerance/solver budget relaxation. All integrated acceptance remains subject to actual run results.'
+manifest['control_baseline'] = manifest['baseline_commit']
+manifest['scope'] = 'Required original-source applied-input certificate with empirical250ms receiver profile, same common float program/full-rest Stop and final packet guard. Shared nine-state COM/tire/body model, causal public velocity/IMU/tire and serialized input history, model-bound QP/nonlinear/Stop/artifact/async, terminal rest proof. Fixed 2025 empirical parameters. No physical margin/tolerance/solver budget relaxation. All integrated acceptance remains subject to actual run results.'
 manifest['working_patch_sha256'] = hashlib.sha256(patch).hexdigest()
 original = Path('aichallenge/simulator_scripts/dev.sh').read_text()
 assert '--laps unlimited' in original and '--timeout 10000000.0' in original

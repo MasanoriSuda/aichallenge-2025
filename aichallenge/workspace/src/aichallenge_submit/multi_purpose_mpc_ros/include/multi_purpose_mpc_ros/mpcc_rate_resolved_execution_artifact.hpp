@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_EXECUTION_ARTIFACT_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
+#include "multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 
 #include <cstddef>
@@ -149,6 +150,7 @@ struct ExecutionArtifact
   /// Absence is invalid; no raw-primal fallback is allowed.
   std::optional<PredictedState> semantic_initial_state;
   mpcc_vehicle_model::Parameters vehicle_model;
+  std::shared_ptr<const mpcc_vehicle_model::AppliedProgramProvenance> applied_stop_program;
 };
 
 inline bool serialized_stop_schedule(const ExecutionArtifact & artifact) noexcept

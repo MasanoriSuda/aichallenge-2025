@@ -86,10 +86,11 @@ const char * to_string(const ActuationRejectDetail detail) noexcept
   return "unknown";
 }
 
-Result build(
+static Result build_with_program(
   const retained::Request & request,
   const retained::StopSuccessorResult & stop_successor,
-  const std::uint64_t artifact_sequence)
+  const std::uint64_t artifact_sequence,
+  std::shared_ptr<const mpcc_vehicle_model::AppliedProgramProvenance> program_provenance)
 {
   Result result;
   const auto reject_actuation = [&] (
@@ -262,6 +263,13 @@ Result build(
   auto execution = std::make_shared<artifact::ExecutionArtifact>();
   auto current_context = source_context;
   current_context.input_schema_id = artifact::kSerializedStopInputSchema;
+  current_context.applied_program_fingerprint = program_provenance ?
+    mpcc_vehicle_model::applied_program_provenance_fingerprint(*program_provenance, source_artifact.vehicle_model) : 0;
+  if (program_provenance && current_context.applied_program_fingerprint == 0) {
+    result.reason = Reason::InvalidIdentity;
+    return result;
+  }
+  execution->applied_stop_program = std::move(program_provenance);
   current_context.decision_id = request.decision_id;
   current_context.observation_generation = request.obstacles.generation;
   if (contract::canonical_normal_intent_requires_target_observation(
@@ -409,6 +417,14 @@ Result build(
   return result;
 }
 
+Result build(
+  const retained::Request & request,
+  const retained::StopSuccessorResult & stop_successor,
+  const std::uint64_t artifact_sequence)
+{
+  return build_with_program(request, stop_successor, artifact_sequence, {});
+}
+
 Result build_certified_terminal(
   const retained::Request & request, const retained::Result & revalidation,
   const std::uint64_t artifact_sequence)
@@ -416,7 +432,8 @@ Result build_certified_terminal(
   Result result;
   if (revalidation.reason != retained::Reason::Accepted || !revalidation.proof ||
     !revalidation.current_control_state_available || !revalidation.terminal_stop_certified ||
-    revalidation.terminal_stop_uses_solved_suffix)
+    (revalidation.terminal_stop_uses_solved_suffix &&
+    (!revalidation.proof || !revalidation.proof->applied_program)))
   {
     return result;
   }
@@ -425,7 +442,7 @@ Result build_certified_terminal(
     proof.decision_id != request.decision_id || proof.obstacle_generation != request.obstacles.generation ||
     proof.observed_sec != request.obstacles.observed_sec ||
     proof.observation_origin_sec != request.now_sec || proof.control_origin_sec != request.control_origin_sec ||
-    !proof.terminal_stop_certified || proof.terminal_stop_uses_solved_suffix ||
+    !proof.terminal_stop_certified || (proof.terminal_stop_uses_solved_suffix && !proof.applied_program) ||
     proof.terminal_stop_publisher_interval_sample_count == 0U ||
     proof.terminal_stop_publisher_interval_sample_count > proof.terminal_stop_actuation_samples.size())
   {
@@ -447,11 +464,42 @@ Result build_certified_terminal(
   stop.initial_heading_offset_rad = revalidation.current_control_state.heading_offset_rad;
   stop.initial_lateral_lower_m = revalidation.terminal_stop_initial_lateral_lower_m;
   stop.initial_lateral_upper_m = revalidation.terminal_stop_initial_lateral_upper_m;
+  std::shared_ptr<const mpcc_vehicle_model::AppliedProgramProvenance> provenance;
+  if (proof.applied_program) {
+    const auto & applied = *proof.applied_program;
+    if (!applied.matches(request) || !applied.matches(proof)) {
+      result.reason = Reason::InvalidIdentity; return result;
+    }
+    const auto & execution = *request.plan->execution_artifact;
+    const auto & initial = revalidation.current_control_state;
+    const auto replayed = mpcc_rate_resolved_physical_adapter::build_stop_program(
+      execution, proof.cursor, proof.actuation,
+      {initial.lateral_m, initial.lag_m, initial.heading_offset_rad, initial.velocity_mps,
+        initial.progress_m, proof.actuation.steering_rad, request.current_response_steering_rad,
+        request.current_lateral_velocity_mps, request.current_yaw_rate_radps},
+      request.plan->physical_snapshot->terminal_stop_course_geometry,
+      applied.prepared().program, applied.tube().rest_sec - request.now_sec);
+    if (!replayed.exact_trajectory) {
+      result.reason = Reason::InvalidActuationSequence; return result;
+    }
+    stop.exact_trajectory = *replayed.exact_trajectory;
+    stop.actuation_samples = replayed.actuation_samples;
+    stop.initial_lateral_lower_m = replayed.initial_lateral_lower_m;
+    stop.initial_lateral_upper_m = replayed.initial_lateral_upper_m;
+    auto data = std::make_shared<mpcc_vehicle_model::AppliedProgramProvenance>();
+    data->nominal_solution_id = applied.prepared().source.sequence;
+    data->nominal_problem_fingerprint = applied.prepared().source.source_context.fingerprint;
+    data->observation = applied.tube().observation;
+    data->profile = applied.tube().profile;
+    data->program = applied.prepared().program;
+    data->proved_rest_sec = applied.tube().rest_sec;
+    provenance = std::move(data);
+  }
   auto materialized_request = request;
   // The first terminal interval holds the command already selected and
   // certified by this proof. Its source's historical steering is unrelated.
   materialized_request.current_steering_rad = proof.actuation.steering_rad;
-  return build(materialized_request, stop, artifact_sequence);
+  return build_with_program(materialized_request, stop, artifact_sequence, std::move(provenance));
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_stop_successor_bundle

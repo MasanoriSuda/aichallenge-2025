@@ -1,4 +1,6 @@
 #include "mpcc_vehicle_model_fixture.hpp"
+#include "multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp"
@@ -2223,6 +2225,223 @@ TEST(MpccRateResolvedRetainedRevalidation, PublishedStopKeepsItsSourceWhenNormal
   changed_wall.current_footprint.front_extent_m += .1;
   EXPECT_EQ(retained::evaluate_published_stop_successor(changed_wall).result.reason,
     retained::StopSuccessorReason::StaticWorldMismatch);
+}
+
+
+namespace applied = multi_purpose_mpc_ros::mpcc_rate_resolved_applied_program;
+namespace stop_program = multi_purpose_mpc_ros::mpcc_stop_input_program;
+namespace vehicle = multi_purpose_mpc_ros::mpcc_vehicle_model;
+
+retained::Request applied_request(const contract::ControlIntent intent = contract::ControlIntent::Track)
+{
+  auto original = intent == contract::ControlIntent::Follow ? accepted_follow_request() : accepted_request(certified_plan());
+  original.control_origin_sec = 1.09;
+  const auto packet = retained::prospective_artifact_packet(original);
+  if (!packet) throw std::runtime_error("no fixture packet");
+  auto request = bind_test_packet(original, *packet);
+  // Original fixture's lone time-zero packet is nominal history only. Supply
+  // actual serialized packets covering the complete declared receiver window.
+  auto observation = request.publication_prefix->observation;
+  observation.commands.clear();
+  for (int i = 0; i <= 40; ++i) observation.commands.push_back(
+    {i * .025, -3, static_cast<float>(original.previous_published_steering_rad *
+      original.plan->execution_artifact->vehicle_model.steering_wire_gain)});
+  request.publication_prefix = vehicle::predict_prospective_publication(
+    observation, *packet, original.plan->execution_artifact->vehicle_model);
+  if (!request.publication_prefix) throw std::runtime_error("invalid complete fixture history");
+  const auto & predicted = *request.publication_prefix;
+  const auto & origin = predicted.control_origin;
+  request.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+  request.control_origin_physical_progress_m = origin.x_m;
+  request.current_speed_mps = predicted.current.forward_velocity_mps;
+  request.control_origin_speed_mps = origin.forward_velocity_mps;
+  request.current_steering_rad = origin.desired_steering_rad;
+  request.current_response_steering_rad = origin.tire_steering_rad;
+  request.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+  request.current_yaw_rate_radps = origin.yaw_rate_radps;
+  request.measured_to_control_path.clear(); request.measured_to_control_elapsed_sec.clear();
+  for (const auto & item : predicted.current_to_control) {
+    request.measured_to_control_path.push_back({item.state.x_m, item.state.y_m, item.state.yaw_rad});
+    request.measured_to_control_elapsed_sec.push_back(item.source_sec - request.now_sec);
+  }
+  return request;
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, AppliedStopBindsOriginalProgramSourceAndCurrentWorld)
+{
+  const auto request = applied_request();
+  const auto nominal = retained::evaluate(request);
+  ASSERT_TRUE(nominal.proof) << retained::to_string(nominal.reason);
+  const vehicle::InputApplicationProfile profile{"test-receiver", .25, .25, .02};
+  const auto result = applied::certify_terminal_stop(request, *nominal.proof, profile);
+  ASSERT_TRUE(result.certificate) << static_cast<int>(result.reason) << '/' <<
+    static_cast<int>(result.program_reason) << '/' << static_cast<int>(result.prediction_reason);
+  const auto & proof = *result.certificate;
+  EXPECT_TRUE(proof.matches(request)); EXPECT_TRUE(proof.matches(*nominal.proof));
+  EXPECT_GT(proof.tube().rest_sec, request.now_sec + .25);
+  EXPECT_DOUBLE_EQ(proof.prepared().nominal_control_origin_sec, request.control_origin_sec);
+  EXPECT_DOUBLE_EQ(proof.prepared().program.commands.front().published_sec, request.now_sec);
+  EXPECT_DOUBLE_EQ(proof.prepared().program.commands.front().wire_acceleration_mps2,
+    request.publication_prefix->proposed_packet.wire_acceleration_mps2);
+  auto other = request; other.obstacles.generation++; EXPECT_FALSE(proof.matches(other));
+  other = request; other.minimum_acceleration_mps2 -= .1; EXPECT_FALSE(proof.matches(other));
+  other = request; other.publication_prefix->observation.commands.back().wire_acceleration_mps2 = 1;
+  EXPECT_FALSE(proof.matches(other));
+  auto changed = *nominal.proof;
+  changed.terminal_stop_actuation_samples.back().acceleration_mps2 = -2;
+  EXPECT_FALSE(proof.matches(changed));
+  changed = *nominal.proof; changed.actuation.steering_rad += .001;
+  EXPECT_FALSE(proof.matches(changed));
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, AppliedStopRejectsMissingCoverageAndActualPeerOverlap)
+{
+  auto request = applied_request();
+  const auto nominal = retained::evaluate(request);
+  ASSERT_TRUE(nominal.proof);
+  const vehicle::InputApplicationProfile profile{"test-receiver", .25, .25, .02};
+  auto missing = request; missing.publication_prefix->observation.commands.resize(1);
+  auto corresponding = *nominal.proof; corresponding.publication_prefix = missing.publication_prefix;
+  const auto unavailable = applied::certify_terminal_stop(missing, corresponding, profile);
+  EXPECT_EQ(unavailable.reason, applied::Reason::InputPredictionRejected);
+  EXPECT_FALSE(unavailable.certificate);
+  const auto & body = request.publication_prefix->observation.initial.state;
+  request.obstacles.obstacles.push_back({"new-peer", {body.x_m, body.y_m, 0, 0, .5}});
+  // The new world has not earned a nominal certificate; this lower-level
+  // negative check still requires the applied physical verifier to reject it.
+  const auto collision = applied::certify_terminal_stop(request, *nominal.proof, profile);
+  EXPECT_EQ(collision.reason, applied::Reason::PeerRejected);
+  EXPECT_FALSE(collision.certificate);
+  EXPECT_EQ(collision.rejected_peer_id, "new-peer");
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, CommonProgramPreservesDelayedBrakingAndRebasesExplicitly)
+{
+  stop_program::Request request;
+  request.source = execution_artifact().identity;
+  request.decision_id = 12;
+  request.nominal_control_origin_sec = 1.13;
+  request.publication_interval_sec = .025;
+  request.first_packet = {1, .5, 0};
+  request.steering_wire_gain = 1;
+  request.minimum_acceleration_mps2 = -3;
+  request.maximum_acceleration_mps2 = 1.37;
+  request.maximum_abs_steering_rad = .6;
+  request.maximum_abs_steering_rate_radps = 1;
+  request.actuator_tolerance = 1e-6;
+  for (int i = 0; i < 20; ++i) {
+    stop_program::Sample sample;
+    sample.elapsed_time_sec = (i + 1) * .005; sample.duration_sec = .005;
+    sample.acceleration_mps2 = i < 10 ? .5 : -3;
+    sample.steering_rate_radps = 0; sample.end_steering_rad = 0;
+    sample.end_velocity_mps = i == 19 ? 0 : .1;
+    sample.end_lateral_velocity_mps = sample.end_yaw_rate_radps = 0;
+    sample.command_interval_index = i / 5;
+    request.nominal_stop_samples.push_back(sample);
+  }
+  const auto built = stop_program::prepare(request);
+  ASSERT_TRUE(built.prepared) << static_cast<int>(built.reason);
+  const auto & program = built.prepared->program;
+  ASSERT_EQ(program.commands.size(), 3U);
+  EXPECT_DOUBLE_EQ(program.commands[0].wire_acceleration_mps2, .5);
+  EXPECT_DOUBLE_EQ(program.commands[1].wire_acceleration_mps2, .5);
+  EXPECT_DOUBLE_EQ(program.commands[2].wire_acceleration_mps2, -3);
+  const auto remaining = stop_program::remaining_program(program, 1.04);
+  ASSERT_TRUE(remaining); ASSERT_EQ(remaining->commands.size(), 2U);
+  EXPECT_DOUBLE_EQ(remaining->commands[0].published_sec, 1.04);
+  EXPECT_DOUBLE_EQ(remaining->commands[0].wire_acceleration_mps2, .5);
+  EXPECT_DOUBLE_EQ(remaining->commands[1].published_sec, 1.04 + .025);
+  EXPECT_DOUBLE_EQ(remaining->commands[1].wire_acceleration_mps2, -3);
+  EXPECT_FALSE(stop_program::remaining_program(program, .99));
+  request.first_packet.wire_acceleration_mps2 = -3;
+  EXPECT_EQ(stop_program::prepare(request).reason, stop_program::Reason::FirstPacketMismatch);
+  request.first_packet.wire_acceleration_mps2 = .5;
+  request.nominal_stop_samples.back().end_lateral_velocity_mps = .001;
+  EXPECT_EQ(stop_program::prepare(request).reason, stop_program::Reason::NominalRestUnavailable);
+}
+
+
+TEST(MpccRateResolvedRetainedRevalidation, AppliedProgramIsRequiredAtTheCommandBoundary)
+{
+  auto request = applied_request();
+  request.applied_program_required = true;
+  EXPECT_FALSE(retained::evaluate(request).proof);
+  request.input_application_profile = vehicle::InputApplicationProfile{"test-receiver", .25, .25, .02};
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof) << retained::to_string(result.reason) << '/' <<
+    static_cast<int>(result.applied_program_reason) << '/' <<
+    static_cast<int>(result.applied_program_prepare_reason);
+  ASSERT_TRUE(result.proof->applied_program);
+  EXPECT_TRUE(production::build(result).authority);
+  auto removed = result; removed.proof->applied_program.reset();
+  EXPECT_FALSE(production::build(removed).authority);
+  auto changed = result; changed.proof->terminal_stop_actuation_samples.back().end_steering_rad += .001;
+  EXPECT_FALSE(production::build(changed).authority);
+  auto different_profile = request;
+  different_profile.input_application_profile->steering_receipt_age_sec = .2;
+  EXPECT_FALSE(result.proof->applied_program->matches(different_profile));
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, MaterializedAppliedStopPreservesProgramThroughEveryResponseRest)
+{
+  auto request = applied_request(); request.applied_program_required = true;
+  request.input_application_profile = vehicle::InputApplicationProfile{"test-receiver", .25, .25, .02};
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof) << retained::to_string(result.reason);
+  ASSERT_TRUE(result.proof->applied_program);
+  const auto materialized = stop_bundle::build_certified_terminal(request, result, 1001U);
+  ASSERT_TRUE(materialized.plan) << stop_bundle::to_string(materialized.reason) << '/' <<
+    stop_bundle::to_string(materialized.actuation_detail);
+  const auto & execution = *materialized.plan->execution_artifact;
+  ASSERT_TRUE(execution.applied_stop_program);
+  EXPECT_NE(execution.identity.source_context.applied_program_fingerprint, 0U);
+  EXPECT_EQ(execution.identity.source_context.applied_program_fingerprint,
+    vehicle::applied_program_provenance_fingerprint(*execution.applied_stop_program, execution.vehicle_model));
+  double duration = 0;
+  for (const auto & stage : execution.control_stages) duration += stage.duration_sec;
+  EXPECT_GE(duration + 1e-9, result.proof->applied_program->tube().rest_sec - request.now_sec);
+  auto joined_request = request; joined_request.plan = materialized.plan;
+  joined_request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto joined = retained::evaluate(joined_request);
+  ASSERT_TRUE(joined.proof) << retained::to_string(joined.reason) << '/' <<
+    static_cast<int>(joined.applied_program_reason) << '/' << static_cast<int>(joined.applied_program_prepare_reason);
+  ASSERT_TRUE(joined.proof->applied_program);
+  EXPECT_TRUE(joined.terminal_stop_uses_solved_suffix);
+  EXPECT_TRUE(production::build(joined).authority);
+  EXPECT_DOUBLE_EQ(joined.proof->applied_program->prepared().program.commands.front().wire_steering_rad,
+    result.proof->applied_program->prepared().program.commands.front().wire_steering_rad);
+  YAML::Emitter encoded;
+  encoded.SetDoublePrecision(17);
+  encoded << vehicle::encode_applied_program_provenance(*execution.applied_stop_program);
+  const auto decoded = vehicle::decode_applied_program_provenance(YAML::Load(encoded.c_str()), execution.vehicle_model);
+  ASSERT_TRUE(decoded);
+  EXPECT_EQ(vehicle::applied_program_provenance_fingerprint(*decoded, execution.vehicle_model),
+    execution.identity.source_context.applied_program_fingerprint);
+  auto altered = execution;
+  auto changed_program = std::make_shared<vehicle::AppliedProgramProvenance>(*execution.applied_stop_program);
+  changed_program->program.commands.back().wire_acceleration_mps2 = -2;
+  altered.applied_stop_program = changed_program;
+  EXPECT_EQ(artifact::validate(altered), artifact::RejectReason::InvalidIdentity);
+  altered = execution; altered.applied_stop_program.reset();
+  EXPECT_EQ(artifact::validate(altered), artifact::RejectReason::InvalidIdentity);
+}
+
+
+TEST(MpccRateResolvedRetainedRevalidation, AppliedStopChecksFollowGapAcrossTheWholeUncertainBodyPath)
+{
+  auto request = applied_request(contract::ControlIntent::Follow);
+  const auto nominal = retained::evaluate(request);
+  ASSERT_TRUE(nominal.proof) << retained::to_string(nominal.reason);
+  const vehicle::InputApplicationProfile profile{"test-follow-receiver", .25, .25, .02};
+  const auto accepted = applied::certify_terminal_stop(request, *nominal.proof, profile);
+  ASSERT_TRUE(accepted.certificate) << static_cast<int>(accepted.reason);
+  EXPECT_GE(accepted.certificate->minimum_follow_gap_m(), request.follow_target->hard_gap_m);
+  auto unsafe = request;
+  unsafe.follow_target->hard_gap_m = 10;
+  const auto rejected = applied::certify_terminal_stop(unsafe, *nominal.proof, profile);
+  EXPECT_EQ(rejected.reason, applied::Reason::FollowGapRejected);
+  EXPECT_FALSE(rejected.certificate);
+  EXPECT_FALSE(accepted.certificate->matches(unsafe));
 }
 
 }  // namespace

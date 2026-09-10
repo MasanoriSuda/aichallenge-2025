@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 
 #include "multi_purpose_mpc_ros/mpc_stage_geometry.hpp"
@@ -359,6 +360,12 @@ std::optional<double> sample_follow_target_progress(
 
 }  // namespace
 
+std::optional<double> follow_target_progress_at(
+  const FollowTargetObservation & observation, double elapsed_time_sec) noexcept
+{
+  return sample_follow_target_progress(observation, elapsed_time_sec);
+}
+
 std::optional<double> resolve_peer_circle_radius(
   const double nominal_peer_body_radius_m,
   const double peer_uncertainty_margin_m) noexcept
@@ -461,6 +468,7 @@ const char * to_string(const Reason reason) noexcept
     case Reason::ContinuationRejected: return "continuation-rejected";
     case Reason::ContinuationWallBlocked:
       return "continuation-wall-blocked";
+    case Reason::AppliedProgramUnavailable: return "applied-program-unavailable";
     case Reason::TerminalContingencyUnavailable:
       return "terminal-contingency-unavailable";
     case Reason::Count: break;
@@ -680,7 +688,7 @@ std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
   return mpcc_vehicle_model::PublishedCommand{
     request.now_sec,
     static_cast<float>(selected->second.acceleration_mps2),
-    static_cast<float>(selected->second.steering_rad * execution.vehicle_model.steering_wire_gain)};
+    mpcc_wire_command::steering(selected->second.steering_rad, execution.vehicle_model.steering_wire_gain)};
 }
 
 static bool publication_prefix_consistent(const Request & request)
@@ -1565,6 +1573,7 @@ static Result evaluate_with_stop_profile(
   }
 
   Proof proof;
+  proof.applied_program_required = request.applied_program_required;
   proof.publication_prefix_required = request.publication_prefix_required;
   proof.publication_prefix = request.publication_prefix;
   proof.plan = request.plan;
@@ -1641,6 +1650,26 @@ static Result evaluate_with_stop_profile(
     std::move(proved_stage_end_velocity_mps);
   proof.continuation_stage_end_steering_rad =
     std::move(proved_stage_end_steering_rad);
+  if (request.applied_program_required || request.input_application_profile) {
+    if (!request.input_application_profile) {
+      result.terminal_stop_certified = false;
+      return complete_continuation_proof(Reason::AppliedProgramUnavailable);
+    }
+    const auto started = SteadyClock::now();
+    const auto applied = mpcc_rate_resolved_applied_program::certify_terminal_stop(
+      request, proof, *request.input_application_profile);
+    result.runtime.applied_program_ms = elapsed_ms(started, SteadyClock::now());
+    result.applied_program_reason = applied.reason;
+    result.applied_program_prepare_reason = applied.program_reason;
+    result.applied_input_prediction_reason = applied.prediction_reason;
+    result.applied_program_rejected_sec = applied.rejected_sec;
+    result.applied_program_rejected_peer_id = applied.rejected_peer_id;
+    if (!applied.certificate) {
+      result.terminal_stop_certified = false;
+      return complete_continuation_proof(Reason::AppliedProgramUnavailable);
+    }
+    proof.applied_program = applied.certificate;
+  }
   result.reason = Reason::Accepted;
   result.proof = std::move(proof);
   return result;
@@ -1674,7 +1703,7 @@ Result evaluate(const Request & request)
   track.terminal_stop_reference_attempts += normal_path.terminal_stop_reference_attempts;
   using Runtime = Result::RuntimeBreakdown;
   for (const auto field : {
-    &Runtime::pre_continuation_ms, &Runtime::continuation_build_ms,
+    &Runtime::applied_program_ms, &Runtime::pre_continuation_ms, &Runtime::continuation_build_ms,
     &Runtime::continuation_proof_ms, &Runtime::continuation_delay_wall_ms,
     &Runtime::continuation_dynamic_ms, &Runtime::continuation_wall_ms,
     &Runtime::terminal_build_ms, &Runtime::terminal_dynamic_ms, &Runtime::terminal_wall_ms})

@@ -1,3 +1,4 @@
+#include <multi_purpose_mpc_ros/mpcc_wire_command.hpp>
 #include <multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp>
 #include <multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp>
 #include <autoware_auto_vehicle_msgs/msg/velocity_report.hpp>
@@ -5987,6 +5988,7 @@ struct MpcConfig
   double state_prediction_delay_sec{0.0};
   bool state_prediction_simulation_only{true};
   mpcc_vehicle_model::Parameters vehicle_model;
+  mpcc_vehicle_model::InputApplicationProfile input_application_profile;
   double nominal_acceleration_application_delay_sec{};
   double nominal_steering_application_delay_sec{};
   double curvature_reference_gain{1.0};
@@ -7639,6 +7641,13 @@ struct RateResolvedPhysicalShadowEvaluation
 struct RateResolvedRetainedShadowEvaluation
 {
   rate_resolved_retained::Result::RuntimeBreakdown runtime;
+  mpcc_rate_resolved_applied_program::Reason applied_program_reason{
+    mpcc_rate_resolved_applied_program::Reason::InvalidNominalProof};
+  mpcc_stop_input_program::Reason applied_program_prepare_reason{mpcc_stop_input_program::Reason::InvalidIdentity};
+  mpcc_vehicle_model::AppliedInputRejectReason applied_prediction_reason{mpcc_vehicle_model::AppliedInputRejectReason::None};
+  double applied_rejected_sec{std::numeric_limits<double>::quiet_NaN()};
+  std::string applied_rejected_peer;
+
   rate_resolved_retained::Result::RuntimeBreakdown aggregate_runtime;
   std::size_t plan_evaluation_count{};
   double plan_evaluation_elapsed_ms{};
@@ -8058,6 +8067,7 @@ struct CanonicalNormalPendingActuation
   overtake_sibling_adoption_token;
   std::optional<rate_resolved_production::CertifiedStopSuccessorEvidence>
   certified_stop_successor;
+  std::shared_ptr<const mpcc_rate_resolved_applied_program::Certificate> applied_program;
 };
 
 using PublishedStopSuccessorEvaluation =
@@ -9695,6 +9705,23 @@ struct MPC
         rate_resolved_stop_lattice_shadow_worker_->
         invalidate_pending_and_running());
     }
+  }
+
+  bool applied_program_matches_final_packet(
+    const std::uint64_t decision_id, const double now_sec,
+    const double acceleration_mps2, const double wire_steering_rad) const
+  {
+    if (!pending_canonical_normal_actuation_ || !pending_canonical_normal_actuation_->applied_program)
+      return false;
+    const auto & pending = *pending_canonical_normal_actuation_;
+    const auto & proof = *pending.applied_program;
+    const auto & program = proof.prepared();
+    const auto & packet = program.program.commands.front();
+    return decision_id == pending.decision_id && decision_id == program.decision_id &&
+      program.source.sequence == pending.command.solution_id &&
+      program.source.source_context.fingerprint == pending.command.problem_fingerprint &&
+      packet.published_sec == now_sec && packet.wire_acceleration_mps2 == acceleration_mps2 &&
+      packet.wire_steering_rad == wire_steering_rad && proof.tube().rest_sec > now_sec;
   }
 
   void record_canonical_normal_final_command(
@@ -26614,6 +26641,8 @@ struct MPC
     request.stop_lateral_policy = stop_path_tracking_policy();
     request.minimum_acceleration_mps2 = cfg.a_min;
     request.maximum_acceleration_mps2 = cfg.a_max;
+    request.applied_program_required = true;
+    request.input_application_profile = cfg.input_application_profile;
     request.publication_prefix_required = true;
     if (!vehicle_observation_provenance_ ||
       vehicle_observation_provenance_->now_sec != now_sec ||
@@ -26627,7 +26656,7 @@ struct MPC
     const auto packet = stop_successor_packet ?
       std::optional<mpcc_vehicle_model::PublishedCommand>{mpcc_vehicle_model::PublishedCommand{
         now_sec, static_cast<float>(cfg.a_min),
-        static_cast<float>(request.previous_published_steering_rad * cfg.vehicle_model.steering_wire_gain)}} :
+        mpcc_wire_command::steering(request.previous_published_steering_rad, cfg.vehicle_model.steering_wire_gain)}} :
       rate_resolved_retained::prospective_artifact_packet(request);
     if (!packet) return request;
     auto predicted = mpcc_vehicle_model::predict_prospective_publication(
@@ -27001,6 +27030,11 @@ struct MPC
     evaluation.obstacle_count = request->obstacles.obstacles.size();
     auto result = rate_resolved_retained::evaluate(request.value());
     evaluation.runtime = result.runtime;
+    evaluation.applied_program_reason = result.applied_program_reason;
+    evaluation.applied_program_prepare_reason = result.applied_program_prepare_reason;
+    evaluation.applied_prediction_reason = result.applied_input_prediction_reason;
+    evaluation.applied_rejected_sec = result.applied_program_rejected_sec;
+    evaluation.applied_rejected_peer = result.applied_program_rejected_peer_id;
     evaluation.decision_id = request->decision_id;
     evaluation.observation_origin_sec = request->now_sec;
     evaluation.control_origin_sec = request->control_origin_sec;
@@ -27183,6 +27217,7 @@ struct MPC
     double plan_evaluation_elapsed_ms{};
     const auto accumulate_runtime = [&aggregate_runtime](
       const rate_resolved_retained::Result::RuntimeBreakdown & runtime) {
+        aggregate_runtime.applied_program_ms += runtime.applied_program_ms;
         aggregate_runtime.pre_continuation_ms += runtime.pre_continuation_ms;
         aggregate_runtime.continuation_build_ms +=
           runtime.continuation_build_ms;
@@ -28229,6 +28264,15 @@ struct MPC
           retained.aggregate_runtime.terminal_build_ms,
           retained.aggregate_runtime.terminal_dynamic_ms,
           retained.aggregate_runtime.terminal_wall_ms);
+        RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
+          "MPCC applied program: decision=%lu, source=%lu, reason=%d, program=%d, prediction=%d, "
+          "rejected_sec=%.9f, peer=%s, selected_ms=%.3f, aggregate_ms=%.3f, profile=%s",
+          static_cast<unsigned long>(active_control_decision_id_), static_cast<unsigned long>(retained.sequence),
+          static_cast<int>(retained.applied_program_reason), static_cast<int>(retained.applied_program_prepare_reason),
+          static_cast<int>(retained.applied_prediction_reason), retained.applied_rejected_sec,
+          retained.applied_rejected_peer.empty() ? "none" : retained.applied_rejected_peer.c_str(),
+          retained.runtime.applied_program_ms, retained.aggregate_runtime.applied_program_ms,
+          cfg.input_application_profile.profile_id.c_str());
         rate_resolved_track_cruise_retained_last_trace_sec_ = now_sec;
         rate_resolved_track_cruise_retained_suppressed_transition_count_ = 0U;
       }
@@ -30002,8 +30046,20 @@ struct MPC
     const RateResolvedRetainedShadowEvaluation & input)
   {
     std::optional<RateResolvedRetainedShadowEvaluation> terminal_execution;
+    const bool applied_stop_needs_materialization = input.production_authority &&
+      input.production_authority->applied_program &&
+      (!input.selected_plan || !input.selected_plan->execution_artifact ||
+      !input.selected_plan->execution_artifact->applied_stop_program ||
+      [&]() {
+        const auto & execution = *input.selected_plan->execution_artifact;
+        const double remaining = std::accumulate(execution.control_stages.begin(), execution.control_stages.end(), 0.0,
+          [](double time, const rate_resolved_artifact::ControlStage & stage) {return time + stage.duration_sec;}) -
+          input.cursor_elapsed_sec;
+        return remaining + 1e-9 < input.production_authority->applied_program->tube().rest_sec -
+          input.production_authority->applied_program->tube().observation.now_sec;
+      }());
     if (input.certified_terminal_contingency_selected && input.production_authority &&
-      !input.terminal_stop_uses_solved_suffix)
+      (!input.terminal_stop_uses_solved_suffix || applied_stop_needs_materialization))
     {
       if (!input.revalidation_request || !input.revalidated_result ||
         rate_resolved_track_cruise_shadow_next_sequence_ == std::numeric_limits<std::uint64_t>::max())
@@ -30050,6 +30106,7 @@ struct MPC
       mpcc_contract::resolve_published_authority_intent(
       intent, retained.certified_terminal_contingency_selected);
     if (
+      !authority.applied_program ||
       !mpcc_contract::problem_context_complete(authority.problem) ||
       !mpcc_contract::solution_certified(authority.solution) ||
       authority.problem.intent != intent || command.intent != intent ||
@@ -30122,7 +30179,7 @@ struct MPC
       normal_execution_evidence ?
       retained.overtake_sibling_adoption_token : std::nullopt,
       normal_execution_evidence ?
-      authority.certified_stop_successor : std::nullopt};
+      authority.certified_stop_successor : std::nullopt, authority.applied_program};
     last_control_resolution_reason_ =
       std::string{retained.certified_terminal_contingency_selected ?
       "canonical-certified-terminal-stop/source-" :
@@ -50217,6 +50274,17 @@ Config load_config(const std::string & path)
     throw std::runtime_error("invalid vehicle model or mismatched steering wire gain");
   }
   cfg.mpc.vehicle_model = *vehicle_model;
+  const auto application = mpc["input_application_profile"];
+  cfg.mpc.input_application_profile = {
+    application["profile_id"].as<std::string>(),
+    application["acceleration_age_sec"].as<double>(),
+    application["steering_receipt_age_sec"].as<double>(),
+    application["steering_mechanical_delay_sec"].as<double>()};
+  if (!mpcc_vehicle_model::valid(cfg.mpc.input_application_profile) ||
+    cfg.mpc.input_application_profile.acceleration_age_sec < 1.0 / cfg.mpc.control_rate ||
+    cfg.mpc.input_application_profile.steering_receipt_age_sec < 1.0 / cfg.mpc.control_rate)
+    throw std::runtime_error("invalid empirical input application profile or uncovered publisher period");
+
   cfg.mpc.nominal_acceleration_application_delay_sec =
     mpc["nominal_acceleration_application_delay_sec"].as<double>();
   cfg.mpc.nominal_steering_application_delay_sec =
@@ -54919,7 +54987,8 @@ private:
   }
 
   std::optional<double> publish_control_command(
-    const rclcpp::Time & stamp, const Eigen::Vector2d & u, const double acc)
+    const rclcpp::Time & stamp, const Eigen::Vector2d & u, const double acc,
+    const bool canonical_execution)
   {
     auto raw_command = create_ackermann_control_command(stamp, u, acc);
     const auto published_steering =
@@ -54934,6 +55003,12 @@ private:
     final_command.lateral.steering_tire_angle = published_steering.value();
     if (!command_is_finite(raw_command) || !command_is_finite(final_command)) {
       publish_failsafe_command(stamp, "non-finite control command rejected");
+      return std::nullopt;
+    }
+    if (canonical_execution && (!mpc_ || !mpc_->applied_program_matches_final_packet(
+        active_control_decision_id_, stamp.seconds(), final_command.longitudinal.acceleration,
+        final_command.lateral.steering_tire_angle))) {
+      publish_failsafe_command(stamp, "applied program does not match final serialized packet");
       return std::nullopt;
     }
     command_raw_pub_->publish(raw_command);
@@ -58953,7 +59028,7 @@ private:
       car_->drive(Eigen::Vector2d(actual_v, u[1]));
     }
     const auto published_steering = publish_control_command(
-      current_time, u, acc);
+      current_time, u, acc, canonical_normal_execution_active && !recovery_command_active);
     if (!published_steering.has_value()) {
       return;
     }

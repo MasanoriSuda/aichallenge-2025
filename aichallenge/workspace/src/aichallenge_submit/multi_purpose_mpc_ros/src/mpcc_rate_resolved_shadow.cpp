@@ -595,6 +595,7 @@ RecedingWarmStartResolution resolve_receding_warm_start(
     current_context.horizon_steps != horizon ||
     previous_horizon == 0U ||
     previous_context.vehicle_model_fingerprint != current_context.vehicle_model_fingerprint ||
+    previous_context.applied_program_fingerprint != current_context.applied_program_fingerprint ||
     previous_context.state_schema_id != current_context.state_schema_id ||
     previous_context.input_schema_id != current_context.input_schema_id ||
     previous_context.bounds_schema_id != current_context.bounds_schema_id ||

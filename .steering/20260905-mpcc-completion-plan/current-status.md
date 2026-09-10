@@ -1,25 +1,21 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。全M1–M6の自律実装・検証・必要分のローカルcommitを継続中。pushなし。
-**全体は未完。直前の共有カーネル基準は `2fc31bf7`。**
+2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ、pushなし。
+**全体は未完。共有ライブラリ基準 `95180a1c` の次の統合候補をローカル検証済み。**
 
-- 公開履歴は同じROS時刻の全packetを保持。未来のpacketによる入力欠損の見逃しを修正。
-- 共有数値ライブラリが元観測から共通の公開指令列・全応答の静止までを予測する。
-  buildr37は26package、testsr30は2417記録/62group、error/failure/skipは0。
-- 保存済み4場面の同一ライブラリreplayで停止・元の壁/他車確認が成立。
-  native374960値の包含を検査。予測と物理照合は単体約9.25–15.06msで、周期受入れは未確認。
-- application-r5はD1 decision966/Stop438で失敗。既存の走行不合格を合格にしない。
-  事前100ms操舵age候補は初期区間134.715637msで反証。別記250ms仮説は完全1865区間に適合。
-  縦入力434選択/432区間も250ms内。経験的観測であり保証上限ではない。
-- 共通指令列のimmutable認証、実行時計、全応答が止まるまでのStop実行、asyncと最終公開は次の統合範囲。
-  新ライブラリ単体には実行権限がない。公開履歴以外の本番制御経路は未変更。
+- live requestは元観測/履歴・経験的250ms入力profile・共通指令列・全応答静止のimmutable認証を要求。
+- Stop materialization/horizon、async context、最終ROS float値まで結合。旧nominal-only実行を省略経路にしない。
+- 実ROSの2段float32変換を共通化。旧libraryの誤ったpacket判定を再現し、現実装で修正を確認。
+- buildr39:26package。testsr31:2425記録/62group、error/failure/skip0。
+- 保存済み3失敗worldを入力改変なしで再生。旧packet mismatchも保存。過去の失敗/不正なpredecessor対応は合格にしない。
+- 次は新しいdev2-r16で最初の失敗とcallback周期を確認。実Stop/rest/restartとM4–M6は未完了。
 
 [統合設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-design.md)、
-[最新証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-library-evidence.json)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-integration-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-統合後、M4の全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEADで単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalと文書・commitを完了する。
-安全余裕・合否基準を緩めず、通常の再確認は求めない。モデル誤差・接触・輸送の保証は未検証。
+M4の全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
+dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
+安全余裕・合格条件は維持。モデル誤差・接触・輸送の保証は未検証。
 
 ## Superseded checkpoint and historical evidence
 

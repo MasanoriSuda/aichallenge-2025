@@ -305,3 +305,16 @@ Boostを使用しない提出物に `/awsim/cmd` は必須ではない。使用�
 | [../spec/makefile-target-naming.md](../spec/makefile-target-naming.md) | make ターゲット命名規約 |
 | [../README.md](../README.md) | ドキュメント命名・分類規約 |
 | [../../README.md](../../README.md) | リポジトリルート README |
+
+### MPCCの共通入力認証と保存データ（2026-09-11、候補）
+
+通常のMPCC指令は、既存の解/trajectory/commandの一致に加え、元観測と公開履歴から
+一つの共通指令列・全応答のモデル内静止までを検査した追加certificateを要求する。
+Stop artifactの `applied_stop_program` はsource IDs、元観測、入力profile、実公開予定列、
+静止時刻を保持する。`problem_context.applied_program_fingerprint` がそのデータを結合し、
+async互換性・artifact検証・最終publish前照合へ引き継ぐ。profileはlive requestで必須。
+旧保存データのfield省略はfingerprint0として旧ハッシュで読めるが、新live実行の省略許可ではない。
+旧入力を新しいfloat32変換へ手修正して再生成功にしない。ROS topic/型、launch、評価JSONの
+既存契約は同じであり、変更はMPCC内部の保存/認証データに限る。
+受信age250msは2025 AWSIM実測から選んだ経験的profileで、2026公式/実車の保証ではない。
+詳細と未完了の統合受入れは[統合仕様](../spec/mpc-integration.md)を参照。

@@ -210,6 +210,20 @@ applied_input_context_fingerprint(const ObservationProvenance &observation,
   return hash.value == 0 ? 1 : hash.value;
 }
 
+std::uint64_t applied_program_provenance_fingerprint(
+    const AppliedProgramProvenance & provenance, const Parameters & parameters) noexcept {
+  const auto input = applied_input_context_fingerprint(provenance.observation,
+    provenance.program, provenance.profile, parameters);
+  if (input == 0 || provenance.nominal_solution_id == 0 || provenance.nominal_problem_fingerprint == 0 ||
+    !std::isfinite(provenance.proved_rest_sec) ||
+    provenance.proved_rest_sec <= provenance.observation.now_sec) return 0;
+  Hash hash;
+  hash.string("applied-stop-provenance-v1");
+  hash.integer(input); hash.integer(provenance.nominal_solution_id);
+  hash.integer(provenance.nominal_problem_fingerprint); hash.number(provenance.proved_rest_sec);
+  return hash.value == 0 ? 1 : hash.value;
+}
+
 std::optional<AppliedInputBounds>
 applied_input_bounds(const std::vector<PublishedCommand> &history,
                      const PublishedInputProgram &program,
@@ -268,7 +282,10 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
     if (stamp == observation.now_sec)
       tube.publication_body = body_ranges(population.front());
     // Even an already stationary member may still receive a positive packet.
-    double rest_not_before = program.commands.back().published_sec;
+    // Every explicitly scheduled packet owns one complete publisher interval,
+    // even if the body is already stationary before that interval ends.
+    double rest_not_before = observation.now_sec +
+      program.commands.size() * program.publication_interval_sec;
     for (const auto *packets : {&observation.commands, &program.commands}) {
       for (const auto &packet : *packets) {
         if (packet.wire_acceleration_mps2 > 0) {

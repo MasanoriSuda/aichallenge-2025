@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 
 #include <algorithm>
@@ -198,6 +199,18 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     artifact.identity.source_context.vehicle_model_fingerprint !=
     mpcc_vehicle_model::fingerprint(artifact.vehicle_model))
   {
+    return RejectReason::InvalidIdentity;
+  }
+  const auto & program = artifact.applied_stop_program;
+  if (program) {
+    if (!serialized_stop_schedule(artifact) || !artifact.terminal_body_rest_required ||
+      artifact.identity.source_context.applied_program_fingerprint == 0 ||
+      artifact.identity.source_context.applied_program_fingerprint !=
+      mpcc_vehicle_model::applied_program_provenance_fingerprint(*program, artifact.vehicle_model) ||
+      program->observation.control_origin_sec != artifact.prediction_origin_sec ||
+      program->program.publication_interval_sec != artifact.publication_interval_sec)
+      return RejectReason::InvalidIdentity;
+  } else if (artifact.identity.source_context.applied_program_fingerprint != 0) {
     return RejectReason::InvalidIdentity;
   }
   if (
@@ -427,6 +440,13 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     if (!std::isfinite(horizon_sec)) {
       return RejectReason::InvalidControlStage;
     }
+    if (program) {
+      const auto & packet = program->program.commands[std::min(index, program->program.commands.size() - 1U)];
+      if (static_cast<float>(control.acceleration_mps2) != packet.wire_acceleration_mps2 ||
+        mpcc_wire_command::steering(artifact.predicted_states[index + 1U].steering_rad,
+          artifact.vehicle_model.steering_wire_gain) != packet.wire_steering_rad)
+        return RejectReason::InvalidControlStage;
+    }
     const double predicted_next_steering =
       artifact.predicted_states[index].steering_rad +
       control.steering_rate_radps * control.duration_sec;
@@ -475,6 +495,8 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   {
     return RejectReason::InvalidTiming;
   }
+  if (program && (horizon_sec + 1e-9 < program->proved_rest_sec - program->observation.now_sec ||
+    artifact.control_stages.size() < program->program.commands.size())) return RejectReason::InvalidTiming;
   return RejectReason::None;
 }
 

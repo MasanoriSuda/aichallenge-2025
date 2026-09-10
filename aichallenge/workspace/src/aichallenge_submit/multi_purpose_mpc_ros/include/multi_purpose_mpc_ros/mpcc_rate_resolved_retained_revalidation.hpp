@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_RETAINED_REVALIDATION_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp"
@@ -49,6 +50,10 @@ struct FollowTargetObservation
   std::vector<double> target_progress_from_current_origin_m;
   bool current{false};
 };
+
+/// Shared current-world Follow forecast, including its existing constant-speed tail.
+std::optional<double> follow_target_progress_at(
+  const FollowTargetObservation & observation, double elapsed_time_sec) noexcept;
 
 struct FollowTargetObservationBuildRequest
 {
@@ -154,6 +159,8 @@ struct Request
   double current_yaw_rate_radps{};
   /// Production requests require their complete future prefix to be bound to
   /// the proposed serialized packet. Absence remains readable for old replays.
+  bool applied_program_required{false};
+  std::optional<mpcc_vehicle_model::InputApplicationProfile> input_application_profile;
   bool publication_prefix_required{false};
   std::optional<mpcc_vehicle_model::ProspectivePublicationPrediction> publication_prefix;
 };
@@ -194,6 +201,7 @@ enum class Reason
   ContinuationRejected,
   ContinuationWallBlocked,
   TerminalContingencyUnavailable,
+  AppliedProgramUnavailable,
   Count,
 };
 
@@ -224,6 +232,8 @@ const char * to_string(DynamicObstacleProofScope scope) noexcept;
 
 struct Proof
 {
+  bool applied_program_required{false};
+  std::shared_ptr<const mpcc_rate_resolved_applied_program::Certificate> applied_program;
   bool publication_prefix_required{false};
   std::optional<mpcc_vehicle_model::ProspectivePublicationPrediction> publication_prefix;
   std::shared_ptr<const certified::CertifiedPlan> plan;
@@ -318,10 +328,18 @@ struct Proof
 
 struct Result
 {
+  mpcc_rate_resolved_applied_program::Reason applied_program_reason{
+    mpcc_rate_resolved_applied_program::Reason::InvalidNominalProof};
+  mpcc_stop_input_program::Reason applied_program_prepare_reason{mpcc_stop_input_program::Reason::InvalidIdentity};
+  mpcc_vehicle_model::AppliedInputRejectReason applied_input_prediction_reason{
+    mpcc_vehicle_model::AppliedInputRejectReason::None};
+  double applied_program_rejected_sec{std::numeric_limits<double>::quiet_NaN()};
+  std::string applied_program_rejected_peer_id;
   /// Non-overlapping wall-clock regions inside evaluate().  These fields are
   /// diagnostic only and never participate in authority selection.
   struct RuntimeBreakdown
   {
+    double applied_program_ms{};
     double pre_continuation_ms{};
     double continuation_build_ms{};
     double continuation_proof_ms{};

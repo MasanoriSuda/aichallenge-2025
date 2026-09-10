@@ -46,6 +46,7 @@ std::shared_ptr<const certified::CertifiedPlan> read_plan(const YAML::Node & evi
  CONTEXT(bounds_schema_id,std::string)
  CONTEXT(cost_schema_id,std::string)
 #undef CONTEXT
+ ctx.applied_program_fingerprint=c["applied_program_fingerprint"].as<std::uint64_t>(0U);
  value.identity.sequence=node["source_sequence"].as<std::uint64_t>();value.identity.snapshot_sec=node["source_snapshot_sec"].as<double>();
  if(ctx.fingerprint!=node["source_problem_fingerprint"].as<std::uint64_t>() || !contract::problem_context_complete(ctx))throw std::runtime_error("original context fingerprint invalid");
   value.prediction_origin_sec = node["prediction_origin_sec"].as<double>();
@@ -110,6 +111,11 @@ std::shared_ptr<const certified::CertifiedPlan> read_plan(const YAML::Node & evi
   value.lateral_upper_m = node["lateral_upper_m"].as<std::vector<double>>();
 
  value.course_frame={std::make_shared<const std::vector<m::mpc_stage_geometry::CourseFrameKnot>>(knots(node["course_frame_knots"])),value.course_progress_origin_m};
+ if(node["applied_stop_program"]) {
+  const auto provenance=m::mpcc_vehicle_model::decode_applied_program_provenance(node["applied_stop_program"],value.vehicle_model);
+  if(!provenance)throw std::runtime_error("invalid captured applied Stop program");
+  value.applied_stop_program=std::make_shared<const m::mpcc_vehicle_model::AppliedProgramProvenance>(*provenance);
+ }
  if(artifact::validate(value)!=artifact::RejectReason::None)throw std::runtime_error("original artifact invalid");
  physical::Snapshot p;const auto n=evidence["physical_snapshot"],i=n["identity"];
  p.identity.artifact=value.identity;

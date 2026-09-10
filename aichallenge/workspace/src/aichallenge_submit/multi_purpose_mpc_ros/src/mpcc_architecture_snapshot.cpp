@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp"
 #include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
@@ -250,54 +251,13 @@ YAML::Node assembly_request_node(const problem::AssemblyRequest & request)
   return node;
 }
 
-YAML::Node observation_provenance_node(const mpcc_vehicle_model::ObservationProvenance & v)
+YAML::Node observation_provenance_node(const mpcc_vehicle_model::ObservationProvenance & value)
 {
-  YAML::Node node;
-  node["pose_source_sec"] = v.initial.source_sec;
-  node["velocity_source_sec"] = v.velocity_source_sec;
-  node["yaw_rate_source_sec"] = v.yaw_rate_source_sec;
-  node["tire_source_sec"] = v.tire_source_sec;
-  node["now_sec"] = v.now_sec;
-  node["control_origin_sec"] = v.control_origin_sec;
-  node["nominal_acceleration_application_delay_sec"] = v.acceleration_delay_sec;
-  node["nominal_steering_application_delay_sec"] = v.steering_delay_sec;
-  const auto & state = v.initial.state;
-  node["initial_x_y_yaw_u_vy_r_desired_tire"] = std::vector<double>{
-    state.x_m, state.y_m, state.yaw_rad, state.forward_velocity_mps,
-    state.lateral_velocity_mps, state.yaw_rate_radps, state.desired_steering_rad,
-    state.tire_steering_rad};
-  YAML::Node history(YAML::NodeType::Sequence);
-  for (const auto & command : v.commands) {
-    history.push_back(std::vector<double>{command.published_sec,
-      command.wire_acceleration_mps2, command.wire_steering_rad});
-  }
-  node["published_time_wire_acceleration_wire_steering"] = history;
-  return node;
+  return mpcc_vehicle_model::encode_observation_provenance(value);
 }
-
-std::optional<mpcc_vehicle_model::ObservationProvenance> load_observation_provenance(
-  const YAML::Node & node)
+std::optional<mpcc_vehicle_model::ObservationProvenance> load_observation_provenance(const YAML::Node & node)
 {
-  if (!node.IsMap()) return std::nullopt;
-  mpcc_vehicle_model::ObservationProvenance v;
-  v.initial.source_sec = node["pose_source_sec"].as<double>();
-  v.velocity_source_sec = node["velocity_source_sec"].as<double>();
-  v.yaw_rate_source_sec = node["yaw_rate_source_sec"].as<double>();
-  v.tire_source_sec = node["tire_source_sec"].as<double>();
-  v.now_sec = node["now_sec"].as<double>();
-  v.control_origin_sec = node["control_origin_sec"].as<double>();
-  v.acceleration_delay_sec = node["nominal_acceleration_application_delay_sec"].as<double>();
-  v.steering_delay_sec = node["nominal_steering_application_delay_sec"].as<double>();
-  const auto state = node["initial_x_y_yaw_u_vy_r_desired_tire"].as<std::vector<double>>();
-  if (state.size() != 8U) return std::nullopt;
-  v.initial.state = {state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7]};
-  const auto history = node["published_time_wire_acceleration_wire_steering"];
-  if (!history.IsSequence()) return std::nullopt;
-  for (const auto & item : history) {
-    if (!item.IsSequence() || item.size() != 3U) return std::nullopt;
-    v.commands.push_back({item[0].as<double>(), item[1].as<double>(), item[2].as<double>()});
-  }
-  return mpcc_vehicle_model::valid(v) ? std::optional{std::move(v)} : std::nullopt;
+  return mpcc_vehicle_model::decode_observation_provenance(node);
 }
 
 YAML::Node semantic_request_node(
@@ -488,6 +448,7 @@ YAML::Node problem_context_node(const contract::MpccProblemContext & context)
   problem_context["cost_schema_id"] = context.cost_schema_id;
   problem_context["fingerprint"] = context.fingerprint;
   problem_context["vehicle_model_fingerprint"] = context.vehicle_model_fingerprint;
+  problem_context["applied_program_fingerprint"] = context.applied_program_fingerprint;
   return problem_context;
 }
 
@@ -1201,6 +1162,7 @@ std::optional<shadow::Snapshot> load_source_snapshot(
   context.cost_schema_id = problem_context["cost_schema_id"].as<std::string>();
   context.fingerprint = problem_context["fingerprint"].as<std::uint64_t>();
   context.vehicle_model_fingerprint = problem_context["vehicle_model_fingerprint"].as<std::uint64_t>(0U);
+  context.applied_program_fingerprint = problem_context["applied_program_fingerprint"].as<std::uint64_t>(0U);
   source.control_prediction_origin_sec =
     node["control_prediction_origin_sec"].as<double>();
   source.course_progress_origin_m =
@@ -2138,6 +2100,8 @@ YAML::Node execution_evidence_node(
   node["course_progress_origin_m"] = value.course_progress_origin_m;
   node["semantic_initial_steering_rad"] = value.semantic_initial_steering_rad;
   node["semantic_initial_response_steering_rad"] = value.semantic_initial_response_steering_rad;
+  if (value.applied_stop_program) node["applied_stop_program"] =
+    mpcc_vehicle_model::encode_applied_program_provenance(*value.applied_stop_program);
   const auto & initial = value.semantic_initial_state.value();
   node["semantic_initial_state"]["lateral_m"] = initial.lateral_m;
   node["semantic_initial_state"]["lag_m"] = initial.lag_m;
@@ -2413,6 +2377,9 @@ static YAML::Node revalidation_evidence_node(
   value["control_origin_sec"] = r.control_origin_sec;
   value["current_intent"] = contract::to_string(r.current_intent);
   value["publication_prefix_required"] = r.publication_prefix_required;
+  value["applied_program_required"] = r.applied_program_required;
+  if (r.input_application_profile) value["input_application_profile"] =
+    mpcc_vehicle_model::encode_input_application_profile(*r.input_application_profile);
   if (r.publication_prefix && r.plan && r.plan->execution_artifact) {
     const auto & bound = *r.publication_prefix;
     auto prefix = value["prospective_publication"];

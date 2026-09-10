@@ -1,6 +1,8 @@
 #ifndef MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_PHYSICAL_ADAPTER_HPP_
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_PHYSICAL_ADAPTER_HPP_
 
+#include "multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp"
+
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 #include "multi_purpose_mpc_ros/race_mpcc_foundation.hpp"
 
@@ -321,6 +323,20 @@ StopContingencyResult build_stop_contingency(
 /// prefix has ended.  The first publisher interval applies maximum braking
 /// while holding the serialized steering origin; subsequent intervals use the
 /// same path-feedback law as the ordinary terminal contingency.
+/// Reify one already prepared common serialized program in the same native
+/// nine-state reference model. The nominal control-origin clock stays distinct
+/// from the program's publication clock. Execute every future packet and the
+/// nonpositive repeated tail through minimum_duration_sec and full body rest.
+/// This generates reference evidence; it does not perform wall/peer admission.
+StopContingencyResult build_stop_program(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
+  const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
+  const ContinuationInitialState & initial_state,
+  const StopCourseGeometry & course_geometry,
+  const mpcc_vehicle_model::PublishedInputProgram & program,
+  double minimum_duration_sec) noexcept;
+
 StopContingencyResult build_stop_successor(
   const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
   const ContinuationInitialState & initial_state,

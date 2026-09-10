@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
 
 #include <algorithm>
@@ -89,7 +90,7 @@ bool publication_packet_matches(
 {
   const auto & packet = prediction.proposed_packet;
   const float acceleration_wire = static_cast<float>(acceleration);
-  const float steering_wire = static_cast<float>(steering * gain);
+  const double steering_wire = mpcc_wire_command::steering(steering, gain);
   return std::isfinite(publication_sec) && publication_sec == packet.published_sec &&
          publication_sec == prediction.observation.now_sec &&
          std::isfinite(acceleration) && std::isfinite(steering) &&

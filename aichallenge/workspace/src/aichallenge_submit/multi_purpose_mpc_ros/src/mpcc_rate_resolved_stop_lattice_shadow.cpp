@@ -115,6 +115,7 @@ bool same_current_world_stop_scope(
     lhs_context.horizon_steps == rhs_context.horizon_steps &&
     lhs_context.state_schema_id == rhs_context.state_schema_id &&
     lhs_context.vehicle_model_fingerprint == rhs_context.vehicle_model_fingerprint &&
+    lhs_context.applied_program_fingerprint == rhs_context.applied_program_fingerprint &&
     lhs_context.input_schema_id == rhs_context.input_schema_id &&
     lhs_context.bounds_schema_id == rhs_context.bounds_schema_id &&
     lhs_context.cost_schema_id == rhs_context.cost_schema_id;

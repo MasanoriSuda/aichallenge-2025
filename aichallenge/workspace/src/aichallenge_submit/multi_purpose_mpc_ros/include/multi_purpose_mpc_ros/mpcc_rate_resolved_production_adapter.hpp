@@ -69,6 +69,7 @@ struct Authority
   std::pair<std::vector<double>, std::vector<double>> world_prediction;
   double maximum_abs_steering_rad{};
   std::optional<CertifiedStopSuccessorEvidence> certified_stop_successor;
+  std::shared_ptr<const mpcc_rate_resolved_applied_program::Certificate> applied_program;
 };
 
 struct Result

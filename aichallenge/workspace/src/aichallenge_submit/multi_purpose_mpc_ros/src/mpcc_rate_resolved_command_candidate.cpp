@@ -48,6 +48,12 @@ Result build(const retained::Result & retained_result) noexcept
     result.reason = Reason::InvalidIdentity;
     return result;
   }
+  if ((proof.applied_program_required && !proof.applied_program) ||
+    (artifact.applied_stop_program && !proof.applied_program) ||
+    (proof.applied_program && !proof.applied_program->matches(proof))) {
+    result.reason = Reason::InvalidActuation;
+    return result;
+  }
   const auto & actuation = proof.actuation;
   if ((proof.publication_prefix_required && !proof.publication_prefix) ||
     (proof.publication_prefix &&

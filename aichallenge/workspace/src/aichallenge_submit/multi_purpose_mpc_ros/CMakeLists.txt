@@ -483,6 +483,8 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_stop_lattice_shadow
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation STATIC
   src/mpcc_rate_resolved_retained_revalidation.cpp
+  src/mpcc_stop_input_program.cpp
+  src/mpcc_rate_resolved_applied_program.cpp
 )
 target_include_directories(
   ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation PUBLIC

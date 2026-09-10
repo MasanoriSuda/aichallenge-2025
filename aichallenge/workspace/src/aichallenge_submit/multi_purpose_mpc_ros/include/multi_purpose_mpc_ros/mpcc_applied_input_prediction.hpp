@@ -32,6 +32,21 @@ struct PublishedInputProgram {
   bool repeat_last_until_rest{};
 };
 
+/// Bounded input provenance carried by a materialized Stop artifact. This
+/// stores no parent plan pointer, so repeated Stop joins cannot retain an
+/// unbounded chain of past plans. It is data, not an execution certificate.
+struct AppliedProgramProvenance {
+  std::uint64_t nominal_solution_id{};
+  std::uint64_t nominal_problem_fingerprint{};
+  ObservationProvenance observation;
+  InputApplicationProfile profile;
+  PublishedInputProgram program;
+  double proved_rest_sec{};
+};
+
+std::uint64_t applied_program_provenance_fingerprint(
+  const AppliedProgramProvenance & provenance, const Parameters & parameters) noexcept;
+
 struct ScalarRange {
   double lower{};
   double upper{};

@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
 
 #include <algorithm>
@@ -575,6 +576,10 @@ std::uint64_t problem_context_fingerprint(
   if (context.vehicle_model_fingerprint != 0U) {
     builder.append_u64(context.vehicle_model_fingerprint);
   }
+  if (context.applied_program_fingerprint != 0U) {
+    builder.append_string("applied-stop-provenance-v1");
+    builder.append_u64(context.applied_program_fingerprint);
+  }
   return builder.finish();
 }
 
@@ -981,20 +986,8 @@ std::optional<double> resolve_published_steering_tire_angle(
   {
     return std::nullopt;
   }
-  // Mirror the actual Ackermann ROS message pipeline exactly. The physical
-  // command first crosses a float32 message field, then actuator calibration
-  // is applied, and the calibrated value crosses the final float32 field.
-  // Multiplying the original double and rounding only once can differ by one
-  // ULP and falsely classify a command which was published as unexecuted.
-  const float serialized_physical_steering_rad =
-    static_cast<float>(physical_steering_tire_angle_rad);
-  const double calibrated_wire_steering_rad =
-    static_cast<double>(serialized_physical_steering_rad) * actuator_gain;
-  if (!std::isfinite(calibrated_wire_steering_rad)) {
-    return std::nullopt;
-  }
-  return static_cast<double>(
-    static_cast<float>(calibrated_wire_steering_rad));
+  const double wire = mpcc_wire_command::steering(physical_steering_tire_angle_rad, actuator_gain);
+  return std::isfinite(wire) ? std::optional<double>{wire} : std::nullopt;
 }
 
 const char * to_string(const FinalAuthorityClass authority) noexcept

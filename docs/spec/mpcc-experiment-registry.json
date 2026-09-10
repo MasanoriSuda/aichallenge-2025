@@ -913,6 +913,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-library-evidence.json",
       "replay_ready": true,
       "reason": "Shared input-program library, frozen negative producers, five-probe receiver observation; no runtime promotion"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-applied-program-integration",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-integration-evidence.json",
+      "replay_ready": true,
+      "reason": "Required live certificate, frozen serializer counterexample and exact captured inputs; race acceptance open"
     }
   ],
   "experiments": [
@@ -6920,6 +6926,60 @@
         "Same-epoch history pop_back"
       ],
       "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-program-integration-wire-rounding",
+      "baseline_commit": "95180a1cad2be91a0f5b54972df00ca4564dd01f",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-program-integration"
+      ],
+      "hypothesis": "Prediction and actual ROS publication serialize exactly the same steering value",
+      "changed_dimension": "Complete common-program certificate and actual two-stage ROS float serialization",
+      "result": "accepted",
+      "reason": "Old frozen library rejects actual two-stage float value; current accepts it and rejects incorrect single-round value.",
+      "production_impact": "Live requests now require the empirical profile and certificate; integrated acceptance remains open",
+      "deleted_code": [
+        "Nominal-only live terminal application claim",
+        "Independent single-round wire conversion",
+        "Duplicated diagnostic footprint enclosure"
+      ],
+      "revisit_condition": "Fresh integrated run or new captured causal evidence; never repair old snapshot history to pass"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-program-integration-certificate-materialization",
+      "baseline_commit": "95180a1cad2be91a0f5b54972df00ca4564dd01f",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-program-integration"
+      ],
+      "hypothesis": "Every profiled command requires an immutable common-program certificate and full-rest Stop provenance",
+      "changed_dimension": "Complete common-program certificate and actual two-stage ROS float serialization",
+      "result": "accepted",
+      "reason": "Current package2425records pass; first packet/future controls/history/profile/world collisions/Follow and missing certificate negative tests remain.",
+      "production_impact": "Live requests now require the empirical profile and certificate; integrated acceptance remains open",
+      "deleted_code": [
+        "Nominal-only live terminal application claim",
+        "Independent single-round wire conversion",
+        "Duplicated diagnostic footprint enclosure"
+      ],
+      "revisit_condition": "Fresh integrated run or new captured causal evidence; never repair old snapshot history to pass"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-program-integration-historical-source-replay",
+      "baseline_commit": "95180a1cad2be91a0f5b54972df00ca4564dd01f",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-program-integration"
+      ],
+      "hypothesis": "Captured historical accepted requests can be promoted under the empirical input window",
+      "changed_dimension": "Complete common-program certificate and actual two-stage ROS float serialization",
+      "result": "inconclusive",
+      "reason": "No saved historical request was promoted. Three exact failed worlds remain rejected;955peer and1771prediction failure retained. Unpaired inputs remain labelled.",
+      "production_impact": "Live requests now require the empirical profile and certificate; integrated acceptance remains open",
+      "deleted_code": [
+        "Nominal-only live terminal application claim",
+        "Independent single-round wire conversion",
+        "Duplicated diagnostic footprint enclosure"
+      ],
+      "revisit_condition": "Fresh integrated run or new captured causal evidence; never repair old snapshot history to pass"
     }
   ]
 }

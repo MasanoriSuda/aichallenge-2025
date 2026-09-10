@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 
 #include <algorithm>
@@ -812,7 +813,7 @@ ContinuationResult build_continuation(
   return result;
 }
 
-StopContingencyResult build_stop_contingency(
+static StopContingencyResult build_stop_contingency_impl(
   const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
   const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
   const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
@@ -821,7 +822,9 @@ StopContingencyResult build_stop_contingency(
   const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
   const double minimum_acceleration_mps2,
   const double target_lateral_m,
-  const StopLateralTargetProfile * const target_profile) noexcept
+  const StopLateralTargetProfile * const target_profile,
+  const mpcc_vehicle_model::PublishedInputProgram * const published_program,
+  const double minimum_duration_sec) noexcept
 {
   namespace execution = mpcc_rate_resolved_execution_artifact;
   namespace race = race_mpcc_foundation;
@@ -895,6 +898,32 @@ StopContingencyResult build_stop_contingency(
     return result;
   }
 
+  if (!std::isfinite(minimum_duration_sec) || minimum_duration_sec < 0.0) {
+    result.reason = StopContingencyRejectReason::InvalidActuation;
+    return result;
+  }
+  if (published_program != nullptr) {
+    const auto & program = *published_program;
+    if (program.commands.empty() || !program.repeat_last_until_rest ||
+      !mpcc_vehicle_model::valid(program, program.commands.front().published_sec) ||
+      program.publication_interval_sec != artifact.publication_interval_sec ||
+      program.commands.front().wire_acceleration_mps2 != static_cast<float>(current_actuation.acceleration_mps2) ||
+      program.commands.front().wire_steering_rad != mpcc_wire_command::steering(
+        current_actuation.steering_rad, artifact.vehicle_model.steering_wire_gain)) {
+      result.reason = StopContingencyRejectReason::InvalidActuation;
+      return result;
+    }
+    for (const auto & packet : program.commands) {
+      if (packet.wire_acceleration_mps2 < current_stage.acceleration_lower_mps2 - tolerance ||
+        packet.wire_acceleration_mps2 > current_stage.acceleration_upper_mps2 + tolerance ||
+        std::abs(packet.wire_steering_rad / artifact.vehicle_model.steering_wire_gain) >
+        artifact.maximum_abs_steering_rad + tolerance) {
+        result.reason = StopContingencyRejectReason::ActuatorEnvelopeRejected;
+        return result;
+      }
+    }
+  }
+
   // Reserve is an allocation hint only. Stop duration is established by the
   // same body/rest transition as normal execution, never by wire a * t.
   constexpr std::size_t reserve_count = 512U;
@@ -942,11 +971,16 @@ StopContingencyResult build_stop_contingency(
       double published_increment_rate_radps = requested_steering_rate_radps;
       if (command_interval_index > 0U) {
         const double previous_steering_rad = nonlinear.steering_rad;
-        const double desired = previous_steering_rad +
-          requested_steering_rate_radps * requested_duration_sec;
-        nonlinear.steering_rad = static_cast<double>(static_cast<float>(
-          desired * artifact.vehicle_model.steering_wire_gain)) /
-          artifact.vehicle_model.steering_wire_gain;
+        if (published_program != nullptr) {
+          nonlinear.steering_rad = published_program->commands[std::min(
+            command_interval_index, published_program->commands.size() - 1U)].wire_steering_rad /
+            artifact.vehicle_model.steering_wire_gain;
+        } else {
+          const double desired = previous_steering_rad +
+            requested_steering_rate_radps * requested_duration_sec;
+          nonlinear.steering_rad = mpcc_wire_command::steering(desired, artifact.vehicle_model.steering_wire_gain) /
+            artifact.vehicle_model.steering_wire_gain;
+        }
         published_increment_rate_radps =
           (nonlinear.steering_rad - previous_steering_rad) / requested_duration_sec;
       }
@@ -1088,7 +1122,23 @@ StopContingencyResult build_stop_contingency(
       return nonlinear.velocity_mps == 0.0 && nonlinear.lateral_velocity_mps == 0.0 &&
              nonlinear.yaw_rate_radps == 0.0;
     };
-  while (!at_rest()) {
+  while (!at_rest() || elapsed_sec + 1e-12 < minimum_duration_sec ||
+    (published_program != nullptr && command_interval_index < published_program->commands.size())) {
+    if (published_program != nullptr) {
+      const auto & packet = published_program->commands[std::min(
+        command_interval_index, published_program->commands.size() - 1U)];
+      const double delta = packet.wire_steering_rad / artifact.vehicle_model.steering_wire_gain -
+        nonlinear.steering_rad;
+      const double rate = delta / artifact.publication_interval_sec;
+      if (std::abs(rate) > artifact.maximum_abs_steering_rate_radps + tolerance ||
+        !append_duration(artifact.publication_interval_sec, packet.wire_acceleration_mps2, rate)) {
+        if (result.reason == StopContingencyRejectReason::InvalidArtifact)
+          result.reason = StopContingencyRejectReason::ActuatorEnvelopeRejected;
+        return result;
+      }
+      ++command_interval_index;
+      continue;
+    }
     const auto geometry = sample_course_geometry(
       course_geometry, tolerance, nonlinear.progress_m);
     if (!geometry.has_value()) {
@@ -1155,6 +1205,36 @@ StopContingencyResult build_stop_contingency(
   result.reason = StopContingencyRejectReason::None;
   result.exact_trajectory = std::move(exact);
   return result;
+}
+
+StopContingencyResult build_stop_contingency(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
+  const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
+  const ContinuationInitialState & initial_state,
+  const StopCourseGeometry & course_geometry,
+  const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
+  const double minimum_acceleration_mps2, const double target_lateral_m,
+  const StopLateralTargetProfile * const target_profile) noexcept
+{
+  return build_stop_contingency_impl(artifact, cursor, current_actuation, initial_state,
+    course_geometry, lateral_policy, minimum_acceleration_mps2, target_lateral_m,
+    target_profile, nullptr, 0.0);
+}
+
+StopContingencyResult build_stop_program(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
+  const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
+  const ContinuationInitialState & initial_state,
+  const StopCourseGeometry & course_geometry,
+  const mpcc_vehicle_model::PublishedInputProgram & program,
+  const double minimum_duration_sec) noexcept
+{
+  if (cursor.control_stage_index >= artifact.control_stages.size()) return {};
+  return build_stop_contingency_impl(artifact, cursor, current_actuation, initial_state,
+    course_geometry, {}, artifact.control_stages[cursor.control_stage_index].acceleration_lower_mps2,
+    0.0, nullptr, &program, minimum_duration_sec);
 }
 
 StopContingencyResult build_stop_successor(

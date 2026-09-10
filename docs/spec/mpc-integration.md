@@ -74,10 +74,17 @@ serialization/fingerprintと候補originの変更に追従させる。
 同一時刻の公開履歴を全件保持し、全予測区間の因果的な入力coverageを要求する。
 元観測から共通float32指令列へ進め、全応答のモデル内静止までを囲む。
 公称操舵の機械遅延と受信ageは別項目。body/tire式は既存scalar kernelと共通である。
-現時点ではこのAPIを本番の認証・公開へ接続しておらず、単体結果は実行権限にならない。
-100ms操舵age候補は実測で反証され、250msは別記した経験的仮説にとどまる。
+現在の候補では全live requestが共有指令列の追加認証を要求する。元の解・現在world・
+元観測/履歴・受信profile・float32指令列・全応答静止時刻をimmutable証明へ結合する。
+Stopには共通指令列と元sourceを保存し、実行horizonが全応答の静止までを覆うことを検査する。
+通常の解・intent・壁・全他車・Follow制約と最終指令のidentity検査も維持する。
+最終ROS値をpublish前に照合し、物理角のfloat32化とgain後のfloat32化の2段階を共通関数へ集約する。
+既存snapshotは追加field省略時に旧fingerprintで読めるが、live実行の認証省略には使えない。
+100ms操舵age候補は実測で反証済み。受信ageは縦/操舵とも250ms、機械遅延は別の100msとする
+明示的な経験的profileを候補設定に採用した。輸送や接触の保証上限ではない。
+buildr39は26package、testsr31は2425記録/62groupで失敗0。新規走行・周期・M4–M6受入れは未完了。
 [共通指令の統合設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-design.md)
-と[検証記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-library-evidence.json)を参照。
+と[統合変更の検証記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-integration-evidence.json)を参照。
 
 ## 現在のアーキテクチャ
 

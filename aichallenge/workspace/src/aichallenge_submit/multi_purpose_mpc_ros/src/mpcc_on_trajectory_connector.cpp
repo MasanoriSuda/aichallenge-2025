@@ -200,6 +200,7 @@ bool compatible_model(
   return lhs.formulation == rhs.formulation &&
          lhs.state_schema_id == rhs.state_schema_id &&
          lhs.vehicle_model_fingerprint == rhs.vehicle_model_fingerprint &&
+         lhs.applied_program_fingerprint == rhs.applied_program_fingerprint &&
          lhs.input_schema_id == rhs.input_schema_id &&
          std::abs(parent.wheelbase_m - candidate.wheelbase_m) <= tolerance;
 }

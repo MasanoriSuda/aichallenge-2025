@@ -86,4 +86,62 @@ publication loss and whole-window coverage each have frozen old-library negative
 reproductions. Clock bridging uses counted native steps with explicit duration.
 Monotone tire refinement and full numerical implementation live only in the
 production library; the diagnostic header delegates. Steps2–5 remain open.
-The currently linked controller has not adopted the input profile or tube.
+At that library checkpoint the controller had not adopted the profile or tube.
+
+## Common-program certificate slice (in progress after95180a1c)
+
+The old terminal proof records a nominal point trajectory starting at
+control-origin, while actual packet receipt can still apply earlier inputs.
+This is the earliest input obligation exposed by saved955/956andapplication
+selections; successful earlier held-Stop diagnostics are not its fix. The
+producer change samples one common serialized program from the existing
+current-world Stop controls, preserving the selected first packet and any
+solved delayed braking. A continuous future steering reference is explicitly
+resampled, so the original point trajectory is only nominal provenance.
+
+An immutable additional certificate carries nominal source identity, complete
+current request/history/profile, exact common program and all-response-rest
+tube. Shared footprint arithmetic checks original wall clearance, every full
+CA1peer circle across each interval, actuator state bounds and Follow gap.
+Follow progress uses all possibly-nearest sealed polyline segments, rejecting
+missing map support or possible crossings; nominal semantic constraints remain
+separate required checks. The same program can be re-anchored for a new
+publication only after a new current-world proof, never by renewing its age.
+
+The slice was initially inactive in controller requests. Its promotion requires
+all Stop materialization/retention, async adoption and final packet consumers
+to retain this object/program and all-response rest horizon. The retired path
+will be nominal-only Stop execution for live profiled requests; old snapshot
+readability does not authorize it. Tests must reject changed future controls,
+world, original history, missing coverage, collision and first-packet mutation.
+Rollback before promotion:95180a1c. No margins/model/solver/rates are adjusted.
+
+2026-09-11 continuation: required applied certificates now reach command candidate
+and production adapter in the working tree. Materialized Stop data binds the
+original program/history/profile/rest horizon with a new problem-context field;
+it stores no parent plan pointer. A native program replay preserves delayed
+braking and runs the same held packets until every-response rest is covered.
+The live builder now requires the explicit empirical profile and the final
+ROS float fields are checked before publication. Full build/package, source
+replay and dynamic acceptance have not yet validated these working-tree changes.
+
+A final-boundary review found another first-input mismatch: the prospective
+producer rounded after applying gain, whereas the actual ROS pipeline rounds
+physical steering first and calibrated steering again. The already existing
+20260827counterexample(-.271520636, gain1.435) distinguishes these values by1ULP.
+A common lower-level serializer now owns both the publisher contract and
+prospective/program/Stop producers. Wrong single-round packets must reject.
+The input tube also covers the complete first publication interval when already
+at rest; stopping its proof after5ms would not cover a25msfirst packet.
+
+## Integrated candidate local validation
+
+Live requests now require the complete certificate; materialization, remaining
+Stop horizon, async compatibility and final packet publication consume it.
+All2425package records/62groups pass afterbuildr39(26packages). Initial fixture
+producer failure is archived. Frozen old/current serializer replay gives the
+expected opposite outcomes. Three exact saved failures and unpaired historical
+requests remain rejected; old packet mismatches are not edited away.
+These local results do not close M4-M6 or25ms acceptance. Next frozen dev2-r16,
+first-failure attribution, then the remaining same-HEAD campaigns and submission.
+See applied-integration-evidence.json. Rollback is95180a1c.

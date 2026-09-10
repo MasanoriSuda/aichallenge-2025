@@ -1,0 +1,656 @@
+{
+  "baseline_commit": "95180a1cad2be91a0f5b54972df00ca4564dd01f",
+  "production_scope": "Required immutable applied-input certificate, original history/profile/program through rest, Stop materialization, async context, final ROS float guard",
+  "integrated_acceptance": false,
+  "validation": {
+    "build_r38": "26 packages, before final integration",
+    "build_r39": "26 packages,4m47s",
+    "tests_r31": "2425 records/62 groups,0 errors/failures/skips,29.22s",
+    "focused": "174 retained/model/contract + separate Follow test pass; initial fixture mismatch retained",
+    "serializer": "Frozen old library rejects actual two-stage packet and accepts wrong single-round value; current opposite",
+    "saved_requests": "3 first-failure worlds reproduced without rebinding; actual966 remains rejected; old956/1773 packet mismatches preserved; historical955 now peer rejects,1771 numerical prediction rejects; historical inputs not immediate predecessors"
+  },
+  "limitations": [
+    "No integrated M4-M6 acceptance yet",
+    "Empirical250ms receiver profile; no transport/contact/model-error bound",
+    "Actual multi-cycle Stop/rest/restart and25ms callback acceptance open"
+  ],
+  "files": [
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r69/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r69/manifest.json",
+      "sha256": "ecfc39d6522d3fd9a035daceda53bfbdbaba20b0238be72db4c3c8376b390ce2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r69/replay",
+      "sha256": "5363d10db83007774a68e83bfecc8a7dcc0f739fc6841d497f9c4d8e23e8ae8d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r70/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r70/manifest.json",
+      "sha256": "9c2b518126dcaa10fadd315ba3c0a8bd7e12a7aeb9607c74b272711fc29871d2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r70/replay",
+      "sha256": "6bdcb2690553b01296892a6758311e4c34977ad9ce4c0040529faf01b340cb02"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificate-local-r1/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "06a2bcb3e2c345ae56d08709f8eaa509043483c4d7bb48df1e2ea4749ab42725"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificate-local-r1/mpcc_stop_input_program.cpp",
+      "sha256": "c5ec78e2acbd8cd3bd19463f85fa2c0430e89395229a0afd77e3e69c5594594f"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificate-local-r1/run.log",
+      "sha256": "331d15d3ee8660466300dff006efe8dbf08655de3fbdc35b9f1db39b69d38537"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificate-local-r1/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "d2ed40d03d5f2548fafc2f5421b651e5d89d12d21c07d5c627934c3348930afd"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/application-r3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/application-r3.yaml",
+      "sha256": "3cc04de01015ca52bd2b88f7c5b9ad92b0974f4c2cef9cc10b792237e5cba541"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/application-r5.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/application-r5.yaml",
+      "sha256": "620bf88abd3a07605616f671856ecc94c6ba0be3f1175db79dc41ccce54c5ddb"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/current-final-packet.log",
+      "sha256": "8f128afeefef6314145f70a27fbdfd3ee8679588108d40b7c96146928000f877"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/dev2-r15.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/dev2-r15.yaml",
+      "sha256": "234efe1185bb396c543047ac55c3a0d53bcf2aedbd9b6e6cf5aab80cb6b48e19"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "724f072f6d7866b17c7bd7c1b5d3aab90d8aeca3386826ea72f512bde47ee7d8"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_boost_start_dash.hpp",
+      "sha256": "6377ee258ce094dd481807b3570045253e0de438684c0f72f5fa1f706cd746c8"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_control_mode_guard.hpp",
+      "sha256": "5f4afa91011e2e66d06087604d90ada5946a434d099c497ec67adafa8393bf01"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "994779bfa1d00f20514b91beb9efaff5425ffd369514487605a1ca86b5e56a95"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp",
+      "sha256": "9528cced3509cef66a0d6516ba982cb43f951895e3500fd4a853d4b4cd66d647"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp",
+      "sha256": "4bf78d7fbee7796df91e1167b54e48c439bcd8158a24c9aece72ced0c49e26c2"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/external_speed_loss_monitor.hpp",
+      "sha256": "82a5a738a12dfa667c6733baf1a8a460f945b02ed91439d703233dccff52164f"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/latest_only_worker.hpp",
+      "sha256": "39f4f298180d8f68d94795961498b46546def7309ac1f2b3b85be33fd6097e35"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp",
+      "sha256": "3cddd30e326339caaa731541bb11f848594975a8cc3c89b3955f46d2fbfe1176"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_stage_geometry.hpp",
+      "sha256": "142723ce37e57380e0aff8a90edb78f5dace8f39768ab84cc7b827cef30a6744"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_velocity_limit.hpp",
+      "sha256": "546d086bbcf361e6306c0d7d8a37582b231d51b8c3f2493712cb3e98e5abbf54"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_association.hpp",
+      "sha256": "0fb2ac6660a90f6a1dfae3b851441eeeb317389601235f9ecfaa3c23c2daa007"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_preview.hpp",
+      "sha256": "8b800bf50f09944346fcb2658fffd6dd20f7e925a69273738823fb85aa90a259"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp",
+      "sha256": "aef3377a775cdf1e68f6b8faeb90028ddeffd89be34403daccfeb194fa6e3bcb"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp",
+      "sha256": "f28ddd28e53bbbd21d70bd565bb199505f05a368b9beb8bfb052516eaf2f2bb7"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp",
+      "sha256": "5eef64d2cce3ee7da13c1cf625f6550eb4e64ac77a99dae93f06c65178cd2bff"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "sha256": "04f31d3179cadd570ff042c953e99a6ddd470671165839840efc08a53eaacb89"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp",
+      "sha256": "491bdcffd46304bacc3b0b5c45a9868548aaa78c2f549526129349468e718231"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp",
+      "sha256": "83431e813c50c8df07e5dbf28d45f84f726d7bd74ce9492f3a55957f7b8da43f"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp",
+      "sha256": "6b4ed1169b37d66d6bbc411c3ca604d7e9764ed2e4de2ee311a36c253b32fcc4"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp",
+      "sha256": "93eb1a2c4332ebb40a53ecd5b91cf90f66a1821036d2f6ad20523dfa653eab73"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp",
+      "sha256": "6e744a67b5be270df16338ed6a497abe47da54d45f187aca2fd3d8ffe6d7c02f"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_progress.hpp",
+      "sha256": "e21c57a0e3a4cd2d1b30ace01c0c84587b42d4a58a03b02881544d78418cbc8d"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "sha256": "4191fa5f1c5382df303be3bf5491b28ed574d015fffb9a1fa1c3514c29d33341"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "sha256": "b7a425fc0efd4ffd8b60c12f19025aa3f3a546642557619bd4c548122796b4af"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp",
+      "sha256": "0f7d46d68cd6ee525e32cca1955b2e8b99342507b1bde0e249762f7a4a693ee2"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp",
+      "sha256": "94bbdafc08578fbebf85af15b90583f1c7452cdf3ab842689281249d0d191b48"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp",
+      "sha256": "c1d150c48b877ceeb29392dde137754279d2c03d9bf3990e7b2fa430fa07b946"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp",
+      "sha256": "e32649cd1f157eac6266c2e80a4ab8a4731e864b92f2cd7b20c292045097dae2"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp",
+      "sha256": "fb31dbf1370c6fa8d4e539d4da090ae677be08934425210ed3c6320b8acf11ea"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "sha256": "81eef27e7e53d57731971258f1477e46f4ce6354467352c26059859c9f2a2a57"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp",
+      "sha256": "3f158a9210e3b5de76ec4df6abb0b4c6eecc575a3d7553850e1c3c16279164bc"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp",
+      "sha256": "464fc3fbf29043c28eb1e27fa12593be6c8dcbd5b87961a312aaf4e178866b1e"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp",
+      "sha256": "cb5dd1b7c5e898f20b0ad712edde7da8ae1a3aaa31125e7cebcb4b23d50b6daa"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp",
+      "sha256": "ad68f2f69c5363e9602eda375958fc825aaa4d1581bae6e220f9a8920c237d4e"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp",
+      "sha256": "8f872a0c8a86f65db032918e191baef626fbcf6466ec9c27e53cc3c979195f8d"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp",
+      "sha256": "2735504de4cf98be0a0fdf9bf08ee337ba0a9d898549e706b9660c8f63ae03ed"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp",
+      "sha256": "e650a5491e34e5c64820cd379ca26289a9fdacb09e65accb6d3e82fd644db64d"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "dea223525b1753e88fd46182a24d30e6505d095da8a44cb4ee402074823ba9a9"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp",
+      "sha256": "ec16338fe4cc96a8eaf0676362ab53a94c79ddeb05135b2a93749017f12cdad6"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp",
+      "sha256": "84eaaf7054fbe43addaa0d1833f2dc7face00fcb34aaef8c022da6c888c32b20"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp",
+      "sha256": "fda7709abdc9d50c80279e7e0b0f4dd4e9ef8a295959b0caaae3d3427e51b9eb"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp",
+      "sha256": "c0364be0c57498691256882b8de9b3f0e9acd9ced3f2ccba590b4d8d1efc4725"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp",
+      "sha256": "3adc114489f24bf75e8fddeab46e8d4eb937a4f3b7bfd506d7b03f1ac6789e9f"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp",
+      "sha256": "e786ef0ea30461c7ad1ca6d43b371c77484cc1c8f3fa7f2e64761b6a6dbfcb47"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp",
+      "sha256": "00e48a55c54aaebc70dc9c5352116f12556de4e5261d32a7ad9818e41b9b96ac"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stop_input_program.hpp",
+      "sha256": "4f229f7f22dad4a40d4901c1bf9e43075c93468434e1e1f4a0ba5150470ae520"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp",
+      "sha256": "d83d7d2185e11200ff1e1f656018994fb3424599011a0c3904c0c5aa66b0b536"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp",
+      "sha256": "8afc0766959fa3477a4a17ed37f2f32c65eaf2bf66ced4cbcdc081ad92d35735"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_wire_command.hpp",
+      "sha256": "c0734bed816636bd6db4bbc3cb56bff4df7c90868297949ecedba545ba315a86"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_decision_trace.hpp",
+      "sha256": "91d7fef94540c0b6ce89ec0139cfb76f8021085eb16563b01b88c076c356e52f"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp",
+      "sha256": "21eae46391377403be955bddab2f38fc2b5857ca3287b6c271db539cb6e51a0c"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/path_core.hpp",
+      "sha256": "648e041b4400b57d268967d4df2f2075516b3eda682de5e9ea39178bf9f80e56"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/persistent_osqp.hpp",
+      "sha256": "c6d015467d5aa82267bc1fdb6bad25efc9cc644fad057e89d49e6a34f4afaab3"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp",
+      "sha256": "445983d9732dd2329633cd952dcb1dc682522911541fd2318a69aee2745cd8c0"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/race_mpcc_foundation.hpp",
+      "sha256": "918837e27ff9b3a2b65924b4fb22ef958f879bfe7f67f47fc2bcb88a6a2c28a1"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp",
+      "sha256": "41dd3feb125fbda04e1e340d7088180fc031ac2de8ede0fcedad4c724a82052b"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_mpc.hpp",
+      "sha256": "f3b918005ea4979ca93dee7c869945556e05555fb51d5cd89d9680721c9f0f73"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/runtime_speed_profile.hpp",
+      "sha256": "247ac0bb446518c83181a8e21ecfb8b738e02fe90818b38c7151045390b31311"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/start_grid_grace.hpp",
+      "sha256": "d263d2e4644b0ebbcfbdda0df0bb6335b1e3beadd8143d29ef34e094985afd23"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp",
+      "sha256": "334696d66637e231e8721d553de390252958985a090026ebed4766a99e2dfa4e"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/v2x_overtake_core.hpp",
+      "sha256": "d8b5d96d02c2759fb0204ee8fbbe73a430e680e39d99c3d63d5ae634ad086f4a"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/awsim_boost_start_dash.cpp",
+      "sha256": "532cde9873be0ccc22e1858f1c9602fdbc0f0054e668d1f3a82e94698a206601"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/awsim_control_mode_guard.cpp",
+      "sha256": "5a1a784ee1255154475cf416c58388f18dd9dca019a8f189c9a49c2afe959fcc"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/bounded_single_job_executor.cpp",
+      "sha256": "a6a5712ae344a37faa58c2ca6ef90a5b25d2a90ac360f705fb0085a5929f8327"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/latest_only_worker.cpp",
+      "sha256": "567a016f0bc0fa81ddf2c6237969caa578290a3d5d360c098f83e01500e20597"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "8568c6d96d60c2e83a0e0ca2d6082187f0ab2f7faba6e9c0ed36d80b4271f886"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_longitudinal_prediction.cpp",
+      "sha256": "7f4560814fb3cba7d73c83bfdae25ca1399105186cfffc00a23efd20c432dc1d"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_stage_geometry.cpp",
+      "sha256": "cf776c27a25f0c735c5bf469e204d33f01dfdcd7a40aa4917790f52b48f76ffe"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_state_prediction.cpp",
+      "sha256": "4be57ea66536a1bc0225f9e40d3382a2ed636766e63cc816f1baf4e7b96ae13b"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_velocity_limit.cpp",
+      "sha256": "2c3ecc66a32cee8f1c6dafaa8df2328d168687e7861b9e8e3539eed24c91ba48"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_waypoint_association.cpp",
+      "sha256": "d97503bced1314edbf660661c76e984aad81ccaed9f0cd11ee44cc2c6a78d839"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_waypoint_preview.cpp",
+      "sha256": "9613669568402e098b18782f6ad21f379d516185ae02184b0831a47f34811e2c"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_applied_input_prediction.cpp",
+      "sha256": "056549db67f04697c4d04c48c2d82eb67089ea36f5dcf431a5b99cae0ec148da"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_compare.cpp",
+      "sha256": "d6bdc82964b018fbf8c1201bd49d66670a3437591114e119f3cdd91696f82ddd"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "b8b04216f3395ef7b7b95b0207b3d91ba8ddd78a2422a85168533a5daf83c32b"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "156fb1451e570104c4db6a071b27ebf2a8ffe0659b16d6871ecee915b1e58d20"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_certified_stop_successor_observation.cpp",
+      "sha256": "6788f885a2a98efcc2acc960e798913f00e3639be390905cf90f72414c92bd06"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_execution_contract.cpp",
+      "sha256": "04e2bfe3868b70a7413427a4da9e10d896ceaff3da9214c4d5b33c81a3f93805"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_latest_state_feedback.cpp",
+      "sha256": "80a3763903df1a57286fb8920a757cdc1fb7fa77288be792eaa30d5a2a3ed012"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_maneuver_replay.cpp",
+      "sha256": "5c3fbe0193a06f32cf509a7ea94ce038aa91918e19634224219c612ea59b56b8"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_on_trajectory_connector.cpp",
+      "sha256": "b58a8dc7a1a66db0c293028fd9ade33089313df4175f21314b3c601377e8d200"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_overtake_sibling_adoption.cpp",
+      "sha256": "a7a153f33cc97dc0436f9ed4eb2ac925b15e7c3e70b0e17f0a9752b3fc49ac7e"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_prepared_suffix_replay.cpp",
+      "sha256": "c1b0698a5e321a480c28940e9fec7dbe87df7536532dab65e0d213469a1f9b80"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_progress.cpp",
+      "sha256": "c0a12fc5f8c2d7f59a0d22d6162adef6a7aff410b046f12281c5996d403554c7"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_qp_replay.cpp",
+      "sha256": "221d714ce6bba36c629d2ada6378c2288fcc7e0fda5d4c96babefbac7fb7cf00"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "sha256": "c0e544311e4be6c0bde46b1170de7240c8ee7e8aef357793b9fdee99a6e4fa1b"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "sha256": "819ed260d526674e054197ddd014d50652b03d059d001a71d4d6aae7185ce3b2"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "4a1ab33c4c42bde29f70f9fee15f7ba151ee12ca2139c1c3436875563b709dea"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp",
+      "sha256": "985a0d1486eed1a216ad6a59ac7ddc2c6e5fdb59b4a1de91d3224f1bd233bf83"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_obstacle.cpp",
+      "sha256": "57d007dc8d778466a4b0927dd5cfdd1cfbc92ac8aee3f70adc923e304df00698"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "fb762cff5ef44a824652c6fb23859a5b193c22b8e169d48d16a688cb4316d291"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "sha256": "9fc64832fc88f09fb87b5d8698035beb1116a98e116bf4ba36a3fcd2783c5a75"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_source.cpp",
+      "sha256": "caf792a10e99ad20a0e7744d615a8d828bf0828bf82f2c02dbb830a3c2ffb353"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_normal_branch_bank.cpp",
+      "sha256": "a3acd9dbf24757b42e55783aaaff8dfea51bac4c480650fcdeca1658533058be"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "sha256": "f6c7ba9bd6cf7a022c92ad45c1cd2903857021117fa8f25470403485574e0412"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "sha256": "983407accd00e52c523cb32106d6054d59df519bc164a01ef7e9e50d79107286"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_wall.cpp",
+      "sha256": "10881540d46e51a8efa277026e421528ba1d93d9df20d3094b69c943d4bba8a9"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_problem.cpp",
+      "sha256": "1a81899496f7a33d699c92cbd61e926bf7548520e0fcb442499c6218b3cbe3d3"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_production_adapter.cpp",
+      "sha256": "e6d22be4e4e0366d31e650c8c3fc574914820770128c0fdf5f6c014eca057964"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "cc65fe11535576b97154ab913d440be7d448008313589fd4dff0f581e70104b7"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "sha256": "946f8c080197fed9aa53f1583f11162f2ef0749f42642ed7bfdfbdea9b6196fe"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a9b458c34a29a607d7a30217fb0e713c1fb77f90db12e66c17d7c91072e8f4d2"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "sha256": "11e83eb28126834a8837289518f0023bd6dd72669f4b5622214639a8c82e1f92"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "00a31e1e4b63fc9fe6d669f10568be58e850c510d3b5acc7172ff0d96e764ceb"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_wall_refinement.cpp",
+      "sha256": "cf521297f83fb6371548607b7437d090b7bb2aaca41243fba5354ff170167b58"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stateless_maneuver.cpp",
+      "sha256": "c7d940bfab89072cb120df5945dd99eb8c35cb5aee1f6cf9009c1624517ee3d8"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_steering_state_contract.cpp",
+      "sha256": "b530641c709927a3864c513eaf1752fc7f5d21e84a6c371a3b7bd2819853a3f9"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stop_input_program.cpp",
+      "sha256": "ce2a115cf4a461660494c7cf6e17d3b5a14d163f0ce8ed2144959c821cf8ecca"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/overtake_decision_trace.cpp",
+      "sha256": "8921942a4a16d681a79613bb76a637a1c5d24dc0207b332021332569975ff975"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/overtake_execution_orchestrator.cpp",
+      "sha256": "2d6c0097a78227b9d54c703eb843ab30c1bd377f0c51d4033b6251419605ad56"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/path_core.cpp",
+      "sha256": "03747fe289c1875b33ba9998254ed2972911c83910f30d54ed1f8cf9a83cb9f3"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/persistent_osqp.cpp",
+      "sha256": "369bd91cf130e07d4bc60532b4b845ead67bfce4fa4e541c696af1a7b577ef95"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/race_mpcc_foundation.cpp",
+      "sha256": "0ad6f4faee3ca69c1388498e066c0d36a1f86e7f308a20f837f4e95a700c7fdd"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/recovery_footprint.cpp",
+      "sha256": "e08798061085d7a85e340a91a74eec1ed6fcb9c760c1398bab5c98975c93f232"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/recovery_mpc.cpp",
+      "sha256": "3c5104bc3cbea43c38b44c2a6f27a06f86c49a00e997a8d959fbff448526b2c6"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/reference_path_validator.cpp",
+      "sha256": "49a8f4fdee2a829a18bf634f13c60f50aa567d74939ae50fda4d8ecc490a678d"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/runtime_speed_profile.cpp",
+      "sha256": "3edb5591bdbbfa4cfe8d4f601a911dbb4986c15a26ba13f9a3cd02f6e1365bee"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/start_grid_grace.cpp",
+      "sha256": "5a456237e89ce547944d1fc18b7c08f676bca96a3632356034796b01daa543f6"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/stuck_recovery_core.cpp",
+      "sha256": "30033c6b61561718870933e403ba5f633e3a830597e4c07959a27de014000eb6"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/v2x_overtake_core.cpp",
+      "sha256": "27e0848e20f612ca1812522652a17c94a71b8c5cdc1ebae7c6d6e93732c25c1d"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/output/20260910-nine-state-revalidation-tool-r69/replay",
+      "sha256": "5363d10db83007774a68e83bfecc8a7dcc0f739fc6841d497f9c4d8e23e8ae8d"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen/output/20260910-nine-state-revalidation-tool-r70/replay",
+      "sha256": "6bdcb2690553b01296892a6758311e4c34977ad9ce4c0040529faf01b340cb02"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/frozen-old-final-packet.log",
+      "sha256": "ee0049aca5602fc0b1162068c8bc57ebec867254ed3d0ca9873ee06859543680"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-certificates-r1/manifest.json",
+      "sha256": "96cf9cff6e5d850503e24603b35f554c8fce416e359e6e6304c4196703494910"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-applied-certificate-local-r1.log",
+      "sha256": "331d15d3ee8660466300dff006efe8dbf08655de3fbdc35b9f1db39b69d38537"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-applied-certificate-local-r2.log",
+      "sha256": "047f1a6689e7b0e603ee3f62a925bab3535d07d1538dd4ea68572831c27be1a8"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-applied-certificates-r1.log",
+      "sha256": "441afff988a162425e8434dbdf25e7720a6c18a2f61f2495ff9af9b692a04cad"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-applied-follow-local-r1.log",
+      "sha256": "114888d53228405edd8e33d8254f91fd89733bc6892a65b57ac28e5abfb5b05b"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-applied-materialization-local-r1.log",
+      "sha256": "6466a621a3582a7438003e2e9c055f936bf1ec41415b5b8b3f096eb5c76f8c7e"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-applied-materialization-local-r2.log",
+      "sha256": "c800b4ab0df78e2972a9454926a66b4d15ca1a66be881630c165f69d5a02e933"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-applied-replay-build-r1.log",
+      "sha256": "3b64840aa659d235f6902cd4860d61d66c5e0c9c1dd1464e87dad5c8f583588b"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-build-r38.log",
+      "sha256": "448f6b336705d54688dd681f4b7e2feccaec0ba961dbe509e4e9a0dad4594b45"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-build-r39.log",
+      "sha256": "868deae83512de16bd0b10a29ffecaf0169138cf2380a6a641362602b62a4f12"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc-nine-state-tests-r31.log",
+      "sha256": "1069b6e199f63f231789dd104486b10ef0106bdd92a8de0fb3423919761f0aab"
+    },
+    {
+      "path": "output/20260911-nine-state-applied-integration-evidence/mpcc_run_applied_certificates.py",
+      "sha256": "3226ffd87c7bc9c22427eda5ff704412ea99cd139630a17c0af4ca3de8021a5a"
+    }
+  ]
+}

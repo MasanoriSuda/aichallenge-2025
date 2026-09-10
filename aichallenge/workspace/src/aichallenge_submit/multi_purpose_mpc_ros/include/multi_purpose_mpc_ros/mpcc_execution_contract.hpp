@@ -338,6 +338,9 @@ struct MpccProblemContext
   std::string cost_schema_id;
   std::uint64_t fingerprint{};
   std::uint64_t vehicle_model_fingerprint{};
+  /// Nonzero only for a materialized Stop with a bound serialized program,
+  /// source observation, input profile and proved all-response-rest horizon.
+  std::uint64_t applied_program_fingerprint{};
 };
 
 std::uint64_t problem_context_fingerprint(

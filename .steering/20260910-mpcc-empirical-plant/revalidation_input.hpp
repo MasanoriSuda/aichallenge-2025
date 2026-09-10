@@ -1,6 +1,7 @@
 #pragma once
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp"
+#include "multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp"
 #include <yaml-cpp/yaml.h>
 #include <filesystem>
 #include <fstream>
@@ -70,6 +71,11 @@ inline m::mpcc_rate_resolved_retained_revalidation::Request read_request(
     target.elapsed_time_sec=f["elapsed_time_sec"].as<std::vector<double>>();
     target.target_progress_from_current_origin_m=f["target_progress_from_current_origin_m"].as<std::vector<double>>();
     target.current=f["current"].as<bool>();r.follow_target=target;
+  }
+  r.applied_program_required=n["applied_program_required"].as<bool>(false);
+  if(n["input_application_profile"]) {
+    r.input_application_profile=m::mpcc_vehicle_model::decode_input_application_profile(n["input_application_profile"]);
+    if(!r.input_application_profile)throw std::runtime_error("invalid captured input application profile");
   }
   r.publication_prefix_required=n["publication_prefix_required"] && n["publication_prefix_required"].as<bool>();
   if(n["prospective_publication"]) {

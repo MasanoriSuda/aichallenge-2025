@@ -363,3 +363,31 @@ TEST(MpccAppliedInput, FuturePacketsCannotFillEarlierGapsInTheDeclaredInputConte
   EXPECT_TRUE(vehicle::applied_input_bounds(
     {{0, 1, 0}, {1.375, 1, 0}}, next, profile, 1.495, 1.505));
 }
+
+TEST(MpccAppliedInputPrediction, RestStillCoversTheFirstCompletePublisherInterval)
+{
+  namespace vehicle = multi_purpose_mpc_ros::mpcc_vehicle_model;
+  const auto model = multi_purpose_mpc_ros::test::vehicle_model();
+  vehicle::ObservationProvenance observation{{1, {0, 0, 0, 0, 0, 0, 0, 0}},
+    1, 1, 1, 1, 1.13, 0, .1, {}};
+  for (int i = 0; i <= 40; ++i) observation.commands.push_back({i * .025, -3, 0});
+  const vehicle::PublishedInputProgram program{.025, {{1, -3, 0}}, true};
+  const auto prediction = vehicle::predict_applied_inputs_to_rest(
+    observation, program, {"complete-first-period", .25, .25, .1}, model);
+  ASSERT_TRUE(prediction.tube);
+  EXPECT_GE(prediction.tube->rest_sec, 1.025);
+  EXPECT_DOUBLE_EQ(prediction.tube->source_to_rest.back().endpoint_body[3].upper, 0);
+}
+
+TEST(MpccVehiclePrediction, PublicationBindingUsesBothActualRosFloatBoundaries)
+{
+  constexpr double physical = -.271520636, gain = 1.435;
+  const double actual_wire = static_cast<float>(static_cast<double>(static_cast<float>(physical)) * gain);
+  ASSERT_NE(actual_wire, static_cast<float>(physical * gain));
+  vehicle::ProspectivePublicationPrediction prediction;
+  prediction.observation.now_sec = 1;
+  prediction.proposed_packet = {1, -3, actual_wire};
+  EXPECT_TRUE(vehicle::publication_packet_matches(prediction, 1, -3, physical, gain));
+  prediction.proposed_packet.wire_steering_rad = static_cast<float>(physical * gain);
+  EXPECT_FALSE(vehicle::publication_packet_matches(prediction, 1, -3, physical, gain));
+}

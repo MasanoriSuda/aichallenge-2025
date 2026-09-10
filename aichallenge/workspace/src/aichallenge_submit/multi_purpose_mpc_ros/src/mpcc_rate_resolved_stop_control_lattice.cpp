@@ -494,9 +494,7 @@ static StopCandidateResult build_complete_rest_candidate(
   std::vector<std::string> observed_ids;
   for (const auto & peer : world.obstacles) {
     if (peer.id.empty() || peer.observation_generation != world.observation_generation ||
-      !std::isfinite(peer.radius_m) || peer.radius_m < 0.0 ||
-      !std::isfinite(peer.x_m) || !std::isfinite(peer.y_m) ||
-      !std::isfinite(peer.velocity_x_mps) || !std::isfinite(peer.velocity_y_mps) ||
+      !peer.circle().valid() ||
       std::find(observed_ids.begin(), observed_ids.end(), peer.id) != observed_ids.end())
     {
       return reject_stop(Reason::InvalidSource, "complete-rest peer provenance invalid");
@@ -533,9 +531,9 @@ static StopCandidateResult build_complete_rest_candidate(
       if (!frame) {
         return reject_stop(Reason::InvalidSource, "complete-rest peer stage frame unavailable");
       }
+      const auto center = primary->circle().predicted_center(elapsed);
       const auto relative = contract::project_planar_pose_to_frenet(
-        {primary->x_m + primary->velocity_x_mps * elapsed,
-          primary->y_m + primary->velocity_y_mps * elapsed, frame->heading_rad},
+        {center[0], center[1], frame->heading_rad},
         {frame->x_m, frame->y_m, frame->heading_rad});
       if (!relative) {
         return reject_stop(Reason::InvalidSource, "complete-rest peer projection unavailable");

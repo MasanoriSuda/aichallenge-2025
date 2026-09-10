@@ -121,6 +121,32 @@ shadow::Snapshot solver_snapshot(
   return value;
 }
 
+TEST(MpccRateResolvedDynamicProof, AcceleratingPeerCrossingUsesRelativeMotionSubdivision)
+{
+  const recovery::FootprintExtents footprint{0.1, 0.1, 0.1, 0.1, 0.0};
+  const recovery::Pose2D ego{0.0, 0.0, 0.0};
+  WorldObservation world{1U, 10.0, {{"d2", {2.0, 0.0, 0.0, 0.0, 0.1}}}, true};
+  Result legacy;
+  observe_segment(footprint, ego, ego, 0.0, 2.0, 0.05, world, legacy);
+  EXPECT_TRUE(legacy.valid && legacy.clear);
+  auto & peer = world.obstacles.front().circle;
+  peer.acceleration_x_mps2 = -8.0;
+  peer.acceleration_horizon_sec = 1.0;
+  // Both endpoints are separated; testing only those misses the crossing.
+  ASSERT_GT(*recovery::circle_obstacle_clearance_at_time(footprint, ego, peer, 0.0), 0.0);
+  ASSERT_GT(*recovery::circle_obstacle_clearance_at_time(footprint, ego, peer, 2.0), 0.0);
+  Result acceleration;
+  observe_segment(footprint, ego, ego, 0.0, 2.0, 0.05, world, acceleration);
+  EXPECT_TRUE(acceleration.valid);
+  EXPECT_FALSE(acceleration.clear);
+  EXPECT_EQ(acceleration.rejection_reason, recovery::DynamicClearanceRejectReason::NewOverlap);
+  EXPECT_GT(acceleration.checked_pose_count, 2U);
+  EXPECT_GT(acceleration.rejected_elapsed_sec, 0.0);
+  EXPECT_LT(acceleration.rejected_elapsed_sec, 1.0);
+  peer.acceleration_horizon_sec = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(observation_valid(world));
+}
+
 TEST(MpccRateResolvedDynamicProof, RecordsFirstDenseRejectionProvenance)
 {
   const recovery::FootprintExtents footprint{0.5, 0.5, 0.4, 0.4, 0.0};

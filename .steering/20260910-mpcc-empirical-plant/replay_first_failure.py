@@ -15,7 +15,9 @@ binary = Path(sys.argv[3]) if len(sys.argv) > 3 else Path('/output/20260910-nine
 pattern = sys.argv[4] if len(sys.argv) > 4 else '000000002804*'
 b = Path('/aichallenge/workspace/build/multi_purpose_mpc_ros')
 records = []
-for domain in ['d1']:
+domain = sys.argv[5] if len(sys.argv) > 5 else 'd1'
+assert domain in ['d1', 'd2', 'd3', 'd4']
+for domain in [domain]:
     for path in sorted((run/domain/'mpcc_architecture_snapshots').glob(pattern+'/snapshot.yaml')):
         document = yaml.load(path.read_bytes(), Loader=yaml.CSafeLoader)
         for key in ['revalidation_evidence', 'previous_accepted_revalidation_evidence']:

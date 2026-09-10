@@ -59,6 +59,35 @@ recovery::ReverseRolloutParameters straight_parameters(const double distance_m =
     0.4};
 }
 
+TEST(RecoveryPeerPrediction, FiniteAccelerationIsContinuousAndLegacyRemainsCV)
+{
+  recovery::CircleObstacle peer{1.0, 2.0, 3.0, -1.0, 0.5, 2.0, -4.0, 1.0};
+  ASSERT_TRUE(peer.valid());
+  EXPECT_EQ(peer.predicted_center(0.0), (std::array<double, 2>{1.0, 2.0}));
+  EXPECT_EQ(peer.predicted_center(0.5), (std::array<double, 2>{2.75, 1.0}));
+  EXPECT_EQ(peer.predicted_center(1.0), (std::array<double, 2>{5.0, -1.0}));
+  EXPECT_EQ(peer.predicted_center(2.0), (std::array<double, 2>{10.0, -6.0}));
+  const double epsilon = 1e-6;
+  const auto before = peer.predicted_center(1.0 - epsilon);
+  const auto after = peer.predicted_center(1.0 + epsilon);
+  EXPECT_NEAR((after[0] - before[0]) / (2.0 * epsilon), 5.0, 2e-6);
+  EXPECT_NEAR((after[1] - before[1]) / (2.0 * epsilon), -5.0, 2e-6);
+  EXPECT_DOUBLE_EQ(peer.maximum_speed(0.0, 2.0), std::hypot(5.0, -5.0));
+  EXPECT_DOUBLE_EQ(peer.maximum_speed(1.0, 5.0), std::hypot(5.0, -5.0));
+  peer.acceleration_horizon_sec = 0.0;
+  EXPECT_EQ(peer.predicted_center(2.0), (std::array<double, 2>{7.0, 0.0}));
+  EXPECT_DOUBLE_EQ(peer.maximum_speed(0.0, 5.0), std::hypot(3.0, -1.0));
+  EXPECT_TRUE(std::isnan(peer.predicted_center(-1.0)[0]));
+  EXPECT_TRUE(std::isnan(peer.maximum_speed(2.0, 1.0)));
+  peer.acceleration_horizon_sec = -1.0;
+  EXPECT_FALSE(peer.valid());
+  EXPECT_FALSE(recovery::circle_obstacle_clearance_at_time(
+    compact_footprint(), {0.0, 0.0, 0.0}, peer, 1.0));
+  peer.acceleration_horizon_sec = 1.0;
+  peer.acceleration_x_mps2 = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(peer.valid());
+}
+
 TEST(RecoveryFootprintGrid, UsesExplicitRowMajorYFlipCompatibleWithMpcMap)
 {
   auto grid = make_grid(4U, 3U, 0.5);

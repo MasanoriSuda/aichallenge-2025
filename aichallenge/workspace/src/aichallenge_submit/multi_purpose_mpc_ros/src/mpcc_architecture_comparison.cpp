@@ -554,9 +554,7 @@ DynamicModelDiagnostic diagnose_dynamic_model(
   {
     return result;
   }
-  const recovery::CircleObstacle circle{
-    obstacle->x_m, obstacle->y_m, obstacle->velocity_x_mps,
-    obstacle->velocity_y_mps, obstacle->radius_m};
+  const auto circle = obstacle->circle();
   const double control_origin_age_sec =
     candidate.control_prediction_origin_sec - replay.observed_sec;
   double stage_end_sec = 0.0;

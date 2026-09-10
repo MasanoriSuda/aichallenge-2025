@@ -81,12 +81,7 @@ bool observation_valid(const WorldObservation & observation) noexcept
   for (const auto & obstacle : observation.obstacles) {
     if (
       obstacle.id.empty() || !ids.emplace(obstacle.id).second ||
-      !std::isfinite(obstacle.circle.x_m) ||
-      !std::isfinite(obstacle.circle.y_m) ||
-      !std::isfinite(obstacle.circle.velocity_x_mps) ||
-      !std::isfinite(obstacle.circle.velocity_y_mps) ||
-      !std::isfinite(obstacle.circle.radius_m) ||
-      obstacle.circle.radius_m < 0.0)
+      !obstacle.circle.valid())
     {
       return false;
     }
@@ -179,11 +174,13 @@ void observe_segment(
   double maximum_obstacle_motion_m = 0.0;
   const double duration_sec = end_time_sec - start_time_sec;
   for (const auto & obstacle : observation.obstacles) {
-    maximum_obstacle_motion_m = std::max(
-      maximum_obstacle_motion_m,
-      std::hypot(
-        obstacle.circle.velocity_x_mps,
-        obstacle.circle.velocity_y_mps) * duration_sec);
+    const double speed = obstacle.circle.maximum_speed(start_time_sec, end_time_sec);
+    if (!std::isfinite(speed)) {
+      result.valid = false;
+      result.clear = false;
+      return;
+    }
+    maximum_obstacle_motion_m = std::max(maximum_obstacle_motion_m, speed * duration_sec);
   }
   const double relative_motion_bound_m =
     std::hypot(end.x_m - start.x_m, end.y_m - start.y_m) +
@@ -375,11 +372,7 @@ Result evaluate_current_world(
   observation.current = replay.current;
   observation.obstacles.reserve(replay.obstacles.size());
   for (const shadow::ReplayDynamicObstacle & source : replay.obstacles) {
-    observation.obstacles.push_back(DynamicObstacle{
-      source.id,
-      recovery::CircleObstacle{
-        source.x_m, source.y_m, source.velocity_x_mps,
-        source.velocity_y_mps, source.radius_m}});
+    observation.obstacles.push_back(DynamicObstacle{source.id, source.circle()});
   }
   if (!observation_valid(observation)) {
     return reject_invalid(SourceValidationReason::WorldObservationInvalid);

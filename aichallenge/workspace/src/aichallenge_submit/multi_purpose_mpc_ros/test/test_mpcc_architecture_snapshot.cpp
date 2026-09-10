@@ -927,6 +927,9 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   std::filesystem::remove_all(root);
   auto snapshot = make_interaction_snapshot(
     mpcc_execution_contract::ControlIntent::Pass);
+  snapshot.replay_world->obstacles.front().acceleration_x_mps2 = 0.6;
+  snapshot.replay_world->obstacles.front().acceleration_y_mps2 = -0.8;
+  snapshot.replay_world->obstacles.front().acceleration_horizon_sec = 1.0;
   snapshot.request.observation_provenance = mpcc_vehicle_model::ObservationProvenance{
     {19.8, {1, 2, .1, 2, .2, .3, .05, .04}}, 19.79, 19.8, 19.78,
     20.0, 20.1, 0, .1, {{19.0, 1.0, .1}, {19.9, -3.0, .2}}};
@@ -965,6 +968,12 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
     interaction_snapshot_matches_fingerprint(
       loaded->source, loaded->interaction_fingerprint));
   ASSERT_TRUE(loaded->source.replay_world.has_value());
+  EXPECT_DOUBLE_EQ(loaded->source.replay_world->obstacles.front().acceleration_horizon_sec, 1.0);
+  auto peer_mutated = loaded->source;
+  peer_mutated.replay_world->obstacles.front().acceleration_horizon_sec = 0.0;
+  EXPECT_FALSE(interaction_snapshot_matches_fingerprint(peer_mutated, loaded->interaction_fingerprint));
+  peer_mutated.replay_world->obstacles.front().acceleration_horizon_sec = -1.0;
+  EXPECT_FALSE(interaction_snapshot_complete(peer_mutated));
   ASSERT_TRUE(loaded->source.terminal_stop_course_geometry);
   EXPECT_EQ(loaded->source.terminal_stop_course_geometry->progress_m,
     (std::vector<double>{0, 1, 2}));

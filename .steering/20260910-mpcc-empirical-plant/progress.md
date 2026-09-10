@@ -99,3 +99,19 @@ feasibility certifies938. Implemented explicit native/max-support terminal-clock
 population, zero-cost Stop objective, retimed all peers and distinct clock IDs.
 Buildr13passes26packages; testsr9pass2389records; canonical938replay accepted.
 Fresh dev2and M4–M6remain open.
+
+746ec926fresh dev2-r2fails first at D2decision991/world32f29644e23b6e68.
+[Current failure](first-dev2-r2-failure.md) records exact990/991replay and fresh
+Stop QPs whose exact dynamic proof rejects. Common-primal SQP comparison is next;
+all runtime is torn down and user artifacts restored. No completion claim.
+
+
+## Causal peer-prediction candidate
+
+D2r2source388's own acceleration detects its approaching conflict at2.0374s,
+where the CV proof passed. Frozen paired CA1holdout and exact new-native replay
+are bound in `dev2-r2-diagnostics-evidence.json`. See `peer-prediction-design.md`.
+The shared finite-acceleration prediction, model identity, dense sweep and
+bounded individual callback timing are implemented. Buildr14passes26packages,
+testsr10passes2392records; source388oldCV/990/991replays retain their outcomes.
+Fresh runtime remains required. Do not mark M4–M6 complete.

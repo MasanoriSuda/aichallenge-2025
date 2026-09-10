@@ -57,7 +57,10 @@ inline m::mpcc_rate_resolved_retained_revalidation::Request read_request(
   const auto peers=n["obstacles"];
   r.obstacles={peers["generation"].as<std::uint64_t>(),peers["observed_sec"].as<double>(),{},peers["current"].as<bool>()};
   for(const auto & p:peers["obstacles"])r.obstacles.obstacles.push_back({p["id"].as<std::string>(),
-    {p["x_m"].as<double>(),p["y_m"].as<double>(),p["velocity_x_mps"].as<double>(),p["velocity_y_mps"].as<double>(),p["radius_m"].as<double>()}});
+    {p["x_m"].as<double>(),p["y_m"].as<double>(),p["velocity_x_mps"].as<double>(),p["velocity_y_mps"].as<double>(),p["radius_m"].as<double>(),
+      p["acceleration_x_mps2"] ? p["acceleration_x_mps2"].as<double>() : 0.0,
+      p["acceleration_y_mps2"] ? p["acceleration_y_mps2"].as<double>() : 0.0,
+      p["acceleration_horizon_sec"] ? p["acceleration_horizon_sec"].as<double>() : 0.0}});
   if(n["follow_target_available"].as<bool>()) {
     const auto f=n["follow_target"];retained::FollowTargetObservation target;
     target.target_id=f["target_id"].as<std::string>();target.observation_generation=f["observation_generation"].as<std::uint64_t>();

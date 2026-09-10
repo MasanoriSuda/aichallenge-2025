@@ -760,6 +760,11 @@
       "snapshot_id": "20260910-nine-state-terminal-time-and-peer-audits",
       "manifest": ".steering/20260910-mpcc-empirical-plant/terminal-time-audit-evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r2-and-peer-prediction",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r2-diagnostics-evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -4270,7 +4275,7 @@
       "hypothesis": "Constant applied wire acceleration equals body velocity derivative",
       "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
       "result": "rejected",
-      "reason": "9.309999791..9.799999780s raw15velocity samples gain0.365482807m/s versus wire integration0.651501815m/s; actual input1.32959557..1.32959855m/s\u00b2. Not a full plant fit.",
+      "reason": "9.309999791..9.799999780s raw15velocity samples gain0.365482807m/s versus wire integration0.651501815m/s; actual input1.32959557..1.32959855m/s². Not a full plant fit.",
       "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
       "deleted_code": [],
       "revisit_condition": "causal unified longitudinal model or independent calibration"
@@ -5281,6 +5286,90 @@
       "production_impact": "Basis for explicit terminal-time feasibility population; runtime still required",
       "deleted_code": [],
       "revisit_condition": "Changed candidate/scene or integrated failure"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r2",
+      "baseline_commit": "746ec926a38368f795c967bfd94af1d2f682fe46",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r2-and-peer-prediction"
+      ],
+      "hypothesis": "Terminal-time repair suffices for integrated dev2",
+      "changed_dimension": "New same-input dev2 on746ec926",
+      "result": "rejected",
+      "reason": "D2first active moving Emergency991; no6lapacceptance.",
+      "production_impact": "Observation only",
+      "deleted_code": [],
+      "revisit_condition": "Fresh causal peer repair and then new run"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r2-dynamic-sqp",
+      "baseline_commit": "746ec926a38368f795c967bfd94af1d2f682fe46",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r2-and-peer-prediction"
+      ],
+      "hypothesis": "Common dynamics/peer relinearization restores991",
+      "changed_dimension": "OSQP/HiGHS,1/3same-primalSQP, same hard bounds",
+      "result": "rejected",
+      "reason": "NoacceptedStop; HiGHSshortUnknown, others solver/wallreject. No physical infeasibility certificate.",
+      "production_impact": "Observation only",
+      "deleted_code": [],
+      "revisit_condition": "New common-primal formulation evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r2-native-witness",
+      "baseline_commit": "746ec926a38368f795c967bfd94af1d2f682fe46",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r2-and-peer-prediction"
+      ],
+      "hypothesis": "An independent native control law certifies991",
+      "changed_dimension": "9 brake/power/min/zero/max steering-rate trajectories",
+      "result": "rejected",
+      "reason": "No witness; firstpeer overlap0.255–0.28s. Unknown, not infeasibility.",
+      "production_impact": "Observation only",
+      "deleted_code": [],
+      "revisit_condition": "New physical candidate family or earlier causal state"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r2-current-peer-ca",
+      "baseline_commit": "746ec926a38368f795c967bfd94af1d2f682fe46",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r2-and-peer-prediction"
+      ],
+      "hypothesis": "Observed acceleration restores late991",
+      "changed_dimension": "Current991CV/CA/CA1 peer path, same ego/artifact",
+      "result": "rejected",
+      "reason": "Both accelerationmodels reject earlier; no restoration at991.",
+      "production_impact": "Observation only",
+      "deleted_code": [],
+      "revisit_condition": "Earlier source world or new evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r2-source-peer-ca1",
+      "baseline_commit": "746ec926a38368f795c967bfd94af1d2f682fe46",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r2-and-peer-prediction"
+      ],
+      "hypothesis": "Source acceleration detects precursor388 unsafe approach",
+      "changed_dimension": "Only source peerforecast; sameego controls and hard geometry",
+      "result": "accepted",
+      "reason": "CVclearance0.374281m; CA1reject2.037403s. Currentnativeimplementation exactlyreproducesdiagnostic.",
+      "production_impact": "Finite1s acceleration shared by all physical peer consumers; integrated acceptance pending",
+      "deleted_code": [],
+      "revisit_condition": "New production run"
+    },
+    {
+      "experiment_id": "20260910-nine-state-peer-holdout-ca1",
+      "baseline_commit": "746ec926a38368f795c967bfd94af1d2f682fe46",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r2-and-peer-prediction"
+      ],
+      "hypothesis": "Finite acceleration improves paired independent prediction",
+      "changed_dimension": "Frozen past-only tracker,1sacceleration thenCV; unchanged anchors",
+      "result": "accepted",
+      "reason": "151/61-anchorlongruns improveall reportedhorizons;5anchorshort1/2sworsen. Long5serrorsremain>11m. Empiricalonly.",
+      "production_impact": "Finite1s acceleration shared by all physical peer consumers; integrated acceptance pending",
+      "deleted_code": [],
+      "revisit_condition": "Independent run with fixed model"
     }
   ]
 }

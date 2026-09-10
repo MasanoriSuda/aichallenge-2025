@@ -3849,6 +3849,7 @@ Result SolverContext::evaluate_impl(
         return finish();
       }
       if (
+        !target->circle().valid() ||
         target->observation_generation != world.observation_generation ||
         !world.physical_footprint.valid() || !std::isfinite(target->radius_m) ||
         target->radius_m < 0.0)
@@ -3871,11 +3872,10 @@ Result SolverContext::evaluate_impl(
       double target_elapsed_sec = snapshot.control_prediction_origin_sec - world.observed_sec;
       for (const auto & input : snapshot.request.inputs) {
         target_elapsed_sec += input.stage_dt_sec;
-        // The exact dynamic certificate owns a constant-velocity world
-        // prediction. Use its same observation and semantic stage clock.
-        prediction.target_positions_m.emplace_back(
-          target->x_m + target->velocity_x_mps * target_elapsed_sec,
-          target->y_m + target->velocity_y_mps * target_elapsed_sec);
+        // Use the same finite-acceleration peer model and observation clock
+        // as dense physical proof and retained current-world revalidation.
+        const auto center = target->circle().predicted_center(target_elapsed_sec);
+        prediction.target_positions_m.emplace_back(center[0], center[1]);
       }
       dynamic_request.cartesian_prediction = std::move(prediction);
       if (snapshot.dynamic_obstacle_forced_physical_diagonal) {
@@ -3919,7 +3919,7 @@ Result SolverContext::evaluate_impl(
           continue;
         }
         if (peer.id.empty() || peer.observation_generation != world.observation_generation ||
-          !std::isfinite(peer.radius_m) || peer.radius_m < 0.0)
+          !peer.circle().valid())
         {
           result.outcome = Outcome::AssemblyRejected;
           result.detail = "complete-rest additional peer provenance invalid";
@@ -3941,8 +3941,8 @@ Result SolverContext::evaluate_impl(
         double elapsed = snapshot.control_prediction_origin_sec - world.observed_sec;
         for (std::size_t stage = 0U; stage < snapshot.request.inputs.size(); ++stage) {
           elapsed += snapshot.request.inputs[stage].stage_dt_sec;
-          prediction.target_positions_m.emplace_back(
-            peer.x_m + peer.velocity_x_mps * elapsed, peer.y_m + peer.velocity_y_mps * elapsed);
+          const auto center = peer.circle().predicted_center(elapsed);
+          prediction.target_positions_m.emplace_back(center[0], center[1]);
           request.stages[stage] = {true, 0.0, 0.0,
             footprint.front_extent_m + footprint.margin_m + peer.radius_m,
             footprint.left_extent_m + footprint.margin_m + peer.radius_m};

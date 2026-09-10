@@ -22,7 +22,8 @@ are active. A native0.8s free-control feasibility Stop certifies the unchanged93
 scene. Production now evaluates explicit native-braking and maximum-support clock
 candidates, preserving rear-peer delayed stopping, all hard proofs and per-solve
 budgets. Time-specific IDs and zero-cost meaning are sealed. Buildr13passes26
-packages, testsr9pass2389records, canonical938replay accepts. Fresh dev2is next.
+packages, testsr9pass2389records, canonical938replay accepts. Fresh dev2-r2on746ec926fails D2decision991;
+[current failure](../20260910-mpcc-empirical-plant/first-dev2-r2-failure.md) is active.
 Peer forecast alternatives and coherent tangent seeds were not promoted.
 
 Remaining sequence: repair current dev2root cause, finish M4intent/Stop/restart/
@@ -348,3 +349,9 @@ is conditional: Emergency supersedes actual publication aroundcursor0.05s.
 Detailed current work: ../20260908-mpcc-delay-prefix-audit/ and
 ../20260909-mpcc-coordinate-consistency/ and ../20260908-peer-envelope-audit/.
 Full acceptance remains P2partial/P3/P4open.
+
+
+2026-09-10更新: dev2-r2はD2decision991で不合格。生成時の相手車加速度を
+捨てるCV予測が接近を見逃す比較を保存し、有限1秒加速度予測を物理QP/proof/
+Stop/retainedへ共通化。buildr14:26packages、testsr10:2392records合格。
+修正を固定した新しいdev2から統合受入れを継続する。M4–M6は未完。

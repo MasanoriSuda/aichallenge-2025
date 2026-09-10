@@ -1,6 +1,7 @@
 #ifndef MULTI_PURPOSE_MPC_ROS__RECOVERY_FOOTPRINT_HPP_
 #define MULTI_PURPOSE_MPC_ROS__RECOVERY_FOOTPRINT_HPP_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -356,9 +357,18 @@ struct CircleObstacle
   double velocity_x_mps{};
   double velocity_y_mps{};
   double radius_m{};
+  double acceleration_x_mps2{};
+  double acceleration_y_mps2{};
+  // Zero preserves legacy CV. Positive values apply observed acceleration
+  // until this time, then preserve the resulting velocity continuously.
+  double acceleration_horizon_sec{};
+
+  bool valid() const noexcept;
+  std::array<double, 2> predicted_center(double elapsed_sec) const noexcept;
+  double maximum_speed(double start_sec, double end_sec) const noexcept;
 };
 
-/// Signed clearance between one linearly predicted circle and the oriented
+/// Signed clearance between one predicted circle and the oriented
 /// ego footprint at an exact elapsed time.  Negative means overlap.  Invalid
 /// input is returned as nullopt so a caller cannot confuse it with contact.
 std::optional<double> circle_obstacle_clearance_at_time(

@@ -1370,6 +1370,37 @@ TEST(MpccArchitectureComparison, CompleteRestPopulationOwnsNativeClockAndFeasibi
     source.publication_interval_sec);
 }
 
+TEST(MpccArchitectureComparison, CompleteRestRetimesAcceleratingPeerOnEachCandidateClock)
+{
+  auto source = stoppable_source_snapshot();
+  auto & peer = source.replay_world->obstacles.front();
+  peer.acceleration_x_mps2 = 0.6;
+  peer.acceleration_y_mps2 = -0.3;
+  peer.acceleration_horizon_sec = 1.0;
+  const auto candidates = stop_lattice::build_current_world_complete_rest_population(
+    source, persistent_osqp::PhysicalConstraintTolerance{});
+  ASSERT_FALSE(candidates.empty());
+  for (const auto & built : candidates) {
+    ASSERT_TRUE(built.accepted()) << built.detail;
+    const auto & candidate = built.candidate;
+    EXPECT_DOUBLE_EQ(candidate.replay_world->obstacles.front().acceleration_horizon_sec, 1.0);
+    double elapsed = candidate.control_prediction_origin_sec - source.replay_world->observed_sec;
+    for (std::size_t i = 0U; i < candidate.request.inputs.size(); ++i) {
+      elapsed += candidate.request.inputs[i].stage_dt_sec;
+      const auto frame = mpc_stage_geometry::sample_course_frame(candidate.wall_course_frame_knots,
+        candidate.course_progress_origin_m + candidate.wall_reference_progress_m[i + 1U]);
+      ASSERT_TRUE(frame);
+      const auto center = peer.circle().predicted_center(elapsed);
+      const auto relative = contract::project_planar_pose_to_frenet(
+        {center[0], center[1], frame->heading_rad}, {frame->x_m, frame->y_m, frame->heading_rad});
+      ASSERT_TRUE(relative);
+      EXPECT_DOUBLE_EQ(candidate.dynamic_obstacle_stages[i].target_lateral_m, relative->lateral_m);
+      EXPECT_DOUBLE_EQ(candidate.dynamic_obstacle_stages[i].target_progress_m,
+        candidate.wall_reference_progress_m[i + 1U] + relative->lag_m);
+    }
+  }
+}
+
 TEST(MpccArchitectureComparison, CurrentWorldStopSolvesFreeControlsWithEveryObservedPeer)
 {
   auto source = stoppable_source_snapshot();

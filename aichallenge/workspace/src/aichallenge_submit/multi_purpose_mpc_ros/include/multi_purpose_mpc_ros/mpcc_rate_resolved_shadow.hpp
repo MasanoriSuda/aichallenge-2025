@@ -23,6 +23,9 @@
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
 {
 
+// Fixed empirical peer model, versioned in production bounds identity.
+constexpr double kPeerAccelerationHorizonSec = 1.0;
+
 namespace artifact = mpcc_rate_resolved_execution_artifact;
 using Identity = artifact::Identity;
 
@@ -48,6 +51,13 @@ struct ReplayDynamicObstacle
   double covariance_y_m2{};
   double radius_m{};
   std::uint64_t observation_generation{};
+  double acceleration_horizon_sec{};
+
+  recovery_footprint::CircleObstacle circle() const noexcept
+  {
+    return {x_m, y_m, velocity_x_mps, velocity_y_mps, radius_m,
+      acceleration_x_mps2, acceleration_y_mps2, acceleration_horizon_sec};
+  }
 };
 
 /// Exact current-world inputs which are outside the convex QP but required to

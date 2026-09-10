@@ -1,0 +1,76 @@
+{
+  "baseline_commit": "746ec926a38368f795c967bfd94af1d2f682fe46",
+  "files": [
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp",
+      "sha256": "ec16338fe4cc96a8eaf0676362ab53a94c79ddeb05135b2a93749017f12cdad6",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp",
+      "sha256": "41dd3feb125fbda04e1e340d7088180fc031ac2de8ede0fcedad4c724a82052b",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "4874a6309411a8c5cca3e37ccd0acf8bdf53e3340c45805da410daee6203ec68",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "54d489f8041e7f68c5bbb151d641b3a932b72e0db05ad8c2c322a0cd69ad7158",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "4e76c751b219564c48d653de3cb267fc9b397a74428f6a4bb7a57b80bf4b9446",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "fb762cff5ef44a824652c6fb23859a5b193c22b8e169d48d16a688cb4316d291",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "sha256": "1f6751e4944d4a83d1bdf3aa0fdaf897da5c8a1b2bdd0d32a1e10793d6725761",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a9b458c34a29a607d7a30217fb0e713c1fb77f90db12e66c17d7c91072e8f4d2",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/recovery_footprint.cpp",
+      "sha256": "e08798061085d7a85e340a91a74eec1ed6fcb9c760c1398bab5c98975c93f232",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/recovery_footprint.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "sha256": "72903884841d31e2306fdf071420cffcb0a03bfeb329a028b308e47a80fe364a",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "sha256": "3c67ddd67048c12b309f31eb6576a9873ab6c8f6d7d9059401ca6728cf22a04b",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "f5f73f306914b0e23d440865a558fcc42fbc6bd2256aafded981d842bc506f81",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_recovery_footprint.cpp",
+      "sha256": "1138940643fc58930c8a0867e7538dc17a4d8da15b1c316cad0c9e9501914c62",
+      "preserved": "output/20260910-nine-state-peer-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_recovery_footprint.cpp"
+    }
+  ],
+  "patch_sha256": "521d26be090e0bf8856ff8320984336a071783e6637c7de30bc467ac2aff36ee",
+  "build": "r14:26 packages/4min50s; setuptools deprecation only",
+  "tests": "r10:2392 records, 0 errors/failures/skips",
+  "source_replay": "Original388 CV replay and990 accepted/991 rejected preserved. New native CA1 matches diagnostic rejection2.0374029485648335s, clearance-0.001763196420858204m.",
+  "runtime": "Not yet executed on this candidate; do not count old single/dev2 results as acceptance",
+  "evidence": "output/20260910-nine-state-peer-candidate-r1"
+}

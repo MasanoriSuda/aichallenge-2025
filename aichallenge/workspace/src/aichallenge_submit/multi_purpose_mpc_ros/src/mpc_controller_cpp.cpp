@@ -25293,7 +25293,8 @@ struct MPC
         vehicle.covariance_x,
         vehicle.covariance_y,
         radius_m.value(),
-        vehicle.observation_generation});
+        vehicle.observation_generation,
+        rate_resolved_shadow::kPeerAccelerationHorizonSec});
     }
     std::sort(
       replay.obstacles.begin(), replay.obstacles.end(),
@@ -26567,6 +26568,9 @@ struct MPC
       obstacle.circle.velocity_x_mps = vehicle.vx;
       obstacle.circle.velocity_y_mps = vehicle.vy;
       obstacle.circle.radius_m = peer_circle_radius_m.value();
+      obstacle.circle.acceleration_x_mps2 = vehicle.ax;
+      obstacle.circle.acceleration_y_mps2 = vehicle.ay;
+      obstacle.circle.acceleration_horizon_sec = rate_resolved_shadow::kPeerAccelerationHorizonSec;
       request.obstacles.obstacles.push_back(std::move(obstacle));
     }
     request.current_speed_mps = current_speed_mps_;
@@ -31249,7 +31253,7 @@ struct MPC
         context.input_schema_id =
           "accel-steering-rate-progress-rate-v1";
         context.bounds_schema_id =
-          "progress-stage-wall-cartesian-obstacle-steering-tire-body-rate-v4";
+          "progress-stage-wall-cartesian-obstacle-steering-tire-body-rate-v4/peer-ca1-v1";
         context.cost_schema_id =
           "velocity-steering-tire-body-progress-v4";
         break;
@@ -58326,6 +58330,12 @@ private:
       timing.recovery_ms + timing.publish_ms;
     const double unattributed_ms = std::max(0.0, elapsed_ms - attributed_ms);
     ++control_callback_count_;
+    if (control_callback_sample_count_ < control_callback_samples_.size()) {
+      control_callback_sample_decisions_[control_callback_sample_count_] = timing.decision_id;
+      control_callback_samples_[control_callback_sample_count_++] = elapsed_ms;
+    } else {
+      ++control_callback_sample_overflow_;
+    }
     control_callback_total_ms_ += elapsed_ms;
     control_callback_maximum_ms_ = std::max(control_callback_maximum_ms_, elapsed_ms);
     control_callback_overrun_count_ += elapsed_ms > period_ms ? 1U : 0U;
@@ -58375,6 +58385,17 @@ private:
         static_cast<std::size_t>(recovery_safety_full_count_),
         static_cast<std::size_t>(recovery_safety_skipped_count_), period_ms,
         static_cast<std::size_t>(control_callback_overrun_count_));
+      std::ostringstream samples;
+      samples.precision(9);
+      for (std::size_t i = 0U; i < control_callback_sample_count_; ++i) {
+        if (i > 0U) {
+          samples << ',';
+        }
+        samples << control_callback_sample_decisions_[i] << ':' << control_callback_samples_[i];
+      }
+      RCLCPP_INFO(get_logger(),
+        "Control callback samples: count=%zu, overflow=%zu, decision_elapsed_ms=%s, observation_only=1",
+        control_callback_sample_count_, control_callback_sample_overflow_, samples.str().c_str());
       if (wall_cache_telemetry.request_count > 0U) {
         const double hit_rate =
           static_cast<double>(wall_cache_telemetry.hit_count) /
@@ -58393,6 +58414,8 @@ private:
       }
     }
     control_callback_count_ = 0U;
+    control_callback_sample_count_ = 0U;
+    control_callback_sample_overflow_ = 0U;
     control_callback_overrun_count_ = 0U;
     control_callback_total_ms_ = 0.0;
     control_callback_maximum_ms_ = 0.0;
@@ -58994,6 +59017,10 @@ private:
   std::optional<CurrentWallTraceSnapshot> last_current_wall_trace_snapshot_;
   double last_published_steering_for_wall_trace_{
     std::numeric_limits<double>::quiet_NaN()};
+  std::array<double, 128U> control_callback_samples_{};
+  std::array<std::uint64_t, 128U> control_callback_sample_decisions_{};
+  std::size_t control_callback_sample_count_{0U};
+  std::size_t control_callback_sample_overflow_{0U};
   std::uint64_t control_callback_count_{0U};
   std::uint64_t control_callback_overrun_count_{0U};
   double control_callback_total_ms_{0.0};

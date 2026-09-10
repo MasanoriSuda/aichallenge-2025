@@ -75,6 +75,28 @@ for domain in sorted(p.name for p in run.iterdir() if re.fullmatch('d[1-4]',p.na
   result['prediction_'+label]={key:summary([r[key] for r in selected]) for key in ['position_m','yaw_rad','u_mps','vy_mps','yaw_rate_radps','tire_rad']}
  cycles=re.findall(r'Control callback runtime: cycles=(\d+), elapsed_ms=([\d.]+)/([\d.]+)\(avg/max\).*?overruns=(\d+)',log)
  result['callback']={'cycles':sum(int(r[0]) for r in cycles),'weighted_mean_ms':sum(int(r[0])*float(r[1]) for r in cycles)/sum(int(r[0]) for r in cycles) if cycles else None,'maximum_ms':max((float(r[2]) for r in cycles),default=None),'overruns':sum(int(r[3]) for r in cycles),'overrun_windows':[r for r in cycles if int(r[3])],'per_cycle_p95_p99':'not recorded; do not substitute percentiles of window means'}
+ raw_windows=re.findall(r'Control callback samples: count=(\d+), overflow=(\d+), decision_elapsed_ms=([^ ]+), observation_only=1',log)
+ raw=[];overflow=0
+ for count,lost,payload in raw_windows:
+  values=[(int(decision),float(elapsed)) for decision,elapsed in (x.split(':') for x in payload.split(','))]
+  assert len(values)==int(count), 'Incomplete callback telemetry window'
+  raw.extend(values);overflow+=int(lost)
+ if raw:
+  elapsed=np.array([v for _,v in raw]);period=float(re.search(r'Control callback runtime:.*?period_ms=([\d.]+)',log)[1])
+  consecutive=sum(a[1]>period and b[1]>period and b[0]==a[0]+1 for a,b in zip(raw,raw[1:]) if a[0]>0)
+  result['callback']['per_cycle']={'count':len(raw),'mean_ms':float(np.mean(elapsed)),'p95_ms':float(np.percentile(elapsed,95)),
+   'p99_ms':float(np.percentile(elapsed,99)),'maximum_ms':float(np.max(elapsed)),'overflow':overflow,
+   'adjacent_overrun_pairs':consecutive,'meaning':'All emitted individual callback measurements, including startup/finish. Final incomplete telemetry window is unobserved. Duration ends before its own telemetry emission.'}
+  result['callback']['per_cycle_p95_p99']='individual measurements; see per_cycle'
+  (out/(domain+'-callback-samples.json')).write_text(json.dumps(raw)+'\n')
+ command_times=times.get('/control/command/control_cmd',[]);anomalies=[]
+ for index,(a,b) in enumerate(zip(command_times,command_times[1:])):
+  if a[0] is None or b[0] is None:continue
+  source_dt=b[0]-a[0];receipt_dt=b[1]-a[1]
+  if source_dt<=0 or source_dt>.0375 or receipt_dt<=0 or receipt_dt>.0375:
+   anomalies.append(dict(index=index,source_before=a[0],source_after=b[0],receipt_before=a[1],receipt_after=b[1],
+    source_interval_ms=source_dt*1000,receipt_interval_ms=receipt_dt*1000))
+ (out/(domain+'-command-clock-anomalies.json')).write_text(json.dumps(anomalies,indent=2)+'\n')
  result['actuation_join_rejections']=sum(int(x) for x in re.findall(r'production actuation join: joined=\d+, rejected=(\d+)',log))
  report['domains'][domain]=result
  (out/(domain+'-prediction-samples.json')).write_text(json.dumps(samples,indent=2)+'\n')

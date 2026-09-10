@@ -54,10 +54,7 @@ bool valid_pose(const Pose2D & pose) noexcept
 
 bool valid_circle_obstacle(const CircleObstacle & obstacle) noexcept
 {
-  return
-    finite(obstacle.x_m) && finite(obstacle.y_m) &&
-    finite(obstacle.velocity_x_mps) && finite(obstacle.velocity_y_mps) &&
-    finite(obstacle.radius_m) && obstacle.radius_m >= 0.0;
+  return obstacle.valid();
 }
 
 double circle_to_footprint_clearance(
@@ -745,6 +742,42 @@ DynamicClearanceRejectReason finalize_dynamic_clearance(
   return DynamicClearanceRejectReason::None;
 }
 
+bool CircleObstacle::valid() const noexcept
+{
+  return finite(x_m) && finite(y_m) && finite(velocity_x_mps) &&
+         finite(velocity_y_mps) && finite(radius_m) && radius_m >= 0.0 &&
+         finite(acceleration_x_mps2) && finite(acceleration_y_mps2) &&
+         finite(acceleration_horizon_sec) && acceleration_horizon_sec >= 0.0;
+}
+
+std::array<double, 2> CircleObstacle::predicted_center(const double elapsed_sec) const noexcept
+{
+  if (!valid() || !finite(elapsed_sec) || elapsed_sec < 0.0) {
+    const double invalid = std::numeric_limits<double>::quiet_NaN();
+    return {invalid, invalid};
+  }
+  const double h = std::min(elapsed_sec, acceleration_horizon_sec);
+  const double acceleration_time = h * (elapsed_sec - 0.5 * h);
+  return {x_m + velocity_x_mps * elapsed_sec + acceleration_x_mps2 * acceleration_time,
+    y_m + velocity_y_mps * elapsed_sec + acceleration_y_mps2 * acceleration_time};
+}
+
+double CircleObstacle::maximum_speed(const double start_sec, const double end_sec) const noexcept
+{
+  if (!valid() || !finite(start_sec) || !finite(end_sec) || start_sec < 0.0 ||
+    end_sec < start_sec)
+  {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  const auto speed = [this](const double time) {
+      const double h = std::min(time, acceleration_horizon_sec);
+      return std::hypot(velocity_x_mps + acceleration_x_mps2 * h,
+        velocity_y_mps + acceleration_y_mps2 * h);
+    };
+  // The norm of affine velocity is convex; after the cutoff it is constant.
+  return std::max(speed(start_sec), speed(end_sec));
+}
+
 std::optional<double> circle_obstacle_clearance_at_time(
   const FootprintExtents & footprint, const Pose2D & pose,
   const CircleObstacle & obstacle, const double elapsed_time_sec) noexcept
@@ -756,11 +789,11 @@ std::optional<double> circle_obstacle_clearance_at_time(
   {
     return std::nullopt;
   }
-  return circle_to_footprint_clearance(
-    footprint, pose,
-    obstacle.x_m + obstacle.velocity_x_mps * elapsed_time_sec,
-    obstacle.y_m + obstacle.velocity_y_mps * elapsed_time_sec,
-    obstacle.radius_m);
+  const auto center = obstacle.predicted_center(elapsed_time_sec);
+  if (!finite(center[0]) || !finite(center[1])) {
+    return std::nullopt;
+  }
+  return circle_to_footprint_clearance(footprint, pose, center[0], center[1], obstacle.radius_m);
 }
 
 DynamicClearanceResult evaluate_circle_obstacle_clearance(
@@ -808,10 +841,9 @@ DynamicClearanceResult evaluate_circle_obstacle_clearance(
     const double distance_fraction = std::clamp(
       rollout_pose.reverse_distance_m / total_distance_m, 0.0, 1.0);
     const double prediction_time_sec = prediction_horizon_sec * distance_fraction;
-    const double obstacle_x_m =
-      obstacle.x_m + obstacle.velocity_x_mps * prediction_time_sec;
-    const double obstacle_y_m =
-      obstacle.y_m + obstacle.velocity_y_mps * prediction_time_sec;
+    const auto center = obstacle.predicted_center(prediction_time_sec);
+    const double obstacle_x_m = center[0];
+    const double obstacle_y_m = center[1];
     const double clearance_m = circle_to_footprint_clearance(
       footprint, rollout_pose.pose, obstacle_x_m, obstacle_y_m, obstacle.radius_m);
     const auto observation = observe_dynamic_clearance(

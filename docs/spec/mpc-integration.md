@@ -4239,13 +4239,13 @@ pose原点の違いを確認した。横速度・yaw rateを持つmovingモデ�
 #### 現行完全停止producerの監査入口（2026-09-10）
 
 `mpcc_architecture_compare <snapshot.yaml> --current-world-complete-rest-only`は、
-実行中の独立Stopワーカーと同じ`build_current_world_complete_rest_candidate`を使う。
-自由な加速度・操舵、候補の時間軸と再配置された全peer、元の目的関数、終端の車体静止を維持し、
+実行中の独立Stopワーカーと同じ`build_current_world_complete_rest_population`を使う。
+自由な加速度・操舵、候補の時間軸と再配置された全peer、可行性の目的関数、終端の車体静止を維持し、
 通常軌道のsolveを前提にしない。結果の`current-world-complete-rest-y`は観測用で、実行権限を持たない。
 
 `--stop-physical-support-only`と旧Stop操舵schedule比較は、最大制動を固定する過去方式の比較である。
-その失敗を現行の自由入力Stopの失敗として扱わない。現行producerは元の重みを引き継ぎ、
-過去の最大制動producerだけがゼロ目的関数のfeasibilityを使う。
+その失敗を現行の自由入力Stopの失敗として扱わない。現行producerは下記の終端時間修正で
+可行性のみの目的へ移行した。過去の最大制動producerとの違いは固定入力と時間軸にある。
 最新の実走行・同一入力比較は[dev2監査記録](../../.steering/20260910-mpcc-empirical-plant/first-dev2-failure.md)を参照。
 単独6周の合格は、2台走行・反復campaign・提出評価の合格を意味しない。
 
@@ -4267,3 +4267,22 @@ pose原点の違いを確認した。横速度・yaw rateを持つmovingモデ�
 同一938場面の比較では、公称0.8秒・可行性目的で現行OSQPが全検査を通った。
 これは局所再生の結果であり、現行実装の2台走行・停止後再始動の受入れは検証中。
 [変更根拠と検証計画](../../.steering/20260910-mpcc-empirical-plant/stop-terminal-time-design.md)を参照。
+
+
+#### 相手車の有限加速度予測（2026-09-10、2025由来の暫定）
+
+物理QP・完全停止候補・dense動的検査・retained/async再検証は、公開V2X位置から
+既存trackerが推定した速度と加速度を使う。加速度を1秒間適用し、その後は到達速度を保持する。
+位置は `p(t)=p0+v0*t+a*(h*t-h*h/2), h=min(t,1)`。予測区間の境界で位置・速度を連続にする。
+円の半径・ego footprint・壁余裕・数値許容差は維持する。dense検査の相対移動距離にも
+加速を含む最大速度を使い、静止から横切る相手を端点だけで見逃さない。
+
+bounds schemaの`/peer-ca1-v1`と、保存worldの`acceleration_horizon_sec`に予測方式を封印する。
+フィールドがない過去snapshotは等速モデルとして再生し、元のfingerprintを維持する。
+ROS/V2Xのtopic・messageは変更しない。callbackログは有界な周期別実測値も記録し、
+p95/p99はその値から計算する。最後の未出力窓やoverflowを完全観測に数えない。
+
+dev2-r2の正常軌道388を生成時の情報で再生すると、等速予測で見逃した約2秒先の
+接近を検出する。過去の別走行でも短中期誤差は改善するが、悪化する区間もあり、
+長期の予測誤差は大きい。将来の相手の動作や無期限の停止占有を保証しない。
+[因果比較と検証](../../.steering/20260910-mpcc-empirical-plant/peer-prediction-design.md)を参照。

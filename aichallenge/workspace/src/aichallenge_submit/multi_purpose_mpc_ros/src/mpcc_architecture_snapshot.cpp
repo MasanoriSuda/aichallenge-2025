@@ -681,6 +681,7 @@ YAML::Node source_node(
       item["velocity_y_mps"] = obstacle.velocity_y_mps;
       item["acceleration_x_mps2"] = obstacle.acceleration_x_mps2;
       item["acceleration_y_mps2"] = obstacle.acceleration_y_mps2;
+      item["acceleration_horizon_sec"] = obstacle.acceleration_horizon_sec;
       item["covariance_x_m2"] = obstacle.covariance_x_m2;
       item["covariance_y_m2"] = obstacle.covariance_y_m2;
       item["radius_m"] = obstacle.radius_m;
@@ -1427,7 +1428,8 @@ std::optional<shadow::Snapshot> load_source_snapshot(
         item["acceleration_y_mps2"].as<double>(),
         item["covariance_x_m2"].as<double>(),
         item["covariance_y_m2"].as<double>(), item["radius_m"].as<double>(),
-        item["observation_generation"].as<std::uint64_t>()});
+        item["observation_generation"].as<std::uint64_t>(),
+        item["acceleration_horizon_sec"] ? item["acceleration_horizon_sec"].as<double>() : 0.0});
     }
     std::sort(
       world.obstacles.begin(), world.obstacles.end(),
@@ -1897,6 +1899,7 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
         !std::isfinite(obstacle.velocity_y_mps) ||
         !std::isfinite(obstacle.acceleration_x_mps2) ||
         !std::isfinite(obstacle.acceleration_y_mps2) ||
+        !std::isfinite(obstacle.acceleration_horizon_sec) || obstacle.acceleration_horizon_sec < 0.0 ||
         !std::isfinite(obstacle.covariance_x_m2) ||
         obstacle.covariance_x_m2 < 0.0 ||
         !std::isfinite(obstacle.covariance_y_m2) ||
@@ -2099,6 +2102,11 @@ std::uint64_t fingerprint_interaction_snapshot(
     builder.append_double(obstacle.covariance_y_m2);
     builder.append_double(obstacle.radius_m);
     builder.append_u64(obstacle.observation_generation);
+    // Preserve old CV recording fingerprints, including their unused acceleration.
+    if (obstacle.acceleration_horizon_sec != 0.0) {
+      builder.append_string("finite-acceleration-cartesian-peer-v1");
+      builder.append_double(obstacle.acceleration_horizon_sec);
+    }
   }
   return builder.finish();
 }
@@ -2468,6 +2476,9 @@ static YAML::Node revalidation_evidence_node(
     item["x_m"] = peer.circle.x_m; item["y_m"] = peer.circle.y_m;
     item["velocity_x_mps"] = peer.circle.velocity_x_mps;
     item["velocity_y_mps"] = peer.circle.velocity_y_mps;
+    item["acceleration_x_mps2"] = peer.circle.acceleration_x_mps2;
+    item["acceleration_y_mps2"] = peer.circle.acceleration_y_mps2;
+    item["acceleration_horizon_sec"] = peer.circle.acceleration_horizon_sec;
     item["radius_m"] = peer.circle.radius_m;
     obstacles["obstacles"].push_back(item);
   }

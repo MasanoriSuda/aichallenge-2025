@@ -1648,11 +1648,14 @@ static Result evaluate_with_stop_profile(
 
 Result evaluate(const Request & request)
 {
-  if (request.plan == nullptr || request.plan->execution_artifact == nullptr) {
+  if (request.plan == nullptr || request.plan->execution_artifact == nullptr ||
+    request.plan->physical_snapshot == nullptr)
+  {
     return evaluate_with_stop_profile(request, nullptr);
   }
-  const auto profile = mpcc_rate_resolved_physical_adapter::build_normal_path_stop_profile(
-    *request.plan->execution_artifact);
+  const auto profile = mpcc_rate_resolved_physical_adapter::build_terminal_stop_reference(
+    *request.plan->execution_artifact,
+    request.plan->physical_snapshot->terminal_stop_course_geometry);
   if (!profile.has_value()) {
     return evaluate_with_stop_profile(request, nullptr);
   }
@@ -1663,9 +1666,9 @@ Result evaluate(const Request & request)
   if (!normal_path.terminal_stop_attempted || normal_path.terminal_stop_certified) {
     return normal_path;
   }
-  // Stop is a feasibility obligation. The solved path owns the preferred
-  // lateral reference, but its declared domain need not cover braking to
-  // rest. The track reference is a second, independently proved hypothesis;
+  // Stop is a feasibility obligation. The solved lateral prefix and its
+  // explicit map-bounded terminal tail own the preferred reference.
+  // The track reference is a second, independently proved hypothesis;
   // it never supplies authority when its own complete current-world proof fails.
   auto track = evaluate_with_stop_profile(request, nullptr);
   track.terminal_stop_reference_attempts += normal_path.terminal_stop_reference_attempts;

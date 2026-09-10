@@ -198,6 +198,20 @@ std::optional<StopLateralTargetProfile> build_normal_path_stop_profile(
     std::optional<StopLateralTargetProfile>{std::move(profile)} : std::nullopt;
 }
 
+std::optional<StopLateralTargetProfile> build_terminal_stop_reference(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & execution,
+  const StopCourseGeometry & geometry) noexcept
+{
+  if (!stop_course_geometry_valid(geometry)) return std::nullopt;
+  auto reference = build_normal_path_stop_profile(execution);
+  if (!reference) return std::nullopt;
+  if (geometry.progress_m.back() > reference->progress_m.back()) {
+    reference->progress_m.push_back(geometry.progress_m.back());
+    reference->lateral_m.push_back(reference->lateral_m.back());
+  }
+  return reference;
+}
+
 std::optional<double> sample_stop_lateral_target(
   const StopLateralTargetProfile & profile,
   const double progress_m,

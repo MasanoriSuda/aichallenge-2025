@@ -823,6 +823,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/moving-failure-observation-evidence.json",
       "replay_ready": true,
       "reason": "Exact ordinary1667/1668Requests available; later firstmoving1669/1670pairmissing due startupCruise833bucket. Keep event identities distinct."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-terminal-reference",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/terminal-reference-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact moving2587/2588pair/source2047 fromr11; earlier1667/1668pair/source1148 retained as dynamicnegativecontrol; native original/candidate/reference identities recorded."
     }
   ],
   "experiments": [
@@ -5814,6 +5820,92 @@
       "production_impact": "Observation only; normal authority/model/proofs/settings unchanged. M4–M6 remain open.",
       "deleted_code": [],
       "revisit_condition": "Fresh dev2-r11 must preserve firstmovingworld; diagnostic code may not be counted as a controller repair"
+    },
+    {
+      "experiment_id": "20260910-nine-state-terminal-reference-integration",
+      "baseline_commit": "ae2137c66a8d4e174dbfa05f6d88c3a1dd78907d",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-reference"
+      ],
+      "hypothesis": "Observation-only r11 closes integration",
+      "changed_dimension": "Freshae2137c6dev2-r11",
+      "result": "rejected",
+      "reason": "D1movingEmergency2588;D2negativeShiftOut/Pass/Return/Idle; firstmoving recordercaptures exactworld as intended",
+      "production_impact": "One normal authority. Explicitterminalreferencecompositiononly; nativecompleteRest/fullwall/peer/packet proofs unchanged. Integratedacceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "Causal terminalreference repair and freshfixedcommitrun"
+    },
+    {
+      "experiment_id": "20260910-nine-state-terminal-reference-cause",
+      "baseline_commit": "ae2137c66a8d4e174dbfa05f6d88c3a1dd78907d",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-reference"
+      ],
+      "hypothesis": "Solved reference end pre-empts feasible complete Stop",
+      "changed_dimension": "Exact2587/2588, originalnormalreference and centerline separately",
+      "result": "accepted",
+      "reason": "2588normal aborts InvalidLateralPolicy beforewall at650samples; centerline thenhitswall. Normalreference ends346.424157658, stoppingendpoint346.526112850",
+      "production_impact": "One normal authority. Explicitterminalreferencecompositiononly; nativecompleteRest/fullwall/peer/packet proofs unchanged. Integratedacceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "Newphysicalworld/model/referencecounterexample"
+    },
+    {
+      "experiment_id": "20260910-nine-state-terminal-reference-candidate",
+      "baseline_commit": "ae2137c66a8d4e174dbfa05f6d88c3a1dd78907d",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-reference"
+      ],
+      "hypothesis": "Explicit map-bounded constant-lateral tail closes missing terminalreference",
+      "changed_dimension": "Sameoriginalsource/packet/body/grid/peers; appendonlyterminalreferencepoint atsealedStopmapend",
+      "result": "accepted",
+      "reason": "2587unchanged;2588native700samples/3.50s andfullrest/wall/peerproof accepted. Newreferencecandidateidentityrecorded; no runtimepromotionfromdiagnostic alone",
+      "production_impact": "One normal authority. Explicitterminalreferencecompositiononly; nativecompleteRest/fullwall/peer/packet proofs unchanged. Integratedacceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "Freshdev2-r12"
+    },
+    {
+      "experiment_id": "20260910-nine-state-terminal-reference-architecture",
+      "baseline_commit": "ae2137c66a8d4e174dbfa05f6d88c3a1dd78907d",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-reference"
+      ],
+      "hypothesis": "A/B/C/D or complete-rest solve resolves same2588world",
+      "changed_dimension": "OriginalA/B/C/D/G and2fullrestclocks",
+      "result": "inconclusive",
+      "reason": "Asolves15.7801ms thencenterlinewallreject;B/C/D/Gmissingtarget;2Stopclocks4000iterationreject. No physicalinfeasibilitycertificate",
+      "production_impact": "One normal authority. Explicitterminalreferencecompositiononly; nativecompleteRest/fullwall/peer/packet proofs unchanged. Integratedacceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "Changedcandidate representation or newsealedtarget/formulationevidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-terminal-reference-production",
+      "baseline_commit": "ae2137c66a8d4e174dbfa05f6d88c3a1dd78907d",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-reference"
+      ],
+      "hypothesis": "Newproducer preserves exactpacket and diagnosticdomains",
+      "changed_dimension": "Boundedreference factory, strictsolved-only observer, native regressions/finalpackage/replay",
+      "result": "accepted",
+      "reason": "Buildr27and2404records pass;actualproduction2587/2588 packets match prospectivewire proof. Keepold sampleroutsidedomain and originalobserver rejection",
+      "production_impact": "One normal authority. Explicitterminalreferencecompositiononly; nativecompleteRest/fullwall/peer/packet proofs unchanged. Integratedacceptance pending.",
+      "deleted_code": [
+        "Solved-only profile as full terminal-reference domain in production"
+      ],
+      "revisit_condition": "Freshintegratedcounterexample"
+    },
+    {
+      "experiment_id": "20260910-nine-state-terminal-reference-negative",
+      "baseline_commit": "ae2137c66a8d4e174dbfa05f6d88c3a1dd78907d",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-reference"
+      ],
+      "hypothesis": "Referencecomposition does not suppress realpeerrejection",
+      "changed_dimension": "Same1667/1668nativeworld andold/candidateprofile comparison",
+      "result": "accepted",
+      "reason": "1668originalnormal/track/tail allrejectpeer; productionadapterretained-proof-unavailable. Independentbrakecandidate stillneeds itsownproof",
+      "production_impact": "One normal authority. Explicitterminalreferencecompositiononly; nativecompleteRest/fullwall/peer/packet proofs unchanged. Integratedacceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "Changedpeerworld or causalinputpolicy"
     }
   ]
 }

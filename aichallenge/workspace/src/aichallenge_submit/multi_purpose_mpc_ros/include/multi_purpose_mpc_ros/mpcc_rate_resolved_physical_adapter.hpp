@@ -211,6 +211,13 @@ bool stop_lateral_target_profile_valid(
 std::optional<StopLateralTargetProfile> build_normal_path_stop_profile(
   const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & execution) noexcept;
 
+/// Compose the solved lateral reference with a constant-lateral course tail
+/// through the sealed Stop map. The tail is a generated reference, not solved
+/// trajectory evidence; native rest/wall/peer proof is still mandatory.
+std::optional<StopLateralTargetProfile> build_terminal_stop_reference(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & execution,
+  const StopCourseGeometry & geometry) noexcept;
+
 /// Linearly sample a validated immutable profile.  Values within tolerance of
 /// either endpoint are clamped to that endpoint; values outside the certified
 /// interval are rejected rather than retaining or extrapolating old geometry.

@@ -1,0 +1,288 @@
+{
+  "baseline_commit": "ae2137c66a8d4e174dbfa05f6d88c3a1dd78907d",
+  "production_candidate": true,
+  "integrated_acceptance": false,
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r11/artifact-restoration.json",
+      "sha256": "a96e883aea4039aae99025ea54f7b6148047beed0053ccf9702112b15c7ce6ce"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/autoware.log",
+      "sha256": "f8a2922b2826192f11494243514d47844c7c2aacc05608c22db48157645878a7"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "879a0c7e06453c4b58b5269c4348ae1afb37aee650446c420af87cfcac26ebfe"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d1/mpcc_architecture_snapshots/000000002588-9faefe11aaa4cdd5-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/d2/autoware.log",
+      "sha256": "95bce32f5c582641f13d81934d35a9ccfc0d298d80665437ddd4f0c39ae8bc7b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/manifest.json",
+      "sha256": "6b7daaff6db29115674eca74a3fd14d27092cfeca76eeedbccb0e3d637239efa"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11/monitor-summary.json",
+      "sha256": "c25ef89fea2205478488a22894fe71a72c1c9ff66aa12c0b424e164d2d8eb518"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/architecture.log",
+      "sha256": "66a0718ca8135fe9343c8564654e1973bb57bcb24a0908a028112344884b4f34"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/complete-rest.log",
+      "sha256": "69eaae55957ec00091d95b6db4452af5650f1f53235549ddc5c0b1f664190ec4"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/exact-pair.log",
+      "sha256": "29c1947c64e5e61e0ea14835e3f50c401cbccc2ab73a7958354a9c12cc4ce8de"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/exact-pair.yaml",
+      "sha256": "29c1947c64e5e61e0ea14835e3f50c401cbccc2ab73a7958354a9c12cc4ce8de"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/manifest.json",
+      "sha256": "bf62b02b34b01c504802bec989950e13fa6dc9ef780771852f0668fc13e34330"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/metrics/d1-callback-samples.json",
+      "sha256": "d85ed871c7cc94a6e7ecb2b5cdb7076ab6e749733e7f22cf46f54ac531988e5e"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/metrics/d1-command-clock-anomalies.json",
+      "sha256": "27f6977bb50e712315a3540ded1da7e23e23d32ed5d3c8b5b276ecffcecb3de9"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/metrics/d1-prediction-samples.json",
+      "sha256": "41c932af195f8fef1a703707d1bfbaab826dca361545ac8b8157b54724cfad85"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/metrics/d2-callback-samples.json",
+      "sha256": "dd4190e535a15117ac41806edbfccb82c64f811c4d7166af7d240ed0a474f363"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/metrics/d2-command-clock-anomalies.json",
+      "sha256": "46c294032783e48d260bbdf1b3318196054d83bd976048fd8e64e31b7067c793"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/metrics/d2-prediction-samples.json",
+      "sha256": "b51b8b0aa7f5381fc394ea3fd1e6ad79ac45d0df4ccc156d231121f0e9c82ce7"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/metrics/report.json",
+      "sha256": "d28f7b3fc5afedd81c9198b9e02756c9020d073e004b6a9c207da6c55791ba2b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/metrics.log",
+      "sha256": "e3646a2f85851f6054008edab2adf9f2dba3772356ee055aa27402510b53ca81"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r11-causal-r1/mpcc_architecture_compare",
+      "sha256": "b8354f08fc018e99ea3e874f63f886697f6fafcabd2e7abbcd98532ca613e7cd"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r25/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r25/manifest.json",
+      "sha256": "44db998b7e5ebfc0f917a66c5703857f2b18bc1e7d79929bb8bdfeff6ef464cc"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r25/replay",
+      "sha256": "f0cd7ce16b0d12e16044d03a21c8705b92c1cacf8e8f7b1a4b86259be61e0f57"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r26/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r26/manifest.json",
+      "sha256": "1daf3a01969b9e4ff1fa18b283a3f7d297bc0ea2f5942d32cba31c4c4e49cf99"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r26/replay",
+      "sha256": "7d1becb5a69149bc161bfb840f39f4fb7135a28a1f7cd9a384032e4d80c02b05"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r27/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r27/manifest.json",
+      "sha256": "31c6eb35d06d2d69ff7b245c74ec4123d81e4ec2931d90527bef2794eb7e41c1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r27/replay",
+      "sha256": "009dd0f31b74405b94c777aa52d84a4708ff6866a3a339d449cdc8aed6f7b3d3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r28/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r28/manifest.json",
+      "sha256": "57ccf614bf3a0223db434c76c794b62c38b1fcb4a789770c347126c3e4ae8ac9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r28/replay",
+      "sha256": "240f65dbf6c2cb23ef3b22de79e6cd88d78faf995fa453a32dcb5ab7751bac28"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r1/2587-normal.csv",
+      "sha256": "c9a4e8e4f19d5d9890a8f0cf80d4b407fb66c4308f0b9e003d337469339ac04e"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r1/2587-track.csv",
+      "sha256": "68ad2f779887394b5c6f085f20410be586e117d787106672f33f43a6c4cdd144"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r1/2588-track.csv",
+      "sha256": "a7cbe5fb2e04ee9590226626e8e65c96b3d1bc4daf48ce5e13dc28cfdf90d03c"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r1/report.yaml",
+      "sha256": "97e690c4e98b934f024e3d36457f193dce63e52b4f2438bdcd553a25ad88f4e8"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r2/2587-bounded-constant-lateral-tail.csv",
+      "sha256": "c9a4e8e4f19d5d9890a8f0cf80d4b407fb66c4308f0b9e003d337469339ac04e"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r2/2587-normal.csv",
+      "sha256": "c9a4e8e4f19d5d9890a8f0cf80d4b407fb66c4308f0b9e003d337469339ac04e"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r2/2587-track.csv",
+      "sha256": "68ad2f779887394b5c6f085f20410be586e117d787106672f33f43a6c4cdd144"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r2/2588-bounded-constant-lateral-tail.csv",
+      "sha256": "033b8d41f44c314d31b85f3a407a56facd6b6cad53d869999b3f8f96e91833b9"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r2/2588-track.csv",
+      "sha256": "a7cbe5fb2e04ee9590226626e8e65c96b3d1bc4daf48ce5e13dc28cfdf90d03c"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-reference-r2/report.yaml",
+      "sha256": "1f38ec61ff9809a4da5fc8836611010cbe21fda56dd4fdef70653b9eb9c29b7a"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-packets-r1/r10.yaml",
+      "sha256": "cd64506b544c8bc8f24ef34933e89d70586843ed1bedf0487096ab8012f33176"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-packets-r1/r11.yaml",
+      "sha256": "f9bab5f0d0d1fe2ef949d5d0b6df4b556295161364dd5e41c513e4212bfd02fa"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/diagnostic-reference-identities.json",
+      "sha256": "7fa0da926d1f5d2a5a5f4d94c156cdb8c331d7bbe7b4b52ef8c7360152592108"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/manifest.json",
+      "sha256": "a9b4124fdd627013570e2d7aa6f6a968c44966543932bcc9cdba94f107626876"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10-original-reference-comparison.log",
+      "sha256": "ab008f9315266c3e2d6b6dc6af78b94aac14d1b40abd793ac16ae8b94b78ea73"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10-reference/1667-bounded-constant-lateral-tail.csv",
+      "sha256": "8182f369c784cceefdbe85cc51e199e3489a3ef9fbb0fb261078da2c0f4db58b"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10-reference/1667-normal.csv",
+      "sha256": "8182f369c784cceefdbe85cc51e199e3489a3ef9fbb0fb261078da2c0f4db58b"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10-reference/1667-track.csv",
+      "sha256": "6d923fc7ce5898acbf6a54415b9c348c5e8e2810582edc81374dacedf2e02841"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10-reference/1668-bounded-constant-lateral-tail.csv",
+      "sha256": "014ee5a23110aced491a91b3e1f233df770206ea011c8239e892da5555546d09"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10-reference/1668-normal.csv",
+      "sha256": "014ee5a23110aced491a91b3e1f233df770206ea011c8239e892da5555546d09"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10-reference/1668-track.csv",
+      "sha256": "1f2c636c610ad6e769c28436a27fcf10c991a5da0b5869feb78c345519f1f22e"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10-reference/report.yaml",
+      "sha256": "ab008f9315266c3e2d6b6dc6af78b94aac14d1b40abd793ac16ae8b94b78ea73"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10.log",
+      "sha256": "c4f1c3dfc89b24ab35b7d64326dc932345568e980e4848afc51754e73b598239"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r10.yaml",
+      "sha256": "c4f1c3dfc89b24ab35b7d64326dc932345568e980e4848afc51754e73b598239"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r11.log",
+      "sha256": "d2a793ba78c8bd66592f338db38d7fc097d38e1e23d78aee77bec777383bc21e"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-reference-production-r1/r11.yaml",
+      "sha256": "d2a793ba78c8bd66592f338db38d7fc097d38e1e23d78aee77bec777383bc21e"
+    }
+  ],
+  "checks": {
+    "before": "Native newStopReference regression fails oldproducer on normal-reference ownership/attemptcount",
+    "build_r26": "26packagespass/4min48s",
+    "tests_r20": "2404records,oneexistingdiagnosticfailure reportedtwice; addedregressionspass; observedsolved-only domain unintentionallyextended",
+    "repair": "Restoreoriginalsolved-only diagnostic, maintainits strict rejection/noeffects; production usesexplicitboundedterminalreference",
+    "build_r27": "26packagespass/17.0s",
+    "tests_r21": "2404records/62CTestgroups/0errors/failures/skips/28.78s",
+    "native_r11": "exact2587remainsaccepted;2588originalnormalInvalidLateralPolicy at650samples; generatedtailpasses700samples/3.50s/u=vy=r=0 andwall/peers. Actualproductionadapteravailableandboundwirepacketmatches",
+    "native_r10_negative": "1667accepted;1668normal/track/generatedtail allterminaldynamicreject. Actualproductionadapterrejects; separateimmediatebrake+1.212136504m remainsdiagnostic",
+    "run_r11": "rejectedfirstmovingD1Emergency2588; newfirstmovingcaptureworks. D2negativeShiftOut/Pass/Return/Idleobserved; no6lapcompletion",
+    "timing_r11": "all-emitted callbacks D1p95/p99/max12.9102459/20.37813468/49.610887ms,5adjacentpairs;D2 13.6942512/19.08161284/57.538105ms,1pair. Beforefirstfailure onlyisolatedoverruns:2D1includingstartup,4D2includingstartup. No timingacceptance claimed",
+    "open": "r10backdatedpublicationtiming and heavycallbackproducer; freshintegratedacceptance/allintents/M5/M6"
+  }
+}

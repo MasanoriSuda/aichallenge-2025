@@ -196,3 +196,15 @@ actualphysicsapplicationepoch and heavycallbackproducer need further evidence.
 Observation adds separate firstmovingfailure bucket and eachoverrun's joincosts.
 Buildr25passes26packages; testsr19passes2402entries/62groups/0errors/fails/skips.
 Freshdev2-r11 next; sameM4–M6 remainopen. See moving-failure-observation-design.md.
+
+2026-09-10: ae2137c6dev2-r11 rejected D1movingEmergency2588. Firstmoving
+recorder now preserves exact2587/2588/source2047. D2negativeShiftOut→Pass→Return
+→Idle observed. Root: normalStop reference ends~0.102m beforecompleteRest;
+InvalidLateralPolicy then masksascenterlinewallcollision. Explicitconstantlateral
+tail boundedby sealedStopmap fixes exact2588;2587unchanged; fullrest/wall/peer/
+productionwirepacket checks pass. Solved-onlydiagnostic and strictsamplerremain.
+Buildr26passes buttestsr20oneexistingdiagnosticfailure reportedtwice; corrected
+buildr27passes26packages,testsr21passes2404entries/62groups/0errors/fails/skips.
+Oldr10D1decision1668peerrejection remains, includingproductionadapter rejection;
+itsbackdatedpublication/largecallbackcause remainsopen. Freshcommitteddev2-r12
+next; M4–M6and fullintegratedacceptance stillopen. See terminal-reference-design.md.

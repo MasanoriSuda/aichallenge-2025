@@ -337,8 +337,10 @@ TEST(MpccRateResolvedRetainedRevalidation, NormalPathObservationCannotExtrapolat
   const auto request = accepted_request(certified_plan());
   const auto before = retained::evaluate(request);
   ASSERT_EQ(before.reason, retained::Reason::Accepted);
-  EXPECT_FALSE(before.proof->terminal_stop_normal_path_reference);
-  EXPECT_EQ(before.terminal_stop_reference_attempts, 2U);
+  // Production has an explicit terminal tail. The observation below still
+  // measures only the original solved profile and must not extend that domain.
+  EXPECT_TRUE(before.proof->terminal_stop_normal_path_reference);
+  EXPECT_EQ(before.terminal_stop_reference_attempts, 1U);
   const auto observation = retained::observe_normal_path_stop(request);
   EXPECT_TRUE(observation.profile_available);
   // The solved path ends at 0.4 m; physical braking needs more distance.
@@ -402,6 +404,39 @@ TEST(MpccRateResolvedRetainedRevalidation, StopCertificateTracksTheSolvedNormalG
     expected.exact_trajectory->lateral_m);
   EXPECT_EQ(result.proof->terminal_stop_actuation_samples.back().end_steering_rad,
     expected.actuation_samples.back().end_steering_rad);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, StopReferenceReachesRestBeyondSolvedHorizon)
+{
+  namespace adapter = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
+  const auto plan = certified_plan();
+  ASSERT_TRUE(plan);
+  const auto & execution = *plan->execution_artifact;
+  const auto request = accepted_request(plan);
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof);
+  const auto solved_reference = adapter::build_normal_path_stop_profile(execution);
+  ASSERT_TRUE(solved_reference);
+  const auto & initial = result.current_control_state;
+  const auto truncated = adapter::build_stop_contingency(
+    execution, result.proof->cursor, result.proof->actuation,
+    {initial.lateral_m, initial.lag_m, initial.heading_offset_rad,
+      initial.velocity_mps, initial.progress_m, result.proof->actuation.steering_rad,
+      request.current_response_steering_rad, request.current_lateral_velocity_mps,
+      request.current_yaw_rate_radps},
+    plan->physical_snapshot->terminal_stop_course_geometry, request.stop_lateral_policy,
+    request.minimum_acceleration_mps2, 0.0, &*solved_reference);
+  EXPECT_EQ(truncated.reason, adapter::StopContingencyRejectReason::InvalidLateralPolicy);
+  // Braking continues beyond the solved normal horizon. Its reference must
+  // explicitly cover that interval without switching to the centerline.
+  EXPECT_TRUE(result.terminal_stop_normal_path_reference);
+  EXPECT_EQ(result.terminal_stop_reference_attempts, 1U);
+  EXPECT_GT(result.proof->terminal_stop_trajectory.progress_m.back(),
+    execution.course_progress_origin_m + solved_reference->progress_m.back());
+  EXPECT_DOUBLE_EQ(result.proof->terminal_stop_trajectory.velocity_mps.back(), 0.0);
+  EXPECT_DOUBLE_EQ(result.proof->terminal_stop_actuation_samples.back().end_lateral_velocity_mps, 0.0);
+  EXPECT_DOUBLE_EQ(result.proof->terminal_stop_actuation_samples.back().end_yaw_rate_radps, 0.0);
+  EXPECT_TRUE(production::build(result).authority);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)

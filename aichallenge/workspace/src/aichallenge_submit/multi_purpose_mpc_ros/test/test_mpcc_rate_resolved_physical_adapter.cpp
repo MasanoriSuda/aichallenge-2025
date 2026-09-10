@@ -180,6 +180,30 @@ TEST(
     adapter::sample_stop_lateral_target(profile, 3.01, 1e-3).has_value());
 }
 
+TEST(MpccRateResolvedPhysicalAdapter, TerminalReferencePreservesSolvedPrefixAndDeclaredMapBoundary)
+{
+  const auto execution = artifact();
+  const auto geometry = stop_course_geometry();
+  const auto solved = adapter::build_normal_path_stop_profile(execution);
+  const auto reference = adapter::build_terminal_stop_reference(execution, geometry);
+  ASSERT_TRUE(solved);
+  ASSERT_TRUE(reference);
+  ASSERT_EQ(reference->progress_m.size(), solved->progress_m.size() + 1U);
+  for (std::size_t i = 0; i < solved->progress_m.size(); ++i) {
+    EXPECT_DOUBLE_EQ(reference->progress_m[i], solved->progress_m[i]);
+    EXPECT_DOUBLE_EQ(reference->lateral_m[i], solved->lateral_m[i]);
+  }
+  EXPECT_DOUBLE_EQ(reference->progress_m.back(), geometry.progress_m.back());
+  const auto tail = adapter::sample_stop_lateral_target(*reference, 2.5, 1e-6);
+  ASSERT_TRUE(tail);
+  EXPECT_DOUBLE_EQ(*tail, solved->lateral_m.back());
+  EXPECT_FALSE(adapter::sample_stop_lateral_target(*solved, 2.5, 1e-6));
+  EXPECT_FALSE(adapter::sample_stop_lateral_target(*reference, 3.01, 1e-6));
+  auto invalid = geometry;
+  invalid.progress_m.back() = invalid.progress_m.front();
+  EXPECT_FALSE(adapter::build_terminal_stop_reference(execution, invalid));
+}
+
 TEST(MpccRateResolvedPhysicalAdapter, EqualityResidualDoesNotRelocatePhysicalInitialState)
 {
   namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;

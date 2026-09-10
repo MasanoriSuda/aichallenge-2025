@@ -29,6 +29,19 @@ int main(int argc, char ** argv)
     row["terminal_clearance"] = result.terminal_stop_minimum_dynamic_clearance_m;
     row["terminal_samples"] = result.proof ? result.proof->terminal_stop_actuation_samples.size() : 0;
     const auto & parameters = r.plan->execution_artifact->vehicle_model;
+    const auto publication = m::mpcc_rate_resolved_production_adapter::build(result);
+    row["production"] = m::mpcc_rate_resolved_production_adapter::to_string(publication.reason);
+    if (result.reason == retained::Reason::Accepted && !publication.authority)
+      throw std::runtime_error("accepted revalidation did not produce matching authority");
+    if (publication.authority) {
+      const auto & command = publication.authority->command;
+      row["packet_acceleration"] = command.acceleration_mps2;
+      row["packet_steering"] = command.steering_tire_angle_rad;
+      if (!r.publication_prefix || !model::publication_packet_matches(*r.publication_prefix,
+          r.now_sec, command.acceleration_mps2, command.steering_tire_angle_rad,
+          parameters.steering_wire_gain))
+        throw std::runtime_error("production packet differs from its prospective proof");
+    }
     if (!r.publication_prefix) throw std::runtime_error("missing prospective original observation");
     const auto observation = r.publication_prefix->observation;
     const auto prefix = model::predict_prospective_publication(observation,

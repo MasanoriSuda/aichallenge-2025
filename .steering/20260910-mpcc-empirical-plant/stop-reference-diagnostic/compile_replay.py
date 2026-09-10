@@ -24,6 +24,6 @@ with (out/'build.log').open('w') as log:
 (out/'manifest.json').write_text(json.dumps(dict(command=cmd, return_code=result.returncode,
     files={str(s/name):hashlib.sha256((s/name).read_bytes()).hexdigest() for name in
            ('replay_revalidation.cpp','../revalidation_input.hpp','../replay_certified_plan.cpp')},
-    purpose='Exact paired native revalidation with separately rebound Stop proposals; compiled current production libraries, wall times diagnostic, zero solves, no authority'), indent=2)+'\n')
+    purpose='Exact r11 normal/track Stop reference comparison and native trajectory samples; same production retained source included, no runtime authority'), indent=2)+'\n')
 print((out/'build.log').read_text(), flush=True)
 result.check_returncode()

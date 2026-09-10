@@ -1012,8 +1012,8 @@ ArmResult evaluate_arm(
     TerminalStopLateralAuditMode::NormalPathProfile)
   {
     terminal_stop_target_attempt_count = 1U;
-    const auto profile = physical::build_normal_path_stop_profile(
-      *solved.execution_artifact);
+    const auto profile = physical::build_terminal_stop_reference(
+      *solved.execution_artifact, physical_snapshot.terminal_stop_course_geometry);
     if (!profile.has_value()) {
       terminal_stop.detail = "normal-path Stop profile unavailable";
     } else {

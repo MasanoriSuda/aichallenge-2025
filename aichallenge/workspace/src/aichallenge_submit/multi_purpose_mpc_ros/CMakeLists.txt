@@ -89,6 +89,7 @@ ament_auto_add_library(${PROJECT_NAME}_mpcc_steering_state_contract SHARED
 ament_auto_add_library(${PROJECT_NAME}_mpcc_vehicle_model SHARED
   NO_TARGET_LINK_LIBRARIES
   src/mpcc_vehicle_model.cpp
+  src/mpcc_applied_input_prediction.cpp
   src/mpcc_vehicle_prediction.cpp
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_vehicle_model yaml-cpp)

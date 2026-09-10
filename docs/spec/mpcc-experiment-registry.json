@@ -907,6 +907,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-kernel-evidence.json",
       "replay_ready": true,
       "reason": "Frozen pre-extraction native source, differential and enclosure/source replay"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-applied-input-library",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-library-evidence.json",
+      "replay_ready": true,
+      "reason": "Shared input-program library, frozen negative producers, five-probe receiver observation; no runtime promotion"
     }
   ],
   "experiments": [
@@ -6778,6 +6784,142 @@
         "Duplicated interval wheel-force, COM kinematics and tire response formulas"
       ],
       "revisit_condition": "New shared arithmetic or input semantics change; no unchanged failed controller rerun"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-input-library-steering-100ms",
+      "baseline_commit": "2fc31bf78c2e50f9195db877f6abb947b0c34422",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-input-library"
+      ],
+      "hypothesis": "The predeclared100ms steering source-packet age covers complete receipt intervals",
+      "changed_dimension": "Receiver observations, lossless packet producer, shared input program numerical library; authority unchanged",
+      "result": "rejected",
+      "reason": "Startup134.715637ms/125.892762ms exceeds100ms; preserve startup and ambiguous rx matches.",
+      "production_impact": "Library and nominal-history correctness only; complete certificate/publisher adoption open",
+      "deleted_code": [
+        "Duplicated diagnostic interval implementation",
+        "Same-epoch history pop_back"
+      ],
+      "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-input-library-steering-250ms-empirical",
+      "baseline_commit": "2fc31bf78c2e50f9195db877f6abb947b0c34422",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-input-library"
+      ],
+      "hypothesis": "The separately reported250ms empirical hypothesis covers this run complete steering intervals",
+      "changed_dimension": "Receiver observations, lossless packet producer, shared input program numerical library; authority unchanged",
+      "result": "accepted",
+      "reason": "1867 writes/1865 complete intervals; all below250ms. Open ends censored, no guaranteed bound.",
+      "production_impact": "Library and nominal-history correctness only; complete certificate/publisher adoption open",
+      "deleted_code": [
+        "Duplicated diagnostic interval implementation",
+        "Same-epoch history pop_back"
+      ],
+      "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-input-library-longitudinal-250ms-repeat",
+      "baseline_commit": "2fc31bf78c2e50f9195db877f6abb947b0c34422",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-input-library"
+      ],
+      "hypothesis": "Independent actual selected longitudinal packet ages remain within empirical250ms",
+      "changed_dimension": "Receiver observations, lossless packet producer, shared input program numerical library; authority unchanged",
+      "result": "accepted",
+      "reason": "434 selections/432 complete intervals; maximum192.562235ms; no body or transport guarantee.",
+      "production_impact": "Library and nominal-history correctness only; complete certificate/publisher adoption open",
+      "deleted_code": [
+        "Duplicated diagnostic interval implementation",
+        "Same-epoch history pop_back"
+      ],
+      "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-input-library-application-r5",
+      "baseline_commit": "2fc31bf78c2e50f9195db877f6abb947b0c34422",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-input-library"
+      ],
+      "hypothesis": "Unchanged controller completes the instrumented dev2 run",
+      "changed_dimension": "Receiver observations, lossless packet producer, shared input program numerical library; authority unchanged",
+      "result": "rejected",
+      "reason": "D1firstmovingEmergency966/Stop438; retained steering-unreachable/new Stop course-frame-unavailable. Historical964/414is not predecessor438.",
+      "production_impact": "Library and nominal-history correctness only; complete certificate/publisher adoption open",
+      "deleted_code": [
+        "Duplicated diagnostic interval implementation",
+        "Same-epoch history pop_back"
+      ],
+      "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-input-library-tire-wrapping",
+      "baseline_commit": "2fc31bf78c2e50f9195db877f6abb947b0c34422",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-input-library"
+      ],
+      "hypothesis": "Monotone shared tire bounds prevent numerical widening beyond native convex hull",
+      "changed_dimension": "Receiver observations, lossless packet producer, shared input program numerical library; authority unchanged",
+      "result": "accepted",
+      "reason": "Old comparator fails step4; new160000values pass; divergent source-stop-r4/r5 retained.",
+      "production_impact": "Library and nominal-history correctness only; complete certificate/publisher adoption open",
+      "deleted_code": [
+        "Duplicated diagnostic interval implementation",
+        "Same-epoch history pop_back"
+      ],
+      "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-input-library-same-epoch-history",
+      "baseline_commit": "2fc31bf78c2e50f9195db877f6abb947b0c34422",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-input-library"
+      ],
+      "hypothesis": "History preserves every actual serialized packet despite a repeated ROS epoch",
+      "changed_dimension": "Receiver observations, lossless packet producer, shared input program numerical library; authority unchanged",
+      "result": "accepted",
+      "reason": "Frozen old producer2/3 packets, current3/3; nominal last-value semantics unchanged.",
+      "production_impact": "Library and nominal-history correctness only; complete certificate/publisher adoption open",
+      "deleted_code": [
+        "Duplicated diagnostic interval implementation",
+        "Same-epoch history pop_back"
+      ],
+      "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-input-library-whole-window-coverage",
+      "baseline_commit": "2fc31bf78c2e50f9195db877f6abb947b0c34422",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-input-library"
+      ],
+      "hypothesis": "Future packets cannot hide earlier or interior missing causal input coverage",
+      "changed_dimension": "Receiver observations, lossless packet producer, shared input program numerical library; authority unchanged",
+      "result": "accepted",
+      "reason": "Frozen old accepts2 invalid windows; current rejects both while retaining contiguous case.",
+      "production_impact": "Library and nominal-history correctness only; complete certificate/publisher adoption open",
+      "deleted_code": [
+        "Duplicated diagnostic interval implementation",
+        "Same-epoch history pop_back"
+      ],
+      "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
+    },
+    {
+      "experiment_id": "20260911-nine-state-applied-input-library-library-source-rest",
+      "baseline_commit": "2fc31bf78c2e50f9195db877f6abb947b0c34422",
+      "snapshot_ids": [
+        "20260911-nine-state-applied-input-library"
+      ],
+      "hypothesis": "One shared production numerical library encloses original sources and a common program through full modeled rest",
+      "changed_dimension": "Receiver observations, lossless packet producer, shared input program numerical library; authority unchanged",
+      "result": "accepted",
+      "reason": "buildr37/testsr30 pass26packages/2417records; four source worlds wall/peer pass;374960scalar values; range+physical9.25–15.06ms standalone. No execution certificate.",
+      "production_impact": "Library and nominal-history correctness only; complete certificate/publisher adoption open",
+      "deleted_code": [
+        "Duplicated diagnostic interval implementation",
+        "Same-epoch history pop_back"
+      ],
+      "revisit_condition": "New causal evidence or complete same-program proof integration; do not repeat unchanged failed controller run"
     }
   ]
 }

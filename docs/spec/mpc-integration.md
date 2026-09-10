@@ -70,6 +70,15 @@ Stop用の地図範囲は通常QPのprogress上限から独立して確保する
 QPの段数・制約を変えない。Stopの曲率・幅・座標範囲もsourceへ封印し、
 serialization/fingerprintと候補originの変更に追従させる。
 
+受信入力を表す共有数値API `mpcc_applied_input_prediction` を追加した。
+同一時刻の公開履歴を全件保持し、全予測区間の因果的な入力coverageを要求する。
+元観測から共通float32指令列へ進め、全応答のモデル内静止までを囲む。
+公称操舵の機械遅延と受信ageは別項目。body/tire式は既存scalar kernelと共通である。
+現時点ではこのAPIを本番の認証・公開へ接続しておらず、単体結果は実行権限にならない。
+100ms操舵age候補は実測で反証され、250msは別記した経験的仮説にとどまる。
+[共通指令の統合設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-design.md)
+と[検証記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-library-evidence.json)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

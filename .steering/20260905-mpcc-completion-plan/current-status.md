@@ -1,23 +1,25 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6の自律実装・検証・必要分のローカルcommitを継続中。pushなし。
-**全体は未完。制御の基準は `cbcda112`、診断保存は `bef879b2`。**
+**全体は未完。直前の共有カーネル基準は `2fc31bf7`。**
 
-- 共有カーネル抽出後、buildr33の26package、testsr28の2410記録が合格。抽出前と494,904値がbit一致。
-- 独立したapplication-dev2-r3はD2 decision1773/Stop1275で壁側の停止証明を失った。
-  Passまで進んだが走行不合格。D2に隣接callback超過2組があり、時間受入れも未完。
-- 実適用816回を受信sequence/float入力と照合。完全観測814区間の最大ageは218.076958msで、
-  事前に固定した250msの経験的候補内。保証上限、車体モデル誤差の保証、実行権限にはしない。
-- 区間予測のnative/輪郭/時間分割/静止・走行モードを検証し、失敗前の4場面で
-  同じ指令による全範囲の停止・壁・peer照合が成立。実装候補の計算量は約9–14msで、
-  制御周期への組み込みは未検証。body/tire算術の共有化は済み。受信入力・指令列と本番の認証経路を結ぶ作業が次。
+- 公開履歴は同じROS時刻の全packetを保持。未来のpacketによる入力欠損の見逃しを修正。
+- 共有数値ライブラリが元観測から共通の公開指令列・全応答の静止までを予測する。
+  buildr37は26package、testsr30は2417記録/62group、error/failure/skipは0。
+- 保存済み4場面の同一ライブラリreplayで停止・元の壁/他車確認が成立。
+  native374960値の包含を検査。予測と物理照合は単体約9.25–15.06msで、周期受入れは未確認。
+- application-r5はD1 decision966/Stop438で失敗。既存の走行不合格を合格にしない。
+  事前100ms操舵age候補は初期区間134.715637msで反証。別記250ms仮説は完全1865区間に適合。
+  縦入力434選択/432区間も250ms内。経験的観測であり保証上限ではない。
+- 共通指令列のimmutable認証、実行時計、全応答が止まるまでのStop実行、asyncと最終公開は次の統合範囲。
+  新ライブラリ単体には実行権限がない。公開履歴以外の本番制御経路は未変更。
 
-[入力範囲の最新結果](../20260910-mpcc-empirical-plant/receiver-input-enclosure/results.md)、
+[統合設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-design.md)、
+[最新証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-library-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-モデルと全proof/publisherの契約を揃えた後、M4の全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
-同一HEADで単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalと文書・commitを完了する。
-ユーザーが承認した経験的シミュレータ評価の範囲を維持し、未検証の保証は明記する。
-安全余裕・合否基準を緩めず、通常の再確認は求めない。
+統合後、M4の全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEADで単車/dev2各3回、
+dev3/dev4六周、gate1–3、同一tar/image/evalと文書・commitを完了する。
+安全余裕・合否基準を緩めず、通常の再確認は求めない。モデル誤差・接触・輸送の保証は未検証。
 
 ## Superseded checkpoint and historical evidence
 

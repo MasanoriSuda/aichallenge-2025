@@ -18,7 +18,6 @@ bool record_serialized_publication(
     !std::isfinite(retain_sec) || retain_sec < 0.0) return false;
   const double published = std::max(nominal.published_sec, publication_clock_sec);
   if (!history.empty() && published < history.back().published_sec) history.clear();
-  if (!history.empty() && published == history.back().published_sec) history.pop_back();
   history.push_back({published, nominal.wire_acceleration_mps2, nominal.wire_steering_rad});
   while (history.size() > 2 && history[1].published_sec < published - retain_sec) {
     history.erase(history.begin());
@@ -42,7 +41,7 @@ bool valid(const ObservationProvenance & v) noexcept
   double previous = -1;
   for (const auto & command : v.commands) {
     if (!std::isfinite(command.published_sec) || command.published_sec < 0 ||
-      command.published_sec <= previous || command.published_sec > v.now_sec ||
+      command.published_sec < previous || command.published_sec > v.now_sec ||
       !std::isfinite(command.wire_acceleration_mps2) ||
       !std::isfinite(command.wire_steering_rad)) return false;
     previous = command.published_sec;
@@ -121,7 +120,7 @@ std::optional<PublishedPrediction> predict_published_history(
   double previous = -1.0;
   for (const auto & command : commands) {
     if (!std::isfinite(command.published_sec) || command.published_sec < 0.0 ||
-      command.published_sec <= previous || command.published_sec > now_sec ||
+      command.published_sec < previous || command.published_sec > now_sec ||
       !std::isfinite(command.wire_acceleration_mps2) ||
       !std::isfinite(command.wire_steering_rad)) return std::nullopt;
     previous = command.published_sec;

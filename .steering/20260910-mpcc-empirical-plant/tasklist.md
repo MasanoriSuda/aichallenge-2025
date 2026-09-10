@@ -11,6 +11,7 @@
 - [x] Preserve published encounter ownership across early side-replan applicability; local regression/build/package.
 - [x] Validate a numerical input enclosure and the predeclared empirical250ms profile on an independent application run; diagnostic only.
 - [x] Extract common scalar/enclosure body arithmetic; frozen-source bitwise parity, buildr33/testsr28, numerical/source replay.
+- [x] Implement lossless packet history and shared input-program numerical library; buildr37/testsr30/source replay.
 - [ ] Bind the receiver uncertainty, common command sequence and full-rest horizon into the shared model and every certificate/publisher consumer.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.
 - [ ] Fresh single/dev2 acceptance and causal repair of any first failure.

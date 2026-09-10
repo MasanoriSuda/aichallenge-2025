@@ -27,8 +27,8 @@ run_kind = 'application-' if application_diagnostic else ''
 root = Path('output/20260910-nine-state-'+run_kind+mode+'-'+attempt)
 host_duration_sec = 120 if application_diagnostic else 840
 assert not subprocess.check_output(['docker', 'ps', '-q']).strip(), 'Other containers running'
-test_log = Path('/tmp/mpcc-nine-state-tests-r27.log')
-build_log = Path('/tmp/mpcc-nine-state-build-r32.log')
+test_log = Path('/tmp/mpcc-nine-state-tests-r28.log')
+build_log = Path('/tmp/mpcc-nine-state-build-r33.log')
 assert 'Summary: 2410 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
 assert 'Summary: 26 packages finished' in build_log.read_text()
 original_dll = Path('aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll')
@@ -97,9 +97,9 @@ if application_diagnostic:
 overlay = root/'compose-six-lap.yml'
 overlay.write_text('services:\n  simulator:\n    volumes:\n      - '+str((repo/script).resolve())+':/aichallenge/simulator_scripts/dev.sh:ro\n')
 if application_diagnostic:
-    probe_root = Path('output/20260909-actuation-instrumentation-r2')
-    validation = json.loads((probe_root/'cil-validation-r2.json').read_text())
-    assert not validation['differences'] and len(validation['probe_calls']) == 4
+    probe_root = Path('output/20260911-steering-instrumentation-r2')
+    validation = json.loads((probe_root/'cil-validation-r3.json').read_text())
+    assert not validation['differences'] and len(validation['probe_calls']) == 5
     assert hashlib.sha256(original_dll.read_bytes()).hexdigest() == validation['original_sha256']
     assert hashlib.sha256((probe_root/'Assembly-CSharp.dll').read_bytes()).hexdigest() == validation['instrumented_sha256']
     manifest['instrumentation'] = dict(validation=validation, files=[])

@@ -12,6 +12,13 @@
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact
 {
 
+/// Materialized Stop uses rate-bounded angle increments at publication
+/// boundaries. Each stage holds its endpoint steering angle on the wire.
+/// The marker is part of the sealed problem fingerprint, so a continuous
+/// artifact cannot acquire this interpretation without a new identity/proof.
+inline constexpr char kSerializedStopInputSchema[] =
+  "accel-published-steering-increment-progress-rate-v1";
+
 struct Identity
 {
   std::uint64_t sequence{};
@@ -143,6 +150,11 @@ struct ExecutionArtifact
   std::optional<PredictedState> semantic_initial_state;
   mpcc_vehicle_model::Parameters vehicle_model;
 };
+
+inline bool serialized_stop_schedule(const ExecutionArtifact & artifact) noexcept
+{
+  return artifact.identity.source_context.input_schema_id == kSerializedStopInputSchema;
+}
 
 enum class RejectReason
 {

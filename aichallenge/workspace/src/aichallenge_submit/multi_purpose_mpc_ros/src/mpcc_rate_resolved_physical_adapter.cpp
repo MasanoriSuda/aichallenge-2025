@@ -407,7 +407,11 @@ Result build(
   NonlinearState nonlinear = initial;
   double elapsed_sec{};
   for (std::size_t stage = 0U; stage < artifact.control_stages.size(); ++stage) {
-    const auto & control = artifact.control_stages[stage];
+    auto control = artifact.control_stages[stage];
+    if (execution::serialized_stop_schedule(artifact)) {
+      nonlinear.steering_rad = artifact.predicted_states[stage + 1U].steering_rad;
+      control.steering_rate_radps = 0.0;
+    }
     const auto substep_count = mpcc_vehicle_model::integration_steps(
       control.duration_sec, artifact.vehicle_model.maximum_step_sec);
     const double step_sec =
@@ -680,6 +684,14 @@ ContinuationResult build_continuation(
         return result;
       }
       auto applied_control = control;
+      if (execution::serialized_stop_schedule(artifact)) {
+        // Every future Stop packet has the same angle-hold semantics as the
+        // first packet. Reusing it must not insert a new steering-rate pause.
+        if (elapsed_sec >= artifact.publication_interval_sec - 1e-12) {
+          nonlinear.steering_rad = artifact.predicted_states[stage + 1U].steering_rad;
+        }
+        applied_control.steering_rate_radps = 0.0;
+      }
       if (elapsed_sec < artifact.publication_interval_sec - 1e-12) {
         // AckermannControlCommand serializes tire angle, not steering rate.
         // The already-published angle therefore remains constant until the
@@ -925,6 +937,19 @@ StopContingencyResult build_stop_contingency(
       const double requested_acceleration_mps2,
       const double requested_steering_rate_radps) -> bool
     {
+      // The rate limits the increment between publications. The physical
+      // actuator receives one float32 angle, held throughout this interval.
+      double published_increment_rate_radps = requested_steering_rate_radps;
+      if (command_interval_index > 0U) {
+        const double previous_steering_rad = nonlinear.steering_rad;
+        const double desired = previous_steering_rad +
+          requested_steering_rate_radps * requested_duration_sec;
+        nonlinear.steering_rad = static_cast<double>(static_cast<float>(
+          desired * artifact.vehicle_model.steering_wire_gain)) /
+          artifact.vehicle_model.steering_wire_gain;
+        published_increment_rate_radps =
+          (nonlinear.steering_rad - previous_steering_rad) / requested_duration_sec;
+      }
       const double requested_end_sec = elapsed_sec + requested_duration_sec;
       double remaining_sec = requested_duration_sec;
       while (remaining_sec > 1e-12) {
@@ -954,7 +979,7 @@ StopContingencyResult build_stop_contingency(
         }
         execution::ControlStage control;
         control.acceleration_mps2 = requested_acceleration_mps2;
-        control.steering_rate_radps = requested_steering_rate_radps;
+        control.steering_rate_radps = 0.0;
         control.virtual_progress_speed_mps = progress_speed.value();
         control.duration_sec = step_sec;
         control.virtual_progress_lower_mps = 0.0;
@@ -1037,7 +1062,7 @@ StopContingencyResult build_stop_contingency(
           StopContingencyResult::ActuationSample{
             elapsed_sec, step_sec, requested_acceleration_mps2,
             (nonlinear.velocity_mps - velocity_before_mps) / step_sec,
-            requested_steering_rate_radps, nonlinear.velocity_mps,
+            published_increment_rate_radps, nonlinear.velocity_mps,
             nonlinear.steering_rad, nonlinear.response_steering_rad,
             geometry->curvature_radpm, progress_speed.value(),
             command_interval_index, nonlinear.lateral_velocity_mps,

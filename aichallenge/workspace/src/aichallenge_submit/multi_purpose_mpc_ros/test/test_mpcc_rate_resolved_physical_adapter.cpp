@@ -13,6 +13,9 @@ namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace race = multi_purpose_mpc_ros::race_mpcc_foundation;
 namespace vehicle = multi_purpose_mpc_ros::mpcc_vehicle_model;
 
+// Each packet is an angle held until the next publication. Continuous future
+// rate integration cannot establish the body path of that packet sequence.
+
 namespace
 {
 
@@ -88,6 +91,42 @@ adapter::StopCourseGeometry stop_course_geometry()
 }
 
 }  // namespace
+
+TEST(MpccRateResolvedPhysicalAdapter, StopPublishesOneSteeringAnglePerInterval)
+{
+  const auto source = artifact();
+  const auto result = adapter::build_stop_successor(source,
+    {-0.40, 0., 0., 2., 0.45, 0.10, 0.10},
+    stop_course_geometry(), stop_lateral_policy(), -3.0);
+  ASSERT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
+  ASSERT_GT(result.actuation_samples.size(), result.publisher_interval_sample_count);
+  double previous_command = 0.10;
+  double held_command = 0.10;
+  std::size_t interval = 0U;
+  bool steering_changed = false;
+  for (const auto & sample : result.actuation_samples) {
+    if (sample.command_interval_index != interval) {
+      EXPECT_EQ(sample.command_interval_index, interval + 1U);
+      previous_command = held_command;
+      held_command = sample.end_steering_rad;
+      interval = sample.command_interval_index;
+      steering_changed = steering_changed || held_command != previous_command;
+      EXPECT_LE(std::abs(held_command-previous_command),
+        source.maximum_abs_steering_rate_radps*source.publication_interval_sec+1e-7);
+      EXPECT_NEAR((held_command-previous_command)/source.publication_interval_sec,
+        sample.steering_rate_radps, 1e-9);
+      EXPECT_DOUBLE_EQ(held_command,
+        static_cast<double>(static_cast<float>(held_command*source.vehicle_model.steering_wire_gain))/
+        source.vehicle_model.steering_wire_gain);
+    }
+    ASSERT_DOUBLE_EQ(sample.end_steering_rad, held_command)
+      << "unpublished angle inside interval " << interval;
+  }
+  EXPECT_TRUE(steering_changed);
+  EXPECT_DOUBLE_EQ(result.actuation_samples.back().end_velocity_mps, 0.0);
+  EXPECT_DOUBLE_EQ(result.actuation_samples.back().end_lateral_velocity_mps, 0.0);
+  EXPECT_DOUBLE_EQ(result.actuation_samples.back().end_yaw_rate_radps, 0.0);
+}
 
 TEST(MpccRateResolvedPhysicalAdapter, RejectsPreviousCoordinateModelIdentity)
 {
@@ -402,13 +441,14 @@ TEST(
     result.publisher_interval_end_steering_rad,
     0.105, 1e-12);
   EXPECT_TRUE(std::isfinite(result.braking_suffix_final_steering_rad));
-  EXPECT_GT(
-    result.braking_suffix_final_steering_rad,
-    result.publisher_interval_end_steering_rad);
   ASSERT_EQ(result.actuation_samples.size(), exact.elapsed_time_sec.size());
   ASSERT_GT(result.publisher_interval_sample_count, 0U);
-  ASSERT_LE(
+  ASSERT_LT(
     result.publisher_interval_sample_count, result.actuation_samples.size());
+  // Initial feedback steers toward the line. At rest the policy may already
+  // have reduced that demand, so its final angle need not exceed the initial.
+  EXPECT_GT(result.actuation_samples[result.publisher_interval_sample_count].end_steering_rad,
+    result.publisher_interval_end_steering_rad);
   const auto & publisher_boundary = result.actuation_samples[
     result.publisher_interval_sample_count - 1U];
   EXPECT_NEAR(

@@ -1575,6 +1575,66 @@ TEST(MpccRateResolvedRetainedRevalidation, MaterializedFeedbackStopExecutesBraki
     stop_bundle::Reason::StopSuccessorUnavailable);
 }
 
+TEST(MpccRateResolvedRetainedRevalidation, SerializedStopRejoinsEveryPublishedModelState)
+{
+  auto request = accepted_request(certified_plan());
+  const auto stop = retained::evaluate_stop_successor(request);
+  ASSERT_TRUE(stop.accepted());
+  const auto built = stop_bundle::build(request, stop, 301U);
+  ASSERT_EQ(built.reason, stop_bundle::Reason::Available);
+  ASSERT_TRUE(built.plan);
+  const auto & execution = *built.plan->execution_artifact;
+  ASSERT_TRUE(artifact::serialized_stop_schedule(execution));
+  auto invalid = execution;
+  invalid.terminal_body_rest_required = false;
+  EXPECT_NE(artifact::validate(invalid), artifact::RejectReason::None);
+  invalid = execution;
+  invalid.control_stages.front().duration_sec *= 0.5;
+  EXPECT_NE(artifact::validate(invalid), artifact::RejectReason::None);
+
+  auto current = request;
+  current.plan = built.plan;
+  current.execution_clock = {retained::ExecutionClockKind::PublishedPlan, request.control_origin_sec, 0.0};
+  double elapsed = 0.0;
+  std::size_t dense_end = 0U;
+  for (std::size_t stage = 0U; stage < execution.control_stages.size(); ++stage) {
+    SCOPED_TRACE(stage);
+    current.now_sec = current.control_origin_sec = request.control_origin_sec + elapsed;
+    current.obstacles.observed_sec = current.now_sec;
+    current.previous_published_command_age_sec = execution.publication_interval_sec;
+    const auto joined = retained::evaluate(current);
+    ASSERT_EQ(joined.reason, retained::Reason::Accepted) << retained::to_string(joined.reason);
+    ASSERT_TRUE(joined.terminal_stop_uses_solved_suffix);
+    const auto published = production::build(joined);
+    ASSERT_TRUE(published.authority);
+    EXPECT_DOUBLE_EQ(published.authority->command.steering_tire_angle_rad,
+      execution.predicted_states[stage + 1U].steering_rad);
+    elapsed += execution.control_stages[stage].duration_sec;
+    while (dense_end + 1U < stop.actuation_samples.size() &&
+      stop.actuation_samples[dense_end].elapsed_time_sec < elapsed - 1e-9) ++dense_end;
+    const auto & sample = stop.actuation_samples[dense_end];
+    const auto & trajectory = stop.exact_trajectory;
+    const auto frame = multi_purpose_mpc_ros::mpc_stage_geometry::sample_course_frame(
+      built.plan->physical_snapshot->course_frame_knots, trajectory.progress_m[dense_end]);
+    ASSERT_TRUE(frame);
+    const auto pose = contract::reconstruct_planar_pose_from_frenet(
+      {frame->x_m, frame->y_m, frame->heading_rad},
+      {trajectory.lateral_m[dense_end], trajectory.lag_m[dense_end], trajectory.heading_offset_rad[dense_end]});
+    ASSERT_TRUE(pose);
+    current.control_pose = {pose->x_m, pose->y_m, pose->yaw_rad};
+    current.measured_to_control_path = {current.control_pose};
+    current.current_speed_mps = current.control_origin_speed_mps = sample.end_velocity_mps;
+    current.current_steering_rad = current.previous_published_steering_rad = sample.end_steering_rad;
+    current.current_time_steering_rad = current.current_response_steering_rad = sample.end_response_steering_rad;
+    current.current_lateral_velocity_mps = sample.end_lateral_velocity_mps;
+    current.current_yaw_rate_radps = sample.end_yaw_rate_radps;
+    current.control_origin_physical_progress_m = trajectory.progress_m[dense_end] + trajectory.lag_m[dense_end];
+  }
+  EXPECT_DOUBLE_EQ(current.current_speed_mps, 0.0);
+  EXPECT_DOUBLE_EQ(current.current_lateral_velocity_mps, 0.0);
+  EXPECT_DOUBLE_EQ(current.current_yaw_rate_radps, 0.0);
+}
+
 TEST(MpccRateResolvedRetainedRevalidation, PublishesCertifiedRestAfterSourceCursorExpires)
 {
   auto request = accepted_request(certified_plan());
@@ -1625,7 +1685,8 @@ TEST(MpccRateResolvedRetainedRevalidation, PublishesCertifiedRestAfterSourceCurs
     if (mutation == 3) { invalid.predicted_states.back().yaw_rate_radps = 0.01; }
     if (mutation == 4) { invalid.control_stages.front().acceleration_mps2 = 0.01; }
     if (mutation == 5) { invalid.nominal_path_distance_m.back() = -0.01; }
-    EXPECT_EQ(artifact::validate(invalid), artifact::RejectReason::InvalidPathDistance);
+    EXPECT_EQ(artifact::validate(invalid), mutation == 0 ?
+      artifact::RejectReason::InvalidCertificate : artifact::RejectReason::InvalidPathDistance);
   }
   current.obstacles.obstacles.push_back({"occupying-peer", {50.45, 0.20, 0.0, 0.0, 0.2}});
   const auto blocked = retained::evaluate(current);

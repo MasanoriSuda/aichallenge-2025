@@ -40,6 +40,18 @@ wire加速度は車体の正味加速度と等しくない。速度のaffine上�
 再検証し、既存の認証済みStop権限で公開する。新しい通常intentは次の非同期問題を
 所有し、一般の通常軌道・Stop評価のintent一致条件は維持する。停止評価だけでは
 公開・plan保存の権限を与えず、完全停止のmaterializationと最終指令の再照合を要求する。
+生成するterminal Stopは、最初の指令に続く各公開周期でもfloat32の操舵角を固定する。
+周期間の角度差を既存の操舵速度限界で制限し、タイヤ・車体は同じnative kernelで積分する。
+materializeしたStopのinput schemaは
+`accel-published-steering-increment-progress-rate-v1`。各stageの操舵速度は
+公開角の差分/周期を表し、物理積分・指令抽出・継続はstage末端の角度を周期内で保持する。
+このschemaはproblem fingerprintに含め、全停止と公開周期・差分の一致を検証する。
+通常SQPと過去の連続レートartifactは元のinput schemaの意味を維持する。
+壁・全車・全停止・最終packet一致の判定を省略しない。旧連続レートStopの予測状態から
+再開するだけで壁証明が失われる反例と、修正後のモデル内継続試験は
+[公開周期の停止設計](../../.steering/20260910-mpcc-empirical-plant/stop-packet-schedule-design.md)を参照。
+新しい統合走行での受入れは未完了であり、過去runの最初の壁/他車拒否は保存している。
+
 派生候補やasync workerも元観測を保持する。必要な公開入力は
 [参加者契約](../interface/participant-interface.md)に記載する。
 

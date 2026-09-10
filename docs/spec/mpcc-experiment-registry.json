@@ -847,6 +847,18 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/intent-stop-evidence.json",
       "replay_ready": true,
       "reason": "Same1294 actualpublished778 and independent933source424; original/corrected publishedStop request producer and output packet verified with native toolr30."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r13",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r13-manifest.json",
+      "replay_ready": true,
+      "reason": "Frozen e710056d dev2 fails D2movingEmergency1401; source828Stop wallreject; no acceptance."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-stop-packet-schedule",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/stop-packet-schedule-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact oldmodel closure plus continuous counterfactual, bounded architectures, corrected native proofs and packet-schedule regression."
     }
   ],
   "experiments": [
@@ -6362,6 +6374,98 @@
       "production_impact": "One certified Stop publication edge, no normal intent bypass, timer/grace/margin/budget change. Integrated acceptance remains open.",
       "deleted_code": [],
       "revisit_condition": "Fresh dev2-r13/currentworld counterexample or publication identity evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-stop-packet-schedule-dev2-r13",
+      "baseline_commit": "e710056d96333960857d04d91eb81f057b724865",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r13",
+        "20260910-nine-state-stop-packet-schedule"
+      ],
+      "hypothesis": "Published Stop is recursively certifiable under the nominal model",
+      "changed_dimension": "Stop publication schedule representation and exact causal observations; unchanged world/model/physical limits",
+      "result": "rejected",
+      "reason": "Initial828Stop passes but its exact modeled25..150ms states lose wall proof when a new publication hold is inserted; first live failure1401 duringShiftOut;1400/1401adjacent25msoverruns.",
+      "production_impact": "Single certified Stop path; no margin, hold grace, solver budget or final authority relaxation. Live acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "New fixedcommit dev2 evidence, new exactbody/packet counterexample, or independently certified candidate; no unchanged all-method retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-stop-packet-schedule-publication-time-only",
+      "baseline_commit": "e710056d96333960857d04d91eb81f057b724865",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r13",
+        "20260910-nine-state-stop-packet-schedule"
+      ],
+      "hypothesis": "Decision-to-publication difference alone explains the wall rejection",
+      "changed_dimension": "Stop publication schedule representation and exact causal observations; unchanged world/model/physical limits",
+      "result": "rejected",
+      "reason": "Backdate only one35ms brake history edge diagnostically and recover exactwaypoint59projection; both originalpacket continuation and freshStop still reject. Actual history unchanged.",
+      "production_impact": "Single certified Stop path; no margin, hold grace, solver budget or final authority relaxation. Live acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "New fixedcommit dev2 evidence, new exactbody/packet counterexample, or independently certified candidate; no unchanged all-method retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-stop-packet-schedule-architecture",
+      "baseline_commit": "e710056d96333960857d04d91eb81f057b724865",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r13",
+        "20260910-nine-state-stop-packet-schedule"
+      ],
+      "hypothesis": "Alternative architectures certify the same failure world",
+      "changed_dimension": "Stop publication schedule representation and exact causal observations; unchanged world/model/physical limits",
+      "result": "inconclusive",
+      "reason": "FullA-G180stimeout emits no complete report. BoundedA/B/C/D15candidates: A,leftBsolve->wallreject; allothercandidates solverreject. Two completeRest clocks reject. Unknown, not physical infeasible.",
+      "production_impact": "Single certified Stop path; no margin, hold grace, solver budget or final authority relaxation. Live acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "New fixedcommit dev2 evidence, new exactbody/packet counterexample, or independently certified candidate; no unchanged all-method retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-stop-packet-schedule-continuous-counterfactual",
+      "baseline_commit": "e710056d96333960857d04d91eb81f057b724865",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r13",
+        "20260910-nine-state-stop-packet-schedule"
+      ],
+      "hypothesis": "Reinserting a publication hold breaks the continuous-rate Stop certificate",
+      "changed_dimension": "Stop publication schedule representation and exact causal observations; unchanged world/model/physical limits",
+      "result": "accepted",
+      "reason": "All8exactmodelstates0..200ms pass fullsuffix when onlyfirstholdremoved; observation is physicallynonpublishable and cannot become authority.",
+      "production_impact": "Single certified Stop path; no margin, hold grace, solver budget or final authority relaxation. Live acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "New fixedcommit dev2 evidence, new exactbody/packet counterexample, or independently certified candidate; no unchanged all-method retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-stop-packet-schedule-serialized-producer",
+      "baseline_commit": "e710056d96333960857d04d91eb81f057b724865",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r13",
+        "20260910-nine-state-stop-packet-schedule"
+      ],
+      "hypothesis": "Stop generator and executable artifact can share actual held-angle semantics",
+      "changed_dimension": "Stop publication schedule representation and exact causal observations; unchanged world/model/physical limits",
+      "result": "accepted",
+      "reason": "Newintervalregression fails oldproducer; newsealedStopinputschema; buildr30/r31pass; testsr26all2409pass; historical1399newStopall8modelclosurespass.",
+      "production_impact": "Single certified Stop path; no margin, hold grace, solver budget or final authority relaxation. Live acceptance remains open.",
+      "deleted_code": [
+        "Continuous future steering evolution in generated terminal Stop"
+      ],
+      "revisit_condition": "New fixedcommit dev2 evidence, new exactbody/packet counterexample, or independently certified candidate; no unchanged all-method retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-stop-packet-schedule-current-world-negative",
+      "baseline_commit": "e710056d96333960857d04d91eb81f057b724865",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r13",
+        "20260910-nine-state-stop-packet-schedule"
+      ],
+      "hypothesis": "The new schedule cannot bypass wall/peer rejection",
+      "changed_dimension": "Stop publication schedule representation and exact causal observations; unchanged world/model/physical limits",
+      "result": "accepted",
+      "reason": "Exact1401remainswallblocked335samples;933remainspeerblocked-0.000891864256m/115samples/no bundle. Independent current-world revalidation and packet binding preserved.",
+      "production_impact": "Single certified Stop path; no margin, hold grace, solver budget or final authority relaxation. Live acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "New fixedcommit dev2 evidence, new exactbody/packet counterexample, or independently certified candidate; no unchanged all-method retry"
     }
   ]
 }

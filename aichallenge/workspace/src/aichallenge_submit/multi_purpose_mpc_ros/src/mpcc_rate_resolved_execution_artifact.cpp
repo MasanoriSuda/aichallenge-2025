@@ -263,6 +263,9 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   if (artifact.control_stages.empty()) {
     return RejectReason::EmptyHorizon;
   }
+  if (serialized_stop_schedule(artifact) && !artifact.terminal_body_rest_required) {
+    return RejectReason::InvalidCertificate;
+  }
   const bool return_intent = artifact.identity.source_context.intent ==
     mpcc_execution_contract::ControlIntent::Return;
   const auto & terminal_contract = artifact.terminal_intent_contract;
@@ -427,6 +430,13 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     const double predicted_next_steering =
       artifact.predicted_states[index].steering_rad +
       control.steering_rate_radps * control.duration_sec;
+    if (serialized_stop_schedule(artifact) &&
+      (std::abs(control.duration_sec - artifact.publication_interval_sec) > 1e-9 ||
+      (index == 0U && control.steering_rate_radps != 0.0) ||
+      std::abs(predicted_next_steering - artifact.predicted_states[index + 1U].steering_rad) > 1e-9))
+    {
+      return RejectReason::SteeringDynamicsMismatch;
+    }
     if (
       std::abs(
         predicted_next_steering -
@@ -581,8 +591,12 @@ ActuationResult extract_actuation(
   for (std::size_t i = 0; i <= stage; ++i) {
     const auto & interval = artifact.control_stages[i];
     const double duration = i == stage ? cursor.stage_elapsed_sec : interval.duration_sec;
+    const bool serialized = serialized_stop_schedule(artifact);
+    if (serialized) {
+      physical.desired_steering_rad = artifact.predicted_states[i + 1U].steering_rad;
+    }
     const auto next = mpcc_vehicle_model::advance(
-      physical, {interval.acceleration_mps2, interval.steering_rate_radps},
+      physical, {interval.acceleration_mps2, serialized ? 0.0 : interval.steering_rate_radps},
       artifact.vehicle_model, duration);
     if (!next) {
       result.reason = ActuationReason::NonfiniteActuation;
@@ -601,8 +615,9 @@ ActuationResult extract_actuation(
   actuation.predicted_speed_mps = physical.forward_velocity_mps;
   actuation.acceleration_mps2 = control.acceleration_mps2;
   actuation.steering_rate_radps = control.steering_rate_radps;
-  actuation.steering_rad = sample.sample->steering_rad;
-  actuation.curvature_radpm = sample.sample->curvature_radpm;
+  actuation.steering_rad = serialized_stop_schedule(artifact) ?
+    artifact.predicted_states[stage + 1U].steering_rad : sample.sample->steering_rad;
+  actuation.curvature_radpm = std::tan(actuation.steering_rad) / artifact.wheelbase_m;
   actuation.virtual_progress_speed_mps = control.virtual_progress_speed_mps;
   if (
     !std::isfinite(actuation.predicted_speed_mps) ||

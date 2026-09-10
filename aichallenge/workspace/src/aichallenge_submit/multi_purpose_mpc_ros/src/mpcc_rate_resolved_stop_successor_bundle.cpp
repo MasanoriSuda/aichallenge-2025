@@ -201,6 +201,10 @@ Result build(
           samples[end].acceleration_mps2 - samples[begin].acceleration_mps2,
           tolerance, tolerance);
       }
+      if (samples[end].end_steering_rad != samples[begin].end_steering_rad) {
+        return reject_actuation(ActuationRejectDetail::CommandChangedWithinInterval,
+          end, samples[end].end_steering_rad, samples[begin].end_steering_rad, 0.0);
+      }
       if (
         !finite(samples[end].elapsed_time_sec) ||
         !finite(samples[end].duration_sec) || samples[end].duration_sec <= 0.0 ||
@@ -257,6 +261,7 @@ Result build(
 
   auto execution = std::make_shared<artifact::ExecutionArtifact>();
   auto current_context = source_context;
+  current_context.input_schema_id = artifact::kSerializedStopInputSchema;
   current_context.decision_id = request.decision_id;
   current_context.observation_generation = request.obstacles.generation;
   if (contract::canonical_normal_intent_requires_target_observation(

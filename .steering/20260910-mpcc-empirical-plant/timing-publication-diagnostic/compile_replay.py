@@ -17,13 +17,13 @@ archives = list(dict.fromkeys(arg for arg in link + retained_link
                               if arg.endswith('.a') and 'gtest' not in arg))
 dependencies = [arg for arg in link[link.index('-o')+2:] if not arg.endswith('.a')]
 cmd = [link[0], '-std=c++17', '-O2', '-I'+str(p/'include'), '-I'+str(p/'src'),
-       '-I/usr/include/eigen3', str(s/'replay_revalidation.cpp'), '-o', str(out/'replay'),
+       '-I/usr/include/eigen3', str(s/(sys.argv[2] if len(sys.argv)>2 else 'replay_revalidation.cpp')), '-o', str(out/'replay'),
        '-Wl,--start-group'] + archives + ['-Wl,--end-group'] + dependencies
 with (out/'build.log').open('w') as log:
     result = subprocess.run(cmd, cwd=b, stdout=log, stderr=subprocess.STDOUT, timeout=120)
 (out/'manifest.json').write_text(json.dumps(dict(command=cmd, return_code=result.returncode,
     files={str(s/name):hashlib.sha256((s/name).read_bytes()).hexdigest() for name in
-           ('replay_revalidation.cpp','../revalidation_input.hpp','../replay_certified_plan.cpp')},
-    purpose='Exact paired native revalidation with separately rebound Stop proposals; compiled current production libraries, wall times diagnostic, zero solves, no authority'), indent=2)+'\n')
+           ((sys.argv[2] if len(sys.argv)>2 else 'replay_revalidation.cpp'),'stop_recursion.hpp','../revalidation_input.hpp','../replay_certified_plan.cpp')},
+    purpose=('Bounded A/B/C/D solver comparison; no authority' if len(sys.argv)>2 and sys.argv[2]=='bounded_architecture.cpp' else 'Native revalidation and model closure; current production libraries, diagnostic wall times, zero solves, no authority')), indent=2)+'\n')
 print((out/'build.log').read_text(), flush=True)
 result.check_returncode()

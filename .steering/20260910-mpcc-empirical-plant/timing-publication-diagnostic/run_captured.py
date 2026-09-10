@@ -22,10 +22,17 @@ commands = [('exact-pair', [str(replay), str(snapshot), str(out / 'exact-pair.ya
             ('architecture', [str(compare), str(snapshot)]),
             ('complete-rest', [str(compare), str(snapshot), '--current-world-complete-rest-only']),
             ('metrics', ['python3', str(Path(__file__).parent.parent / 'analyze_run.py'), str(run), str(out / 'metrics')])]
+selected = set(sys.argv[5:])
+assert selected <= {name for name, _ in commands}
+if selected:
+    commands = [(name, command) for name, command in commands if name in selected]
 for name, command in commands:
     with (out / (name + '.log')).open('w') as log:
-        result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=180)
-    row = dict(name=name, command=command, return_code=result.returncode)
+        try:
+            result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=180)
+            row = dict(name=name, command=command, return_code=result.returncode, status='completed')
+        except subprocess.TimeoutExpired:
+            row = dict(name=name, command=command, return_code=None, status='timeout', timeout_sec=180)
     manifest['commands'].append(row)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     print(row, flush=True)

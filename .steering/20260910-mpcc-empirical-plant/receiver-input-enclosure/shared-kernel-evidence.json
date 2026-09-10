@@ -1,0 +1,243 @@
+{
+  "baseline_commit": "bef879b277d738413fc573fc6a930f6713f272d7",
+  "scope": "Shared arithmetic extraction; receiver uncertainty is not yet a production certificate",
+  "integrated_acceptance": false,
+  "files": [
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r9/compare_interval.cpp",
+      "sha256": "9da26fcc51e945077d0868437462f0c84df57001cabdfa9126ea9e551ea1b48b"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r9/footprint_enclosure.hpp",
+      "sha256": "d6a5bad27723c5f7dd9456ac7bf00df35c42c8798606074d104046342560ab27"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r9/interval_model.hpp",
+      "sha256": "82c3a94ffddcc98fa130954435162f72465773be79921371adb079f9c2bb86e7"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r9/manifest.json",
+      "sha256": "429aab6b6171082923667c023b2b7df0a64150e98873056e184a7221f3025929"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r9/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r9/native_vehicle_model.cpp",
+      "sha256": "69409c6d9085014068aced6ea47a81501173ab1874f6d67a992c250e715760b8"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r9/run.log",
+      "sha256": "fcfb70a578dfffe114af08b863dce28abc09c098c01e436d4b6c30c49b40ec6d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r61/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r61/manifest.json",
+      "sha256": "012dbcd9eeff5a9fb3bedcc6981fd64af6be6a7fdb63c9d1a29de9c024a518ff"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r61/replay",
+      "sha256": "a2194b5d520d7b06132dadf5c4468b79bd0a8543f946033251d725d4e3c170b6"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r62/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r62/manifest.json",
+      "sha256": "0780bd3d3657d3964b9a2b2d0a307d543e810d03bf5d405b2ea852ee9b71bfff"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r62/replay",
+      "sha256": "dfc08d5ad5064f63ebc82a7de920f1348e7fa78313d7bd2d0fc43e5e8a7db027"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/footprint_enclosure.hpp",
+      "sha256": "d6a5bad27723c5f7dd9456ac7bf00df35c42c8798606074d104046342560ab27"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/independent-1101.log",
+      "sha256": "5c04cc8ec750f85d572d1b466ba620663c89e5e824b055d55de0d22a21557616"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/independent-1101.yaml",
+      "sha256": "5c04cc8ec750f85d572d1b466ba620663c89e5e824b055d55de0d22a21557616"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/independent-1585.log",
+      "sha256": "6049ab75424171ab57ca7d35ecb1b55b25943de2f92c7a4f6f968c425241e565"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/independent-1585.yaml",
+      "sha256": "6049ab75424171ab57ca7d35ecb1b55b25943de2f92c7a4f6f968c425241e565"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/independent-1620.log",
+      "sha256": "1e448e048e099ca65a070c15a97f6f9e50114a8132e2e5512333035915c8d484"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/independent-1620.yaml",
+      "sha256": "1e448e048e099ca65a070c15a97f6f9e50114a8132e2e5512333035915c8d484"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/interval_model.hpp",
+      "sha256": "82c3a94ffddcc98fa130954435162f72465773be79921371adb079f9c2bb86e7"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/manifest.json",
+      "sha256": "03c3716a2054224e271c306d563fc94bd3dac24ed3fe779cbfd372a2db3e9e61"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/replay_common_stop.cpp",
+      "sha256": "bcf6c94ed584507b7260c401c30ee421cffda9b5dad74921eb90a5e2402382a6"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/unmodified-895.log",
+      "sha256": "97b54305624bf7b08ab5da5c3eb0db8abdc76e9d9d69ea7618cce8f895ccfb58"
+    },
+    {
+      "path": "output/20260910-nine-state-source-stop-r3/unmodified-895.yaml",
+      "sha256": "97b54305624bf7b08ab5da5c3eb0db8abdc76e9d9d69ea7618cce8f895ccfb58"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-baseline/manifest.json",
+      "sha256": "7ff328661e01fb2ffc6321c29e04a736e7509ac633daff6c92bb711995a2d2ae"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-baseline/mpcc_vehicle_model.cpp",
+      "sha256": "de918d32d757592fa909ead17ce4e05e5111da3f7cfa81772d8592f2b4da862c"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-evidence/mpcc-nine-state-build-r33.log",
+      "sha256": "fbd354d66f8a647fd00efdf35293a4aaf2c323972e1a1ada568972fce9d02370"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-evidence/mpcc-nine-state-shared-arithmetic-r1.log",
+      "sha256": "485ac62781d1517e1181f61b8581d09fbe63b2d74c290ab040d6bcefad32e46c"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-evidence/mpcc-nine-state-shared-arithmetic-r2.log",
+      "sha256": "a8598662459ee4f048b3a6839f62455b6763d1be66f099928310cb429953c474"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-evidence/mpcc-nine-state-shared-enclosure-build-r1.log",
+      "sha256": "ed3958c3117ca1bc1b87678f6b741debe8afebeef34aaf60ccca66839015d699"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-evidence/mpcc-nine-state-shared-enclosure-r1.log",
+      "sha256": "79e8c44410fa659d8f3615a080784c289d3a3a7cca293f88090c650fdde1efd7"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-evidence/mpcc-nine-state-tests-r28.log",
+      "sha256": "ed718e83930c3644b012c6242715b828ac67e4efd3c917014530368c8f65fabb"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/baseline.cpp",
+      "sha256": "aac7cfb8845f14975fd726d0716da7dc7ca1aa0e115d615035a3da8a36fae8b6"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/build.log",
+      "sha256": "f6b8970ef19dc71e59395c81616c3b1550a4f35d7d91c7efacb0e27c5a8285ab"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/manifest.json",
+      "sha256": "9d9337f3d787ebcd7d277207e5885c8b011b26c659e27443fc4390dca28b8329"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/sources/.steering/20260910-mpcc-empirical-plant/native_vehicle_model.cpp",
+      "sha256": "99b1fe88a159498231f77e215f0c60f7d33f7f059e8c57a72a841adf6e4102d3"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/sources/.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_shared_kernel.cpp",
+      "sha256": "f3c5f74e37739cd1a8e6cb751327bf03c6e50e780af11fe3662c8db642b834b7"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/sources/.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/run_shared_comparison.py",
+      "sha256": "6edd4c56cafb14b69138b55f3b713d7fedcebb29e711547492211e1c0230d588"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r1/sources/output/20260911-nine-state-shared-arithmetic-baseline/mpcc_vehicle_model.cpp",
+      "sha256": "de918d32d757592fa909ead17ce4e05e5111da3f7cfa81772d8592f2b4da862c"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/baseline.cpp",
+      "sha256": "aac7cfb8845f14975fd726d0716da7dc7ca1aa0e115d615035a3da8a36fae8b6"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/compare",
+      "sha256": "da78c4db4eca61cb36554c1f87bbe2ae4d1c7f619388c71ad67d9f65a2a34c8f"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/manifest.json",
+      "sha256": "22fdad983396c9de25a75636f8b23ed9f812c4dd2de852ef6ad9afb28fd2eef1"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/parameters.txt",
+      "sha256": "4044167e9b1568c2c6f8b99b90ce10603c76c0b0cdfe8ffb6fee10ac0e1a2d66"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/run.log",
+      "sha256": "588505c0b37e6983e63e3b779a8c0d6ad328bc2b6744096dddd8c546bb8d3d4e"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/sources/.steering/20260910-mpcc-empirical-plant/native_vehicle_model.cpp",
+      "sha256": "69409c6d9085014068aced6ea47a81501173ab1874f6d67a992c250e715760b8"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/sources/.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_shared_kernel.cpp",
+      "sha256": "975ed5c17373f46b93faba12b37bfeb92b2fd65f300598451c811c19384f61b7"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/sources/.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/run_shared_comparison.py",
+      "sha256": "61c8d4c8a310f42f2e8e77f8aedebd365e5cb68b915ce8b237f691a8e67b5bfb"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260911-nine-state-shared-arithmetic-r2/sources/output/20260911-nine-state-shared-arithmetic-baseline/mpcc_vehicle_model.cpp",
+      "sha256": "de918d32d757592fa909ead17ce4e05e5111da3f7cfa81772d8592f2b4da862c"
+    }
+  ],
+  "validation": {
+    "differential": "37956 cases,494904 scalar outputs bitwise equal;36 rejected,1676 rest; counts/flags/fingerprint equal; initial test initializer compile failure preserved",
+    "build": "r33:26 packages, setuptools deprecation stderr retained",
+    "package": "r28:2410 tests,0 errors/failures/skips",
+    "enclosure": "r61/r9:previous scalar/corner/subdivision/hybrid suite passes; no tests removed",
+    "source_world": "r62/r3:895/1101/1585/1620 full modeled rest, original wall/peer pass; exact minimum clearances unchanged",
+    "runtime": "Not rerun unchanged failing controller as acceptance; receiver/proof integration remains next"
+  }
+}

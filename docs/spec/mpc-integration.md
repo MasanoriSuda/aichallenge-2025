@@ -4409,3 +4409,8 @@ Stop1275の壁側の証明を失った。事前に固定した250msの経験的�
 停止まで照合できた。本番の共有カーネル・proof・artifact・publisherへの採用は未完。
 [最新の結果と採用条件](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/results.md)に
 失敗、計算量、未検証範囲を残す。過去の単車合格やこの診断を全体完了に数えない。
+
+車輪力・COM/base_link運動・タイヤ応答は内部の共有算術カーネルを使い、公称double予測と
+数値範囲の診断で同じ式を実行する。抽出前の実装との比較、package検証、元worldの再生は
+[共有化の記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-kernel-design.md)を参照。
+これは受信不確かさを本番認証へ採用したことを意味しない。

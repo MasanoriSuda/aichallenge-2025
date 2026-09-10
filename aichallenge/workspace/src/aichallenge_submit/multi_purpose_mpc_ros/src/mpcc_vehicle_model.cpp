@@ -1,4 +1,5 @@
 #include "multi_purpose_mpc_ros/mpcc_vehicle_model.hpp"
+#include "multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -23,13 +24,10 @@ bool nonnegative(const double value) noexcept
 
 State body_increment(State state, const BodyDerivative & rate, const double dt) noexcept
 {
-  state.x_m += rate.x_mps * dt;
-  state.y_m += rate.y_mps * dt;
-  state.yaw_rad += rate.yaw_radps * dt;
-  state.forward_velocity_mps += rate.forward_acceleration_mps2 * dt;
-  state.lateral_velocity_mps += rate.lateral_acceleration_mps2 * dt;
-  state.yaw_rate_radps += rate.yaw_acceleration_radps2 * dt;
-  return state;
+  return kernel::state(kernel::body_increment(kernel::values(state),
+    kernel::BodyRates<double>{rate.x_mps, rate.y_mps, rate.yaw_radps,
+      rate.forward_acceleration_mps2, rate.lateral_acceleration_mps2,
+      rate.yaw_acceleration_radps2}, dt));
 }
 }  // namespace
 
@@ -124,41 +122,9 @@ std::optional<BodyDerivative> derivative(
   if (!valid(p) || !finite(s) || !std::isfinite(wire) || !positive(force_interval_sec)) {
     return std::nullopt;
   }
-  const double u = s.forward_velocity_mps;
-  const double v = s.lateral_velocity_mps;
-  const double r = s.yaw_rate_radps;
-  const double interval = std::max(force_interval_sec, p.minimum_force_interval_sec);
-  double acceleration = std::clamp(
-    wire, -p.maximum_wire_deceleration_mps2, p.maximum_wire_acceleration_mps2);
-  if (u < 0) {acceleration = std::max(acceleration, -u / interval);}
-  acceleration = std::clamp(
-    acceleration, -p.maximum_wire_deceleration_mps2, p.maximum_wire_acceleration_mps2);
-  const double rolling = u == 0 ? 0 :
-    -std::copysign(std::min(p.rolling_mps2, std::abs(u) / interval), u);
-  double fx{}, fy{}, moment{};
-  for (const auto & wheel : p.wheels) {
-    const double angle = wheel.steerable ? s.tire_steering_rad : 0;
-    const double c = std::cos(angle), sn = std::sin(angle);
-    const double point_forward = u - r * wheel.com_left_m;
-    const double point_left = v + r * wheel.com_forward_m;
-    const double slip = -sn * point_forward + c * point_left;
-    const double lateral = -wheel.cornering_per_sec * slip;
-    const double drive = wheel.traction_fraction * (acceleration + rolling);
-    const double ax = c * drive - sn * lateral;
-    const double ay = sn * drive + c * lateral;
-    fx += ax;
-    fy += ay;
-    moment += wheel.com_forward_m * ay - wheel.com_left_m * ax;
-  }
-  const double reference_forward = u + r * p.com_left_m;
-  const double reference_left = v - r * p.com_forward_m;
-  const double c = std::cos(s.yaw_rad), sn = std::sin(s.yaw_rad);
-  BodyDerivative result{
-    c * reference_forward - sn * reference_left,
-    sn * reference_forward + c * reference_left,
-    r, fx - p.drag_per_sec * u + r * v,
-    fy - p.drag_per_sec * v - r * u,
-    moment * p.mass_kg / p.yaw_inertia_kgm2 - p.angular_drag_per_sec * r};
+  const auto rates = kernel::derivative(
+    kernel::values(s), wire, p, force_interval_sec, kernel::ScalarArithmetic{});
+  const BodyDerivative result{rates[0], rates[1], rates[2], rates[3], rates[4], rates[5]};
   for (const double value : {result.x_mps, result.y_mps, result.yaw_radps,
     result.forward_acceleration_mps2, result.lateral_acceleration_mps2,
     result.yaw_acceleration_radps2})
@@ -187,12 +153,9 @@ std::optional<Transition> advance(
     if (!std::isfinite(wire_steering)) {return std::nullopt;}
     // These bounds transcribe the plant response; the command and its original
     // physical bounds remain unchanged and separately certified by the caller.
-    const double demand = p.tire_grip * std::clamp(
-      wire_steering, -p.maximum_wire_steering_rad, p.maximum_wire_steering_rad);
-    const double alpha = dt / (p.tire_lag_sec + dt);
-    state.tire_steering_rad += std::clamp(
-      alpha * (demand - state.tire_steering_rad), -p.tire_slew_radps * dt,
-      p.tire_slew_radps * dt);
+    auto values = kernel::values(state);
+    kernel::update_tire(values, p, dt, kernel::ScalarArithmetic{});
+    state = kernel::state(values);
     const bool rest = p.nominal_settled_contact &&
       std::abs(state.forward_velocity_mps) < p.sleep_speed_mps &&
       input.wire_acceleration_mps2 <= 0;

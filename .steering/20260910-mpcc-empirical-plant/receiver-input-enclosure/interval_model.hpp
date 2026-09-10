@@ -2,6 +2,7 @@
 // Diagnostic numerical enclosure of the native midpoint body map. No runtime
 // authority, receiver bound, or contact assumption is introduced by this file.
 #include "multi_purpose_mpc_ros/mpcc_vehicle_model.hpp"
+#include "multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -51,33 +52,30 @@ inline I max(I a,I b){return {std::max(a.lo,b.lo),std::max(a.hi,b.hi)};}
 inline I unite(I a,I b){return hull(a,b);}
 inline J unite(const J&a,const J&b){J r(hull(a.v,b.v));for(size_t i=0;i<N;++i)r.d[i]=hull(a.d[i],b.d[i]);return r;}
 using JS=std::array<J,8>;using Box=std::array<I,8>;
-template<class T> inline std::array<T,8> increment(std::array<T,8> s,const std::array<T,6>&d,double dt){for(size_t i=0;i<6;++i)s[i]=s[i]+d[i]*T(dt);return s;}
-template<class T> inline std::array<T,6> derivative(const std::array<T,8>&s,T wire,const model::Parameters&p,double dt,bool * discontinuous){
- const T u=s[3],v=s[4],r=s[5];const double interval=std::max(dt,p.minimum_force_interval_sec);
- T a=clamp(wire,-p.maximum_wire_deceleration_mps2,p.maximum_wire_acceleration_mps2);
- if(bounds(u).hi<0)a=max(a,-u/interval);
- else if(bounds(u).lo<0){
-  const T united=unite(a,max(a,-u/interval));
-  if(discontinuous && bounds(wire).lo<0)*discontinuous=true;
-  a=united;
+// Only nonsmooth scalar/set arithmetic differs. All wheel, body and tire
+// equations below come from the same kernel as the production native model.
+template<class T> struct Arithmetic {
+ bool * discontinuous{};
+ T sin(const T&a)const{return enclosure::sin(a);}
+ T cos(const T&a)const{return enclosure::cos(a);}
+ T clamp(const T&a,double lo,double hi)const{return enclosure::clamp(a,lo,hi);}
+ T reverse_correction(const T&u,const T&a,double interval)const{
+  if(bounds(u).hi<0)return max(a,-u/interval);
+  if(bounds(u).lo<0){
+   if(discontinuous && bounds(a).lo<0)*discontinuous=true;
+   return unite(a,max(a,-u/interval));
+  }
+  return a;
  }
- a=clamp(a,-p.maximum_wire_deceleration_mps2,p.maximum_wire_acceleration_mps2);
- const T rolling=clamp(-u/interval,-p.rolling_mps2,p.rolling_mps2);
- T fx,fy,moment;
- for(const auto&w:p.wheels){const T angle=w.steerable?s[7]:T(0),c=cos(angle),sn=sin(angle);
-  const T slip=-sn*(u-r*T(w.com_left_m))+c*(v+r*T(w.com_forward_m));
-  const T lateral=T(-w.cornering_per_sec)*slip,drive=T(w.traction_fraction)*(a+rolling);
-  const T ax=c*drive-sn*lateral,ay=sn*drive+c*lateral;fx=fx+ax;fy=fy+ay;moment=moment+T(w.com_forward_m)*ay-T(w.com_left_m)*ax;
- }
- const T forward=u+r*T(p.com_left_m),left=v-r*T(p.com_forward_m),c=cos(s[2]),sn=sin(s[2]);
- return {c*forward-sn*left,sn*forward+c*left,r,fx-T(p.drag_per_sec)*u+r*v,fy-T(p.drag_per_sec)*v-r*u,moment*T(p.mass_kg)/p.yaw_inertia_kgm2-T(p.angular_drag_per_sec)*r};
-}
+ T rolling(const T&u,double interval,double limit)const{return clamp(-u/interval,-limit,limit);}
+};
 template<class T> inline std::array<T,8> map(std::array<T,8> s,T a,const model::Parameters&p,double dt,bool rest,bool * discontinuous=nullptr){
- const T demand=T(p.tire_grip)*clamp(s[6]*T(p.steering_wire_gain),-p.maximum_wire_steering_rad,p.maximum_wire_steering_rad);
- s[7]=s[7]+clamp(T(dt/(p.tire_lag_sec+dt))*(demand-s[7]),-p.tire_slew_radps*dt,p.tire_slew_radps*dt);
+ const Arithmetic<T> arithmetic{discontinuous};
+ model::kernel::update_tire(s,p,dt,arithmetic);
  if(rest){s[3]=T(0);s[4]=T(0);s[5]=T(0);return s;}
- const auto d1=derivative(s,a,p,dt,discontinuous);const auto mid=increment(s,d1,.5*dt);
- return increment(s,derivative(mid,a,p,dt,discontinuous),dt);
+ const auto d1=model::kernel::derivative(s,a,p,dt,arithmetic);
+ const auto mid=model::kernel::body_increment(s,d1,.5*dt);
+ return model::kernel::body_increment(s,model::kernel::derivative(mid,a,p,dt,arithmetic),dt);
 }
 inline Box centered_step(const Box&b,I acceleration,const model::Parameters&p,double dt,bool rest){
  JS inputs;Box center;std::array<I,N> offsets{};

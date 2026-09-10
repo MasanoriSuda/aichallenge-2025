@@ -137,4 +137,5 @@ int main(int argc, char ** argv)
     }
   }
   require(std::cin.eof(), "malformed request stream");
+  return 0;
 }

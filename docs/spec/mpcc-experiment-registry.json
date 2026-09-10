@@ -901,6 +901,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/evidence.json",
       "replay_ready": true,
       "reason": "Frozen numerical input-enclosure comparisons, failed iterations and earlier original source worlds"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-shared-body-arithmetic",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-kernel-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen pre-extraction native source, differential and enclosure/source replay"
     }
   ],
   "experiments": [
@@ -6756,6 +6762,22 @@
       "production_impact": "None; shared receiver model and immutable proof integration remain open",
       "deleted_code": [],
       "revisit_condition": "Shared arithmetic or a causally different same-control proof with original source/world; independent new profile evidence. No unchanged rejected runtime retry."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-body-arithmetic",
+      "baseline_commit": "bef879b277d738413fc573fc6a930f6713f272d7",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-body-arithmetic"
+      ],
+      "hypothesis": "One body/tire kernel can serve the native scalar model and interval arithmetic without changing scalar outputs or source-world outcomes",
+      "changed_dimension": "Extract shared arithmetic; remove diagnostic vehicle equation transcription",
+      "result": "accepted",
+      "reason": "37956 independent frozen-source cases/494904 bits agree, flags and rejects agree;26package build/2410test records; enclosure and four source worlds pass",
+      "production_impact": "Behavior-preserving native arithmetic extraction; receiver uncertainty/proof integration not adopted",
+      "deleted_code": [
+        "Duplicated interval wheel-force, COM kinematics and tire response formulas"
+      ],
+      "revisit_condition": "New shared arithmetic or input semantics change; no unchanged failed controller rerun"
     }
   ]
 }

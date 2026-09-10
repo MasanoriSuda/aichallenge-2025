@@ -1,16 +1,16 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6の自律実装・検証・必要分のローカルcommitを継続中。pushなし。
-**全体は未完。制御の基準は `cbcda112`、直近の調査基準は `7b9a6093`。**
+**全体は未完。制御の基準は `cbcda112`、診断保存は `bef879b2`。**
 
-- 現行制御は buildr32の26package、testsr27の2410記録が合格。以下の診断では制御を変更していない。
+- 共有カーネル抽出後、buildr33の26package、testsr28の2410記録が合格。抽出前と494,904値がbit一致。
 - 独立したapplication-dev2-r3はD2 decision1773/Stop1275で壁側の停止証明を失った。
   Passまで進んだが走行不合格。D2に隣接callback超過2組があり、時間受入れも未完。
 - 実適用816回を受信sequence/float入力と照合。完全観測814区間の最大ageは218.076958msで、
   事前に固定した250msの経験的候補内。保証上限、車体モデル誤差の保証、実行権限にはしない。
 - 区間予測のnative/輪郭/時間分割/静止・走行モードを検証し、失敗前の4場面で
   同じ指令による全範囲の停止・壁・peer照合が成立。実装候補の計算量は約9–14msで、
-  制御周期への組み込みは未検証。試作を本番の認証経路へ移す作業が次。
+  制御周期への組み込みは未検証。body/tire算術の共有化は済み。受信入力・指令列と本番の認証経路を結ぶ作業が次。
 
 [入力範囲の最新結果](../20260910-mpcc-empirical-plant/receiver-input-enclosure/results.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。

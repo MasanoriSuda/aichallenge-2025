@@ -121,6 +121,13 @@ D1 decision1020の停止認証は、実送信加速度−3/+1.329596の間を一
 buildr43=26、testsr36=2432記録/62groupで失敗0。r19の走行中の壁・相手車拒否は未解決で、
 実走の25ms・再発進・全受入れは未達。[逐次検証設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/stream-validation-design.md)を参照。
 
+2026-09-11のdev2-r20はD1decision964、2.29m/sで通常認証を失った。元の停止入力・壁を固定した
+回帰は同じ予測時刻で失敗した。数値予測で既に計算している自然区間像と平均値形式の区間像の
+共通部分を使い、全応答を保ったまま不要な幅を除去した。元入力は完全停止認証・最終指令・
+停止計画への引き継ぎまで合格。連続入力2017600値・hybrid956800値、buildr44=26、
+testsr37=2433記録/62groupで失敗0。別の相手車拒否、実走25ms・再発進・完走は未解決。
+[区間境界と壁回帰](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/wall-enclosure-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

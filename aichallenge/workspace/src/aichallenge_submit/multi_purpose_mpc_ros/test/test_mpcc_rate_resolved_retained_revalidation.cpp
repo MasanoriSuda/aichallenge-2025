@@ -1,5 +1,7 @@
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
+#include "mpcc_wall_input_fixture.hpp"
+#include "multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp"
 #include "multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
@@ -13,6 +15,48 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+
+TEST(MpccAppliedProgram, CapturedMovingStopRemainsClearOfOriginalWallThroughRest)
+{
+  namespace vm = multi_purpose_mpc_ros::mpcc_vehicle_model;
+  namespace num = vm::numerical;
+  namespace rec = multi_purpose_mpc_ros::recovery_footprint;
+  namespace fixture = multi_purpose_mpc_ros::test;
+  const auto observation = fixture::wall_packet_observation();
+  const auto program = fixture::wall_packet_program();
+  const auto grid = fixture::wall_packet_grid();
+  const auto footprint = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall::
+    resolve_clearance_footprint({1.615, .51, .768, .768, .05}, .2);
+  ASSERT_TRUE(footprint);
+  ASSERT_TRUE(grid.valid());
+  const auto & origin = observation.initial.state;
+  double rejected_sec = NAN;
+  std::size_t checked = 0;
+  const auto prediction = vm::predict_applied_inputs_to_rest(
+    observation, program, {"awsim-2025-empirical-receiver-age-250ms-v1", .25, .25, .1},
+    fixture::vehicle_model(),
+    [&](const vm::BodyRanges & body, double begin, double) {
+      num::Box box;
+      for (std::size_t i = 0; i < box.size(); ++i) box[i] = {body[i].lower, body[i].upper};
+      const auto enclosed = num::footprint(box, *footprint);
+      const auto & p = enclosed.pose;
+      const double c = std::cos(origin.yaw_rad), s = std::sin(origin.yaw_rad);
+      const rec::Pose2D world{origin.x_m + c*p.x_m - s*p.y_m,
+        origin.y_m + s*p.x_m + c*p.y_m, origin.yaw_rad + p.yaw_rad};
+      const auto sampled = rec::sample_footprint(grid, enclosed.extents, world);
+      ++checked;
+      const bool clear = sampled.valid && !sampled.out_of_map && sampled.contact_cells.empty();
+      if (!clear) rejected_sec = begin;
+      return clear;
+    });
+  ASSERT_TRUE(prediction.tube) << "wall rejection at " << rejected_sec;
+  EXPECT_GT(checked, 200U);
+  EXPECT_GT(prediction.tube->rest_sec, program.commands.back().published_sec);
+  for (const std::size_t index : {3U, 4U, 5U}) {
+    EXPECT_DOUBLE_EQ(prediction.tube->source_to_rest.back().endpoint_body[index].lower, 0);
+    EXPECT_DOUBLE_EQ(prediction.tube->source_to_rest.back().endpoint_body[index].upper, 0);
+  }
+}
 
 namespace
 {

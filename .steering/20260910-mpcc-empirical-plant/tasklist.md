@@ -17,7 +17,8 @@
 - [x] Diagnose r17convex acceleration packet loss; union propagation, exact certificate/join replay, buildr41/testsr33.
 - [x] Reproduce r18history-gap rejection; add bounded slow-alternate observation; buildr42/testsr35.
 - [x] Capture r19slow alternates; stream required checks and remove duplicate solved-suffix proof; native regressions/buildr43/testsr36.
-- [ ] Validate fresh moving failures and actual publication timing after the measured cost repair.
+- [x] Reproduce r20wall failure with original final reference; intersect independent numerical images; wall fixture/native/buildr44/testsr37.
+- [ ] Validate fresh moving failures and actual publication timing after the numerical wall repair.
 - [ ] Validate integrated applied-program behavior and25ms timing in fresh runs.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.
 - [ ] Fresh single/dev2 acceptance and causal repair of any first failure.

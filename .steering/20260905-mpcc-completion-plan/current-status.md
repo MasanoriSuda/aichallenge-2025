@@ -1,20 +1,19 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。直近dev2-r19は走行中Emergency・25ms未達。**
+**全体は未完。直近dev2-r20はD1964、2.29m/sでEmergency・25ms未達。**
 
-- r19で遅い停止候補D1854/source182、D2836/source145を正確に保存した。
-- 必要な物理条件の失敗後も全停止予測を続け、同じ解済み停止列を再検証していた。
-  同じ検査を逐次実行し、無効候補の後続計算と同じ停止列の重複検証を除去した。
-- 再生は約135→14ms、89→12ms。元の拒否理由・最初の拒否時刻は同じ。
-  部分証明は返さず、合格時には従来どおり全入力応答の完全停止が必要。
-- buildr43:26package。testsr36:2432記録/62group、error/failure/skip0。
-  r17合格指令・引き継ぎ、r16符号付き元観測、r18本当の履歴欠落拒否、4入力の数値APIも確認。
-- r19はD1972で1.92m/s、D21071で1.16m/sのEmergency。保存要求は壁/相手車条件で拒否。
-  この修正でこれらの拒否を解除したとは扱わない。新規dev2-r20へ進む。
+- 元入力・元壁・実際の停止経路を固定し、同じ予測時刻の壁拒否を回帰テストで再現した。
+- 同じ車体モデルの独立した2種類の区間像の共通部分を使い、不要な予測幅を除去した。
+  入力応答・壁・余裕・完全停止・指令同一性の条件は維持する。
+- 元の964要求は完全停止認証・最終指令・停止計画の引き継ぎまで合格した。
+  前回r19D1972の壁拒否も合格。D21071の相手車拒否は残る。
+- buildr44:26package、testsr37:2433記録/62group、error/failure/skip0。
+  連続入力2017600値・hybrid956800値、4元入力の数値検証、既存の正負回帰も合格。
+- 次はこの修正の新規dev2-r21。ローカル再生時間を実走25msの合格には扱わない。
 
-[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/stream-validation-design.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/stream-validation-evidence.json)、
+[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/wall-enclosure-design.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/wall-enclosure-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 実送信と認証時刻の整合、M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
 同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。

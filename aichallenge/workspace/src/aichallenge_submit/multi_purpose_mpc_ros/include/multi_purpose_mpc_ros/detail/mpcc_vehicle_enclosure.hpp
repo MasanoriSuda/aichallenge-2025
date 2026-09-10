@@ -281,6 +281,9 @@ inline Box centered_step(const Box &b, I acceleration,
     for (size_t j = 0; j < N; ++j)
       delta = delta + range[i].d[j] * offsets[j];
     result[i] = discontinuous ? range[i].v : point[i] + delta;
+    // Both mean-value and direct natural extensions contain the same image.
+    // Their intersection cannot remove a represented physical response.
+    intersect(result[i], range[i].v);
     if (i < 2)
       result[i] = b[i] + result[i];
     if (rest && i >= 3 && i <= 5)

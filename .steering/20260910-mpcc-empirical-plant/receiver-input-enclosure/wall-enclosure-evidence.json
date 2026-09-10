@@ -1,0 +1,2380 @@
+{
+  "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+  "integrated_acceptance": false,
+  "run": "output/20260910-nine-state-dev2-r20",
+  "first_failure": {
+    "domain": 1,
+    "decision": 964,
+    "speed_mps": 2.29,
+    "waypoint": 33,
+    "previous_decision": 963,
+    "previous_published_source": 277,
+    "exact_inspected_source": 260,
+    "reason": "AppliedProgram/WallRejected at12.254999750"
+  },
+  "change": "Intersect independent mean-value and natural interval images already evaluated by the same native midpoint kernel before Cartesian translation. No input, mode, model, interval, margin, solver or authority change.",
+  "baseline_reproduction": "Original source/history/final programme and exact wall geometry fail regression at12.25499975. Native r90same final reference and direct applied reason/time match. r89nominal-gate-off changed reference arm and is not exact live evidence.",
+  "fixture": "Original full grid geometry;120x120original-cell region preserved; omitted cells Unknown.294non-free spans,42unchanged serialized commands. Captured model parameters equal shared test config.",
+  "validation": {
+    "build": "r44:26packages/22.4s",
+    "package": "r37:2433records/62groups/zeroerrors-failures-skips/29.08s",
+    "numerical": "r92/enclosure-r14:2017600continuous+956800hybrid scalar values; rounding, footprint, duration and exact boundary cases also pass",
+    "native": {
+      "wall-r20": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 963,
+          "source": 277,
+          "captured_request": {
+            "elapsed_ms": 21.385674,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.464999751,
+            "program_commands": 42,
+            "samples": 268,
+            "peer_clearance_m": 1.390907809840646,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 21.185669,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.464999751,
+            "program_commands": 42,
+            "samples": 268,
+            "peer_clearance_m": 1.390907809840646,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 964,
+          "source": 260,
+          "captured_request": {
+            "elapsed_ms": 19.537706,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.49499975,
+            "program_commands": 42,
+            "samples": 271,
+            "peer_clearance_m": 1.41015037083353,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 18.701816,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.49499975,
+            "program_commands": 42,
+            "samples": 271,
+            "peer_clearance_m": 1.41015037083353,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "accepted-r17": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r17/d1/mpcc_architecture_snapshots/000000001020-7b13fc78d1f505da-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 1019,
+          "source": 544,
+          "captured_request": {
+            "elapsed_ms": 6.555055,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.409999661999999,
+            "program_commands": 3,
+            "samples": 66,
+            "peer_clearance_m": 0.6299659857591886,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 6.380127,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.409999661999999,
+            "program_commands": 3,
+            "samples": 66,
+            "peer_clearance_m": 0.6299659857591886,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1020,
+          "source": 619,
+          "captured_request": {
+            "elapsed_ms": 6.660142,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.429999662,
+            "program_commands": 1,
+            "samples": 67,
+            "peer_clearance_m": 0.6284901853970306,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 6.626659,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.429999662,
+            "program_commands": 1,
+            "samples": 67,
+            "peer_clearance_m": 0.6284901853970306,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "signed-r16": {
+        "authority": false,
+        "source": 124,
+        "decision": 795,
+        "captured": {
+          "elapsed_ms": 0.03213,
+          "reason": "intent-mismatch",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 1,
+          "program_reason": 1,
+          "prediction_reason": 0,
+          "rejected_sec": NaN,
+          "nominal_only": "intent-mismatch"
+        },
+        "published_upstream_retained": {
+          "elapsed_ms": 0.860164,
+          "reason": "accepted",
+          "production": "available",
+          "applied_certificate": true,
+          "rest_sec": 7.9149998230000005,
+          "minimum_peer_clearance_m": 1.0726770723374652,
+          "applied_reason": 0,
+          "program_reason": 0,
+          "prediction_reason": 0,
+          "rejected_sec": NaN,
+          "nominal_only": "invalid-current-state"
+        },
+        "published_stop": "accepted",
+        "bundle": "available",
+        "joined_published_stop": {
+          "elapsed_ms": 0.242936,
+          "reason": "accepted",
+          "production": "available",
+          "applied_certificate": true,
+          "rest_sec": 7.9149998230000005,
+          "minimum_peer_clearance_m": 1.0726770723374652,
+          "applied_reason": 0,
+          "program_reason": 0,
+          "prediction_reason": 0,
+          "rejected_sec": NaN,
+          "nominal_only": "invalid-current-state"
+        }
+      },
+      "gap-r18": {
+        "authority": false,
+        "source": 249,
+        "decision": 839,
+        "captured": {
+          "elapsed_ms": 0.022472,
+          "reason": "intent-mismatch",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 1,
+          "program_reason": 1,
+          "prediction_reason": 0,
+          "rejected_sec": NaN,
+          "nominal_only": "intent-mismatch"
+        },
+        "published_upstream_retained": {
+          "elapsed_ms": 1.555159,
+          "reason": "applied-program-unavailable",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 3,
+          "program_reason": 0,
+          "prediction_reason": 5,
+          "rejected_sec": NaN,
+          "nominal_only": "accepted",
+          "direct_applied_reason": 3,
+          "direct_prediction": 5
+        },
+        "published_stop": "accepted",
+        "bundle": "available",
+        "joined_published_stop": {
+          "elapsed_ms": 0.899088,
+          "reason": "applied-program-unavailable",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 3,
+          "program_reason": 0,
+          "prediction_reason": 5,
+          "rejected_sec": NaN,
+          "nominal_only": "accepted",
+          "direct_applied_reason": 3,
+          "direct_prediction": 5
+        }
+      },
+      "wall-oracles-r20": {
+        "authority": false,
+        "meaning": "Original separate requests and actual final reference arms, no repaired source association. Full original numerical tube and sampled scalar input schedules. Native clearance does not prove every response clear.",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "decision": 963,
+          "source": 277,
+          "actual_reason": "accepted",
+          "actual_applied_reason": 0,
+          "actual_rejected_sec": NaN,
+          "nominal_reason": "accepted",
+          "actual_reference_attempts": 2,
+          "direct_applied_reason": 0,
+          "direct_rejected_sec": NaN,
+          "prediction_reason": 0,
+          "rest_sec": 12.464999751,
+          "now_sec": 11.129999751,
+          "program": [
+            [
+              11.129999751,
+              1.3295965194702148,
+              -0.2777628004550934
+            ],
+            [
+              11.154999751,
+              -3,
+              -0.2515127956867218
+            ],
+            [
+              11.179999751,
+              -3,
+              -0.2252628058195114
+            ],
+            [
+              11.204999750999999,
+              -3,
+              -0.20508217811584473
+            ],
+            [
+              11.229999751,
+              -3,
+              -0.18986837565898895
+            ],
+            [
+              11.254999751,
+              -3,
+              -0.17519283294677734
+            ],
+            [
+              11.279999751,
+              -3,
+              -0.1611722856760025
+            ],
+            [
+              11.304999751,
+              -3,
+              -0.1478770524263382
+            ],
+            [
+              11.329999750999999,
+              -3,
+              -0.13534820079803467
+            ],
+            [
+              11.354999751,
+              -3,
+              -0.12360545992851257
+            ],
+            [
+              11.379999751,
+              -3,
+              -0.11265202611684799
+            ],
+            [
+              11.404999751,
+              -3,
+              -0.10247813165187836
+            ],
+            [
+              11.429999751,
+              -3,
+              -0.08699004352092743
+            ],
+            [
+              11.454999750999999,
+              -3,
+              -0.07893815636634827
+            ],
+            [
+              11.479999751,
+              -3,
+              -0.0715983584523201
+            ],
+            [
+              11.504999751,
+              -3,
+              -0.06493301689624786
+            ],
+            [
+              11.529999751,
+              -3,
+              -0.05889378860592842
+            ],
+            [
+              11.554999751,
+              -3,
+              -0.053430866450071335
+            ],
+            [
+              11.579999750999999,
+              -3,
+              -0.04849602282047272
+            ],
+            [
+              11.604999751,
+              -3,
+              -0.044043611735105515
+            ],
+            [
+              11.629999751,
+              -3,
+              -0.04003099724650383
+            ],
+            [
+              11.654999751,
+              -3,
+              -0.03641862794756889
+            ],
+            [
+              11.679999751,
+              -3,
+              -0.03317006304860115
+            ],
+            [
+              11.704999750999999,
+              -3,
+              -0.03025190904736519
+            ],
+            [
+              11.729999751,
+              -3,
+              -0.02763369120657444
+            ],
+            [
+              11.754999751,
+              -3,
+              -0.025287726894021034
+            ],
+            [
+              11.779999751,
+              -3,
+              -0.023188967257738113
+            ],
+            [
+              11.804999751,
+              -3,
+              -0.021314816549420357
+            ],
+            [
+              11.829999750999999,
+              -3,
+              -0.0196449626237154
+            ],
+            [
+              11.854999751,
+              -3,
+              -0.01816120557487011
+            ],
+            [
+              11.879999751,
+              -3,
+              -0.0168472807854414
+            ],
+            [
+              11.904999751,
+              -3,
+              -0.0156886987388134
+            ],
+            [
+              11.929999751,
+              -3,
+              -0.014672591350972652
+            ],
+            [
+              11.954999750999999,
+              -3,
+              -0.013787561096251011
+            ],
+            [
+              11.979999751,
+              -3,
+              -0.013023549690842628
+            ],
+            [
+              12.004999751,
+              -3,
+              -0.012371717020869255
+            ],
+            [
+              12.029999751,
+              -3,
+              -0.011824321933090687
+            ],
+            [
+              12.054999751,
+              -3,
+              -0.011374620720744133
+            ],
+            [
+              12.079999750999999,
+              -3,
+              -0.011016775853931904
+            ],
+            [
+              12.104999751,
+              -3,
+              -0.010745774954557419
+            ],
+            [
+              12.129999751,
+              -3,
+              -0.010557352565228939
+            ],
+            [
+              12.154999751,
+              -3,
+              -0.010447927750647068
+            ]
+          ],
+          "first_wall_sec": NaN,
+          "native_first_wall_sec": NaN,
+          "native_contact_segments": 0,
+          "native_scalar_checks": 139776,
+          "all_native_at_rest": true
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "decision": 964,
+          "source": 260,
+          "actual_reason": "accepted",
+          "actual_applied_reason": 0,
+          "actual_rejected_sec": NaN,
+          "nominal_reason": "accepted",
+          "actual_reference_attempts": 2,
+          "direct_applied_reason": 0,
+          "direct_rejected_sec": NaN,
+          "prediction_reason": 0,
+          "rest_sec": 12.49499975,
+          "now_sec": 11.14499975,
+          "program": [
+            [
+              11.14499975,
+              1.3295958042144775,
+              -0.2683318853378296
+            ],
+            [
+              11.16999975,
+              -3,
+              -0.242081880569458
+            ],
+            [
+              11.194999750000001,
+              -3,
+              -0.21583189070224762
+            ],
+            [
+              11.21999975,
+              -3,
+              -0.18958188593387604
+            ],
+            [
+              11.24499975,
+              -3,
+              -0.17087554931640625
+            ],
+            [
+              11.26999975,
+              -3,
+              -0.15602175891399384
+            ],
+            [
+              11.29499975,
+              -3,
+              -0.14197561144828796
+            ],
+            [
+              11.319999750000001,
+              -3,
+              -0.12879100441932678
+            ],
+            [
+              11.34499975,
+              -3,
+              -0.11648531258106232
+            ],
+            [
+              11.36999975,
+              -3,
+              -0.10505495220422745
+            ],
+            [
+              11.39499975,
+              -3,
+              -0.0944821760058403
+            ],
+            [
+              11.41999975,
+              -3,
+              -0.084739089012146
+            ],
+            [
+              11.444999750000001,
+              -3,
+              -0.06972623616456985
+            ],
+            [
+              11.46999975,
+              -3,
+              -0.06216958165168762
+            ],
+            [
+              11.49499975,
+              -3,
+              -0.05533699318766594
+            ],
+            [
+              11.51999975,
+              -3,
+              -0.04918210208415985
+            ],
+            [
+              11.54499975,
+              -3,
+              -0.043649252504110336
+            ],
+            [
+              11.569999750000001,
+              -3,
+              -0.038682788610458374
+            ],
+            [
+              11.59499975,
+              -3,
+              -0.03422987088561058
+            ],
+            [
+              11.61999975,
+              -3,
+              -0.030241353437304497
+            ],
+            [
+              11.64499975,
+              -3,
+              -0.026671985164284706
+            ],
+            [
+              11.66999975,
+              -3,
+              -0.02348036877810955
+            ],
+            [
+              11.694999750000001,
+              -3,
+              -0.02062882110476494
+            ],
+            [
+              11.71999975,
+              -3,
+              -0.018083203583955765
+            ],
+            [
+              11.74499975,
+              -3,
+              -0.015812695026397705
+            ],
+            [
+              11.76999975,
+              -3,
+              -0.013789573684334755
+            ],
+            [
+              11.79499975,
+              -3,
+              -0.011988982558250427
+            ],
+            [
+              11.819999750000001,
+              -3,
+              -0.010388698428869247
+            ],
+            [
+              11.84499975,
+              -3,
+              -0.00896890927106142
+            ],
+            [
+              11.86999975,
+              -3,
+              -0.007711995858699083
+            ],
+            [
+              11.89499975,
+              -3,
+              -0.006602330598980188
+            ],
+            [
+              11.91999975,
+              -3,
+              -0.005626082886010408
+            ],
+            [
+              11.944999750000001,
+              -3,
+              -0.004771048203110695
+            ],
+            [
+              11.96999975,
+              -3,
+              -0.004026478622108698
+            ],
+            [
+              11.99499975,
+              -3,
+              -0.0033829405438154936
+            ],
+            [
+              12.01999975,
+              -3,
+              -0.0028321766294538975
+            ],
+            [
+              12.04499975,
+              -3,
+              -0.0023669858928769827
+            ],
+            [
+              12.069999750000001,
+              -3,
+              -0.001981115434318781
+            ],
+            [
+              12.09499975,
+              -3,
+              -0.001669163117185235
+            ],
+            [
+              12.11999975,
+              -3,
+              -0.0014264921192079782
+            ],
+            [
+              12.14499975,
+              -3,
+              -0.0012491544475778937
+            ],
+            [
+              12.16999975,
+              -3,
+              -0.001133825397118926
+            ]
+          ],
+          "first_wall_sec": NaN,
+          "native_first_wall_sec": NaN,
+          "native_contact_segments": 0,
+          "native_scalar_checks": 142336,
+          "all_native_at_rest": true
+        }
+      },
+      "d1-r19-cost": {
+        "authority": false,
+        "capture_status": "present",
+        "recorded_detail": "authority=observation-only/source=182/reason=steering-unreachable/elapsed_ms=187.114/pre_ms=0.066775/continuation_build_ms=1.5446/continuation_proof_ms=15.2134/terminal_build_ms=0/terminal_dynamic_ms=0/terminal_wall_ms=0/applied_ms=169.332/applied_reason=5/prediction_reason=0/feedback_proof=applied-program-unavailable",
+        "decision": 854,
+        "source": 182,
+        "attempts": [
+          {
+            "elapsed_ms": 14.907855,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.545915,
+              "continuation_build": 1.473767,
+              "continuation_proof": 4.81033,
+              "delay_wall": 0.133991,
+              "dynamic": 0.346661,
+              "wall": 4.329648,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 7.946457
+            }
+          },
+          {
+            "elapsed_ms": 13.784896,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.536276,
+              "continuation_build": 0.583816,
+              "continuation_proof": 4.832752,
+              "delay_wall": 0.132128,
+              "dynamic": 0.328136,
+              "wall": 4.372458,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 7.810321
+            }
+          },
+          {
+            "elapsed_ms": 13.705267,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.537008,
+              "continuation_build": 0.581722,
+              "continuation_proof": 4.823334,
+              "delay_wall": 0.131477,
+              "dynamic": 0.328727,
+              "wall": 4.3631,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 7.746712
+            }
+          },
+          {
+            "elapsed_ms": 13.700398,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.536978,
+              "continuation_build": 0.579057,
+              "continuation_proof": 4.825458,
+              "delay_wall": 0.131086,
+              "dynamic": 0.331422,
+              "wall": 4.36292,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 7.74047
+            }
+          },
+          {
+            "elapsed_ms": 13.730114,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.537248,
+              "continuation_build": 0.582083,
+              "continuation_proof": 4.8263,
+              "delay_wall": 0.131036,
+              "dynamic": 0.334297,
+              "wall": 4.360947,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 7.768012
+            }
+          }
+        ]
+      },
+      "d2-r19-cost": {
+        "authority": false,
+        "capture_status": "present",
+        "recorded_detail": "authority=observation-only/source=145/reason=steering-unreachable/elapsed_ms=139.706/pre_ms=0.095289/continuation_build_ms=1.8797/continuation_proof_ms=19.1261/terminal_build_ms=0/terminal_dynamic_ms=0/terminal_wall_ms=0/applied_ms=118.292/applied_reason=5/prediction_reason=0/feedback_proof=applied-program-unavailable",
+        "decision": 836,
+        "source": 145,
+        "attempts": [
+          {
+            "elapsed_ms": 12.917138,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.554792,
+              "continuation_build": 1.496008,
+              "continuation_proof": 4.823034,
+              "delay_wall": 0.134733,
+              "dynamic": 0.343164,
+              "wall": 4.345116,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.91272
+            }
+          },
+          {
+            "elapsed_ms": 11.708589,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.539042,
+              "continuation_build": 0.515377,
+              "continuation_proof": 4.775635,
+              "delay_wall": 0.126037,
+              "dynamic": 0.322094,
+              "wall": 4.327474,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.859139
+            }
+          },
+          {
+            "elapsed_ms": 11.625844,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.536998,
+              "continuation_build": 0.514626,
+              "continuation_proof": 4.743254,
+              "delay_wall": 0.125946,
+              "dynamic": 0.321013,
+              "wall": 4.296265,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.816649
+            }
+          },
+          {
+            "elapsed_ms": 11.616175,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.532189,
+              "continuation_build": 0.518593,
+              "continuation_proof": 4.738936,
+              "delay_wall": 0.125736,
+              "dynamic": 0.318869,
+              "wall": 4.294301,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.813212
+            }
+          },
+          {
+            "elapsed_ms": 11.672913,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.536798,
+              "continuation_build": 0.530475,
+              "continuation_proof": 4.729238,
+              "delay_wall": 0.126097,
+              "dynamic": 0.317156,
+              "wall": 4.285965,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.853899
+            }
+          }
+        ]
+      },
+      "d1-r19-moving": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r19/d1/mpcc_architecture_snapshots/000000000972-7a386465eeb8f5cc-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 971,
+          "source": 266,
+          "captured_request": {
+            "elapsed_ms": 20.931311,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.169999755000001,
+            "program_commands": 36,
+            "samples": 245,
+            "peer_clearance_m": 0.5953275506690063,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 20.565475,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.169999755000001,
+            "program_commands": 36,
+            "samples": 245,
+            "peer_clearance_m": 0.5953275506690063,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 972,
+          "source": 266,
+          "captured_request": {
+            "elapsed_ms": 20.518426,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.304999752999999,
+            "program_commands": 37,
+            "samples": 255,
+            "peer_clearance_m": 0.5268641515506081,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 20.825513,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.304999752999999,
+            "program_commands": 37,
+            "samples": 255,
+            "peer_clearance_m": 0.5268641515506081,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "d2-r19-moving": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000001071-d426f9a520aa2c4e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1070,
+          "source": 692,
+          "captured_request": {
+            "elapsed_ms": 8.585346,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.624999691000001,
+            "program_commands": 2,
+            "samples": 170,
+            "peer_clearance_m": 0.01817436437837827,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 8.469609,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": NaN,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.624999691000001,
+            "program_commands": 2,
+            "samples": 170,
+            "peer_clearance_m": 0.01817436437837827,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1071,
+          "source": 692,
+          "captured_request": {
+            "elapsed_ms": 8.167311,
+            "reason": "applied-program-unavailable",
+            "applied_reason": 7,
+            "program_reason": 0,
+            "prediction_reason": 8,
+            "rejected_sec": 14.649999691,
+            "rejected_peer": "d1",
+            "production": "retained-proof-unavailable"
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 8.16652,
+            "reason": "applied-program-unavailable",
+            "applied_reason": 7,
+            "program_reason": 0,
+            "prediction_reason": 8,
+            "rejected_sec": 14.649999691,
+            "rejected_peer": "d1",
+            "production": "retained-proof-unavailable"
+          }
+        }
+      }
+    }
+  },
+  "current_limits": "r20p99D1/D2=46.4872026/49.66856355ms; adjacent overruns62/70. r19D2peer rejection persists after numerical tightening. Publication-clock agreement, real Stop/rest/restart, M4–M6 remain open. Freshdev2-r21next.",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r20/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "c85a1768009807665aad446597a76a212d999a425685735374a85c27d766693f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/launch.log",
+      "sha256": "2b53944f03054b06904ce1ea7b9ccf0f36c67e4bf4b6d1ef1cf00eb8159ebd19"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/manifest.json",
+      "sha256": "73657e895530cec605e6a46339cba0baae7597c55703bfad298f82ae1d6aa37c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/monitor-summary.json",
+      "sha256": "276bf471a3b8938f29f5b480613f4fe9e15fcf3696b027db2bec9aa5100bebec"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r20/mpcc-source.patch",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/compare_interval.cpp",
+      "sha256": "9da26fcc51e945077d0868437462f0c84df57001cabdfa9126ea9e551ea1b48b"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/footprint_enclosure.hpp",
+      "sha256": "70761459b847b4d4ce676a7d570915e1355068a61adeaf26d20f3ebda1091046"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/interval_model.hpp",
+      "sha256": "cde9c0096c84ff8ad109eb2ec284711164bc1c4921aa20eb578f87fbc03c11ca"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "57fd8728ba7e88e669a8a66c688033608670edcda64a293bca0146e40dfa062c"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/manifest.json",
+      "sha256": "245b8c55dd7edd463f0130bb4d119ef89fdd481c7ea2f7f23f435fdd969686a2"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/mpcc_vehicle_enclosure.hpp",
+      "sha256": "949760419e4af9e86f72ddc70ec29078156e1687c42f2e41209e262f5598ec54"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/native_vehicle_model.cpp",
+      "sha256": "69409c6d9085014068aced6ea47a81501173ab1874f6d67a992c250e715760b8"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r14/run.log",
+      "sha256": "e9dbea0191714cd482ff83df003262f7b824f008a049774f380680d2a8c72c34"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r89/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r89/manifest.json",
+      "sha256": "3b4f9cbeb41a0e8146ae77f33d8c53aa55cd8e39f8c2354ca2302474941db1ca"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r89/r20-wall.yaml",
+      "sha256": "41f4b0f98cb76c3501d4993926a3ee87d7bfaa1009fadfea1ef03d80dc862e7e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r89/replay",
+      "sha256": "d6e393bcbd503fe4285d3fdc41ca3704ffdd787af4ce83259c6ae971e4b1b504"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r90/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r90/manifest.json",
+      "sha256": "02358cc593e8864e2c46106d1aee89199f1fbff3b579b8ce230f2cb23ef1064b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r90/r20-wall.yaml",
+      "sha256": "014a5e02337c71752436e1ace4cae1970fdc57ce283826fc9ac0467c3eea652c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r90/replay",
+      "sha256": "b4e6e738e8d2c9a85af477fdffd70c4911bbe769129315959b4b16f7b6e2d203"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r91/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r91/manifest.json",
+      "sha256": "0204d48f12f1b6462a0eaf2e5070af17c6ee166795dbfdf67883c7b8fb3d736b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r91/r20-wall.yaml",
+      "sha256": "18d8c04c6e1d981ebf78c57e005698db2a5056744df3b3a731d593488b3e5507"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r91/replay",
+      "sha256": "2fb486ed336d0c5389994ccf5519703c2c139c20434ecfe966b25caae5b59dee"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r91/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r91/variant/audit.cpp",
+      "sha256": "ca8b2376def4e50b1624a2d1034d08155cce852e42d9d79acbf7b96e2ba23631"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r91/variant/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp",
+      "sha256": "949760419e4af9e86f72ddc70ec29078156e1687c42f2e41209e262f5598ec54"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r92/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r92/manifest.json",
+      "sha256": "6a96ecc0c81323916f1d3a99bbad2cda1c0d1a88938ff312018e51063c6d62a9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r92/replay",
+      "sha256": "03e69646f324c895ef97f801dcd5c637860c7a431fe0cef7ed09575a636917e0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r93/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r93/manifest.json",
+      "sha256": "fb6fdb85852f991af2ad7ed91011b7c3d2eb8fd9da68caef1f795679648e8f49"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r93/replay",
+      "sha256": "0b46f654dd0bccf9b017c3e583fd6ce866faaa614694353461c839363e8bb1bb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r94/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r94/manifest.json",
+      "sha256": "c9d3b55946717f7bbde7869db7298daa6ed5a4f22aee626784a56447407c3dc4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r94/replay",
+      "sha256": "fb2f84e172ab2b3c8193f116ffba7c5d13bdc42a41bce5a57f343ecf07f5dbd4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r95/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r95/manifest.json",
+      "sha256": "af6553f3bc54a6fd8393c7f369fe80e47ef415a13c8b44959017c4522e9aef76"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r95/replay",
+      "sha256": "b4e6e738e8d2c9a85af477fdffd70c4911bbe769129315959b4b16f7b6e2d203"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r96/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r96/manifest.json",
+      "sha256": "6e83371fd8ccdb0783c65a844480d87c7ce3f60ef0aea4915bc3229c7b9abfc5"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r96/replay",
+      "sha256": "f5ece6a5bcbe65cd555f1497945f01d251033e564cc09644d5974a17647744df"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/architecture.log",
+      "sha256": "36b4732d9c429e94f2d6ae2368cff1db86522d0a27802ac866f98e8e929354b7"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/complete-rest.log",
+      "sha256": "d944b1cd36a9ef19a6551b8d0763a089194ef355dc456e845c0af1778730955f"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/exact-pair.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/exact-pair.yaml",
+      "sha256": "f261558aed0b18456732c46d4079520a2e4116b850271c0670e7cf6f2ca8080a"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/manifest.json",
+      "sha256": "840e550200974b1d9b2b30942fcbd112ff9e6339689ef0712bd9b9c8e8d4c1b4"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/metrics/d1-callback-samples.json",
+      "sha256": "af7df5f023cea0fecdbe423e23e968c0d20a11cde52cec157fe6db2325d3b145"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/metrics/d1-command-clock-anomalies.json",
+      "sha256": "4a647236c5cabcbbab76fe670e038b57dd4dd8d55c736cd70d6858fd83d2f239"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/metrics/d1-prediction-samples.json",
+      "sha256": "1990e7596b334bf8aedb9f1c1f31a21a558463208f53859ffc4c89607b0292c0"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/metrics/d2-callback-samples.json",
+      "sha256": "5dcc728dd87285115bd86e6022c1a598926caf4d358e2c11219f0b8859ad6792"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/metrics/d2-command-clock-anomalies.json",
+      "sha256": "7d2da6070fc400831f51e6bb2b2c779d2dc1677cb0aa751a5e65b21966e49023"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/metrics/d2-prediction-samples.json",
+      "sha256": "ef50fb42cc7e38ff55b5790c1f8e2c8d1e228862d665c1d2ddb7e8817e32087f"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/metrics/report.json",
+      "sha256": "8e40995b134630175f04f1f9ea1d60c9c50f67549d3a0481ac8900678caf9d0a"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/metrics.log",
+      "sha256": "4dde95cecd6fe23eb3d338592c0e7579eadb4e8d415c919d0bdb6b613a150ee0"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r20/mpcc_architecture_compare",
+      "sha256": "df529027c48ef982e34dc3547f252657cb45c57fd646d55ddf90bdd39d1118b6"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/footprint_enclosure.hpp",
+      "sha256": "70761459b847b4d4ce676a7d570915e1355068a61adeaf26d20f3ebda1091046"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/independent-1101.log",
+      "sha256": "cd64f03833b295998498ddc716ae07da0acd4e87b81b75a3806a405d5235abb1"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/independent-1101.yaml",
+      "sha256": "cd64f03833b295998498ddc716ae07da0acd4e87b81b75a3806a405d5235abb1"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/independent-1585.log",
+      "sha256": "fc047aa67488d551888f1381dc8ecb710e8e2c9916f223a14fc4b824adbda4e3"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/independent-1585.yaml",
+      "sha256": "fc047aa67488d551888f1381dc8ecb710e8e2c9916f223a14fc4b824adbda4e3"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/independent-1620.log",
+      "sha256": "790915e9fb72a2087cf821e7b41c992c42de4a1adf33a0ba11e4ab1a6c8be3a6"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/independent-1620.yaml",
+      "sha256": "790915e9fb72a2087cf821e7b41c992c42de4a1adf33a0ba11e4ab1a6c8be3a6"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/interval_model.hpp",
+      "sha256": "cde9c0096c84ff8ad109eb2ec284711164bc1c4921aa20eb578f87fbc03c11ca"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "57fd8728ba7e88e669a8a66c688033608670edcda64a293bca0146e40dfa062c"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/manifest.json",
+      "sha256": "4616082a523d33f7d4fe8e0edcd5cfe2b6a6babcd0abc21584bc439656847c1f"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/mpcc_applied_input_prediction.cpp",
+      "sha256": "0f668168485065d199ab2447e13fc365c51286b5d22733968616aa0bf376a31c"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/mpcc_applied_input_prediction.hpp",
+      "sha256": "827a5491270ef35682271c842c6ce2215ab02b63ff474a0502151989adf703df"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/mpcc_vehicle_enclosure.hpp",
+      "sha256": "949760419e4af9e86f72ddc70ec29078156e1687c42f2e41209e262f5598ec54"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/replay",
+      "sha256": "489cad43e8cca7b2b245b61efed92a9a586342609682acc23fb2c1840f830e32"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/replay_applied_input_tube.cpp",
+      "sha256": "1f3b3f5182c464ef3430f370440b798608085d6b382465a6a0c6d009a4526687"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/unmodified-895.log",
+      "sha256": "83201d4eb1098c8926d5fc3f54e0ce7c32a280ecd176926da58f100d6bd1df42"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r7/unmodified-895.yaml",
+      "sha256": "83201d4eb1098c8926d5fc3f54e0ce7c32a280ecd176926da58f100d6bd1df42"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc-nine-state-build-r44.log",
+      "sha256": "fa900d70b8ee1add14a8977986b521734d97c0cea707d9f214e69626aae68fc6"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc-nine-state-tests-r37.log",
+      "sha256": "c93df2a556a77277c67c8ff45929294bee2da653312eb06f6d0744149991412d"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc-r20-wall-audit-r1.log",
+      "sha256": "7a5c66f2f5a291c9820ca68cab62ba252c709f4ffd24d34c9c625743747233c0"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc-r20-wall-audit-r2.log",
+      "sha256": "c61d3f72cb16b72a730a7bab3203da7204042b75c1ce9e4ca08819109d50a117"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc-wall-fixture-before-r1.log",
+      "sha256": "13b8209034a46255f8fba6acfb428e82b2072509a22813a9be7878701c24370c"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc-wall-intersection-r1.log",
+      "sha256": "658c4dc1ef86c7c3426957b94d4c2a777964c3f1bc940b2779e0904aa76f3dfc"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc-wall-native-suite-r1.log",
+      "sha256": "d72b341094408a43c502e23136bc526842324feebf1f64956a2bb9d9cafe8e3a"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc_compile_wall_intersection.py",
+      "sha256": "9115b40d601cbf3574a0faa9674be308be852d515100edda79a97915a001c9a0"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc_generate_wall_fixture.py",
+      "sha256": "0ed240495418b589dc23d8812cc4b9df2904c2ca0c76934ce7050d9009ec4093"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc_record_wall_enclosure.py",
+      "sha256": "bb99cb5ba2b99e132de61d62beeb2af3f66074b1f3c9d2ec39270e645cfeba6b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-evidence/mpcc_wall_native_suite.py",
+      "sha256": "6e8ce2972bfd44775e3eec69a795f1390d3c736989db48c271f588f371133657"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/accepted-r17.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/accepted-r17.yaml",
+      "sha256": "6410af2db16b7badc6d7ae004572e82a8cbb49ed8afe981af7f5f8bd9d646191"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/commands.json",
+      "sha256": "3f8e5c567570082c6667b966952e0aeced9a90611cdec193fee35ec4a8b5322a"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/compile-r92.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/compile-r93.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/compile-r94.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/compile-r95.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/compile-r96.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/continuous-and-hybrid.log",
+      "sha256": "7447bea7c75ab419cdbf4fd293a0599c92d38696bf0c0b4ff8c1e830223f7499"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/d1-r19-cost.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/d1-r19-cost.yaml",
+      "sha256": "d846feae0a5876a74c1ccab9cefd652ccf9ae2a2fe08f1391aeff75ea4501fca"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/d1-r19-moving.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/d1-r19-moving.yaml",
+      "sha256": "4bf80a0ae7c6d5415d747df9236b818ab5bbba73e488fad47a74044196232ef9"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/d2-r19-cost.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/d2-r19-cost.yaml",
+      "sha256": "81288b2f93b8d93e108d873938ff14222edb4a187b6b8905c0ad00df38965de5"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/d2-r19-moving.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/d2-r19-moving.yaml",
+      "sha256": "61a6f82b4dd7196e7f9b02e3084a3ed327e4e9d0ab92fc862b72c59f82170333"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/files.json",
+      "sha256": "49309adef5f572f7468df8e5b5f0743b047f5d713dc322910099765f0f27c1c6"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/four-source-default-api.log",
+      "sha256": "da91714a9d56b2f0bad2cb66cea448b736b9eb863165719c45294f825637d1f7"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros.so",
+      "sha256": "2f9e9f09888de16443d689a651d92a6184746407405f523def87e03d6d2b6d4c"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_boost_start_dash.so",
+      "sha256": "16f5e37b07209aef64088993ad544261bd556702ee394ee54c2bcf1fa96e29d9"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_control_mode_guard.so",
+      "sha256": "2f3790bca465a63e121105e4fc0bc96535b6edefb1dbff6ed896e4de030518f2"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_bounded_single_job_executor.so",
+      "sha256": "ca1e7df3df184f761e5ad594cbe44764cb531d13d6b6eb987ee7871d3667b249"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan.so",
+      "sha256": "ce489bd98b8d0b855a5e6b842ff12ae378dece831253def49529643bcf28e0fb"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan_adapter.so",
+      "sha256": "376476c63bdda01b91604b19452a16319320e3de2562ccd64927a6f66a976e0c"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_revalidation.so",
+      "sha256": "754b45878217fe33a560124c1521b8e9ec448b269de408a21282143c9deb9202"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_world_revalidation.so",
+      "sha256": "608e8991a459d47eb00cb6f1491d1b3225c432d5b71da067998fb010bfdbb00e"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_follow_canonical_async.so",
+      "sha256": "16b17f5148aaabf53dfc9616217914e0923f83ae3b79b819cc5105cff4bc7dac"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_latest_only_worker.so",
+      "sha256": "4ea3676fa3fb92a6b61aef2f4549b9c1401a2848a5102ebc2faa4254672cf388"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_stage_geometry.so",
+      "sha256": "0387d075bfe4dac3f0a44ec2ab9adbcb9b02adab62154230245a646d72e9a514"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "sha256": "db812e64db8a9cc000767a0c27e6018139f31508112c5d54b55d0e65adf88043"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_velocity_limit.so",
+      "sha256": "5edfd8b8848f3810edb7c7b11963b0c60f601538dbf059fc4a991ddc45d99395"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_association.so",
+      "sha256": "f605749b6b1d1dc2920d61540e946ebf45bdcc0a191504919294806d38efcebe"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_preview.so",
+      "sha256": "51acc1153014fba2c6f38cf304a6a8033e43707fec5f083ddaad345e2e03b00e"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_comparison.a",
+      "sha256": "fd329cc3c696ac98ceb2c5206acf9547700a7b8c6def4c064ce3866c4ee8512f"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_snapshot.a",
+      "sha256": "c41d7c8e9b8aee7b60b50c52082bb179781aa7285738d4ee438ddea9c8f4934e"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_certified_stop_successor_observation.a",
+      "sha256": "621b4f2e8d6d3224c3084980248625f1c04a0be1c78ea7cfde90cbd61e790c3d"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_execution_contract.so",
+      "sha256": "100686e2eb897b01442195e8d17faa7ef3a354ab2ed61430e9761cd772af57fc"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_latest_state_feedback.a",
+      "sha256": "54a428855c52451b7cd412de820f8e190408f76446a621b2be12e1e0f6f7d992"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_on_trajectory_connector.a",
+      "sha256": "2860432af2629c54f69756a2771eb70fc2d3ee8bc8862c682135eb0ac5587f82"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_overtake_sibling_adoption.a",
+      "sha256": "49cb2198bf9d9751ba58afcd6f9e98ae23718e44f5f63e78994a33dc8d223028"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_progress.so",
+      "sha256": "d064d8d232f31cc7be383243b6df983fcef70c6b0c6a7d6796851d06c11451e6"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.a",
+      "sha256": "e7c029456c8dd126cf41daf1b60298f0fbeee39c63d45eb9ca6f8f5a49c49186"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.so",
+      "sha256": "c01addb1368825d92a3337e6f4946201b42bafcf72f9802c36eb0bc441cffb12"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_adapter.a",
+      "sha256": "87de34de6da68634540063a4c7f4f7e76dc069e49e684a24bde2af1eee76cb67"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_certified_plan.a",
+      "sha256": "6ede9c573e7fb85641c3728d3acc9d9bca0f49e2b076b84a6caadbdcd8f1a9d6"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_command_candidate.a",
+      "sha256": "70521ef2e8abe3ad384a7ea7083d409403c38e7f2e0a3726243c3e6ecc7f6aba"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_dynamic_proof.a",
+      "sha256": "99092fe7fd1502e32951cd62dea1a0af679444e8cd0b8a14336f76ece1f8d25b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_artifact.a",
+      "sha256": "820ee6b8478704b2518184c0be9f3818a4cb49307e112932582bd4cc8b978bea"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_source.a",
+      "sha256": "65a8d51933811ad552daa26319c6edc04f181f3b755675c1a7778aab6993a731"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_normal_branch_bank.a",
+      "sha256": "66c6eea82bd89cfa4e4cd10c0f571bd387420c706f87409b61ccaca5208b2aaf"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_overtake_branch_bank.a",
+      "sha256": "0262ea8ae93d91eb706b411bcbefef60020e4d6201a558f00c58bd834a93e547"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_adapter.a",
+      "sha256": "70070b6a7ce14fccf59990704a1ddee204714f025d0acae9e6213460256c0c7b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_wall.a",
+      "sha256": "f4aa95ce288b650e23f1569d5faf2775640a723285efb444ef7ff4a2306ea6d3"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_problem.a",
+      "sha256": "79db324f8a13adf327e12c95d8678c4adaf14074e2cae5eaa581a1ea0cbe9914"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_production_adapter.a",
+      "sha256": "aaa6239899e07b4dc87ec49eba893d0a9a80b222e53ec50334a5660c0478ff53"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_retained_revalidation.a",
+      "sha256": "ea4a75b0b1079937d2dcee4106aec6e06ea859881a09c08f6ee8bb21573c6228"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_shadow.a",
+      "sha256": "068a4b9df465db4465be5150ef1e2269c016c5a2d6a29858eb32e9d74d20058a"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_control_lattice.a",
+      "sha256": "f360472032396b6e5617af632eaa2d3b633a844b548a77e457ada8dd3f98dc0c"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_lattice_shadow.a",
+      "sha256": "f21db286f49f515ddb36c25f0b88280770ee115f981a1923f3e74861dc8a01c0"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_successor_bundle.a",
+      "sha256": "3b86ec8c085a5d6963dfb693bc66d4422bc870ec6b1f50b6f07da5e8998b9861"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_stateless_maneuver.a",
+      "sha256": "6a3324e7dae8478245dd76445a407dd201d696b6beab742d2dddc3ca47c453ed"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_steering_state_contract.so",
+      "sha256": "03eaf0f72437c114269b7f9252fabff6ff8267da7657671c6bc1f133e151d886"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "57fd8728ba7e88e669a8a66c688033608670edcda64a293bca0146e40dfa062c"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_decision_trace.so",
+      "sha256": "5e439e7d0c7a06a22b1c9d50ba0b5078a2ba4383249179ad07cda96e462a71f6"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_execution_orchestrator.so",
+      "sha256": "8fdb9e8fcd846b3195dd59b3033cb6f77934593e5ccfc0c3a7f058ea52b53451"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_path_core.so",
+      "sha256": "520c4afe066b0d7e55a84c32b2a13961ca912771a00d97a960820a00e6aa28c5"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_persistent_osqp.so",
+      "sha256": "4a8c23ce5fecdf903b401b25537ccef660dad85cbd79f77b21746718f361a944"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_race_mpcc_foundation.so",
+      "sha256": "8e333d2a791fcd20e17ba14689afa75e15cb6658c85e1a0277cc331444626450"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_footprint.so",
+      "sha256": "d060bf3ad237a337f05b3c8e94bce75964fbaea1346a8dc0a31ca53727995ff4"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_mpc.so",
+      "sha256": "f8bb0ec2af86c20e784c792c5cf9a23576f3edddd90c9c8f31c4847394a7da59"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_runtime_speed_profile.so",
+      "sha256": "f3bde7a7d3deb6df958555323c3c5c12deb22263963938c9e10fef328def4316"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_start_grid_grace.so",
+      "sha256": "4579a4d9b9a97c635206f5417ff369486c15e4d2dc6305b392fa9a298e3b88e1"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_stuck_recovery_core.so",
+      "sha256": "1af4df45e4353d8d7680462cd5b964c695c00bc3403b1ffed041ee8d36303ba0"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_v2x_overtake_core.so",
+      "sha256": "1a43451a6033eb064a91789f5964682d57c23f83967b8183dde3d8c5079fd260"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_boost_start_dash.hpp",
+      "sha256": "6377ee258ce094dd481807b3570045253e0de438684c0f72f5fa1f706cd746c8"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_control_mode_guard.hpp",
+      "sha256": "5f4afa91011e2e66d06087604d90ada5946a434d099c497ec67adafa8393bf01"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "994779bfa1d00f20514b91beb9efaff5425ffd369514487605a1ca86b5e56a95"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp",
+      "sha256": "9528cced3509cef66a0d6516ba982cb43f951895e3500fd4a853d4b4cd66d647"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp",
+      "sha256": "949760419e4af9e86f72ddc70ec29078156e1687c42f2e41209e262f5598ec54"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/external_speed_loss_monitor.hpp",
+      "sha256": "82a5a738a12dfa667c6733baf1a8a460f945b02ed91439d703233dccff52164f"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/latest_only_worker.hpp",
+      "sha256": "39f4f298180d8f68d94795961498b46546def7309ac1f2b3b85be33fd6097e35"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp",
+      "sha256": "3cddd30e326339caaa731541bb11f848594975a8cc3c89b3955f46d2fbfe1176"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_stage_geometry.hpp",
+      "sha256": "142723ce37e57380e0aff8a90edb78f5dace8f39768ab84cc7b827cef30a6744"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_velocity_limit.hpp",
+      "sha256": "546d086bbcf361e6306c0d7d8a37582b231d51b8c3f2493712cb3e98e5abbf54"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_association.hpp",
+      "sha256": "0fb2ac6660a90f6a1dfae3b851441eeeb317389601235f9ecfaa3c23c2daa007"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_preview.hpp",
+      "sha256": "8b800bf50f09944346fcb2658fffd6dd20f7e925a69273738823fb85aa90a259"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp",
+      "sha256": "827a5491270ef35682271c842c6ce2215ab02b63ff474a0502151989adf703df"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp",
+      "sha256": "f28ddd28e53bbbd21d70bd565bb199505f05a368b9beb8bfb052516eaf2f2bb7"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp",
+      "sha256": "5eef64d2cce3ee7da13c1cf625f6550eb4e64ac77a99dae93f06c65178cd2bff"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "sha256": "5782909e01b8caf818e66a92b4c8339af08447acf03456ff3e1ec511a9cb4557"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp",
+      "sha256": "491bdcffd46304bacc3b0b5c45a9868548aaa78c2f549526129349468e718231"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp",
+      "sha256": "83431e813c50c8df07e5dbf28d45f84f726d7bd74ce9492f3a55957f7b8da43f"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp",
+      "sha256": "6b4ed1169b37d66d6bbc411c3ca604d7e9764ed2e4de2ee311a36c253b32fcc4"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp",
+      "sha256": "93eb1a2c4332ebb40a53ecd5b91cf90f66a1821036d2f6ad20523dfa653eab73"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp",
+      "sha256": "6e744a67b5be270df16338ed6a497abe47da54d45f187aca2fd3d8ffe6d7c02f"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_progress.hpp",
+      "sha256": "e21c57a0e3a4cd2d1b30ace01c0c84587b42d4a58a03b02881544d78418cbc8d"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "sha256": "4191fa5f1c5382df303be3bf5491b28ed574d015fffb9a1fa1c3514c29d33341"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "sha256": "b7a425fc0efd4ffd8b60c12f19025aa3f3a546642557619bd4c548122796b4af"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp",
+      "sha256": "0f7d46d68cd6ee525e32cca1955b2e8b99342507b1bde0e249762f7a4a693ee2"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp",
+      "sha256": "94bbdafc08578fbebf85af15b90583f1c7452cdf3ab842689281249d0d191b48"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp",
+      "sha256": "c1d150c48b877ceeb29392dde137754279d2c03d9bf3990e7b2fa430fa07b946"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp",
+      "sha256": "e32649cd1f157eac6266c2e80a4ab8a4731e864b92f2cd7b20c292045097dae2"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp",
+      "sha256": "fb31dbf1370c6fa8d4e539d4da090ae677be08934425210ed3c6320b8acf11ea"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "sha256": "81eef27e7e53d57731971258f1477e46f4ce6354467352c26059859c9f2a2a57"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp",
+      "sha256": "3f158a9210e3b5de76ec4df6abb0b4c6eecc575a3d7553850e1c3c16279164bc"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp",
+      "sha256": "464fc3fbf29043c28eb1e27fa12593be6c8dcbd5b87961a312aaf4e178866b1e"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp",
+      "sha256": "cb5dd1b7c5e898f20b0ad712edde7da8ae1a3aaa31125e7cebcb4b23d50b6daa"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp",
+      "sha256": "ad68f2f69c5363e9602eda375958fc825aaa4d1581bae6e220f9a8920c237d4e"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp",
+      "sha256": "8f872a0c8a86f65db032918e191baef626fbcf6466ec9c27e53cc3c979195f8d"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp",
+      "sha256": "2735504de4cf98be0a0fdf9bf08ee337ba0a9d898549e706b9660c8f63ae03ed"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp",
+      "sha256": "e650a5491e34e5c64820cd379ca26289a9fdacb09e65accb6d3e82fd644db64d"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "dea223525b1753e88fd46182a24d30e6505d095da8a44cb4ee402074823ba9a9"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp",
+      "sha256": "ec16338fe4cc96a8eaf0676362ab53a94c79ddeb05135b2a93749017f12cdad6"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp",
+      "sha256": "84eaaf7054fbe43addaa0d1833f2dc7face00fcb34aaef8c022da6c888c32b20"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp",
+      "sha256": "fda7709abdc9d50c80279e7e0b0f4dd4e9ef8a295959b0caaae3d3427e51b9eb"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp",
+      "sha256": "c0364be0c57498691256882b8de9b3f0e9acd9ced3f2ccba590b4d8d1efc4725"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp",
+      "sha256": "3adc114489f24bf75e8fddeab46e8d4eb937a4f3b7bfd506d7b03f1ac6789e9f"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp",
+      "sha256": "e786ef0ea30461c7ad1ca6d43b371c77484cc1c8f3fa7f2e64761b6a6dbfcb47"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp",
+      "sha256": "00e48a55c54aaebc70dc9c5352116f12556de4e5261d32a7ad9818e41b9b96ac"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stop_input_program.hpp",
+      "sha256": "4f229f7f22dad4a40d4901c1bf9e43075c93468434e1e1f4a0ba5150470ae520"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp",
+      "sha256": "d83d7d2185e11200ff1e1f656018994fb3424599011a0c3904c0c5aa66b0b536"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp",
+      "sha256": "8afc0766959fa3477a4a17ed37f2f32c65eaf2bf66ced4cbcdc081ad92d35735"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_wire_command.hpp",
+      "sha256": "c0734bed816636bd6db4bbc3cb56bff4df7c90868297949ecedba545ba315a86"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_decision_trace.hpp",
+      "sha256": "91d7fef94540c0b6ce89ec0139cfb76f8021085eb16563b01b88c076c356e52f"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp",
+      "sha256": "21eae46391377403be955bddab2f38fc2b5857ca3287b6c271db539cb6e51a0c"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/path_core.hpp",
+      "sha256": "648e041b4400b57d268967d4df2f2075516b3eda682de5e9ea39178bf9f80e56"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/persistent_osqp.hpp",
+      "sha256": "c6d015467d5aa82267bc1fdb6bad25efc9cc644fad057e89d49e6a34f4afaab3"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp",
+      "sha256": "445983d9732dd2329633cd952dcb1dc682522911541fd2318a69aee2745cd8c0"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/race_mpcc_foundation.hpp",
+      "sha256": "918837e27ff9b3a2b65924b4fb22ef958f879bfe7f67f47fc2bcb88a6a2c28a1"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp",
+      "sha256": "41dd3feb125fbda04e1e340d7088180fc031ac2de8ede0fcedad4c724a82052b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_mpc.hpp",
+      "sha256": "f3b918005ea4979ca93dee7c869945556e05555fb51d5cd89d9680721c9f0f73"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/runtime_speed_profile.hpp",
+      "sha256": "247ac0bb446518c83181a8e21ecfb8b738e02fe90818b38c7151045390b31311"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/start_grid_grace.hpp",
+      "sha256": "d263d2e4644b0ebbcfbdda0df0bb6335b1e3beadd8143d29ef34e094985afd23"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp",
+      "sha256": "334696d66637e231e8721d553de390252958985a090026ebed4766a99e2dfa4e"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/v2x_overtake_core.hpp",
+      "sha256": "d8b5d96d02c2759fb0204ee8fbbe73a430e680e39d99c3d63d5ae634ad086f4a"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_applied_input_prediction.cpp",
+      "sha256": "0f668168485065d199ab2447e13fc365c51286b5d22733968616aa0bf376a31c"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_compare.cpp",
+      "sha256": "d6bdc82964b018fbf8c1201bd49d66670a3437591114e119f3cdd91696f82ddd"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "b8b04216f3395ef7b7b95b0207b3d91ba8ddd78a2422a85168533a5daf83c32b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "279020e563325c0001ac1574386ebaf70a74bb661ede22cbf66c17c16da35039"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_certified_stop_successor_observation.cpp",
+      "sha256": "6788f885a2a98efcc2acc960e798913f00e3639be390905cf90f72414c92bd06"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_execution_contract.cpp",
+      "sha256": "04e2bfe3868b70a7413427a4da9e10d896ceaff3da9214c4d5b33c81a3f93805"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_latest_state_feedback.cpp",
+      "sha256": "80a3763903df1a57286fb8920a757cdc1fb7fa77288be792eaa30d5a2a3ed012"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_maneuver_replay.cpp",
+      "sha256": "5c3fbe0193a06f32cf509a7ea94ce038aa91918e19634224219c612ea59b56b8"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_on_trajectory_connector.cpp",
+      "sha256": "b58a8dc7a1a66db0c293028fd9ade33089313df4175f21314b3c601377e8d200"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_overtake_sibling_adoption.cpp",
+      "sha256": "a7a153f33cc97dc0436f9ed4eb2ac925b15e7c3e70b0e17f0a9752b3fc49ac7e"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_prepared_suffix_replay.cpp",
+      "sha256": "c1b0698a5e321a480c28940e9fec7dbe87df7536532dab65e0d213469a1f9b80"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_progress.cpp",
+      "sha256": "c0a12fc5f8c2d7f59a0d22d6162adef6a7aff410b046f12281c5996d403554c7"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_qp_replay.cpp",
+      "sha256": "221d714ce6bba36c629d2ada6378c2288fcc7e0fda5d4c96babefbac7fb7cf00"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "sha256": "c0e544311e4be6c0bde46b1170de7240c8ee7e8aef357793b9fdee99a6e4fa1b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "sha256": "819ed260d526674e054197ddd014d50652b03d059d001a71d4d6aae7185ce3b2"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "f3390a9722509c6fd89c04e10262d2caad2f3fd2c03fbdf85375c46ea3addd5a"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp",
+      "sha256": "985a0d1486eed1a216ad6a59ac7ddc2c6e5fdb59b4a1de91d3224f1bd233bf83"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_obstacle.cpp",
+      "sha256": "57d007dc8d778466a4b0927dd5cfdd1cfbc92ac8aee3f70adc923e304df00698"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "fb762cff5ef44a824652c6fb23859a5b193c22b8e169d48d16a688cb4316d291"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "sha256": "9fc64832fc88f09fb87b5d8698035beb1116a98e116bf4ba36a3fcd2783c5a75"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_source.cpp",
+      "sha256": "caf792a10e99ad20a0e7744d615a8d828bf0828bf82f2c02dbb830a3c2ffb353"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_normal_branch_bank.cpp",
+      "sha256": "a3acd9dbf24757b42e55783aaaff8dfea51bac4c480650fcdeca1658533058be"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "sha256": "f6c7ba9bd6cf7a022c92ad45c1cd2903857021117fa8f25470403485574e0412"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "sha256": "983407accd00e52c523cb32106d6054d59df519bc164a01ef7e9e50d79107286"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_wall.cpp",
+      "sha256": "10881540d46e51a8efa277026e421528ba1d93d9df20d3094b69c943d4bba8a9"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_problem.cpp",
+      "sha256": "1a81899496f7a33d699c92cbd61e926bf7548520e0fcb442499c6218b3cbe3d3"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_production_adapter.cpp",
+      "sha256": "e6d22be4e4e0366d31e650c8c3fc574914820770128c0fdf5f6c014eca057964"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "ef181a05bee24560dfd8b778ac825ea92a9c3bc26003d84b54136f3187e7d06e"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "sha256": "946f8c080197fed9aa53f1583f11162f2ef0749f42642ed7bfdfbdea9b6196fe"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a9b458c34a29a607d7a30217fb0e713c1fb77f90db12e66c17d7c91072e8f4d2"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "sha256": "11e83eb28126834a8837289518f0023bd6dd72669f4b5622214639a8c82e1f92"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "00a31e1e4b63fc9fe6d669f10568be58e850c510d3b5acc7172ff0d96e764ceb"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_wall_refinement.cpp",
+      "sha256": "cf521297f83fb6371548607b7437d090b7bb2aaca41243fba5354ff170167b58"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stateless_maneuver.cpp",
+      "sha256": "c7d940bfab89072cb120df5945dd99eb8c35cb5aee1f6cf9009c1624517ee3d8"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_steering_state_contract.cpp",
+      "sha256": "b530641c709927a3864c513eaf1752fc7f5d21e84a6c371a3b7bd2819853a3f9"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stop_input_program.cpp",
+      "sha256": "ce2a115cf4a461660494c7cf6e17d3b5a14d163f0ce8ed2144959c821cf8ecca"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r16/d2/mpcc_architecture_snapshots/000000000795-01e3e7cbcf62d2f4-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "ec728c76a7c82708b8e8e64c8837b0a17d3dc69d3d4ef258ecb0208bdb4ee97c"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r17/d1/mpcc_architecture_snapshots/000000001020-7b13fc78d1f505da-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b77c6467c1f38503207c9afe37abcacb493b14530fb92032315ea48542d077ce"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b7cbe726c7098ab94ce00e36358856a3d33f1062018befdc5e650ab6d28befb2"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d1/mpcc_architecture_snapshots/000000000854-47564d1699d6a423-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml",
+      "sha256": "3b426e2abaaebe1e1ed3f4416c5cddd61f9889d25a15097ee3cd88ef5f2617b7"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d1/mpcc_architecture_snapshots/000000000972-7a386465eeb8f5cc-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "f5e859f73135d58de1cb36e57fa5a685c5495ababad6cc33165547c4a41eb2b1"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000000836-10c6439274b4fabe-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml",
+      "sha256": "d792304c36a0724cb42021510a76df4606636352afa1aabec588d576d2aad180"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000001071-d426f9a520aa2c4e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "02578477116e07e451922a4ac84860d27480015d743316371ee87b30e645b99a"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "c85a1768009807665aad446597a76a212d999a425685735374a85c27d766693f"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/frozen-inputs/task-tmp/mpcc_wall_native_suite.py",
+      "sha256": "6e8ce2972bfd44775e3eec69a795f1390d3c736989db48c271f588f371133657"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/gap-r18.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/gap-r18.yaml",
+      "sha256": "19aaebe421271bdab46a8cb56fae5c091be78d24180b53e9855892264fa0691b"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/signed-r16.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/signed-r16.yaml",
+      "sha256": "04b55220ce5194217acd196cd2cef693f34e9d367df0b9a0f4fae5e4608f88bf"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/wall-oracles-r20.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/wall-oracles-r20.yaml",
+      "sha256": "18d8c04c6e1d981ebf78c57e005698db2a5056744df3b3a731d593488b3e5507"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/wall-r20.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-wall-enclosure-native-r1/wall-r20.yaml",
+      "sha256": "de5eaab748ed6aca4d9650ade3aa1d09449483bac0176b3b25d9c706e1ee8c3c"
+    }
+  ]
+}

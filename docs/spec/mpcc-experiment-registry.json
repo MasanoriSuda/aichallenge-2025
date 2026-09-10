@@ -943,6 +943,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/stream-validation-evidence.json",
       "replay_ready": true,
       "reason": "Exact slow alternates D1854/source182 and D2836/source145; original first moving failure requests972/1071; native before/after and same-world architectures"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-wall-enclosure-r20",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/wall-enclosure-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact first D1964/source260wall failure, separate accepted963/source277, native reference-arm audit and conservative wall regression"
     }
   ],
   "experiments": [
@@ -7514,6 +7520,246 @@
         "Repeating identical solved Stop suffix with unused alternate lateral reference"
       ],
       "revisit_condition": "New world/input or observed integrated failure; no repeat of rejected identical candidate without changed causal input"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-integrated-r20",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Streaming resolves integrated authority/timing",
+      "changed_dimension": "Fresh same-build dev2",
+      "result": "rejected",
+      "reason": "First D1movingEmergency964/2.29mps; p99 and adjacent overruns fail. Source260captured, previous actualpublished277separate.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-nominal-only-r89",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Disabling applied gate preserves the final selected reference",
+      "changed_dimension": "Diagnostic proof extraction",
+      "result": "rejected",
+      "reason": "Wrong: earlier reference succeeds nominally, producing wall time11.91999975instead of actual12.25499975. r90fixes diagnostic arm selection and asserts reason/time.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-exact-arm-r90",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Final reference arm reproduces the actual wall rejection",
+      "changed_dimension": "Diagnostic reference selection",
+      "result": "accepted",
+      "reason": "Original964walltime matches;64sampled trajectories clear but finite samples do not certify every response. Separate963accepted.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-persistent-a-1",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: persistent-a",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=68662875505219386 solver=solved solve_ms=30.1416 terminal_progress=5.95115 terminal_velocity=3.45106 lateral_reserve=0.388419 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-stateless-left-b-2",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: stateless-left-b",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=stateless-left-b stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-stateless-right-b-3",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: stateless-right-b",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=stateless-right-b stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-rough-left-c-4",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: rough-left-c",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=rough-left-c stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-rough-right-c-5",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: rough-right-c",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=rough-right-c stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-offline-left-d-6",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: offline-left-d",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=offline-left-d stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-offline-right-d-7",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: offline-right-d",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=offline-right-d stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-production-left-g-8",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: production-left-g",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=production-left-g stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-architecture-production-right-g-9",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: production-right-g",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=production-right-g stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=16860086005332987708 solver=solved solve_ms=15.492 terminal_progress=0.731217 terminal_velocity=0 lateral_reserve=0.392161 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.94425,-1.70619]/mean=-2.73723/bounds=0 steer_rate=[-0.683592,0.696854]/mean=0.158749/bounds=0/sign_changes=4 sequence=[0.055:-1.70619:0.509364;0.055:-2.48536:-0.220389;0.055:-2.58932:-0.470586;0.055:-2.63559:0.324845;0.055:-2.67506:0.369303;0.055:-2.71456:0.550241;0.055:-2.73763:0.677254;0.055:-2.75699:0.681055;0.055:-2.77578:0.688204;0.055:-2.79426:0.695313;0.055:-2.81286:0.696352;0.055:-2.83175:0.60112;0.055:-2.8511:0.277428;0.055:-2.87066:-0.658638;0.055:-2.89085:-0.656843;0.055:-2.91222:-0.659508;0.055:-2.93445:-0.66782;0.055:-2.9214:-0.683592;0.055:-2.90432:0.425018;0.055:-2.94425:0.696854] detail=accepted; Nominal only. Missing dynamic-target candidates were not solved and do not show physical infeasibility.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-independent-intersection-r91",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Keeping both independent bounds eliminates unnecessary width",
+      "changed_dimension": "Numerical image intersection",
+      "result": "accepted",
+      "reason": "Isolated variant preserves963 and certifies exact964through12.49499975;64sampled schedules enclosed. No production mutation for this experiment.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-enclosure-r20-production-local",
+      "baseline_commit": "c87b9fa6552eeae39fb4a5e5768c6ebdc5b239c6",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-enclosure-r20"
+      ],
+      "hypothesis": "Conservative intersection preserves full physical/programme requirements",
+      "changed_dimension": "Same interval intersection in shared numerical kernel",
+      "result": "accepted",
+      "reason": "Baseline fixture fails atoriginalwalltime; newfixture passes. Buildr44/testsr37pass. Broad continuous/hybrid suites pass. Exact964and r19D1972now certificate/materialization/join accepted; r19D2peer still rejected.",
+      "production_impact": "Same physical requirements; intersection of independently valid numerical images only. No runtime acceptance claimed.",
+      "deleted_code": [
+        "Discarding the already computed natural interval image when mean-value image is wider"
+      ],
+      "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
     }
   ]
 }

@@ -20,7 +20,8 @@ bool finite_state(const PredictedState & state) noexcept
          std::isfinite(state.velocity_mps) &&
          std::isfinite(state.progress_m) &&
          std::isfinite(state.steering_rad) &&
-         std::isfinite(state.response_steering_rad);
+         std::isfinite(state.response_steering_rad) &&
+         std::isfinite(state.lateral_velocity_mps) && std::isfinite(state.yaw_rate_radps);
 }
 
 bool finite_control(const ControlStage & control) noexcept
@@ -113,7 +114,7 @@ bool identity_valid(const Identity & identity) noexcept
            identity.source_context) &&
          supports_intent(identity.source_context.intent) &&
          identity.source_context.formulation ==
-         mpcc_execution_contract::Formulation::VelocitySteeringYawResponseProgress7State &&
+         mpcc_execution_contract::Formulation::VelocitySteeringTireBodyProgress9State &&
          std::isfinite(identity.snapshot_sec) && identity.snapshot_sec >= 0.0;
 }
 
@@ -192,7 +193,10 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   constexpr double half_pi = 1.57079632679489661923;
   if (!identity_valid(artifact.identity) ||
     artifact.identity.source_context.state_schema_id !=
-    mpcc_rate_resolved::kCoordinateStateSchema)
+    mpcc_rate_resolved::kCoordinateStateSchema ||
+    !mpcc_vehicle_model::valid(artifact.vehicle_model) ||
+    artifact.identity.source_context.vehicle_model_fingerprint !=
+    mpcc_vehicle_model::fingerprint(artifact.vehicle_model))
   {
     return RejectReason::InvalidIdentity;
   }
@@ -226,10 +230,6 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     !std::isfinite(artifact.semantic_initial_steering_rad) ||
     !std::isfinite(artifact.semantic_initial_response_steering_rad) ||
     !std::isfinite(artifact.wheelbase_m) || artifact.wheelbase_m <= 0.0 ||
-    !std::isfinite(artifact.yaw_response_gain) ||
-    artifact.yaw_response_gain <= 0.0 ||
-    !std::isfinite(artifact.yaw_response_time_constant_sec) ||
-    artifact.yaw_response_time_constant_sec <= 0.0 ||
     !std::isfinite(artifact.minimum_frenet_denominator) ||
     artifact.minimum_frenet_denominator <= 0.0 ||
     !std::isfinite(artifact.maximum_abs_steering_rad) ||
@@ -331,7 +331,7 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
       std::abs(state.steering_rad) >
       artifact.maximum_abs_steering_rad + tolerance ||
       std::abs(state.response_steering_rad) >
-      artifact.maximum_abs_steering_rad + tolerance)
+      artifact.vehicle_model.maximum_wire_steering_rad * artifact.vehicle_model.tire_grip + tolerance)
     {
       return RejectReason::InvalidPredictedState;
     }
@@ -425,24 +425,10 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     {
       return RejectReason::SteeringDynamicsMismatch;
     }
-    const double response_decay = std::exp(
-      -control.duration_sec / artifact.yaw_response_time_constant_sec);
-    const double response_rate_integral_sec =
-      control.duration_sec - artifact.yaw_response_time_constant_sec *
-      (1.0 - response_decay);
-    const double predicted_next_response =
-      artifact.predicted_states[index].steering_rad +
-      (artifact.predicted_states[index].response_steering_rad -
-      artifact.predicted_states[index].steering_rad) * response_decay +
-      control.steering_rate_radps * response_rate_integral_sec;
-    if (
-      std::abs(
-        predicted_next_response -
-        artifact.predicted_states[index + 1U].response_steering_rad) >
-      residual_bound_m)
-    {
-      return RejectReason::SteeringDynamicsMismatch;
-    }
+    // Tire, lateral velocity and yaw rate are nonlinear predicted states.
+    // Their physical realization is replayed from semantic_initial_state by
+    // the common body kernel in the required exact wall/peer certificate.
+    // Only desired steering and virtual progress have exact affine rows.
     const double progress_delta_m =
       artifact.predicted_states[index + 1U].progress_m -
       artifact.predicted_states[index].progress_m;
@@ -576,13 +562,34 @@ ActuationResult extract_actuation(
     result.reason = ActuationReason::SampleRejected;
     return result;
   }
-  const auto & state = artifact.predicted_states[stage];
   const auto & control = artifact.control_stages[stage];
+  const auto & initial = *artifact.semantic_initial_state;
+  mpcc_vehicle_model::State physical{
+    initial.lag_m, initial.lateral_m, initial.heading_offset_rad, initial.velocity_mps,
+    initial.lateral_velocity_mps, initial.yaw_rate_radps,
+    initial.steering_rad, initial.response_steering_rad};
+  double physical_elapsed{};
+  for (std::size_t i = 0; i <= stage; ++i) {
+    const auto & interval = artifact.control_stages[i];
+    const double duration = i == stage ? cursor.stage_elapsed_sec : interval.duration_sec;
+    const auto next = mpcc_vehicle_model::advance(
+      physical, {interval.acceleration_mps2, interval.steering_rate_radps},
+      artifact.vehicle_model, duration);
+    if (!next) {
+      result.reason = ActuationReason::NonfiniteActuation;
+      return result;
+    }
+    physical = next->state;
+    physical_elapsed += duration;
+  }
+  if (std::abs(physical_elapsed - cursor.elapsed_sec) > 1e-9) {
+    result.reason = ActuationReason::InvalidStageIndex;
+    return result;
+  }
   Actuation actuation;
   actuation.sequence = artifact.identity.sequence;
   actuation.control_stage_index = stage;
-  actuation.predicted_speed_mps =
-    state.velocity_mps + control.acceleration_mps2 * cursor.stage_elapsed_sec;
+  actuation.predicted_speed_mps = physical.forward_velocity_mps;
   actuation.acceleration_mps2 = control.acceleration_mps2;
   actuation.steering_rate_radps = control.steering_rate_radps;
   actuation.steering_rad = sample.sample->steering_rad;

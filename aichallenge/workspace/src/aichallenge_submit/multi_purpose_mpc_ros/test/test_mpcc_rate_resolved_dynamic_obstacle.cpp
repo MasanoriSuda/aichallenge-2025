@@ -39,8 +39,8 @@ dynamic_obstacle::Request request_with_lateral_suffix()
 TEST(MpccRateResolvedDynamicObstacle, SamePhysicalBodyHasSamePeerSupportAcrossCourseFrames)
 {
   auto request = request_with_lateral_suffix();
-  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(35, -10.0);
-  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(35, 10.0);
+  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(model::kStateDimension * 5, -10.0);
+  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(model::kStateDimension * 5, 10.0);
   request.witness_physical_separation = true;
   request.physical_separation_geometry =
     dynamic_obstacle::PhysicalSeparationGeometry{1.2, 0.8, 0.7, 0.4, 0.1, 0.45};
@@ -128,17 +128,17 @@ TEST(MpccRateResolvedDynamicObstacle, UsesDeclaredBoxForTangentWithoutChangingSo
     std::initializer_list<multi_purpose_mpc_ros::mpc_stage_geometry::CourseFrameKnot>{{0, 0, 0, 0, 0}, {5, 5, 0, 0, 1}});
   request.cartesian_prediction = dynamic_obstacle::CartesianPrediction{
     {knots, 0.0}, std::vector<Eigen::Vector2d>(4, Eigen::Vector2d{2.0, -2.6})};
-  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(35, -10.0);
-  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(35, 10.0);
-  request.wall_only_problem.state_lower[7 + model::kProgressIndex] = 0.0;
-  request.wall_only_primal[7 + model::kProgressIndex] = -2.215132146736506e-9;
+  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(model::kStateDimension * 5, -10.0);
+  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(model::kStateDimension * 5, 10.0);
+  request.wall_only_problem.state_lower[model::kStateDimension + model::kProgressIndex] = 0.0;
+  request.wall_only_primal[model::kStateDimension + model::kProgressIndex] = -2.215132146736506e-9;
   const auto original = request.wall_only_primal;
   EXPECT_TRUE(dynamic_obstacle::refine(request).problem.has_value());
   EXPECT_TRUE(request.wall_only_primal.isApprox(original, 0.0));
   // A semantic box that actually permits an unavailable frame is still
   // rejected. Numerical tangent selection must not extrapolate that frame.
-  request.wall_only_problem.state_lower[7 + model::kProgressIndex] = -1.0;
-  request.wall_only_primal[7 + model::kProgressIndex] = -0.2;
+  request.wall_only_problem.state_lower[model::kStateDimension + model::kProgressIndex] = -1.0;
+  request.wall_only_primal[model::kStateDimension + model::kProgressIndex] = -0.2;
   EXPECT_EQ(dynamic_obstacle::refine(request).reason, dynamic_obstacle::Reason::InvalidInput);
 }
 

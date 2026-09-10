@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_HPP_
 
 #include "multi_purpose_mpc_ros/mpc_stage_geometry.hpp"
+#include "multi_purpose_mpc_ros/mpcc_vehicle_model.hpp"
 
 #include <Eigen/Dense>
 
@@ -13,7 +14,7 @@
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved
 {
 
-inline constexpr int kStateDimension = 7;
+inline constexpr int kStateDimension = 9;
 inline constexpr int kInputDimension = 3;
 inline constexpr int kLateralIndex = 0;
 inline constexpr int kLagIndex = 1;
@@ -22,12 +23,14 @@ inline constexpr int kVelocityIndex = 3;
 inline constexpr int kProgressIndex = 4;
 inline constexpr int kSteeringIndex = 5;
 inline constexpr int kResponseSteeringIndex = 6;
+inline constexpr int kLateralVelocityIndex = 7;
+inline constexpr int kYawRateIndex = 8;
 inline constexpr int kAccelerationIndex = 0;
 inline constexpr int kSteeringRateIndex = 1;
 inline constexpr int kVirtualProgressSpeedIndex = 2;
 /// Numerical dynamics contract shared by SQP tangent construction and exact
 /// physical publication proof.
-inline constexpr double kMaximumPhysicalIntegrationStepSec = 0.01;
+inline constexpr double kMaximumPhysicalIntegrationStepSec = 0.005;
 
 using StateVector = Eigen::Matrix<double, kStateDimension, 1>;
 using InputVector = Eigen::Matrix<double, kInputDimension, 1>;
@@ -49,7 +52,7 @@ bool course_frame_matches(
   double progress_origin_m) noexcept;
 
 inline constexpr const char * kCoordinateStateSchema =
-  "ey-elag-epsi-v-progress-steering-yaw-response-cartesian-step-v3";
+  "ey-elag-epsi-u-progress-steering-tire-vy-yaw-rate-cartesian-step-v4";
 
 struct LinearizationRequest
 {
@@ -65,13 +68,14 @@ struct LinearizationRequest
   double reference_virtual_progress_speed_mps{};
   double reference_path_curvature_radpm{};
   double wheelbase_m{};
-  double yaw_response_gain{1.0};
-  double yaw_response_time_constant_sec{};
   double stage_dt_sec{};
   double minimum_frenet_denominator{0.20};
   double minimum_stage_dt_sec{0.01};
   double maximum_stage_dt_sec{0.25};
   CourseFrame course_frame;
+  double reference_lateral_velocity_mps{};
+  double reference_yaw_rate_radps{};
+  mpcc_vehicle_model::Parameters vehicle_model;
 };
 
 struct Linearization
@@ -91,17 +95,16 @@ struct NonlinearTransition
   std::size_t integration_substep_count{};
 };
 
-/// Evaluate the canonical nonlinear seven-state transition used by both SQP
+/// Evaluate the canonical nonlinear nine-state transition used by both SQP
 /// tangent construction and the exact publication proof. The stage is
 /// integrated in physical Cartesian coordinates with midpoint substeps no
-/// longer than 10 ms, then projected into the same immutable reference window.
+/// longer than the sealed integration step (5 ms maximum), then projected into the same immutable reference window.
 std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
   const LinearizationRequest & request) noexcept;
 
 /// Linearize the canonical nonlinear temporal Frenet transition whose lateral
-/// actuator is a steering-rate input. Commanded steering and the tire/yaw
-/// response steering are distinct states; the latter follows the former
-/// through the identified first-order vehicle yaw response.
+/// actuator is a steering-rate input. Desired steering, physical tire angle,
+/// COM lateral velocity and body yaw rate are separate shared-model states.
 std::optional<Linearization> linearize_temporal_frenet(
   const LinearizationRequest & request) noexcept;
 

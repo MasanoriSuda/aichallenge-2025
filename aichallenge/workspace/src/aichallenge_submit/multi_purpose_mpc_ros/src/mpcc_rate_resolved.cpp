@@ -29,10 +29,10 @@ bool transition_request_valid(const LinearizationRequest & request) noexcept
     std::isfinite(request.reference_virtual_progress_speed_mps) &&
     std::isfinite(request.reference_path_curvature_radpm) &&
     std::isfinite(request.wheelbase_m) && request.wheelbase_m > 0.0 &&
-    std::isfinite(request.yaw_response_gain) &&
-    request.yaw_response_gain > 0.0 &&
-    std::isfinite(request.yaw_response_time_constant_sec) &&
-    request.yaw_response_time_constant_sec > 0.0 &&
+    std::isfinite(request.reference_lateral_velocity_mps) &&
+    std::isfinite(request.reference_yaw_rate_radps) &&
+    mpcc_vehicle_model::valid(request.vehicle_model) &&
+    request.vehicle_model.maximum_step_sec <= kMaximumPhysicalIntegrationStepSec &&
     std::isfinite(request.stage_dt_sec) &&
     std::isfinite(request.minimum_frenet_denominator) &&
     request.minimum_frenet_denominator > 0.0 &&
@@ -50,7 +50,8 @@ StateVector request_state(const LinearizationRequest & request) noexcept
     request.reference_lateral_m, request.reference_lag_m,
     request.reference_heading_rad, request.reference_velocity_mps,
     request.reference_progress_m, request.reference_steering_rad,
-    request.reference_response_steering_rad).finished();
+    request.reference_response_steering_rad,
+    request.reference_lateral_velocity_mps, request.reference_yaw_rate_radps).finished();
 }
 
 InputVector request_input(const LinearizationRequest & request) noexcept
@@ -71,6 +72,8 @@ void set_request_state(
   request.reference_progress_m = state[kProgressIndex];
   request.reference_steering_rad = state[kSteeringIndex];
   request.reference_response_steering_rad = state[kResponseSteeringIndex];
+  request.reference_lateral_velocity_mps = state[kLateralVelocityIndex];
+  request.reference_yaw_rate_radps = state[kYawRateIndex];
 }
 
 void set_request_input(
@@ -80,20 +83,6 @@ void set_request_input(
   request.reference_steering_rate_radps = input[kSteeringRateIndex];
   request.reference_virtual_progress_speed_mps =
     input[kVirtualProgressSpeedIndex];
-}
-
-double response_steering_after_ramp(
-  const double initial_command_rad,
-  const double initial_response_rad,
-  const double steering_rate_radps,
-  const double elapsed_sec,
-  const double time_constant_sec) noexcept
-{
-  const double decay = std::exp(-elapsed_sec / time_constant_sec);
-  return initial_command_rad +
-         (initial_response_rad - initial_command_rad) * decay +
-         steering_rate_radps *
-         (elapsed_sec - time_constant_sec * (1.0 - decay));
 }
 
 }  // namespace
@@ -120,11 +109,6 @@ std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
   if (!transition_request_valid(request)) {
     return std::nullopt;
   }
-  const auto substep_count = static_cast<std::size_t>(std::max(
-      1.0, std::ceil(
-        request.stage_dt_sec / kMaximumPhysicalIntegrationStepSec)));
-  const double step_sec =
-    request.stage_dt_sec / static_cast<double>(substep_count);
   StateVector state = request_state(request);
   const InputVector input = request_input(request);
   // Integrate in a fixed physical frame whose origin/orientation are the
@@ -176,41 +160,22 @@ std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
   {
     return std::nullopt;
   }
-  for (std::size_t substep = 0U; substep < substep_count; ++substep) {
-    const double steering = state[kSteeringIndex];
-    const double response = state[kResponseSteeringIndex];
-    const double steering_rate = input[kSteeringRateIndex];
-    const double response_mid = response_steering_after_ramp(
-      steering, response, steering_rate, 0.5 * step_sec,
-      request.yaw_response_time_constant_sec);
-    const double response_next = response_steering_after_ramp(
-      steering, response, steering_rate, step_sec,
-      request.yaw_response_time_constant_sec);
-    const double velocity_mid = state[kVelocityIndex] +
-      0.5 * input[kAccelerationIndex] * step_sec;
-    const double yaw_rate_mid =
-      request.yaw_response_gain * velocity_mid * std::tan(response_mid) /
-      request.wheelbase_m;
-    const double yaw_mid = yaw_rad + 0.5 * yaw_rate_mid * step_sec;
-    if (
-      !std::isfinite(response_mid) || !std::isfinite(response_next) ||
-      !std::isfinite(velocity_mid) || !std::isfinite(yaw_mid) ||
-      !std::isfinite(yaw_rate_mid))
-    {
-      return std::nullopt;
-    }
-    x_m += velocity_mid * std::cos(yaw_mid) * step_sec;
-    y_m += velocity_mid * std::sin(yaw_mid) * step_sec;
-    yaw_rad += yaw_rate_mid * step_sec;
-    state[kVelocityIndex] += input[kAccelerationIndex] * step_sec;
-    state[kProgressIndex] +=
-      input[kVirtualProgressSpeedIndex] * step_sec;
-    state[kSteeringIndex] += steering_rate * step_sec;
-    state[kResponseSteeringIndex] = response_next;
-    if (!state.allFinite()) {
-      return std::nullopt;
-    }
-  }
+  const auto body = mpcc_vehicle_model::advance(
+    mpcc_vehicle_model::State{x_m, y_m, yaw_rad, state[kVelocityIndex],
+      state[kLateralVelocityIndex], state[kYawRateIndex], state[kSteeringIndex],
+      state[kResponseSteeringIndex]},
+    mpcc_vehicle_model::Input{input[kAccelerationIndex], input[kSteeringRateIndex]},
+    request.vehicle_model, request.stage_dt_sec);
+  if (!body) {return std::nullopt;}
+  x_m = body->state.x_m;
+  y_m = body->state.y_m;
+  yaw_rad = body->state.yaw_rad;
+  state[kVelocityIndex] = body->state.forward_velocity_mps;
+  state[kLateralVelocityIndex] = body->state.lateral_velocity_mps;
+  state[kYawRateIndex] = body->state.yaw_rate_radps;
+  state[kSteeringIndex] = body->state.desired_steering_rad;
+  state[kResponseSteeringIndex] = body->state.tire_steering_rad;
+  state[kProgressIndex] += progress_delta_m;
   const double dx = x_m - frame_dx_m;
   const double dy = y_m - frame_dy_m;
   const double c = std::cos(frame_heading_delta_rad);
@@ -226,7 +191,7 @@ std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
   {
     return std::nullopt;
   }
-  return NonlinearTransition{state, substep_count};
+  return NonlinearTransition{state, body->substeps};
 }
 
 std::optional<Linearization> linearize_temporal_frenet(
@@ -275,14 +240,20 @@ std::optional<Linearization> linearize_temporal_frenet(
       }
       const auto plus = evaluate_temporal_frenet_transition(plus_request);
       const auto minus = evaluate_temporal_frenet_transition(minus_request);
+      const auto physical_difference = [](const StateVector & to, const StateVector & from) {
+          StateVector difference = to - from;
+          difference[kHeadingIndex] = std::atan2(
+            std::sin(difference[kHeadingIndex]), std::cos(difference[kHeadingIndex]));
+          return difference;
+        };
       if (plus.has_value() && minus.has_value()) {
-        return (plus->next_state - minus->next_state) / (2.0 * delta);
+        return physical_difference(plus->next_state, minus->next_state) / (2.0 * delta);
       }
       if (plus.has_value()) {
-        return (plus->next_state - reference_transition->next_state) / delta;
+        return physical_difference(plus->next_state, reference_transition->next_state) / delta;
       }
       if (minus.has_value()) {
-        return (reference_transition->next_state - minus->next_state) / delta;
+        return physical_difference(reference_transition->next_state, minus->next_state) / delta;
       }
       return std::nullopt;
     };
@@ -304,12 +275,6 @@ std::optional<Linearization> linearize_temporal_frenet(
   // These rows are exactly affine under the stage's constant inputs.  Keep
   // their solver rows bit-for-bit consistent with the immutable execution
   // artifact contract instead of retaining finite-difference noise.
-  result.state_matrix.row(kVelocityIndex).setZero();
-  result.input_matrix.row(kVelocityIndex).setZero();
-  result.state_matrix(kVelocityIndex, kVelocityIndex) = 1.0;
-  result.input_matrix(kVelocityIndex, kAccelerationIndex) =
-    request.stage_dt_sec;
-
   result.state_matrix.row(kProgressIndex).setZero();
   result.input_matrix.row(kProgressIndex).setZero();
   result.state_matrix(kProgressIndex, kProgressIndex) = 1.0;
@@ -321,20 +286,6 @@ std::optional<Linearization> linearize_temporal_frenet(
   result.state_matrix(kSteeringIndex, kSteeringIndex) = 1.0;
   result.input_matrix(kSteeringIndex, kSteeringRateIndex) =
     request.stage_dt_sec;
-
-  const double response_decay = std::exp(
-    -request.stage_dt_sec / request.yaw_response_time_constant_sec);
-  const double response_rate_integral_sec =
-    request.stage_dt_sec - request.yaw_response_time_constant_sec *
-    (1.0 - response_decay);
-  result.state_matrix.row(kResponseSteeringIndex).setZero();
-  result.input_matrix.row(kResponseSteeringIndex).setZero();
-  result.state_matrix(kResponseSteeringIndex, kSteeringIndex) =
-    1.0 - response_decay;
-  result.state_matrix(kResponseSteeringIndex, kResponseSteeringIndex) =
-    response_decay;
-  result.input_matrix(kResponseSteeringIndex, kSteeringRateIndex) =
-    response_rate_integral_sec;
 
   result.stage_dt_sec = request.stage_dt_sec;
   result.equality_offset =

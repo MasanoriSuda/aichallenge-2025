@@ -149,6 +149,8 @@ struct Request
   race_mpcc_foundation::StopPathTrackingPolicy stop_lateral_policy;
   double minimum_acceleration_mps2{};
   double maximum_acceleration_mps2{};
+  double current_lateral_velocity_mps{};
+  double current_yaw_rate_radps{};
 };
 
 enum class Reason
@@ -396,6 +398,8 @@ struct Result
   double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double current_response_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  double current_lateral_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
+  double current_yaw_rate_radps{std::numeric_limits<double>::quiet_NaN()};
   bool current_control_state_available{false};
   artifact::PredictedState current_control_state;
   double previous_published_steering_rad{

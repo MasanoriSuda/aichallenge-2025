@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp"
 
 #include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
@@ -37,7 +38,9 @@ mpcc_rate_resolved_shadow::Snapshot make_source()
   source.identity.source_context.dynamic_obstacle_side_sign = 1;
   source.identity.source_context.horizon_steps = 3U;
   source.identity.source_context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  source.identity.source_context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   source.identity.source_context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   source.identity.source_context.input_schema_id = "input-3";
@@ -57,8 +60,8 @@ mpcc_rate_resolved_shadow::Snapshot make_source()
   request.current_steering_rad = 0.0;
   request.current_response_steering_rad = 0.0;
   request.wheelbase_m = 1.0;
-  request.yaw_response_gain = 1.0;
-  request.yaw_response_time_constant_sec = 0.1;
+  request.curvature_reference_gain = 1.0;
+  request.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   request.maximum_abs_steering_rad = 0.5;
   request.maximum_abs_steering_rate_radps = 1.0;
   request.states.resize(4U);

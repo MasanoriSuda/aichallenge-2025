@@ -86,6 +86,13 @@ ament_auto_add_library(${PROJECT_NAME}_mpcc_steering_state_contract SHARED
   src/mpcc_steering_state_contract.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_mpcc_vehicle_model SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/mpcc_vehicle_model.cpp
+  src/mpcc_vehicle_prediction.cpp
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_vehicle_model yaml-cpp)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved STATIC
   src/mpcc_rate_resolved.cpp
 )
@@ -96,6 +103,7 @@ target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved PUBLIC
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved
   ${PROJECT_NAME}_mpc_stage_geometry
+  ${PROJECT_NAME}_mpcc_vehicle_model
 )
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_problem STATIC
@@ -646,6 +654,8 @@ target_link_libraries(reference_path_validator
 if(BUILD_TESTING)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_mpcc_vehicle_model test/test_mpcc_vehicle_model.cpp)
+  target_link_libraries(test_mpcc_vehicle_model ${PROJECT_NAME}_mpcc_vehicle_model)
   find_package(ament_cmake_pytest REQUIRED)
 
   ament_add_gtest(test_mpcc_steering_state_contract
@@ -1211,6 +1221,34 @@ install(PROGRAMS
   scripts/v2x_position_editor
   DESTINATION lib/${PROJECT_NAME}
 )
+
+if(BUILD_TESTING)
+  foreach(vehicle_fixture_target
+    test_mpcc_rate_resolved_problem
+    test_mpcc_architecture_snapshot
+    test_mpcc_rate_resolved_certified_plan
+    test_mpcc_rate_resolved_physical_wall
+    test_mpcc_rate_resolved_execution_source
+    test_mpcc_execution_contract
+    test_mpcc_rate_resolved_normal_branch_bank
+    test_mpcc_rate_resolved_adapter
+    test_mpcc_rate_resolved_retained_revalidation
+    test_mpcc_rate_resolved_physical_adapter
+    test_mpcc_rate_resolved_shadow
+    test_mpcc_rate_resolved_command_candidate
+    test_mpcc_rate_resolved_overtake_branch_bank
+    test_mpcc_rate_resolved_dynamic_proof
+    test_mpcc_on_trajectory_connector
+    test_mpcc_architecture_comparison
+    test_mpcc_rate_resolved
+    test_mpcc_overtake_sibling_adoption
+    test_mpcc_stateless_maneuver
+  )
+    if(TARGET ${vehicle_fixture_target})
+      target_link_libraries(${vehicle_fixture_target} ${PROJECT_NAME}_mpcc_vehicle_model)
+    endif()
+  endforeach()
+endif()
 
 # create python virtual environment
 execute_process(

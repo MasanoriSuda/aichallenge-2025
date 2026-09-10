@@ -247,6 +247,8 @@ const char * to_string(const Formulation formulation) noexcept
     case Formulation::Unresolved: return "unresolved";
     case Formulation::VelocitySteeringYawResponseProgress7State:
       return "velocity-steering-yaw-response-progress-7state";
+    case Formulation::VelocitySteeringTireBodyProgress9State:
+      return "velocity-steering-tire-body-progress-9state";
     case Formulation::SolverDerivedBypass: return "solver-derived-bypass";
   }
   return "unknown";
@@ -354,7 +356,7 @@ bool canonical_normal_formulation_supported(
   const Formulation formulation) noexcept
 {
   return formulation ==
-    Formulation::VelocitySteeringYawResponseProgress7State;
+    Formulation::VelocitySteeringTireBodyProgress9State;
 }
 
 std::uint64_t fingerprint_stage_geometry(
@@ -570,6 +572,9 @@ std::uint64_t problem_context_fingerprint(
   builder.append_string(context.input_schema_id);
   builder.append_string(context.bounds_schema_id);
   builder.append_string(context.cost_schema_id);
+  if (context.vehicle_model_fingerprint != 0U) {
+    builder.append_u64(context.vehicle_model_fingerprint);
+  }
   return builder.finish();
 }
 
@@ -604,6 +609,8 @@ bool problem_context_complete(const MpccProblemContext & context) noexcept
     context.decision_id > 0U && context.intent != ControlIntent::Unknown &&
     context.stage_geometry_id > 0U && context.horizon_steps > 0U &&
     context.formulation != Formulation::Unresolved && schemas_complete(context) &&
+    (context.formulation != Formulation::VelocitySteeringTireBodyProgress9State ||
+    context.vehicle_model_fingerprint != 0U) &&
     required_target_present && target_generation_complete &&
     execution_side_complete && dynamic_obstacle_identity_complete &&
     context.fingerprint > 0U &&

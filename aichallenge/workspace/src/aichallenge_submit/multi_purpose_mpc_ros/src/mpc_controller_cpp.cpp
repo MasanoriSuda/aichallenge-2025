@@ -1,3 +1,8 @@
+#include <multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp>
+#include <multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp>
+#include <autoware_auto_vehicle_msgs/msg/velocity_report.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+#include <deque>
 #include <autoware_auto_control_msgs/msg/ackermann_control_command.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
 #include <autoware_auto_vehicle_msgs/msg/gear_command.hpp>
@@ -112,6 +117,8 @@ using autoware_auto_planning_msgs::msg::Trajectory;
 using autoware_auto_vehicle_msgs::msg::GearCommand;
 using autoware_auto_vehicle_msgs::msg::GearReport;
 using autoware_auto_vehicle_msgs::msg::SteeringReport;
+using autoware_auto_vehicle_msgs::msg::VelocityReport;
+using sensor_msgs::msg::Imu;
 using geometry_msgs::msg::Point;
 using geometry_msgs::msg::Pose2D;
 using geometry_msgs::msg::Quaternion;
@@ -2302,7 +2309,7 @@ struct OvertakeArtifactIdentitySeed
   int source_side_sign{0};
 };
 
-/// Observation-only six-state proof for one prospective Overtake Gate-A
+/// Observation-only nine-state proof for one prospective Overtake Gate-A
 /// branch.  This artifact deliberately cannot carry a command or Mission.
 struct RateResolvedPreentryShadowEvaluation
 {
@@ -2444,7 +2451,7 @@ struct RateResolvedPreentryAdoptionShadowEvaluation
 };
 
 /// Atomic admission handoff at the real Overtake Gate-A boundary.
-/// Mission geometry and the causal six-state proof must travel together; a
+/// Mission geometry and the causal nine-state proof must travel together; a
 /// caller may not reconstruct either half from an older tactical result.
 struct RateResolvedMissionGateAProposal
 {
@@ -2571,7 +2578,7 @@ bool bind_rate_resolved_gate_a_execution_certificate(
     return false;
   }
 
-  // Gate A certified this exact six-state trajectory.  Bind the immutable
+  // Gate A certified this exact nine-state trajectory.  Bind the immutable
   // proof to the Mission before the supervisor mutates so the first active
   // ShiftOut cycle cannot silently fall back to the older tactical DP path.
   mission.physical_execution_certificate_valid = true;
@@ -2802,7 +2809,7 @@ struct V2XBehaviorOutput
   std::uint64_t rate_resolved_preentry_tactical_source_sequence{};
   RateResolvedPreentryAdoptionShadowEvaluation
   rate_resolved_preentry_adoption_shadow;
-  /// Atomic six-state admission evidence for the fresh ShiftOut Gate A. It is
+  /// Atomic nine-state admission evidence for the fresh ShiftOut Gate A. It is
   /// current-cycle data and is never retained as a fallback or command owner.
   std::optional<RateResolvedMissionGateAProposal>
   rate_resolved_mission_gate_a_proposal;
@@ -5977,10 +5984,11 @@ struct MpcConfig
   int solver_failure_steering_hold_cycles{4};
   double odom_timeout_sec{0.5};
   double state_prediction_delay_sec{0.0};
-  double longitudinal_response_filter_gain{0.9};
   bool state_prediction_simulation_only{true};
-  double yaw_response_gain{1.0};
-  double yaw_response_time_constant_sec{0.13};
+  mpcc_vehicle_model::Parameters vehicle_model;
+  double nominal_acceleration_application_delay_sec{};
+  double nominal_steering_application_delay_sec{};
+  double curvature_reference_gain{1.0};
   double min_linearization_speed_mps{0.5};
   bool progress_contouring_dual_branch_enabled{false};
   double progress_contouring_dual_branch_minimum_objective_advantage{1.0};
@@ -6101,7 +6109,7 @@ struct MpcProblem
   /// init_problem() has materialized that trace.
   mpcc_contract::ControlIntent resolved_control_intent{
     mpcc_contract::ControlIntent::Unknown};
-  /// Semantic intent used to assemble the canonical seven-state problem. It
+  /// Semantic intent used to assemble the canonical nine-state problem. It
   /// normally equals resolved_control_intent. During Stop it names the latent
   /// normal successor which remains shadow-only while Emergency owns the wire.
   mpcc_contract::ControlIntent problem_intent{
@@ -8304,6 +8312,9 @@ struct MPC
       current_physical_steering_state_;
     snapshot->command_control_origin_steering_rad_ =
       command_control_origin_steering_rad_;
+    snapshot->physical_control_origin_lateral_velocity_mps_ = physical_control_origin_lateral_velocity_mps_;
+    snapshot->vehicle_observation_provenance_ = vehicle_observation_provenance_;
+    snapshot->physical_control_origin_yaw_rate_radps_ = physical_control_origin_yaw_rate_radps_;
     snapshot->physical_control_origin_response_steering_rad_ =
       physical_control_origin_response_steering_rad_;
     // Pre-entry branches are solved from an owned tactical snapshot, but their
@@ -8444,7 +8455,7 @@ struct MPC
     snapshot->current_control = current_control;
     snapshot->current_prediction = current_prediction;
     snapshot->current_speed_mps_ = current_speed_mps_;
-    // The seven-state problem is initialized at the latency-compensated
+    // The nine-state problem is initialized at the latency-compensated
     // control origin, not at observation time.  Leaving this at the snapshot
     // object's zero default creates a physically certified 0 m/s branch which
     // the live controller must then reject as velocity-unreachable.
@@ -8618,11 +8629,20 @@ struct MPC
       std::nullopt;
   }
 
+  void update_vehicle_observation_provenance(
+    const mpcc_vehicle_model::ObservationProvenance & provenance)
+  {
+    vehicle_observation_provenance_ = provenance;
+  }
+
   void update_response_steering_state_for_execution_contract(
-    std::optional<double> response_steering_rad)
+    std::optional<double> response_steering_rad,
+    std::optional<double> lateral_velocity_mps, std::optional<double> yaw_rate_radps)
   {
     physical_control_origin_response_steering_rad_ =
       std::move(response_steering_rad);
+    physical_control_origin_lateral_velocity_mps_ = lateral_velocity_mps;
+    physical_control_origin_yaw_rate_radps_ = yaw_rate_radps;
   }
 
   void update_v_max(const double v_max)
@@ -10112,6 +10132,8 @@ struct MPC
       active_rate_resolved_preentry_solver_context_ == nullptr ||
       !extended_problem.rate_resolved_track_cruise_shadow_request.has_value() ||
       !command_control_origin_steering_rad_.has_value() ||
+      !physical_control_origin_lateral_velocity_mps_.has_value() ||
+      !physical_control_origin_yaw_rate_radps_.has_value() ||
       !physical_control_origin_response_steering_rad_.has_value() ||
       !current_physical_steering_state_.has_value() ||
       !last_rate_resolved_serialized_predecessor_.has_value() ||
@@ -10144,7 +10166,7 @@ struct MPC
         problem.progress_execution_dynamic_obstacle_side_sign;
     }
     prospective_context.formulation =
-      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State;
+      mpcc_contract::Formulation::VelocitySteeringTireBodyProgress9State;
     prospective_context = seal_problem_context_for_problem(
       problem, std::move(prospective_context), extended_problem.N);
     if (!mpcc_contract::problem_context_complete(prospective_context)) {
@@ -11052,7 +11074,7 @@ struct MPC
     }
     behavior.extended_mpcc_right_branch = std::move(right_artifact.evaluation);
     behavior.extended_mpcc_left_branch = std::move(left_artifact.evaluation);
-    // Diagnostics and tactical selection now expose the same six-state result.
+    // Diagnostics and tactical selection now expose the same nine-state result.
     // There is no second five-state branch decision which can veto or replace
     // this homotopy before causal Gate A admission.
     behavior.extended_mpcc_branch_selection =
@@ -11117,7 +11139,7 @@ struct MPC
       return;
     }
     // This Mission is a tactical hint only.  The causal worker must bind the
-    // current-world six-state execution certificate atomically at Gate A.
+    // current-world nine-state execution certificate atomically at Gate A.
     selected_mission.physical_execution_certificate_valid = false;
     selected_mission.physical_execution_certificate_source_sec =
       -std::numeric_limits<double>::infinity();
@@ -16697,10 +16719,10 @@ struct MPC
         // This raw geometric corridor is tactical preference/diagnostic data,
         // not a normal execution candidate. Replacing the corresponding
         // SideAssessment here used to discard its complete Mission and let the
-        // start-grid exception enter ShiftOut without any six-state Gate A.
+        // start-grid exception enter ShiftOut without any nine-state Gate A.
         // Keep the independently planned left/right Mission assessments; the
         // start-grid result may bias their side selection below, but only a
-        // certified six-state candidate may mutate the line FSM.
+        // certified nine-state candidate may mutate the line FSM.
       }
 
       const bool dynamic_decision_scope =
@@ -18835,7 +18857,7 @@ struct MPC
           locked_pass_side,
           best_shadow_branch});
       mpcc_authority_action = authority.action;
-      // Fresh entry is owned exclusively by the asynchronous causal six-state
+      // Fresh entry is owned exclusively by the asynchronous causal nine-state
       // Gate A worker.  This local tactical shadow may still propose runtime
       // replacements, but it cannot cache or admit a second entry artifact.
       if (
@@ -21573,7 +21595,7 @@ struct MPC
 
     // Canonical identity, rather than the visible FSM label, owns the normal
     // execution scope.  FollowPrepare/DynamicMissionWait keeps the interrupted
-    // ShiftOut or Pass identity and must not lose its seven-state producer
+    // ShiftOut or Pass identity and must not lose its nine-state producer
     // merely because tactical replanning changed the display phase.
     const bool progress_contouring_execution_phase =
       canonical_execution_identity.active;
@@ -22153,7 +22175,7 @@ struct MPC
             overtake_line_output.stage_wall_corridor_upper_ey[index]);
         }
         // OvertakeLine owns only the scalar progress support and the current
-        // measured-pose anchor.  The latest-only seven-state worker turns
+        // measured-pose anchor.  The latest-only nine-state worker turns
         // this support into footprint-aware hard rows from the immutable map,
         // then exact swept-footprint proof gates publication.
         progress_aligned_wall_contract_source =
@@ -22169,7 +22191,7 @@ struct MPC
         progress_execution_lateral_upper_m.push_back(ub[i]);
       }
 
-      // Every canonical seven-state intent needs progress-indexed wall
+      // Every canonical nine-state intent needs progress-indexed wall
       // support.  OvertakeLine supplies scalar support for its horizon; for
       // Track/Cruise, Follow, Rejoin and Dynamic Escape build the missing
       // footprint-aware profile from the same map used by final
@@ -23136,10 +23158,14 @@ struct MPC
       request.current_response_steering_rad =
         physical_control_origin_response_steering_rad_.value_or(
         std::numeric_limits<double>::quiet_NaN());
+      request.current_lateral_velocity_mps = physical_control_origin_lateral_velocity_mps_.value_or(
+        std::numeric_limits<double>::quiet_NaN());
+      request.current_yaw_rate_radps = physical_control_origin_yaw_rate_radps_.value_or(
+        std::numeric_limits<double>::quiet_NaN());
+      request.vehicle_model = cfg.vehicle_model;
+      request.observation_provenance = vehicle_observation_provenance_;
       request.wheelbase_m = model->length;
-      request.yaw_response_gain = cfg.yaw_response_gain;
-      request.yaw_response_time_constant_sec =
-        cfg.yaw_response_time_constant_sec;
+      request.curvature_reference_gain = cfg.curvature_reference_gain;
       request.maximum_abs_steering_rad = std::abs(cfg.delta_max);
       request.maximum_abs_steering_rate_radps =
         std::abs(cfg.steer_rate_max);
@@ -23546,7 +23572,7 @@ struct MPC
     {
       return;
     }
-    // This is a non-command projection of the exact certified six-state
+    // This is a non-command projection of the exact certified nine-state
     // trajectory.  Its age remains tied to the immutable observation time;
     // neither adoption nor current-world revalidation can renew it.  The
     // measured-state stitch below owns the small source-to-current offset.
@@ -24962,7 +24988,7 @@ struct MPC
       extended_problem->execution_prefix_steps;
     draft.source_context = make_problem_context(
       problem,
-      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State,
+      mpcc_contract::Formulation::VelocitySteeringTireBodyProgress9State,
       intent, extended_problem->N);
     if (!mpcc_contract::problem_context_complete(draft.source_context)) {
       reject_reason = "rate-resolved source context incomplete";
@@ -25014,6 +25040,8 @@ struct MPC
       return reject("predecessor-wire-physical-mismatch");
     }
     if (
+      !physical_control_origin_lateral_velocity_mps_.has_value() ||
+      !physical_control_origin_yaw_rate_radps_.has_value() ||
       !physical_control_origin_response_steering_rad_.has_value() ||
       !std::isfinite(physical_control_origin_response_steering_rad_.value()))
     {
@@ -25025,6 +25053,10 @@ struct MPC
       predecessor.physical_steering_rad;
     bound.request.current_response_steering_rad =
       physical_control_origin_response_steering_rad_.value();
+    bound.request.current_lateral_velocity_mps = *physical_control_origin_lateral_velocity_mps_;
+    bound.request.current_yaw_rate_radps = *physical_control_origin_yaw_rate_radps_;
+    bound.request.vehicle_model = cfg.vehicle_model;
+    bound.request.observation_provenance = vehicle_observation_provenance_;
     bound.request.previous_input = predecessor.previous_input;
     bound.control_prediction_origin_sec =
       draft.control_prediction_origin_sec;
@@ -25069,6 +25101,10 @@ struct MPC
       bound_submission.physical_control_origin_response_steering_rad) ||
       bound_submission.request.current_response_steering_rad !=
       bound_submission.physical_control_origin_response_steering_rad ||
+      !std::isfinite(bound_submission.request.current_lateral_velocity_mps) ||
+      !std::isfinite(bound_submission.request.current_yaw_rate_radps) ||
+      bound_submission.source_context.vehicle_model_fingerprint !=
+      mpcc_vehicle_model::fingerprint(bound_submission.request.vehicle_model) ||
       !mpcc_contract::problem_context_complete(
       bound_submission.source_context) ||
       source_problem.progress_stage_geometry.stages.size() <
@@ -25954,7 +25990,7 @@ struct MPC
               progress_execution_dynamic_obstacle_side_sign;
           }
           prospective_context.formulation =
-            mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State;
+            mpcc_contract::Formulation::VelocitySteeringTireBodyProgress9State;
           prospective_context = planner->seal_problem_context_for_problem(
             prospective->source_problem, std::move(prospective_context),
             prospective->extended_problem.N);
@@ -26435,6 +26471,8 @@ struct MPC
       gap_planner == nullptr ||
       overtake_static_wall_grid_snapshot_owner_ == nullptr ||
       !command_control_origin_steering_rad_.has_value() ||
+      !physical_control_origin_lateral_velocity_mps_.has_value() ||
+      !physical_control_origin_yaw_rate_radps_.has_value() ||
       !physical_control_origin_response_steering_rad_.has_value())
     {
       return std::nullopt;
@@ -26502,6 +26540,8 @@ struct MPC
       command_control_origin_steering_rad_.value();
     request.current_response_steering_rad =
       physical_control_origin_response_steering_rad_.value();
+    request.current_lateral_velocity_mps = *physical_control_origin_lateral_velocity_mps_;
+    request.current_yaw_rate_radps = *physical_control_origin_yaw_rate_radps_;
     request.previous_published_steering_rad =
       current_physical_steering_state_->committed_steering_rad;
     request.previous_published_command_age_sec =
@@ -26539,7 +26579,7 @@ struct MPC
 
     // When the current tactical intent is Follow, the problem already owns
     // the canonical, continuity-constrained course projection used to build
-    // the six-state Follow horizon.  Re-projecting the same Cartesian V2X
+    // the nine-state Follow horizon.  Re-projecting the same Cartesian V2X
     // sample here can choose another branch at a course crossing and make an
     // otherwise valid Follow artifact appear to have no target observation.
     // Consume that current-world evidence when its immutable target identity
@@ -29857,7 +29897,7 @@ struct MPC
       !mpcc_contract::solution_certified(authority.solution) ||
       authority.problem.intent != intent || command.intent != intent ||
       authority.problem.formulation !=
-      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State ||
+      mpcc_contract::Formulation::VelocitySteeringTireBodyProgress9State ||
       command.formulation != authority.problem.formulation ||
       command.problem_fingerprint != authority.problem.fingerprint ||
       command.solution_id != authority.solution.solution_id ||
@@ -30193,7 +30233,7 @@ struct MPC
     // Consume the retained artifact against the predecessor which entered
     // this cycle. The next asynchronous problem is bound only after the
     // current command is committed, so all intents share one causal steering
-    // origin and one seven-state actuation time base.
+    // origin and one nine-state actuation time base.
     auto effective_intent = intent;
     bool published_stop_retained = false;
     double primary_retained_ms{};
@@ -30744,6 +30784,9 @@ struct MPC
   current_physical_steering_state_;
   std::optional<double> command_control_origin_steering_rad_;
   std::optional<double> physical_control_origin_response_steering_rad_;
+  std::optional<double> physical_control_origin_lateral_velocity_mps_;
+  std::optional<mpcc_vehicle_model::ObservationProvenance> vehicle_observation_provenance_;
+  std::optional<double> physical_control_origin_yaw_rate_radps_;
   std::optional<RateResolvedSerializedPredecessor>
   last_rate_resolved_serialized_predecessor_;
   double execution_prediction_yaw_rate_radps_{
@@ -31119,13 +31162,14 @@ struct MPC
   {
     const auto formulation = context.formulation;
     context.fingerprint = 0U;
+    context.vehicle_model_fingerprint = mpcc_vehicle_model::fingerprint(cfg.vehicle_model);
     context.state_schema_id.clear();
     context.input_schema_id.clear();
     context.bounds_schema_id.clear();
     context.cost_schema_id.clear();
     const bool progress_geometry_required =
       formulation ==
-      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State;
+      mpcc_contract::Formulation::VelocitySteeringTireBodyProgress9State;
     const int effective_horizon_steps = horizon_steps_override >= 0 ?
       horizon_steps_override : problem.N;
     if (progress_geometry_required) {
@@ -31162,15 +31206,15 @@ struct MPC
     context.horizon_steps = static_cast<std::size_t>(
       std::max(0, effective_horizon_steps));
     switch (formulation) {
-      case mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State:
+      case mpcc_contract::Formulation::VelocitySteeringTireBodyProgress9State:
         context.state_schema_id =
           multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
         context.input_schema_id =
           "accel-steering-rate-progress-rate-v1";
         context.bounds_schema_id =
-          "progress-stage-wall-cartesian-obstacle-steering-yaw-response-rate-v3";
+          "progress-stage-wall-cartesian-obstacle-steering-tire-body-rate-v4";
         context.cost_schema_id =
-          "velocity-steering-yaw-response-progress-v2";
+          "velocity-steering-tire-body-progress-v4";
         break;
       case mpcc_contract::Formulation::SolverDerivedBypass:
         context.state_schema_id = "retained-current-state-v1";
@@ -33033,7 +33077,7 @@ private:
       rate_resolved_certified::validate(*gate_a_proposal.certified_plan) ==
       rate_resolved_certified::RejectReason::None &&
       source_context.formulation ==
-      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State &&
+      mpcc_contract::Formulation::VelocitySteeringTireBodyProgress9State &&
       source_context.intent == replacement_intent &&
       source_context.intent_generation == prospective_generation &&
       source_context.target_id == overtake_line_state_.target_vehicle_id &&
@@ -34699,7 +34743,7 @@ private:
     std::vector<RecedingHorizonTargetExecutionConstraint> target_execution_constraints;
     target_execution_constraints.reserve(static_cast<std::size_t>(N));
     // These are scalar course-support bounds for the reference generator.
-    // Footprint-aware bounds are owned by the canonical seven-state worker,
+    // Footprint-aware bounds are owned by the canonical nine-state worker,
     // which receives the immutable wall map and clearance-expanded footprint
     // and must pass exact swept-footprint proof before publication.  Building
     // a second heading-dependent physical corridor here performed 40 map
@@ -37352,7 +37396,7 @@ private:
     {
       // Elapsed Mission time is tactical telemetry, not current-world physical
       // evidence.  It must not mutate the phase while a publisher-aligned
-      // seven-state artifact remains the normal authority; doing so previously
+      // nine-state artifact remains the normal authority; doing so previously
       // produced Recovery state with a still-published ShiftOut command.
       // Rear-clear, exact Return admission, hard faults and certified Stop are
       // the only owners of the corresponding production transitions.
@@ -38534,7 +38578,7 @@ private:
       published_overtake_execution_alignment.source_side_sign;
     published_overtake_execution_alignment_last_reason_ =
       published_overtake_execution_alignment.reason;
-    // The six-state certified store is the sole normal solve owner. Project
+    // The nine-state certified store is the sole normal solve owner. Project
     // its exact accepted phase-compatible horizon into the lateral-prefix supervisor
     // before testing whether a newer rolling execution source is available.
     // The retired five-state primal extractor had no producer after canonical
@@ -40049,7 +40093,7 @@ private:
             // Hold is a tactical no-transition result. The optional legacy
             // prefix may provide a reference, but it is not a command owner:
             // its absence must not rewrite FollowPrepare to Recovery while a
-            // current-world seven-state ShiftOut/Pass artifact is still being
+            // current-world nine-state ShiftOut/Pass artifact is still being
             // certified. Canonical admission below either publishes a proved
             // artifact or fails closed through the Emergency supervisor.
             (void)publish_dynamic_wait_forward_prefix(
@@ -40647,7 +40691,7 @@ private:
             return output;
           }
           // Gate A freezes supervisor geometry together with the exact
-          // six-state execution prefix which passed the physical proof. After
+          // nine-state execution prefix which passed the physical proof. After
           // the phase transition the shared producer may replace that prefix
           // only through another solved/current-world-certified handoff. No
           // tactical five-state path can overwrite the admitted prefix.
@@ -43894,7 +43938,7 @@ private:
             }
             if (return_transition_authority_pending) {
               // The geometric Return is physically admissible, but its exact
-              // current-world seven-state artifact is still being produced.
+              // current-world nine-state artifact is still being produced.
               // Keep Pass as the sole tactical phase owner.  Falling through
               // to DynamicMissionWait here would invalidate the Mission
               // generation that identifies the in-flight Return proposal and
@@ -44959,7 +45003,7 @@ private:
       return_preflight_execution_reference.active ?
       std::optional<std::vector<double>>{
       return_preflight_execution_reference.lateral_targets_m} : std::nullopt;
-    // The seven-state MPCC is the sole continuous optimiser and normal
+    // The nine-state MPCC is the sole continuous optimiser and normal
     // command authority. OvertakeLine supplies its tactical reference and
     // stage-wise physical corridor, but must not synchronously run the former
     // receding optimiser over the same lateral decision variables. That
@@ -46504,7 +46548,7 @@ private:
         overtake_locked_side_sign_ = 0;
         return output;
       }
-      // Once the seven-state authority has accepted a complete reference
+      // Once the nine-state authority has accepted a complete reference
       // contract, this legacy viability result is reference-only.  Gate the
       // entire legacy phase-transition path, rather than only its first
       // retained-Mission branch: otherwise a rejected legacy rollout falls
@@ -49985,24 +50029,29 @@ Config load_config(const std::string & path)
   cfg.mpc.state_prediction_delay_sec =
     mpc["state_prediction_delay_sec"] ?
     mpc["state_prediction_delay_sec"].as<double>() : 0.0;
-  cfg.mpc.longitudinal_response_filter_gain =
-    mpc["longitudinal_response_filter_gain"] ?
-    mpc["longitudinal_response_filter_gain"].as<double>() : 0.9;
-  if (
-    !std::isfinite(cfg.mpc.longitudinal_response_filter_gain) ||
-    cfg.mpc.longitudinal_response_filter_gain < 0.0 ||
-    cfg.mpc.longitudinal_response_filter_gain >= 1.0)
-  {
-    throw std::runtime_error("mpc.longitudinal_response_filter_gain must be within [0, 1)");
-  }
   cfg.mpc.state_prediction_simulation_only =
     mpc["state_prediction_simulation_only"] ?
     mpc["state_prediction_simulation_only"].as<bool>() : true;
-  cfg.mpc.yaw_response_gain = mpc["yaw_response_gain"] ?
-    mpc["yaw_response_gain"].as<double>() : 1.0;
-  cfg.mpc.yaw_response_time_constant_sec =
-    mpc["yaw_response_time_constant_sec"] ?
-    mpc["yaw_response_time_constant_sec"].as<double>() : 0.13;
+  const auto vehicle_model_path = std::filesystem::path(path).parent_path() /
+    mpc["vehicle_model_file"].as<std::string>();
+  const auto vehicle_model = mpcc_vehicle_model::decode_parameters(YAML::LoadFile(vehicle_model_path));
+  if (!vehicle_model || vehicle_model->steering_wire_gain != cfg.mpc.steering_tire_angle_gain_var) {
+    throw std::runtime_error("invalid vehicle model or mismatched steering wire gain");
+  }
+  cfg.mpc.vehicle_model = *vehicle_model;
+  cfg.mpc.nominal_acceleration_application_delay_sec =
+    mpc["nominal_acceleration_application_delay_sec"].as<double>();
+  cfg.mpc.nominal_steering_application_delay_sec =
+    mpc["nominal_steering_application_delay_sec"].as<double>();
+  for (const double delay : {cfg.mpc.nominal_acceleration_application_delay_sec,
+    cfg.mpc.nominal_steering_application_delay_sec})
+  {
+    if (!std::isfinite(delay) || delay < 0.0 || delay > cfg.mpc.state_prediction_delay_sec) {
+      throw std::runtime_error("nominal input delay must lie within the control origin interval");
+    }
+  }
+  cfg.mpc.curvature_reference_gain = mpc["curvature_reference_gain"] ?
+    mpc["curvature_reference_gain"].as<double>() : 1.0;
   if (
     !std::isfinite(cfg.mpc.state_prediction_delay_sec) ||
     cfg.mpc.state_prediction_delay_sec < 0.0 ||
@@ -50012,18 +50061,10 @@ Config load_config(const std::string & path)
             "mpc.state_prediction_delay_sec must be finite and within [0, 1]");
   }
   if (
-    !std::isfinite(cfg.mpc.yaw_response_gain) ||
-    cfg.mpc.yaw_response_gain <= 0.0)
+    !std::isfinite(cfg.mpc.curvature_reference_gain) ||
+    cfg.mpc.curvature_reference_gain <= 0.0)
   {
-    throw std::runtime_error("mpc.yaw_response_gain must be finite and positive");
-  }
-  if (
-    !std::isfinite(cfg.mpc.yaw_response_time_constant_sec) ||
-    cfg.mpc.yaw_response_time_constant_sec <= 0.0 ||
-    cfg.mpc.yaw_response_time_constant_sec > 1.0)
-  {
-    throw std::runtime_error(
-            "mpc.yaw_response_time_constant_sec must be finite and within (0, 1]");
+    throw std::runtime_error("mpc.curvature_reference_gain must be finite and positive");
   }
   cfg.mpc.min_linearization_speed_mps =
     mpc["min_linearization_speed_mps"] ?
@@ -52768,11 +52809,6 @@ public:
     state_prediction_active_ =
       mpc_cfg_.state_prediction_delay_sec > 0.0 &&
       (!mpc_cfg_.state_prediction_simulation_only || simulation_mode_);
-    if (state_prediction_active_) {
-      longitudinal_response_observer_ =
-        std::make_unique<mpc_state_prediction::LongitudinalResponseObserver>(
-        mpc_cfg_.longitudinal_response_filter_gain, mpc_cfg_.odom_timeout_sec);
-    }
     mpc_cfg_.steer_rate_max = mpc_cfg_.steer_rate_max / mpc_cfg_.steering_tire_angle_gain_var;
     stuck_recovery_core_ =
       std::make_unique<stuck_recovery::StuckRecoveryCore>(cfg_.stuck_recovery.core);
@@ -53957,8 +53993,11 @@ private:
           } else if (
             name == "steering_tire_angle_gain_var" &&
             param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
-            mpc_cfg_.steering_tire_angle_gain_var = param.as_double();
-            mpc_->cfg.steering_tire_angle_gain_var = param.as_double();
+            if (param.as_double() != mpc_cfg_.vehicle_model.steering_wire_gain) {
+              result.successful = false;
+              result.reason = "steering gain belongs to the immutable vehicle profile; reload matching config";
+              return result;
+            }
           } else if (name == "Q0") {
             mpc_->cfg.Q[0] = param.as_double();
           } else if (name == "Q1") {
@@ -54044,13 +54083,6 @@ private:
         odom_ = msg;
         last_odom_receipt_steady_ = receipt_time;
         const rclcpp::Time source_stamp(msg->header.stamp);
-        if (longitudinal_response_observer_) {
-          // Own both filter updates on this exact velocity observation. A
-          // separately delivered filtered acceleration cannot establish the
-          // corresponding committed-input filter epoch.
-          longitudinal_response_observer_->observe(
-            source_stamp.seconds(), std::abs(msg->twist.twist.linear.x));
-        }
         if (source_stamp.nanoseconds() > 0) {
           if (
             !last_odom_source_stamp_.has_value() ||
@@ -54067,6 +54099,22 @@ private:
           emit_abrupt_speed_loss_observation(abrupt_speed_loss.value());
         }
       });
+    velocity_status_sub_ = create_subscription<VelocityReport>(
+      "/vehicle/status/velocity_status", rclcpp::QoS(10).best_effort(),
+      [this](const VelocityReport::SharedPtr msg) {
+        remember_vehicle_observation(velocity_observations_,
+          rclcpp::Time(msg->header.stamp).seconds(),
+          msg->longitudinal_velocity, msg->lateral_velocity);
+      });
+    body_imu_sub_ = create_subscription<Imu>(
+      "/sensing/imu/imu_raw", rclcpp::QoS(100).best_effort(),
+      [this](const Imu::SharedPtr msg) {
+        // The simulation sensor-to-body rotation is about z; angular.z is
+        // the actual body yaw rate. VelocityReport.heading_rate is Euler-rate
+        // output and must not substitute for this angular velocity.
+        remember_vehicle_observation(yaw_rate_observations_,
+          rclcpp::Time(msg->header.stamp).seconds(), msg->angular_velocity.z, 0.0);
+      });
     steering_status_sub_ = create_subscription<SteeringReport>(
       "/vehicle/status/steering_status",
       rclcpp::QoS(rclcpp::KeepLast(10)).reliable(),
@@ -54075,6 +54123,8 @@ private:
         if (!std::isfinite(msg->steering_tire_angle)) {
           return;
         }
+        remember_vehicle_observation(tire_observations_,
+          rclcpp::Time(msg->stamp).seconds(), msg->steering_tire_angle, 0.0);
         steering_report_ = msg;
         last_steering_receipt_steady_ = receipt_time;
       });
@@ -54537,19 +54587,88 @@ private:
       last_commanded_recovery_gear_.value() == stuck_recovery::Gear::Reverse);
   }
 
-  void record_published_longitudinal_command(
-    const rclcpp::Time & stamp, const double serialized_acceleration_mps2)
+  void record_published_vehicle_command(
+    const rclcpp::Time & stamp, const double acceleration, const double wire_steering)
   {
-    if (!longitudinal_response_observer_) {
-      return;
+    auto & history = published_vehicle_commands_;
+    const double published = stamp.seconds();
+    if (!history.empty() && published < history.back().published_sec) history.clear();
+    if (!history.empty() && published == history.back().published_sec) history.pop_back();
+    history.push_back({published, acceleration, wire_steering});
+    // Keep a predecessor for both channels before the oldest accepted state.
+    const double retain_sec = mpc_cfg_.odom_timeout_sec +
+      mpc_cfg_.state_prediction_delay_sec;
+    while (history.size() > 2 && history[1].published_sec < published - retain_sec) {
+      history.erase(history.begin());
     }
-    if (!longitudinal_response_observer_->record_published_command(
-        stamp.seconds(), stamp.seconds() + mpc_cfg_.state_prediction_delay_sec,
-        serialized_acceleration_mps2))
+  }
+
+  struct VehicleObservation
+  {
+    double source_sec{};
+    SteadyClock::time_point received;
+    double first{};
+    double second{};
+  };
+
+  void remember_vehicle_observation(
+    std::deque<VehicleObservation> & observations,
+    const double source_sec, const double first, const double second)
+  {
+    if (!std::isfinite(source_sec) || source_sec < 0.0 ||
+      !std::isfinite(first) || !std::isfinite(second)) return;
+    const auto position = std::lower_bound(observations.begin(), observations.end(), source_sec,
+      [](const VehicleObservation & item, double stamp) {return item.source_sec < stamp;});
+    const VehicleObservation value{source_sec, SteadyClock::now(), first, second};
+    if (position != observations.end() && position->source_sec == source_sec) {
+      *position = value;
+    } else {
+      observations.insert(position, value);
+    }
+    while (observations.size() > 256U) observations.pop_front();
+  }
+
+  std::optional<mpcc_vehicle_model::PublishedPrediction> predict_observed_vehicle(
+    const Pose2D & pose, const double source_sec, const double now_sec,
+    const SteadyClock::time_point receipt_now) const
+  {
+    const auto latest_at = [&](const std::deque<VehicleObservation> & observations)
+        -> std::optional<VehicleObservation>
+      {
+        for (auto it = observations.rbegin(); it != observations.rend(); ++it) {
+          if (it->source_sec > source_sec) continue;
+          if (now_sec - it->source_sec > mpc_cfg_.odom_timeout_sec ||
+            std::chrono::duration<double>(receipt_now - it->received).count() >
+            mpc_cfg_.odom_timeout_sec) return std::nullopt;
+          return *it;
+        }
+        return std::nullopt;
+      };
+    const auto velocity = latest_at(velocity_observations_);
+    const auto yaw_rate = latest_at(yaw_rate_observations_);
+    const auto tire = latest_at(tire_observations_);
+    if (!velocity || !yaw_rate || !tire || !last_published_physical_steering_rad_ ||
+      !last_published_steering_control_time_ || !last_published_steering_steady_)
     {
-      longitudinal_response_observer_->reset();
-      RCLCPP_ERROR(get_logger(), "Invalid committed longitudinal prediction history");
+      return std::nullopt;
     }
+    // Each component uses its latest received, nonfuture public sample at the
+    // pose epoch. Holding between source samples is explicit empirical input
+    // reconstruction; later observations never initialize an earlier state.
+    const mpcc_vehicle_model::TimedState initial{source_sec,
+      {pose.x, pose.y, pose.theta, velocity->first, velocity->second,
+        yaw_rate->first, *last_published_physical_steering_rad_, tire->first}};
+    auto prediction = mpcc_vehicle_model::predict_published_history(
+      initial, now_sec, now_sec + (state_prediction_active_ ?
+      mpc_cfg_.state_prediction_delay_sec : 0.0), published_vehicle_commands_,
+      mpc_cfg_.vehicle_model, mpc_cfg_.nominal_acceleration_application_delay_sec,
+      mpc_cfg_.nominal_steering_application_delay_sec);
+    if (prediction) {
+      prediction->provenance.velocity_source_sec = velocity->source_sec;
+      prediction->provenance.yaw_rate_source_sec = yaw_rate->source_sec;
+      prediction->provenance.tire_source_sec = tire->source_sec;
+    }
+    return prediction;
   }
 
   void publish_failsafe_command(const rclcpp::Time & stamp, const char * reason)
@@ -54594,7 +54713,8 @@ private:
       raw_command.lateral.steering_tire_angle = 0.0;
     }
     command_pub_->publish(raw_command);
-    record_published_longitudinal_command(stamp, raw_command.longitudinal.acceleration);
+    record_published_vehicle_command(stamp, raw_command.longitudinal.acceleration,
+      raw_command.lateral.steering_tire_angle);
     last_published_physical_steering_rad_ =
       safe_control[1];
     last_published_steering_steady_ = SteadyClock::now();
@@ -54635,7 +54755,8 @@ private:
     }
     command_raw_pub_->publish(raw_command);
     command_pub_->publish(final_command);
-    record_published_longitudinal_command(stamp, final_command.longitudinal.acceleration);
+    record_published_vehicle_command(stamp, final_command.longitudinal.acceleration,
+      final_command.lateral.steering_tire_angle);
     last_published_physical_steering_rad_ =
       raw_command.lateral.steering_tire_angle;
     last_published_steering_steady_ = SteadyClock::now();
@@ -58274,7 +58395,10 @@ private:
         last_odom_receipt_steady_.reset();
         last_odom_source_stamp_.reset();
         last_odom_source_advance_steady_.reset();
-        longitudinal_response_observer_->reset();
+        published_vehicle_commands_.clear();
+        velocity_observations_.clear();
+        yaw_rate_observations_.clear();
+        tire_observations_.clear();
       } else if (!epoch.valid) {
         publish_failsafe_command(control_time, "odometry/control clock epoch mismatch");
         return;
@@ -58332,94 +58456,43 @@ private:
       publish_failsafe_command(control_time, "non-finite odometry rejected");
       return;
     }
+    const auto prediction = predict_observed_vehicle(
+      pose, rclcpp::Time(odom_->header.stamp).seconds(), control_time.seconds(), steady_now);
+    if (!prediction) {
+      publish_failsafe_command(control_time, "missing causal body/tire/input observation");
+      return;
+    }
+    mpc_->update_vehicle_observation_provenance(prediction->provenance);
+    const auto & observed = prediction->current;
+    const auto & predicted = prediction->control_origin;
+    const auto & provenance = prediction->provenance;
+    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+      "MPCC body prediction: now=%.9f, pose_source=%.9f, velocity_source=%.9f, "
+      "imu_source=%.9f, tire_source=%.9f, last_publication=%.9f, origin=%.9f, "
+      "source_u=%.9f, source_vy=%.9f, source_r=%.9f, source_tire=%.9f, "
+      "x=%.9f, y=%.9f, yaw=%.9f, u=%.9f, vy=%.9f, r=%.9f, tire=%.9f",
+      provenance.now_sec, provenance.initial.source_sec, provenance.velocity_source_sec,
+      provenance.yaw_rate_source_sec, provenance.tire_source_sec,
+      provenance.commands.back().published_sec, provenance.control_origin_sec,
+      provenance.initial.state.forward_velocity_mps, provenance.initial.state.lateral_velocity_mps,
+      provenance.initial.state.yaw_rate_radps, provenance.initial.state.tire_steering_rad,
+      predicted.x_m, predicted.y_m, predicted.yaw_rad, predicted.forward_velocity_mps,
+      predicted.lateral_velocity_mps, predicted.yaw_rate_radps, predicted.tire_steering_rad);
     mpc_state_prediction::MotionObservation control_observation{
-      rclcpp::Time(odom_->header.stamp).seconds(),
-      {pose.x, pose.y, pose.theta}, actual_v, yaw_rate};
-    if (state_prediction_active_) {
-      // Own the observation-to-now interval explicitly. The actuator-delay
-      // predictor below starts at now; its fixed duration cannot also account
-      // for an older Odometry state. Body twist is held only across that age.
-      const auto aligned = mpc_state_prediction::predict_constant_twist_observation(
-        control_observation, control_time.seconds(), mpc_cfg_.odom_timeout_sec);
-      if (!aligned) {
-        publish_failsafe_command(control_time, "invalid current motion observation");
-        return;
-      }
-      control_observation = *aligned;
-    }
-    std::optional<std::vector<mpc_state_prediction::AccelerationInterval>>
-      longitudinal_prediction_intervals;
-    if (state_prediction_active_) {
-      longitudinal_prediction_intervals =
-        longitudinal_response_observer_->prediction_intervals(
-        control_time.seconds(), mpc_cfg_.state_prediction_delay_sec);
-      if (!longitudinal_prediction_intervals) {
-        publish_failsafe_command(
-          control_time, "missing causal longitudinal response observation");
-        return;
-      }
-    }
-    steering_state_contract::Result physical_steering_resolution;
-    if (
-      steering_report_ != nullptr &&
-      last_steering_receipt_steady_.has_value() &&
-      last_published_steering_steady_.has_value() &&
-      last_published_physical_steering_rad_.has_value() &&
-      last_published_steering_control_time_.has_value())
-    {
-      const double steering_observation_age_sec =
-        std::chrono::duration<double>(
-        steady_now - last_steering_receipt_steady_.value()).count();
-      const double committed_command_age_sec =
-        std::chrono::duration<double>(
-        steady_now - last_published_steering_steady_.value()).count();
-      const double committed_command_control_age_sec =
-        (control_time - last_published_steering_control_time_.value()).seconds();
-      physical_steering_resolution = steering_state_contract::resolve(
-        steering_state_contract::Request{
-          steering_report_->steering_tire_angle,
-          last_published_physical_steering_rad_,
-          steering_observation_age_sec,
-          state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0,
-          mpc_cfg_.odom_timeout_sec,
-          std::abs(mpc_cfg_.delta_max),
-          std::abs(mpc_cfg_.steer_rate_max), committed_command_age_sec,
-          committed_command_control_age_sec});
-    }
-    mpc_->update_physical_steering_state_for_execution_contract(
-      physical_steering_resolution.state);
-    if (!physical_steering_resolution.state.has_value()) {
-      RCLCPP_ERROR_THROTTLE(
-        get_logger(), *get_clock(), 1000,
-        "Yaw-response physical steering unavailable: reason=%s; canonical "
-        "normal authority remains closed",
-        steering_state_contract::to_string(physical_steering_resolution.reason));
-    }
-
-    std::optional<double> response_steering_rad;
-    if (physical_steering_resolution.state.has_value()) {
-      const auto response_inference =
-        mpc_state_prediction::infer_response_steering(
-        control_observation.longitudinal_velocity_mps, control_observation.yaw_rate_radps,
-        physical_steering_resolution.state->current_time_steering_rad,
-        car_->length, mpc_cfg_.yaw_response_gain,
-        mpc_cfg_.min_linearization_speed_mps,
-        std::abs(mpc_cfg_.delta_max));
-      if (response_inference.has_value()) {
-        response_steering_rad = response_inference->steering_rad;
-        if (response_inference->projected_to_model_envelope) {
-          RCLCPP_WARN_THROTTLE(
-            get_logger(), *get_clock(), 1000,
-            "Yaw-response observation projected to model envelope: "
-            "raw=%.4f rad, projected=%.4f rad, physical=%.4f rad, "
-            "speed=%.3f m/s, yaw_rate=%.3f rad/s; authority=preserved",
-            response_inference->unconstrained_steering_rad,
-            response_inference->steering_rad,
-            physical_steering_resolution.state->current_time_steering_rad,
-            actual_v, yaw_rate);
-        }
-      }
-    }
+      control_time.seconds(), {observed.x_m, observed.y_m, observed.yaw_rad},
+      observed.forward_velocity_mps, observed.yaw_rate_radps};
+    steering_state_contract::PhysicalState physical_steering;
+    physical_steering.measured_steering_rad = observed.tire_steering_rad;
+    physical_steering.committed_steering_rad = *last_published_physical_steering_rad_;
+    physical_steering.current_time_steering_rad = observed.tire_steering_rad;
+    physical_steering.prediction_origin_steering_rad = predicted.tire_steering_rad;
+    physical_steering.committed_command_age_sec =
+      std::chrono::duration<double>(steady_now - *last_published_steering_steady_).count();
+    physical_steering.committed_command_control_age_sec =
+      (control_time - *last_published_steering_control_time_).seconds();
+    physical_steering.prediction_delay_sec = state_prediction_active_ ?
+      mpc_cfg_.state_prediction_delay_sec : 0.0;
+    mpc_->update_physical_steering_state_for_execution_contract(physical_steering);
     if (awsim_control_mode_guard_) {
       apply_awsim_control_mode_decision(
         awsim_control_mode_guard_->update(steady_seconds(steady_now), actual_v));
@@ -58433,75 +58506,20 @@ private:
       }
     }
     Pose2D mpc_pose = pose;
-    mpc_pose.x = control_observation.state.x;
-    mpc_pose.y = control_observation.state.y;
-    mpc_pose.theta = control_observation.state.yaw;
-    double control_origin_speed_mps = std::abs(control_observation.longitudinal_velocity_mps);
-    double execution_prediction_yaw_rate_radps = control_observation.yaw_rate_radps;
-    std::optional<CanonicalCurrentControlPath> canonical_control_path;
-    if (!state_prediction_active_) {
-      CanonicalCurrentControlPath path;
-      path.poses.push_back(
-        recovery_footprint::Pose2D{pose.x, pose.y, pose.theta});
-      path.elapsed_sec.push_back(0.0);
-      path.duration_sec = 0.0;
-      canonical_control_path = std::move(path);
+    mpc_pose.x = predicted.x_m;
+    mpc_pose.y = predicted.y_m;
+    mpc_pose.theta = predicted.yaw_rad;
+    const double control_origin_speed_mps = predicted.forward_velocity_mps;
+    const double execution_prediction_yaw_rate_radps = predicted.yaw_rate_radps;
+    CanonicalCurrentControlPath path;
+    for (const auto & sample : prediction->current_to_control) {
+      path.poses.push_back({sample.state.x_m, sample.state.y_m, sample.state.yaw_rad});
+      path.elapsed_sec.push_back(sample.source_sec - control_time.seconds());
     }
-    if (state_prediction_active_) {
-      if (
-        response_steering_rad.has_value() &&
-        physical_steering_resolution.state.has_value())
-      {
-        const auto prediction_trajectory =
-          mpc_state_prediction::predict_piecewise_yaw_response_trajectory(
-          control_observation.state,
-          std::abs(control_observation.longitudinal_velocity_mps),
-          response_steering_rad.value(),
-          physical_steering_resolution.state->current_time_steering_rad,
-          physical_steering_resolution.state->prediction_origin_steering_rad,
-          car_->length, mpc_cfg_.yaw_response_gain,
-          mpc_cfg_.yaw_response_time_constant_sec,
-          *longitudinal_prediction_intervals);
-        const auto & predicted = prediction_trajectory.back().prediction;
-        CanonicalCurrentControlPath path;
-        path.poses.reserve(prediction_trajectory.size());
-        path.elapsed_sec.reserve(prediction_trajectory.size());
-        for (const auto & sample : prediction_trajectory) {
-          path.poses.push_back(recovery_footprint::Pose2D{
-            sample.prediction.state.x,
-            sample.prediction.state.y,
-            sample.prediction.state.yaw});
-          path.elapsed_sec.push_back(sample.elapsed_sec);
-        }
-        path.duration_sec = mpc_cfg_.state_prediction_delay_sec;
-        canonical_control_path = std::move(path);
-        mpc_pose.x = predicted.state.x;
-        mpc_pose.y = predicted.state.y;
-        mpc_pose.theta = predicted.state.yaw;
-        control_origin_speed_mps = predicted.longitudinal_velocity_mps;
-        response_steering_rad = predicted.response_steering_rad;
-        execution_prediction_yaw_rate_radps = predicted.yaw_rate_radps;
-      } else {
-        // Missing steering evidence already closes canonical physical
-        // authority. Keep this diagnostic velocity on the same input history.
-        for (const auto & interval : *longitudinal_prediction_intervals) {
-          control_origin_speed_mps = std::max(
-            0.0, control_origin_speed_mps +
-            interval.acceleration_mps2 * interval.duration_sec);
-        }
-        const double average_prediction_speed_mps =
-          0.5 * (std::abs(control_observation.longitudinal_velocity_mps) + control_origin_speed_mps);
-        const auto predicted = mpc_state_prediction::predict_constant_turn_rate(
-          control_observation.state,
-          average_prediction_speed_mps, control_observation.yaw_rate_radps,
-          mpc_cfg_.state_prediction_delay_sec);
-        mpc_pose.x = predicted.x;
-        mpc_pose.y = predicted.y;
-        mpc_pose.theta = predicted.yaw;
-      }
-    }
+    path.duration_sec = state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0;
+    std::optional<CanonicalCurrentControlPath> canonical_control_path{std::move(path)};
     mpc_->update_response_steering_state_for_execution_contract(
-      response_steering_rad);
+      predicted.tire_steering_rad, predicted.lateral_velocity_mps, predicted.yaw_rate_radps);
     if (!initialized_) {
       car_->update_states(
         mpc_pose.x, mpc_pose.y, mpc_pose.theta,
@@ -58832,61 +58850,20 @@ private:
         steering_report_->steering_tire_angle :
         std::numeric_limits<double>::quiet_NaN();
       const double physical_origin_steering_rad =
-        physical_steering_resolution.state.has_value() ?
-        physical_steering_resolution.state->prediction_origin_steering_rad :
-        std::numeric_limits<double>::quiet_NaN();
+        physical_steering.prediction_origin_steering_rad;
       const double committed_steering_rad =
-        physical_steering_resolution.state.has_value() ?
-        physical_steering_resolution.state->committed_steering_rad :
-        std::numeric_limits<double>::quiet_NaN();
-      const double maximum_reachable_step_rad =
-        physical_steering_resolution.state.has_value() ?
-        physical_steering_resolution.state->maximum_reachable_step_rad :
-        std::numeric_limits<double>::quiet_NaN();
-      const double steering_observation_age_sec =
-        physical_steering_resolution.state.has_value() ?
-        physical_steering_resolution.state->observation_age_sec :
-        std::numeric_limits<double>::quiet_NaN();
-      const double committed_projection_duration_sec =
-        physical_steering_resolution.state.has_value() ?
-        physical_steering_resolution.state
-        ->committed_command_projection_duration_sec :
-        std::numeric_limits<double>::quiet_NaN();
-      const double committed_control_age_sec =
-        physical_steering_resolution.state.has_value() ?
-        physical_steering_resolution.state
-        ->committed_command_control_age_sec :
-        std::numeric_limits<double>::quiet_NaN();
-      const bool committed_command_reached =
-        physical_steering_resolution.state.has_value() &&
-        physical_steering_resolution.state->committed_command_reached;
-      const bool measured_serialization_projected =
-        physical_steering_resolution.state.has_value() &&
-        physical_steering_resolution.state
-        ->measured_steering_serialization_projected;
-      const bool committed_serialization_projected =
-        physical_steering_resolution.state.has_value() &&
-        physical_steering_resolution.state
-        ->committed_steering_serialization_projected;
+        physical_steering.committed_steering_rad;
       RCLCPP_INFO_THROTTLE(
         get_logger(), *get_clock(), 1000,
         "Steering debug: wp_id=%d, speed=%.3f, yaw_rate=%.3f, raw=%.4f, "
         "output=%.4f, measured_steering=%.4f, physical_origin=%.4f, "
-        "committed_input=%.4f, reachable_step=%.4f, command_reached=%d, "
-        "observation_age=%.4f, committed_projection=%.4f, "
-        "committed_control_age=%.4f, serialization_projection=%d/%d, "
+        "committed_input=%.4f, "
         "predicted_kappa=%.5f, measured_kappa=%.5f, "
         "error=%.5f, ratio=%.3f, valid=%d, ref_kappa=%.5f, "
         "solver_fallback=%d, recovery=%d",
         mpc_->model->wp_id, actual_v, yaw_rate, u[1], output_steering,
         measured_steering_rad, physical_origin_steering_rad,
-        committed_steering_rad, maximum_reachable_step_rad,
-        committed_command_reached ? 1 : 0,
-        steering_observation_age_sec,
-        committed_projection_duration_sec,
-        committed_control_age_sec,
-        measured_serialization_projected ? 1 : 0,
-        committed_serialization_projected ? 1 : 0,
+        committed_steering_rad,
         predicted_curvature, measured_curvature, curvature_error, curvature_ratio,
         measured_curvature_valid ? 1 : 0, reference_curvature,
         mpc_fallback_active ? 1 : 0, recovery_command_active ? 1 : 0);
@@ -58937,8 +58914,7 @@ private:
   bool use_sim_time_{};
   bool simulation_mode_{};
   bool state_prediction_active_{false};
-  std::unique_ptr<mpc_state_prediction::LongitudinalResponseObserver>
-    longitudinal_response_observer_;
+  std::vector<mpcc_vehicle_model::PublishedCommand> published_vehicle_commands_;
   std::optional<double> previous_control_ros_clock_sec_;
   bool use_obstacle_avoidance_{};
   bool use_stats_{};
@@ -59077,6 +59053,11 @@ private:
 
   rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
   rclcpp::Subscription<SteeringReport>::SharedPtr steering_status_sub_;
+  rclcpp::Subscription<VelocityReport>::SharedPtr velocity_status_sub_;
+  rclcpp::Subscription<Imu>::SharedPtr body_imu_sub_;
+  std::deque<VehicleObservation> velocity_observations_;
+  std::deque<VehicleObservation> yaw_rate_observations_;
+  std::deque<VehicleObservation> tire_observations_;
   rclcpp::Subscription<Bool>::SharedPtr control_mode_request_sub_;
   rclcpp::Subscription<Trajectory>::SharedPtr trajectory_sub_;
   rclcpp::Subscription<Empty>::SharedPtr stop_request_sub_;

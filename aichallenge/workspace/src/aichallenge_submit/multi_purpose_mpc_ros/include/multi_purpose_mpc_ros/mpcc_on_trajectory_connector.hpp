@@ -38,6 +38,8 @@ struct State
   double absolute_progress_m{};
   double steering_rad{};
   double response_steering_rad{};
+  double lateral_velocity_mps{};
+  double yaw_rate_radps{};
 };
 
 /// Observation-only comparison of one new asynchronous candidate with the
@@ -79,6 +81,8 @@ struct Result
   double steering_difference_rad{std::numeric_limits<double>::quiet_NaN()};
   double response_steering_difference_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  double lateral_velocity_difference_mps{};
+  double yaw_rate_difference_radps{};
   double position_tolerance_m{std::numeric_limits<double>::quiet_NaN()};
   double model_tolerance{std::numeric_limits<double>::quiet_NaN()};
 

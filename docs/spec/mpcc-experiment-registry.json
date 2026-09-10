@@ -700,6 +700,31 @@
       "snapshot_id": "20260910-shared-plant-wheel-colliders",
       "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-empirical-plant-native-public-parity",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-empirical-plant-qp-zero-is-rest",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-empirical-plant-terminal-positive-wire",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-empirical-plant-migration-regressions",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-empirical-plant-integrated-promotion",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -4798,6 +4823,101 @@
       "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
       "deleted_code": [],
       "revisit_condition": "resolved acceptance requirement, selected causal model with explicit uncertainty and independent Stop/trajectory validation"
+    },
+    {
+      "experiment_id": "20260910-empirical-plant-native-public-parity",
+      "baseline_commit": "6b0f18805a1a9d91a42a88ae3c7d883594dae1eb",
+      "snapshot_ids": [
+        "20260910-empirical-plant-native-public-parity"
+      ],
+      "hypothesis": "The single fixed native body/tire kernel reproduces the preceding nominal Python public-input experiment",
+      "changed_dimension": "Shared nine-state empirical body/tire/rest model and model-bound consumers; fixed original calibration",
+      "result": "accepted",
+      "reason": "8212 values max difference4.4964e-15; single held-out1s position MAE0.193661302m/max0.675902423m. Public recording coverage enforced. Not an error bound.",
+      "production_impact": "Candidate migration; integrated acceptance remains open. No physical margin/tolerance/solver budget relaxation.",
+      "deleted_code": [
+        "normal wire=net velocity override",
+        "normal yaw-rate/speed tire inversion",
+        "normal independent longitudinal observer and yaw-response prefix",
+        "wire-times-duration velocity feasibility shortcut"
+      ],
+      "revisit_condition": "Changed native model, profile, independent input coverage or calibration"
+    },
+    {
+      "experiment_id": "20260910-empirical-plant-qp-zero-is-rest",
+      "baseline_commit": "6b0f18805a1a9d91a42a88ae3c7d883594dae1eb",
+      "snapshot_ids": [
+        "20260910-empirical-plant-qp-zero-is-rest"
+      ],
+      "hypothesis": "A zero terminal QP velocity alone certifies physical complete rest",
+      "changed_dimension": "Shared nine-state empirical body/tire/rest model and model-bound consumers; fixed original calibration",
+      "result": "rejected",
+      "reason": "Frozen5970523660795198978 reports QP0 while exact replay1.61453m/s. Existing SQP correction certifies after1 correction; four independent held-speed/brake stage alternatives also certify.",
+      "production_impact": "Candidate migration; integrated acceptance remains open. No physical margin/tolerance/solver budget relaxation.",
+      "deleted_code": [
+        "normal wire=net velocity override",
+        "normal yaw-rate/speed tire inversion",
+        "normal independent longitudinal observer and yaw-response prefix",
+        "wire-times-duration velocity feasibility shortcut"
+      ],
+      "revisit_condition": "Changed shared model or exact nonlinear proof, never larger speed tolerance"
+    },
+    {
+      "experiment_id": "20260910-empirical-plant-terminal-positive-wire",
+      "baseline_commit": "6b0f18805a1a9d91a42a88ae3c7d883594dae1eb",
+      "snapshot_ids": [
+        "20260910-empirical-plant-terminal-positive-wire"
+      ],
+      "hypothesis": "Numerically tiny positive terminal wire preserves nominal rest",
+      "changed_dimension": "Shared nine-state empirical body/tire/rest model and model-bound consumers; fixed original calibration",
+      "result": "rejected",
+      "reason": "Frozen367272d907e582e9 ends u1.64407e-8 with wire1.76091e-6. Positive drive leaves rest. Producer now constrains terminal wire<=0 before solver inset; no output rounding.",
+      "production_impact": "Candidate migration; integrated acceptance remains open. No physical margin/tolerance/solver budget relaxation.",
+      "deleted_code": [
+        "normal wire=net velocity override",
+        "normal yaw-rate/speed tire inversion",
+        "normal independent longitudinal observer and yaw-response prefix",
+        "wire-times-duration velocity feasibility shortcut"
+      ],
+      "revisit_condition": "Changed inspected Drive/rest law or a separately validated model contract"
+    },
+    {
+      "experiment_id": "20260910-empirical-plant-migration-regressions",
+      "baseline_commit": "6b0f18805a1a9d91a42a88ae3c7d883594dae1eb",
+      "snapshot_ids": [
+        "20260910-empirical-plant-migration-regressions"
+      ],
+      "hypothesis": "All migrated nine-state consumers preserve the tested shared-model and authority contracts",
+      "changed_dimension": "Shared nine-state empirical body/tire/rest model and model-bound consumers; fixed original calibration",
+      "result": "accepted",
+      "reason": "26package build and2387tests pass, no skipped cases; observation provenance/model hash roundtrip, stale context rejection and exact Stop proof covered. Runtime remains untested.",
+      "production_impact": "Candidate migration; integrated acceptance remains open. No physical margin/tolerance/solver budget relaxation.",
+      "deleted_code": [
+        "normal wire=net velocity override",
+        "normal yaw-rate/speed tire inversion",
+        "normal independent longitudinal observer and yaw-response prefix",
+        "wire-times-duration velocity feasibility shortcut"
+      ],
+      "revisit_condition": "Changed code, configuration, model identity or a new causal regression"
+    },
+    {
+      "experiment_id": "20260910-empirical-plant-integrated-promotion",
+      "baseline_commit": "6b0f18805a1a9d91a42a88ae3c7d883594dae1eb",
+      "snapshot_ids": [
+        "20260910-empirical-plant-integrated-promotion"
+      ],
+      "hypothesis": "The shared nine-state model completes M1-M6 empirical simulator acceptance",
+      "changed_dimension": "Shared nine-state empirical body/tire/rest model and model-bound consumers; fixed original calibration",
+      "result": "inconclusive",
+      "reason": "User explicitly accepted empirical simulation scope and autonomous continuation. Native/build/tests pass; fresh single/dev2, intents/restart, repetitions/multivehicle/gates/submission still pending.",
+      "production_impact": "Candidate migration; integrated acceptance remains open. No physical margin/tolerance/solver budget relaxation.",
+      "deleted_code": [
+        "normal wire=net velocity override",
+        "normal yaw-rate/speed tire inversion",
+        "normal independent longitudinal observer and yaw-response prefix",
+        "wire-times-duration velocity feasibility shortcut"
+      ],
+      "revisit_condition": "Fresh runtime and required M3-M6 evidence"
     }
   ]
 }

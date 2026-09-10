@@ -60,7 +60,8 @@ std::optional<artifact::PredictedState> interpolate_recorded_state(
         state[model::kHeadingIndex],
         std::max(0.0, state[model::kVelocityIndex]),
         state[model::kProgressIndex], state[model::kSteeringIndex],
-        state[model::kResponseSteeringIndex]};
+        state[model::kResponseSteeringIndex],
+        state[model::kLateralVelocityIndex], state[model::kYawRateIndex]};
     }
     remaining = std::max(0.0, remaining - dt);
     ++stage;

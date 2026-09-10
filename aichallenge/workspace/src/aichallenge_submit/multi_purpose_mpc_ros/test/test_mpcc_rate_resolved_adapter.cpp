@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
 
 #include <gtest/gtest.h>
@@ -33,8 +34,8 @@ adapter::Request curved_request(const int horizon = 4)
   request.current_steering_rad = 0.0;
   request.current_response_steering_rad = 0.0;
   request.wheelbase_m = 2.5;
-  request.yaw_response_gain = 0.75;
-  request.yaw_response_time_constant_sec = 0.13;
+  request.curvature_reference_gain = 0.75;
+  request.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   request.maximum_abs_steering_rad = 0.6;
   request.maximum_abs_steering_rate_radps = 1.0;
   request.previous_input << 0.0, 0.0, 3.0;
@@ -180,7 +181,7 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
 
 TEST(
   MpccRateResolvedAdapter,
-  CurvatureReferenceUsesTheSameYawResponseGainAsTheDynamics)
+  CurvatureReferenceConversionPreservesTheExistingCommandBounds)
 {
   const auto request = curved_request();
   const auto result = adapter::build(request, kSolverTolerance);
@@ -191,7 +192,7 @@ TEST(
   const double steering = result->problem.state_reference[
     state_offset + model::kSteeringIndex];
   const double represented_curvature =
-    request.yaw_response_gain * std::tan(steering) / request.wheelbase_m;
+    request.curvature_reference_gain * std::tan(steering) / request.wheelbase_m;
 
   EXPECT_NEAR(
     represented_curvature,
@@ -201,14 +202,14 @@ TEST(
     std::max(-request.maximum_abs_steering_rad, std::atan(
       request.wheelbase_m *
       request.inputs.front().lower[adapter::kLegacyCurvatureIndex] /
-      request.yaw_response_gain)),
+      request.curvature_reference_gain)),
     1e-12);
   EXPECT_NEAR(
     result->problem.state_upper[state_offset + model::kSteeringIndex],
     std::min(request.maximum_abs_steering_rad, std::atan(
       request.wheelbase_m *
       request.inputs.front().upper[adapter::kLegacyCurvatureIndex] /
-      request.yaw_response_gain)),
+      request.curvature_reference_gain)),
     1e-12);
 }
 
@@ -371,7 +372,7 @@ TEST(MpccRateResolvedAdapter, RelinearizesTheSameProblemAroundTheSolvedIterate)
   EXPECT_EQ(
     relinearized.reason, adapter::RelinearizationReason::Accepted);
   EXPECT_EQ(relinearized.stage, -1);
-  EXPECT_TRUE(adapted->problem.state_lower.isApprox(original_state_lower, 0.0));
+  EXPECT_TRUE((adapted->problem.state_lower.array() == original_state_lower.array()).all());
   EXPECT_TRUE(adapted->problem.input_upper.isApprox(original_input_upper, 0.0));
   EXPECT_FALSE(adapted->problem.linearizations[2].equality_offset.isApprox(
     original_third.equality_offset, 1e-12));

@@ -674,7 +674,11 @@ inline bool semantic_initial_state_matches(
          initial.velocity_mps == request.initial_state[3] &&
          initial.progress_m == request.initial_state[4] &&
          initial.steering_rad == request.current_steering_rad &&
-         initial.response_steering_rad == request.current_response_steering_rad;
+         initial.response_steering_rad == request.current_response_steering_rad &&
+         initial.lateral_velocity_mps == request.current_lateral_velocity_mps &&
+         initial.yaw_rate_radps == request.current_yaw_rate_radps &&
+         mpcc_vehicle_model::fingerprint(execution.vehicle_model) ==
+         mpcc_vehicle_model::fingerprint(request.vehicle_model);
 }
 
 /// Materialize a completed, non-executable worker rejection. Early

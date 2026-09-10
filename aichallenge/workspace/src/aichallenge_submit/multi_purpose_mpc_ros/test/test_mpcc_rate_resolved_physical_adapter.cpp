@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 
 #include <gtest/gtest.h>
@@ -10,6 +11,7 @@ namespace execution =
   multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace race = multi_purpose_mpc_ros::race_mpcc_foundation;
+namespace vehicle = multi_purpose_mpc_ros::mpcc_vehicle_model;
 
 namespace
 {
@@ -17,6 +19,8 @@ namespace
 contract::MpccProblemContext source_context()
 {
   contract::MpccProblemContext context;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.decision_id = 2U;
   context.intent = contract::ControlIntent::Track;
   context.intent_generation = 1U;
@@ -24,7 +28,9 @@ contract::MpccProblemContext source_context()
   context.stage_geometry_id = 4U;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
@@ -36,6 +42,7 @@ contract::MpccProblemContext source_context()
 execution::ExecutionArtifact artifact()
 {
   execution::ExecutionArtifact value;
+  value.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   value.identity = execution::Identity{1U, source_context(), 10.0};
   value.prediction_origin_sec = 10.0;
   value.publication_interval_sec = 0.025;
@@ -194,7 +201,8 @@ TEST(MpccRateResolvedPhysicalAdapter, EqualityResidualDoesNotRelocatePhysicalIni
     source, source.identity.source_context.intent,
     source.identity.source_context.stage_geometry_id);
   ASSERT_TRUE(result.exact_trajectory) << adapter::to_string(result.reason);
-  EXPECT_NEAR(result.exact_trajectory->progress_m.front(), 50.02, 1e-12);
+  EXPECT_NEAR(result.exact_trajectory->progress_m.front(),
+    50.0 + 2.0 * multi_purpose_mpc_ros::mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec, 1e-12);
   EXPECT_DOUBLE_EQ(source.predicted_states.front().progress_m, residual);
   EXPECT_DOUBLE_EQ(source.semantic_initial_state->progress_m, 0.0);
 
@@ -233,7 +241,10 @@ TEST(MpccRateResolvedPhysicalAdapter, ReplaysControlsThroughNonlinearModel)
   EXPECT_GT(exact.path_distance_m.front(), 0.0);
   EXPECT_DOUBLE_EQ(exact.path_distance_m.back(), 0.4);
   EXPECT_NEAR(exact.progress_m.back(), 50.4, 1e-12);
-  EXPECT_NEAR(exact.velocity_mps.back(), 2.2, 1e-12);
+  const auto body = vehicle::advance({0, 0, 0, 2, 0, 0, .1, .1}, {1, .1},
+    source.vehicle_model, .2);
+  ASSERT_TRUE(body);
+  EXPECT_NEAR(exact.velocity_mps.back(), body->state.forward_velocity_mps, 1e-12);
   EXPECT_GT(exact.minimum_lateral_bound_reserve_m, 0.0);
   EXPECT_LT(exact.minimum_lateral_bound_reserve_m, 1.0);
   EXPECT_DOUBLE_EQ(
@@ -302,9 +313,14 @@ TEST(
   ASSERT_EQ(result.stage_end_velocity_mps.size(), 2U);
   ASSERT_EQ(result.stage_end_steering_rad.size(), 2U);
   EXPECT_NEAR(result.publisher_interval_end_steering_rad, 0.105, 1e-12);
-  EXPECT_NEAR(
-    result.publisher_interval_end_response_steering_rad, 0.105, 1e-12);
-  EXPECT_NEAR(result.stage_end_velocity_mps.back(), 2.20, 1e-12);
+  const auto held = vehicle::advance({0, 0, 0, 2.05, 0, 0, .105, .105}, {1, 0},
+    source.vehicle_model, .025);
+  ASSERT_TRUE(held);
+  const auto moving = vehicle::advance(held->state, {1, .1}, source.vehicle_model, .125);
+  ASSERT_TRUE(moving);
+  EXPECT_NEAR(result.publisher_interval_end_response_steering_rad,
+    held->state.tire_steering_rad, 1e-12);
+  EXPECT_NEAR(result.stage_end_velocity_mps.back(), moving->state.forward_velocity_mps, 1e-12);
   // The serialized 0.105 rad angle is held for the first 25 ms. The
   // un-serialized 0.1 rad/s SQP input resumes only after that boundary.
   EXPECT_NEAR(result.stage_end_steering_rad.front(), 0.1075, 1e-12);
@@ -353,9 +369,11 @@ TEST(
   ASSERT_FALSE(exact.velocity_mps.empty());
   EXPECT_NEAR(exact.velocity_mps.back(), 0.0, 1e-9);
   EXPECT_GT(exact.elapsed_time_sec.back(), source.publication_interval_sec);
-  EXPECT_NEAR(
-    exact.velocity_mps.front(),
-    2.05 + actuation.actuation->acceleration_mps2 * 0.01, 1e-9);
+  const auto first_step = vehicle::advance({0, 0, 0, 2.05, 0, 0, .105, .105},
+    {actuation.actuation->acceleration_mps2, 0}, source.vehicle_model,
+    exact.elapsed_time_sec.front());
+  ASSERT_TRUE(first_step);
+  EXPECT_NEAR(exact.velocity_mps.front(), first_step->state.forward_velocity_mps, 1e-9);
   EXPECT_NEAR(
     result.publisher_interval_end_steering_rad,
     0.105, 1e-12);
@@ -470,7 +488,7 @@ TEST(
     }
   }
   EXPECT_TRUE(observed_saturated_response);
-  EXPECT_GT(result.exact_trajectory->velocity_mps.back(), 0.0);
+  EXPECT_DOUBLE_EQ(result.exact_trajectory->velocity_mps.back(), 0.0);
   EXPECT_LE(
     result.exact_trajectory->velocity_mps.back(),
     source.physical_global_tolerance);
@@ -485,7 +503,7 @@ TEST(
   const auto result = adapter::build_stop_successor(
     source,
     adapter::ContinuationInitialState{
-      -0.40, 0.0, 0.0, 0.055985, 0.45, 0.10, 0.10},
+      -0.40, 0.0, 0.0, 0.035, 0.45, 0.10, 0.10},
     stop_course_geometry(), stop_lateral_policy(), -3.0);
 
   ASSERT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
@@ -679,7 +697,7 @@ TEST(
   source.semantic_initial_steering_rad = 0.35;
   source.semantic_initial_response_steering_rad = 0.35;
   source.predicted_states = {
-    {0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35, 0.0, 1.0},
     {0.0, 0.0, 0.0, 8.0, 0.4, 0.35, 0.35},
     {0.0, 0.0, 0.0, 8.0, 0.8, 0.35, 0.35},
   };
@@ -697,7 +715,7 @@ TEST(
   const auto result = adapter::build_continuation(
     source, cursor,
     adapter::ContinuationInitialState{
-      0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35});
+      0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35, 0.0, 1.0});
 
   ASSERT_EQ(result.reason, adapter::ContinuationRejectReason::None);
   ASSERT_TRUE(result.exact_trajectory.has_value());
@@ -891,8 +909,10 @@ TEST(MpccRateResolvedPhysicalAdapter, DoesNotUseAffineVelocityAsPhysicalRollout)
     source.identity.source_context.stage_geometry_id);
   ASSERT_EQ(result.reason, adapter::RejectReason::None);
   ASSERT_TRUE(result.exact_trajectory.has_value());
-  EXPECT_NEAR(
-    result.exact_trajectory->velocity_mps.front(), 2.01, 1e-12);
+  const auto body = vehicle::advance({0, 0, 0, 2, 0, 0, .1, .1}, {1, .1},
+    source.vehicle_model, result.exact_trajectory->elapsed_time_sec.front());
+  ASSERT_TRUE(body);
+  EXPECT_NEAR(result.exact_trajectory->velocity_mps.front(), body->state.forward_velocity_mps, 1e-12);
   EXPECT_GT(
     result.exact_trajectory->velocity_lower_bound_tolerance_mps, 5e-7);
 
@@ -944,4 +964,17 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsProgressOutsideSolverCertificate)
   EXPECT_EQ(
     result.artifact_reason,
     execution::RejectReason::ProgressDynamicsMismatch);
+}
+
+TEST(MpccRateResolvedPhysicalAdapter, AZeroQpEndpointCannotCertifyAMovingBodyAsRest)
+{
+  auto source = artifact();
+  source.terminal_body_rest_required = true;
+  source.predicted_states.back().velocity_mps = 0.0;
+  source.predicted_states.back().lateral_velocity_mps = 0.0;
+  source.predicted_states.back().yaw_rate_radps = 0.0;
+  const auto result = adapter::build(source, source.identity.source_context.intent,
+    source.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(result.reason, adapter::RejectReason::TerminalRestNotReached);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
 }

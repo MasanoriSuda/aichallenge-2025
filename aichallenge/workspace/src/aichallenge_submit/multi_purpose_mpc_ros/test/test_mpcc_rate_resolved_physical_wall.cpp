@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
 
 #include <gtest/gtest.h>
@@ -15,6 +16,8 @@ namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 contract::MpccProblemContext source_context()
 {
   contract::MpccProblemContext context;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.decision_id = 10U;
   context.intent = contract::ControlIntent::Track;
   context.intent_generation = 1U;
@@ -22,7 +25,9 @@ contract::MpccProblemContext source_context()
   context.stage_geometry_id = 30U;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";

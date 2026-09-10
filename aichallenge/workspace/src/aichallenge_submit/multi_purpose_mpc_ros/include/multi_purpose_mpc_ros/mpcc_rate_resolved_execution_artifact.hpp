@@ -15,20 +15,20 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact
 struct Identity
 {
   std::uint64_t sequence{};
-  /// Exact immutable problem identity consumed by the seven-state solver.
+  /// Exact immutable problem identity consumed by the nine-state solver.
   /// Retained execution keeps this source identity while a separate current
   /// decision certifies the executable suffix against the current world.
   mpcc_execution_contract::MpccProblemContext source_context;
   double snapshot_sec{};
 };
 
-/// Return whether the seven-state steering-rate execution artifact owns this
+/// Return whether the nine-state steering-rate execution artifact owns this
 /// canonical normal intent.  All validators and current-world consumers must
 /// use this single capability definition; duplicating a Track/Cruise-only
 /// subset makes a physically certified Overtake artifact unpublishable.
 bool supports_intent(mpcc_execution_contract::ControlIntent intent) noexcept;
 
-/// Resolve whether the current semantic problem can create a seven-state normal
+/// Resolve whether the current semantic problem can create a nine-state normal
 /// request for the selected intent.  Both semantic request assembly and the
 /// submission boundary must use this resolver so an intent cannot be admitted
 /// by one layer and silently omitted by the next.
@@ -49,9 +49,11 @@ struct PredictedState
   double velocity_mps{};
   double progress_m{};
   double steering_rad{};
-  /// Effective steering state which produces yaw after actuator response.
-  /// This is distinct from the serialized command state above.
+  /// Physical tire angle after the actuator response. The v4 schema carries
+  /// actual body yaw rate separately; this is no longer a yaw-derived proxy.
   double response_steering_rad{};
+  double lateral_velocity_mps{};
+  double yaw_rate_radps{};
 };
 
 struct ControlStage
@@ -96,7 +98,7 @@ struct TerminalIntentCertificate
 };
 
 /// Immutable executable prefix of one complete, physically row-certified
-/// seven-state/three-input solve.  Planning may use a longer horizon than this
+/// nine-state/three-input solve.  Planning may use a longer horizon than this
 /// artifact; only this leading prefix crosses the execution boundary.  This
 /// deliberately does not reuse the curvature-input CanonicalExecutionPlan
 /// representation.
@@ -111,19 +113,19 @@ struct ExecutionArtifact
   double completed_sec{};
   double course_progress_origin_m{};
   /// Physical-equivalent serialized steering command at the
-  /// latency-compensated control origin.  The measured/yaw-derived response
+  /// latency-compensated control origin.  The physical tire response
   /// state is deliberately not an alternate execution origin.
   double semantic_initial_steering_rad{};
   double semantic_initial_response_steering_rad{};
   double wheelbase_m{};
-  double yaw_response_gain{1.0};
-  double yaw_response_time_constant_sec{0.13};
   double minimum_frenet_denominator{0.20};
   double maximum_abs_steering_rad{};
   double maximum_abs_steering_rate_radps{};
   double physical_global_tolerance{};
   double maximum_constraint_violation{};
   double maximum_normalized_constraint_violation{};
+  /// Full execution horizon owns a physically stationary body endpoint.
+  bool terminal_body_rest_required{false};
   TerminalIntentContract terminal_intent_contract;
   TerminalIntentCertificate terminal_intent_certificate;
   /// Unmodified solved affine states (or exact Stop successor samples).
@@ -139,6 +141,7 @@ struct ExecutionArtifact
   /// residual must never relocate the physical body or change its controls.
   /// Absence is invalid; no raw-primal fallback is allowed.
   std::optional<PredictedState> semantic_initial_state;
+  mpcc_vehicle_model::Parameters vehicle_model;
 };
 
 enum class RejectReason

@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 
@@ -34,6 +35,8 @@ contract::MpccProblemContext source_context(
   const std::uint64_t decision_id, const std::uint64_t stage_geometry_id)
 {
   contract::MpccProblemContext context;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.decision_id = decision_id;
   context.intent = contract::ControlIntent::Track;
   context.intent_generation = 1U;
@@ -41,7 +44,9 @@ contract::MpccProblemContext source_context(
   context.stage_geometry_id = stage_geometry_id;
   context.horizon_steps = 3U;
   context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
@@ -58,8 +63,8 @@ adapter::Request straight_request(const int horizon = 3)
   request.current_steering_rad = 0.10;
   request.current_response_steering_rad = 0.08;
   request.wheelbase_m = 2.0;
-  request.yaw_response_gain = 0.75;
-  request.yaw_response_time_constant_sec = 0.13;
+  request.curvature_reference_gain = 0.75;
+  request.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   request.maximum_abs_steering_rad = 0.60;
   request.maximum_abs_steering_rate_radps = 0.70;
   request.states.resize(static_cast<std::size_t>(horizon + 1));
@@ -711,7 +716,7 @@ TEST(
   ASSERT_TRUE(feedback.suffix.snapshot.has_value());
   EXPECT_EQ(feedback.suffix.consumed_stage_count, 2U);
   EXPECT_EQ(feedback.problem->horizon_steps, 1);
-  EXPECT_EQ(feedback.linearization_primal.size(), 17);
+  EXPECT_EQ(feedback.linearization_primal.size(), 2 * model::kStateDimension + model::kInputDimension);
   EXPECT_NEAR(
     feedback.problem->initial_state[model::kProgressIndex],
     latest_state.progress_m, 1e-12);
@@ -850,9 +855,9 @@ TEST(
     bridge_problem.state_reference.isApprox(
       direct_problem.state_reference, 0.0));
   EXPECT_TRUE(
-    bridge_problem.state_lower.isApprox(direct_problem.state_lower, 0.0));
+    (bridge_problem.state_lower.array() == direct_problem.state_lower.array()).all());
   EXPECT_TRUE(
-    bridge_problem.state_upper.isApprox(direct_problem.state_upper, 0.0));
+    (bridge_problem.state_upper.array() == direct_problem.state_upper.array()).all());
   EXPECT_TRUE(
     bridge_problem.input_reference.isApprox(
       direct_problem.input_reference, 0.0));
@@ -919,13 +924,12 @@ TEST(
         input[model::kVirtualProgressSpeedIndex],
         semantic_input.path_curvature_radpm,
         bridge.suffix.snapshot->request.wheelbase_m,
-        bridge.suffix.snapshot->request.yaw_response_gain,
-        bridge.suffix.snapshot->request.yaw_response_time_constant_sec,
         semantic_input.stage_dt_sec,
         bridge.suffix.snapshot->request.minimum_frenet_denominator,
         bridge.suffix.snapshot->request.minimum_stage_dt_sec,
         bridge.suffix.snapshot->request.maximum_stage_dt_sec,
-        bridge.suffix.snapshot->request.course_frame});
+        bridge.suffix.snapshot->request.course_frame, state[model::kLateralVelocityIndex],
+        state[model::kYawRateIndex], bridge.suffix.snapshot->request.vehicle_model});
     ASSERT_TRUE(transition.has_value());
     EXPECT_TRUE(
       transition->next_state.isApprox(
@@ -1022,11 +1026,11 @@ TEST(
     topRows(original->constraints.rows()).isApprox(
       Eigen::MatrixXd(original->constraints), 0.0));
   EXPECT_TRUE(
-    augmented.problem->lower_bound.head(original->lower_bound.size()).isApprox(
-      original->lower_bound, 0.0));
+    (augmented.problem->lower_bound.head(original->lower_bound.size()).array() ==
+      original->lower_bound.array()).all());
   EXPECT_TRUE(
-    augmented.problem->upper_bound.head(original->upper_bound.size()).isApprox(
-      original->upper_bound, 0.0));
+    (augmented.problem->upper_bound.head(original->upper_bound.size()).array() ==
+      original->upper_bound.array()).all());
   const Eigen::VectorXd row_values =
     augmented.problem->constraints * bridge.linearization_primal;
   const auto appended_values = row_values.tail(
@@ -1055,7 +1059,7 @@ TEST(
   ASSERT_TRUE(first.sample.has_value());
   EXPECT_EQ(first.sample->transition_stage, 0);
   EXPECT_EQ(first.sample->substep_index, 1U);
-  EXPECT_EQ(first.sample->substep_count, 3U);
+  EXPECT_EQ(first.sample->substep_count, 5U);
 
   const auto second = shadow::locate_physical_proof_sample(source, 1);
   ASSERT_EQ(second.reason, shadow::PhysicalProofSampleReason::Accepted);
@@ -1064,23 +1068,23 @@ TEST(
   EXPECT_EQ(second.sample->substep_index, 2U);
 
   const auto first_endpoint =
-    shadow::locate_physical_proof_sample(source, 2);
+    shadow::locate_physical_proof_sample(source, 4);
   EXPECT_EQ(
     first_endpoint.reason, shadow::PhysicalProofSampleReason::EndpointSample);
   ASSERT_TRUE(first_endpoint.sample.has_value());
   EXPECT_EQ(first_endpoint.sample->transition_stage, 0);
-  EXPECT_EQ(first_endpoint.sample->substep_index, 3U);
+  EXPECT_EQ(first_endpoint.sample->substep_index, 5U);
 
   const auto second_endpoint =
-    shadow::locate_physical_proof_sample(source, 3);
+    shadow::locate_physical_proof_sample(source, 6);
   EXPECT_EQ(
     second_endpoint.reason, shadow::PhysicalProofSampleReason::EndpointSample);
   ASSERT_TRUE(second_endpoint.sample.has_value());
   EXPECT_EQ(second_endpoint.sample->transition_stage, 1);
-  EXPECT_EQ(second_endpoint.sample->substep_index, 1U);
+  EXPECT_EQ(second_endpoint.sample->substep_index, 2U);
 
   EXPECT_EQ(
-    shadow::locate_physical_proof_sample(source, 4).reason,
+    shadow::locate_physical_proof_sample(source, 7).reason,
     shadow::PhysicalProofSampleReason::OutOfRange);
   EXPECT_EQ(
     shadow::locate_physical_proof_sample(source, -1).reason,
@@ -1195,11 +1199,11 @@ TEST(
     topRows(original->constraints.rows()).isApprox(
       Eigen::MatrixXd(original->constraints), 0.0));
   EXPECT_TRUE(
-    augmented.problem->lower_bound.head(original->lower_bound.size()).isApprox(
-      original->lower_bound, 0.0));
+    (augmented.problem->lower_bound.head(original->lower_bound.size()).array() ==
+      original->lower_bound.array()).all());
   EXPECT_TRUE(
-    augmented.problem->upper_bound.head(original->upper_bound.size()).isApprox(
-      original->upper_bound, 0.0));
+    (augmented.problem->upper_bound.head(original->upper_bound.size()).array() ==
+      original->upper_bound.array()).all());
 }
 
 TEST(
@@ -1449,7 +1453,7 @@ TEST(
   ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
 
   const execution::PredictedState latest_state{
-    0.0, 0.0, -0.35, 2.0, 0.04, -0.55, -0.44};
+    0.0, 0.0, -0.5, 2.0, 0.04, -0.3, -0.2, 1.0, 0.0};
   const shadow::LatestStateFeedbackRequest request{
     prepared.latest_state_feedback_preparation,
     old_origin.control_prediction_origin_sec + 0.02,
@@ -1485,7 +1489,7 @@ TEST(
   EXPECT_EQ(multi_sqp.latest_state_multi_sqp_solve_count, 1U);
   EXPECT_EQ(multi_sqp.reason, shadow::LatestStateFeedbackReason::SolveRejected)
     << multi_sqp.detail;
-  EXPECT_NE(multi_sqp.detail.find("primal infeasible"), std::string::npos);
+  EXPECT_NE(multi_sqp.detail.find("maximum iterations reached"), std::string::npos);
   EXPECT_EQ(multi_sqp.execution_artifact, nullptr);
 }
 

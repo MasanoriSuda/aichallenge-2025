@@ -139,7 +139,8 @@ Result build(
     request.control_origin_speed_mps <=
     std::max(1e-9, source_artifact.physical_global_tolerance) ||
     !finite(request.current_steering_rad) ||
-    !finite(request.current_response_steering_rad))
+    !finite(request.current_response_steering_rad) ||
+    !finite(request.current_lateral_velocity_mps) || !finite(request.current_yaw_rate_radps))
   {
     result.reason = Reason::InvalidIdentity;
     return result;
@@ -210,6 +211,8 @@ Result build(
         !finite(samples[end].end_velocity_mps) ||
         !finite(samples[end].end_steering_rad) ||
         !finite(samples[end].end_response_steering_rad) ||
+        !finite(samples[end].end_lateral_velocity_mps) ||
+        !finite(samples[end].end_yaw_rate_radps) ||
         !finite(samples[end].path_curvature_radpm) ||
         !finite(samples[end].virtual_progress_speed_mps))
       {
@@ -225,6 +228,15 @@ Result build(
         ActuationRejectDetail::InvalidCommandDuration,
         command_end_indices.size(), duration_sec, 0.0, tolerance);
     }
+    const double boundary_duration = samples[end - 1U].elapsed_time_sec -
+      (begin == 0U ? 0.0 : samples[begin - 1U].elapsed_time_sec);
+    if (!finite(boundary_duration) || boundary_duration <= 0.0 ||
+      std::abs(boundary_duration - duration_sec) > 1e-9)
+    {
+      return reject_actuation(ActuationRejectDetail::InvalidCommandDuration,
+        command_end_indices.size(), boundary_duration, duration_sec, 1e-9);
+    }
+    duration_sec = boundary_duration;
     command_end_indices.push_back(end - 1U);
     command_durations_sec.push_back(duration_sec);
     command_acceleration_mps2.push_back(samples[begin].acceleration_mps2);
@@ -271,10 +283,9 @@ Result build(
   execution->semantic_initial_steering_rad = request.current_steering_rad;
   execution->semantic_initial_response_steering_rad =
     request.current_response_steering_rad;
+  execution->vehicle_model = source_artifact.vehicle_model;
+  execution->terminal_body_rest_required = true;
   execution->wheelbase_m = source_artifact.wheelbase_m;
-  execution->yaw_response_gain = source_artifact.yaw_response_gain;
-  execution->yaw_response_time_constant_sec =
-    source_artifact.yaw_response_time_constant_sec;
   execution->minimum_frenet_denominator =
     source_artifact.minimum_frenet_denominator;
   execution->maximum_abs_steering_rad =
@@ -297,7 +308,8 @@ Result build(
     request.control_origin_speed_mps,
     initial_course_progress_m - execution->course_progress_origin_m,
     request.current_steering_rad,
-    request.current_response_steering_rad});
+    request.current_response_steering_rad,
+    request.current_lateral_velocity_mps, request.current_yaw_rate_radps});
   execution->semantic_initial_state = execution->predicted_states.front();
   execution->nominal_path_distance_m.push_back(0.0);
   execution->lateral_lower_m.push_back(
@@ -335,7 +347,8 @@ Result build(
       exact.heading_offset_rad[dense_end], exact.velocity_mps[dense_end],
       endpoint_progress_m - execution->course_progress_origin_m,
       samples[dense_end].end_steering_rad,
-      samples[dense_end].end_response_steering_rad});
+      samples[dense_end].end_response_steering_rad,
+      samples[dense_end].end_lateral_velocity_mps, samples[dense_end].end_yaw_rate_radps});
     execution->nominal_path_distance_m.push_back(
       exact.path_distance_m[dense_end]);
     execution->lateral_lower_m.push_back(exact.lateral_lower_m[dense_end]);

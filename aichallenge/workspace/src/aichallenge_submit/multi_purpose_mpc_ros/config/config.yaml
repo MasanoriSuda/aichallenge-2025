@@ -321,16 +321,15 @@ mpc:
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   # Controller/actuation latency compensation after EKF pose timing compensation.
   # 0.125 s reproduces the non-mutating equivalent of the 2025 Pure Pursuit prediction.
+  vehicle_model_file: mpcc_plant_awsim_2025.yaml
+  # Nominal public-input scheduling; neither is a transport guarantee.
+  nominal_acceleration_application_delay_sec: 0.0
+  nominal_steering_application_delay_sec: 0.1
   state_prediction_delay_sec: 0.13
-  # Pair velocity-response and committed-input filters in the same observer.
-  # Preserve the former twist2accel gain; this is not actuator-delay tuning.
-  longitudinal_response_filter_gain: 0.9
   state_prediction_simulation_only: true
-  # Identified from four 2026-08-26 bags: measured yaw response is 0.74--0.79
-  # of kinematic curvature with an equivalent 0.11--0.15 s response state.
-  # These describe the simulated vehicle plant, not a tracking-weight tune.
-  yaw_response_gain: 0.75
-  yaw_response_time_constant_sec: 0.13
+  # Existing soft curvature-reference conversion; vehicle dynamics use only
+  # the explicit shared profile above.
+  curvature_reference_gain: 0.75
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   # The canonical progress MPCC owns every normal intent. During
   # ShiftOut/Pass/Return the tactical corridor remains the hard lateral constraint.

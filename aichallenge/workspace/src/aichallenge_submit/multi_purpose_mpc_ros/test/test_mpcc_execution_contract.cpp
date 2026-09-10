@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
 
 #include <gtest/gtest.h>
@@ -150,6 +151,8 @@ TEST(MpccExecutionContract, CertifiedTerminalContingencyPublishesStopAuthority)
 contract::MpccProblemContext make_context()
 {
   contract::MpccProblemContext context;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.decision_id = 42U;
   context.intent = contract::ControlIntent::Pass;
   context.intent_generation = 7U;
@@ -164,7 +167,9 @@ contract::MpccProblemContext make_context()
   context.execution_side_sign = 1;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id = "ey-elag-epsi-v-steering-progress-v1";
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-obstacle-v1";

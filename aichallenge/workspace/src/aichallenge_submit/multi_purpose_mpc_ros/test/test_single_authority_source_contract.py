@@ -656,7 +656,7 @@ def test_rate_resolved_track_cruise_identity_names_the_effective_solver_horizon(
     assert (
         "draft.source_context = make_problem_context(\n"
         "      problem,\n"
-        "      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State,\n"
+        "      mpcc_contract::Formulation::VelocitySteeringTireBodyProgress9State,\n"
         "      intent, extended_problem->N);"
         in builder
     )
@@ -1296,7 +1296,7 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     shadow = SOURCE[shadow_start:shadow_end]
     assert "const mpcc_contract::ControlIntent prospective_intent" in shadow
     assert "current_control_intent()" not in shadow
-    assert "Formulation::VelocitySteeringYawResponseProgress7State" in shadow
+    assert "Formulation::VelocitySteeringTireBodyProgress9State" in shadow
     assert "evaluate_rate_resolved_current_world_population(" in shadow
     assert "validate_frenet_dp_target_bound_horizon(" in shadow
     assert "rate_resolved_track_cruise_certified_plan_store_" not in shadow
@@ -3527,11 +3527,13 @@ def test_latency_wall_proof_reuses_the_canonical_state_prediction_trajectory() -
     control_start = SOURCE.index("void control()")
     control_end = SOURCE.index("void publish_zero_command()", control_start)
     control = SOURCE[control_start:control_end]
-    assert "predict_piecewise_yaw_response_trajectory(" in control
-    assert "longitudinal_response_observer_->prediction_intervals(" in control
+    assert "predict_observed_vehicle(" in control
+    assert "prediction->current_to_control" in control
+    assert "predict_piecewise_yaw_response_trajectory(" not in control
+    assert "longitudinal_response_observer_->prediction_intervals(" not in control
     assert "predict_accelerating_yaw_response_trajectory(" not in control
     assert "acceleration_sub_" not in SOURCE
-    assert "canonical_control_path = std::move(path);" in control
+    assert "canonical_control_path{std::move(path)}" in control
     assert "update_predicted_pose_for_execution_contract(" in control
 
 
@@ -3761,7 +3763,7 @@ def test_stop_successor_separates_serialized_and_effective_acceleration() -> Non
     assert (
         "elapsed_sec, step_sec, requested_acceleration_mps2," in adapter_source
     )
-    assert "effective_acceleration_mps2," in adapter_source
+    assert "(nonlinear.velocity_mps - velocity_before_mps) / step_sec" in adapter_source
     assert "samples[end].effective_acceleration_mps2" in bundle_source
     assert "same_command(samples[begin], samples[end], tolerance)" in bundle_source
 
@@ -3777,7 +3779,7 @@ def test_canonical_overtake_problem_has_no_legacy_receding_optimizer_edge() -> N
     problem_builder = SOURCE[problem_start:problem_end]
 
     assert "evaluate_overtake_line_horizon(" in problem_builder
-    assert "seven-state MPCC is the sole continuous" in problem_builder
+    assert "nine-state MPCC is the sole continuous" in problem_builder
     assert "optimize_live_overtake_line_horizon(" not in problem_builder
     assert "Overtake horizon schedule:" not in problem_builder
 

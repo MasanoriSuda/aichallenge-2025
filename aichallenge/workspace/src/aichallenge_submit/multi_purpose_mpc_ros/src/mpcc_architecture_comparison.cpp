@@ -281,10 +281,11 @@ ExternalArtifactBuild build_external_artifact(
     snapshot.request.current_steering_rad;
   execution.semantic_initial_response_steering_rad =
     snapshot.request.current_response_steering_rad;
+  execution.vehicle_model = snapshot.request.vehicle_model;
+  execution.terminal_body_rest_required = execution_horizon == horizon &&
+    snapshot.request.states.back().lower[model::kVelocityIndex] == 0.0 &&
+    snapshot.request.states.back().upper[model::kVelocityIndex] == 0.0;
   execution.wheelbase_m = snapshot.request.wheelbase_m;
-  execution.yaw_response_gain = snapshot.request.yaw_response_gain;
-  execution.yaw_response_time_constant_sec =
-    snapshot.request.yaw_response_time_constant_sec;
   execution.minimum_frenet_denominator =
     snapshot.request.minimum_frenet_denominator;
   execution.maximum_abs_steering_rad =
@@ -340,11 +341,14 @@ ExternalArtifactBuild build_external_artifact(
     snapshot.request.current_steering_rad;
   nonlinear_state[model::kResponseSteeringIndex] =
     snapshot.request.current_response_steering_rad;
+  nonlinear_state[model::kLateralVelocityIndex] = snapshot.request.current_lateral_velocity_mps;
+  nonlinear_state[model::kYawRateIndex] = snapshot.request.current_yaw_rate_radps;
   execution.semantic_initial_state = artifact::PredictedState{
     nonlinear_state[model::kLateralIndex], nonlinear_state[model::kLagIndex],
     nonlinear_state[model::kHeadingIndex], nonlinear_state[model::kVelocityIndex],
     nonlinear_state[model::kProgressIndex], nonlinear_state[model::kSteeringIndex],
-    nonlinear_state[model::kResponseSteeringIndex]};
+    nonlinear_state[model::kResponseSteeringIndex],
+    nonlinear_state[model::kLateralVelocityIndex], nonlinear_state[model::kYawRateIndex]};
   for (int stage = 0; stage <= execution_horizon; ++stage) {
     const int state = model::kStateDimension * stage;
     if (!enforce_affine_rows && stage > 0) {
@@ -375,15 +379,15 @@ ExternalArtifactBuild build_external_artifact(
       transition.reference_path_curvature_radpm =
         semantic.path_curvature_radpm;
       transition.wheelbase_m = snapshot.request.wheelbase_m;
-      transition.yaw_response_gain = snapshot.request.yaw_response_gain;
-      transition.yaw_response_time_constant_sec =
-        snapshot.request.yaw_response_time_constant_sec;
       transition.stage_dt_sec = semantic.stage_dt_sec;
       transition.minimum_frenet_denominator =
         snapshot.request.minimum_frenet_denominator;
       transition.minimum_stage_dt_sec = semantic.stage_dt_sec;
       transition.maximum_stage_dt_sec = semantic.stage_dt_sec;
       transition.course_frame = snapshot.request.course_frame;
+      transition.vehicle_model = snapshot.request.vehicle_model;
+      transition.reference_lateral_velocity_mps = nonlinear_state[model::kLateralVelocityIndex];
+      transition.reference_yaw_rate_radps = nonlinear_state[model::kYawRateIndex];
       const auto advanced = model::evaluate_temporal_frenet_transition(
         transition);
       if (!advanced.has_value()) {
@@ -409,7 +413,11 @@ ExternalArtifactBuild build_external_artifact(
       use_affine_state ? primal[state + model::kSteeringIndex] :
       nonlinear_state[model::kSteeringIndex],
       use_affine_state ? primal[state + model::kResponseSteeringIndex] :
-      nonlinear_state[model::kResponseSteeringIndex]});
+      nonlinear_state[model::kResponseSteeringIndex],
+      use_affine_state ? primal[state + model::kLateralVelocityIndex] :
+      nonlinear_state[model::kLateralVelocityIndex],
+      use_affine_state ? primal[state + model::kYawRateIndex] :
+      nonlinear_state[model::kYawRateIndex]});
     const int lateral_row = state_box_row + state + model::kLateralIndex;
     execution.lateral_lower_m.push_back(
       physical_oracle_lateral_support.has_value() ?
@@ -423,6 +431,13 @@ ExternalArtifactBuild build_external_artifact(
   for (int stage = 0; stage < execution_horizon; ++stage) {
     const int input = state_values + model::kInputDimension * stage;
     const auto & semantic = snapshot.request.inputs[static_cast<std::size_t>(stage)];
+    if (!enforce_affine_rows && snapshot.request.maximum_braking_feasibility &&
+      std::abs(primal[input + model::kAccelerationIndex] -
+      semantic.reference[model::kAccelerationIndex]) > tolerance.absolute)
+    {
+      result.detail = "physical-nonlinear-oracle-changed-sealed-maximum-braking-input";
+      return result;
+    }
     execution.control_stages.push_back(artifact::ControlStage{
       primal[input + model::kAccelerationIndex],
       primal[input + model::kSteeringRateIndex],
@@ -726,7 +741,7 @@ TerminalStopCertificate certify_terminal_stop(
     physical::ContinuationInitialState{
       initial.lateral_m, initial.lag_m, initial.heading_offset_rad,
       initial.velocity_mps, initial.progress_m, initial.steering_rad,
-      initial.response_steering_rad},
+      initial.response_steering_rad, initial.lateral_velocity_mps, initial.yaw_rate_radps},
     normal_wall_snapshot.terminal_stop_course_geometry,
     world.terminal_stop_lateral_policy,
     world.terminal_stop_minimum_acceleration_mps2, target_lateral_m,

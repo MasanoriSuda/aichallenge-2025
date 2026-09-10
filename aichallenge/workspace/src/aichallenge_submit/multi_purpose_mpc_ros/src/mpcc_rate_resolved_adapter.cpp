@@ -73,24 +73,20 @@ std::optional<double> select_virtual_speed_tangent(
 }
 
 double steering_from_curvature(
-  const double wheelbase_m, const double yaw_response_gain,
+  const double wheelbase_m, const double curvature_reference_gain,
   const double curvature_radpm) noexcept
 {
-  // The seven-state model defines the steady yaw response as
-  //   kappa = yaw_response_gain * tan(delta_response) / wheelbase.
-  // Curvature references and bounds must use that same contract.  Reusing
-  // the unit-gain bicycle conversion under-steers every future reference
-  // whenever the identified response gain is below one, leaving feedback to
-  // discover the deficit only after a heading error has already developed.
-  return std::atan(wheelbase_m * curvature_radpm / yaw_response_gain);
+  // Preserve the existing curvature-reference and command-bound conversion.
+  // This soft-reference calibration is independent of the body/tire dynamics.
+  return std::atan(wheelbase_m * curvature_radpm / curvature_reference_gain);
 }
 
 double curvature_jacobian(
-  const double wheelbase_m, const double yaw_response_gain,
+  const double wheelbase_m, const double curvature_reference_gain,
   const double steering_rad) noexcept
 {
   const double cosine = std::cos(steering_rad);
-  return yaw_response_gain / (wheelbase_m * cosine * cosine);
+  return curvature_reference_gain / (wheelbase_m * cosine * cosine);
 }
 
 }  // namespace
@@ -204,28 +200,35 @@ bool is_braking_feasibility_request(const Request & request) noexcept
       return false;
     }
   }
-  double previous = request.initial_state[model::kVelocityIndex];
-  if (!std::isfinite(previous) || previous < 0.0) {
-    return false;
-  }
-  for (std::size_t stage = 0; stage < request.inputs.size(); ++stage) {
-    const auto & input = request.inputs[stage];
-    const auto & state = request.states[stage + 1U];
-    const double velocity = state.lower[model::kVelocityIndex];
+  if (!request.maximum_braking_feasibility ||
+    !mpcc_vehicle_model::valid(request.vehicle_model)) return false;
+  mpcc_vehicle_model::State body{0, 0, 0, request.initial_state[model::kVelocityIndex],
+    request.current_lateral_velocity_mps, request.current_yaw_rate_radps,
+    request.current_steering_rad, request.current_response_steering_rad};
+  std::size_t stage = 0U;
+  for (const auto & input : request.inputs) {
     if (!input.weight.isZero(0.0) || !input.linear_cost.isZero(0.0) ||
       !std::isfinite(input.stage_dt_sec) || input.stage_dt_sec <= 0.0 ||
-      !std::isfinite(velocity) || velocity < 0.0 || velocity > previous ||
-      state.upper[model::kVelocityIndex] != velocity ||
-      state.reference[model::kVelocityIndex] != velocity ||
       !std::isfinite(input.reference[model::kAccelerationIndex]) ||
-      std::abs(input.reference[model::kAccelerationIndex] -
-      (velocity - previous) / input.stage_dt_sec) > 1e-9)
+      input.reference[model::kAccelerationIndex] >= 0.0 ||
+      input.reference[model::kAccelerationIndex] < input.lower[model::kAccelerationIndex] ||
+      input.reference[model::kAccelerationIndex] > input.upper[model::kAccelerationIndex])
     {
       return false;
     }
-    previous = velocity;
+    const auto next = mpcc_vehicle_model::advance(
+      body, {input.reference[model::kAccelerationIndex], 0.0},
+      request.vehicle_model, input.stage_dt_sec);
+    if (!next || !std::isfinite(request.states[stage + 1U].reference[model::kVelocityIndex]) ||
+      std::abs(next->state.forward_velocity_mps -
+      request.states[stage + 1U].reference[model::kVelocityIndex]) > 1e-12) return false;
+    body = next->state;
+    ++stage;
   }
-  return previous == 0.0;
+  const auto & terminal = request.states.back();
+  return terminal.lower[model::kVelocityIndex] == 0.0 &&
+         terminal.upper[model::kVelocityIndex] == 0.0;
+
 }
 
 std::optional<Result> build(
@@ -256,11 +259,12 @@ std::optional<Result> build(
     horizon <= 0 || !request.initial_state.allFinite() ||
     !std::isfinite(request.current_steering_rad) ||
     !std::isfinite(request.current_response_steering_rad) ||
+    !std::isfinite(request.current_lateral_velocity_mps) ||
+    !std::isfinite(request.current_yaw_rate_radps) ||
+    !mpcc_vehicle_model::valid(request.vehicle_model) ||
     !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
-    !std::isfinite(request.yaw_response_gain) ||
-    request.yaw_response_gain <= 0.0 ||
-    !std::isfinite(request.yaw_response_time_constant_sec) ||
-    request.yaw_response_time_constant_sec <= 0.0 ||
+    !std::isfinite(request.curvature_reference_gain) ||
+    request.curvature_reference_gain <= 0.0 ||
     !std::isfinite(request.maximum_abs_steering_rad) ||
     request.maximum_abs_steering_rad <= 0.0 ||
     request.maximum_abs_steering_rad >= half_pi ||
@@ -314,6 +318,8 @@ std::optional<Result> build(
   problem.initial_state[model::kSteeringIndex] = request.current_steering_rad;
   problem.initial_state[model::kResponseSteeringIndex] =
     request.current_response_steering_rad;
+  problem.initial_state[model::kLateralVelocityIndex] = request.current_lateral_velocity_mps;
+  problem.initial_state[model::kYawRateIndex] = request.current_yaw_rate_radps;
   problem.state_reference = Eigen::VectorXd::Zero(state_values);
   problem.state_lower = Eigen::VectorXd::Zero(state_values);
   problem.state_upper = Eigen::VectorXd::Zero(state_values);
@@ -335,6 +341,10 @@ std::optional<Result> build(
   std::vector<double> response_steering_reference_rad(
     static_cast<std::size_t>(horizon + 1),
     request.current_response_steering_rad);
+  std::vector<double> lateral_velocity_reference_mps(
+    static_cast<std::size_t>(horizon + 1), request.current_lateral_velocity_mps);
+  std::vector<double> yaw_rate_reference_radps(
+    static_cast<std::size_t>(horizon + 1), request.current_yaw_rate_radps);
   result.curvature_to_steering_jacobian_radpm_per_rad.resize(
     static_cast<std::size_t>(horizon));
   // The physical steering state is the only origin of the optimized rate
@@ -395,7 +405,7 @@ std::optional<Result> build(
     const double requested_steering_reference = stage == 0 ?
       request.current_steering_rad :
       steering_from_curvature(
-      request.wheelbase_m, request.yaw_response_gain,
+      request.wheelbase_m, request.curvature_reference_gain,
       request.inputs[static_cast<std::size_t>(source_input)].
       reference[kLegacyCurvatureIndex]);
     const double curvature_lower = stage == 0 ?
@@ -409,11 +419,11 @@ std::optional<Result> build(
     const double steering_lower = std::max(
       -request.maximum_abs_steering_rad,
       steering_from_curvature(
-        request.wheelbase_m, request.yaw_response_gain, curvature_lower));
+        request.wheelbase_m, request.curvature_reference_gain, curvature_lower));
     const double steering_upper = std::min(
       request.maximum_abs_steering_rad,
       steering_from_curvature(
-        request.wheelbase_m, request.yaw_response_gain, curvature_upper));
+        request.wheelbase_m, request.curvature_reference_gain, curvature_upper));
     if (
       !std::isfinite(requested_steering_reference) ||
       !std::isfinite(steering_lower) || !std::isfinite(steering_upper) ||
@@ -445,18 +455,32 @@ std::optional<Result> build(
         result.steering_reference_rad[static_cast<std::size_t>(stage - 1)];
       const double previous_dt =
         request.inputs[static_cast<std::size_t>(stage - 1)].stage_dt_sec;
-      const double response_decay = std::exp(
-        -previous_dt / request.yaw_response_time_constant_sec);
+      const auto previous_stage = static_cast<std::size_t>(stage - 1);
+      const auto auxiliary = mpcc_vehicle_model::advance(
+        mpcc_vehicle_model::State{0, 0, 0,
+          problem.state_reference[(stage - 1) * model::kStateDimension + model::kVelocityIndex],
+          lateral_velocity_reference_mps[previous_stage], yaw_rate_reference_radps[previous_stage],
+          previous_steering, previous_response},
+        mpcc_vehicle_model::Input{
+          request.inputs[previous_stage].reference[model::kAccelerationIndex],
+          (steering_reference - previous_steering) / previous_dt},
+        request.vehicle_model, previous_dt);
+      if (!auxiliary) {
+        return reject(RejectReason::LinearizationUnavailable, stage);
+      }
       response_steering_reference_rad[static_cast<std::size_t>(stage)] =
-        previous_steering +
-        (previous_response - previous_steering) * response_decay;
+        auxiliary->state.tire_steering_rad;
+      lateral_velocity_reference_mps[static_cast<std::size_t>(stage)] =
+        auxiliary->state.lateral_velocity_mps;
+      yaw_rate_reference_radps[static_cast<std::size_t>(stage)] =
+        auxiliary->state.yaw_rate_radps;
     }
     const double response_steering_reference =
       response_steering_reference_rad[static_cast<std::size_t>(stage)];
     if (
       !std::isfinite(response_steering_reference) ||
       std::abs(response_steering_reference) >
-      request.maximum_abs_steering_rad)
+      request.vehicle_model.maximum_wire_steering_rad * request.vehicle_model.tire_grip)
     {
       return reject(
         RejectReason::SteeringBoundsUnavailable, stage,
@@ -467,10 +491,31 @@ std::optional<Result> build(
     problem.state_reference[state_offset + model::kResponseSteeringIndex] =
       response_steering_reference;
     problem.state_lower[state_offset + model::kResponseSteeringIndex] =
-      -request.maximum_abs_steering_rad;
+      -request.vehicle_model.maximum_wire_steering_rad * request.vehicle_model.tire_grip;
     problem.state_upper[state_offset + model::kResponseSteeringIndex] =
-      request.maximum_abs_steering_rad;
+      request.vehicle_model.maximum_wire_steering_rad * request.vehicle_model.tire_grip;
     problem.state_weight[state_offset + model::kResponseSteeringIndex] = 0.0;
+    problem.state_reference[state_offset + model::kLateralVelocityIndex] =
+      lateral_velocity_reference_mps[static_cast<std::size_t>(stage)];
+    problem.state_reference[state_offset + model::kYawRateIndex] =
+      yaw_rate_reference_radps[static_cast<std::size_t>(stage)];
+    // These are physical dynamic states, not new command channels or tuned
+    // tracking objectives. The dynamics determine them; the existing exact
+    // swept-body constraints certify their geometric effect.
+    for (const int element : {model::kLateralVelocityIndex, model::kYawRateIndex}) {
+      problem.state_lower[state_offset + element] = stage == 0 ?
+        problem.initial_state[element] : -std::numeric_limits<double>::infinity();
+      problem.state_upper[state_offset + element] = stage == 0 ?
+        problem.initial_state[element] : std::numeric_limits<double>::infinity();
+    }
+    if (stage == horizon &&
+      request.states.back().lower[model::kVelocityIndex] == 0.0 &&
+      request.states.back().upper[model::kVelocityIndex] == 0.0) {
+      for (const int element : {model::kLateralVelocityIndex, model::kYawRateIndex}) {
+        problem.state_lower[state_offset + element] = 0.0;
+        problem.state_upper[state_offset + element] = 0.0;
+      }
+    }
     result.steering_reference_rad[static_cast<std::size_t>(stage)] =
       steering_reference;
     result.steering_lower_rad[static_cast<std::size_t>(stage)] = steering_lower;
@@ -478,7 +523,7 @@ std::optional<Result> build(
     if (stage > 0) {
       const auto & input = request.inputs[static_cast<std::size_t>(source_input)];
       const double jacobian = curvature_jacobian(
-        request.wheelbase_m, request.yaw_response_gain, steering_reference);
+        request.wheelbase_m, request.curvature_reference_gain, steering_reference);
       if (!std::isfinite(jacobian) || jacobian <= 0.0) {
         return reject(
           RejectReason::SteeringJacobianUnavailable, stage,
@@ -490,6 +535,8 @@ std::optional<Result> build(
   }
 
   problem.linearizations.reserve(static_cast<std::size_t>(horizon));
+  const bool braking_feasibility_valid = !request.maximum_braking_feasibility ||
+    is_braking_feasibility_request(request);
   for (int stage = 0; stage < horizon; ++stage) {
     const auto index = static_cast<std::size_t>(stage);
     const auto & legacy_state = request.states[index];
@@ -513,11 +560,10 @@ std::optional<Result> build(
         response_steering_reference_rad[index],
         legacy_input.reference[0], 0.0, *virtual_speed_tangent,
         legacy_input.path_curvature_radpm, request.wheelbase_m,
-        request.yaw_response_gain,
-        request.yaw_response_time_constant_sec,
         legacy_input.stage_dt_sec, request.minimum_frenet_denominator,
         request.minimum_stage_dt_sec, request.maximum_stage_dt_sec,
-        request.course_frame});
+        request.course_frame, lateral_velocity_reference_mps[index],
+        yaw_rate_reference_radps[index], request.vehicle_model});
     if (!linearization.has_value()) {
       return reject(RejectReason::LinearizationUnavailable, stage);
     }
@@ -557,6 +603,15 @@ std::optional<Result> build(
       acceleration_bounds->lower;
     problem.input_upper[input_offset + model::kAccelerationIndex] =
       acceleration_bounds->upper;
+    if (request.maximum_braking_feasibility) {
+      if (!braking_feasibility_valid ||
+        std::abs(legacy_input.reference[0] - acceleration_bounds->lower) > 1e-9)
+      {
+        return reject(RejectReason::AccelerationInsetUnavailable, stage);
+      }
+      problem.input_lower[input_offset + model::kAccelerationIndex] = acceleration_bounds->lower;
+      problem.input_upper[input_offset + model::kAccelerationIndex] = acceleration_bounds->lower;
+    }
     problem.input_lower[input_offset + model::kSteeringRateIndex] =
       steering_rate_bounds->lower;
     problem.input_upper[input_offset + model::kSteeringRateIndex] =
@@ -592,7 +647,7 @@ std::optional<Result> build(
       legacy_input.linear_cost[2];
 
     const double jacobian = curvature_jacobian(
-      request.wheelbase_m, request.yaw_response_gain, steering_reference);
+      request.wheelbase_m, request.curvature_reference_gain, steering_reference);
     result.curvature_to_steering_jacobian_radpm_per_rad[index] = jacobian;
     const double curvature_change_weight =
       request.input_delta_weight[kLegacyCurvatureIndex];
@@ -671,12 +726,12 @@ RelinearizationResult relinearize_around_primal(
         linearization_input[model::kVirtualProgressSpeedIndex],
         semantic_input.path_curvature_radpm,
         request.wheelbase_m,
-        request.yaw_response_gain,
-        request.yaw_response_time_constant_sec,
         semantic_input.stage_dt_sec,
         request.minimum_frenet_denominator,
         request.minimum_stage_dt_sec,
-        request.maximum_stage_dt_sec, request.course_frame});
+        request.maximum_stage_dt_sec, request.course_frame,
+        linearization_state[model::kLateralVelocityIndex],
+        linearization_state[model::kYawRateIndex], request.vehicle_model});
     if (!linearization.has_value()) {
       result.reason = RelinearizationReason::LinearizationUnavailable;
       result.stage = stage;

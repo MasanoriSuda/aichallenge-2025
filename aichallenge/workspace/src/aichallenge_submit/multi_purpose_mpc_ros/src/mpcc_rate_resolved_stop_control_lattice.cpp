@@ -141,7 +141,10 @@ StopCandidateResult impose_maximum_braking_law(
   // Exact Stop proof owns the complete suffix through rest, rather than the
   // shorter normal publication prefix.
   candidate.execution_prefix_steps = candidate.request.horizon_steps;
-  double elapsed_sec = 0.0;
+  candidate.request.maximum_braking_feasibility = true;
+  mpcc_vehicle_model::State body{0, 0, 0, initial_velocity_mps,
+    candidate.request.current_lateral_velocity_mps, candidate.request.current_yaw_rate_radps,
+    candidate.request.current_steering_rad, candidate.request.current_response_steering_rad};
   candidate.request.states.front().reference[model::kVelocityIndex] =
     initial_velocity_mps;
   for (std::size_t stage = 0U; stage < candidate.request.inputs.size();
@@ -153,30 +156,25 @@ StopCandidateResult impose_maximum_braking_law(
         Reason::InvalidBrakingEnvelope,
         "invalid Stop stage duration");
     }
-    const double stage_start_velocity_mps = std::max(
-      0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
-    elapsed_sec += input.stage_dt_sec;
-    const double stage_end_velocity_mps = std::max(
-      0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
-    const double required_acceleration_mps2 =
-      (stage_end_velocity_mps - stage_start_velocity_mps) /
-      input.stage_dt_sec;
-    if (required_acceleration_mps2 <
-      input.lower[model::kAccelerationIndex] - 1e-9 ||
-      required_acceleration_mps2 >
-      input.upper[model::kAccelerationIndex] + 1e-9)
-    {
-      return reject_stop(
-        Reason::InvalidBrakingEnvelope,
-        "maximum-braking Stop acceleration outside source bounds");
+    const auto bounds = mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+      input.lower[model::kAccelerationIndex], input.upper[model::kAccelerationIndex],
+      solver_tolerance);
+    if (!bounds || bounds->lower >= 0.0) {
+      return reject_stop(Reason::InvalidBrakingEnvelope, "Stop wire braking unavailable");
     }
-    input.reference[model::kAccelerationIndex] = required_acceleration_mps2;
-    input.reference[model::kVirtualProgressSpeedIndex] =
-      stage_start_velocity_mps;
-    auto & next_state = candidate.request.states[stage + 1U];
-    next_state.reference[model::kVelocityIndex] = stage_end_velocity_mps;
-    next_state.lower[model::kVelocityIndex] = stage_end_velocity_mps;
-    next_state.upper[model::kVelocityIndex] = stage_end_velocity_mps;
+    input.reference[model::kAccelerationIndex] = bounds->lower;
+    input.reference[model::kVirtualProgressSpeedIndex] = std::max(0.0, body.forward_velocity_mps);
+    const auto advanced = mpcc_vehicle_model::advance(
+      body, {bounds->lower, 0.0}, candidate.request.vehicle_model, input.stage_dt_sec);
+    if (!advanced) {
+      return reject_stop(Reason::InvalidBrakingEnvelope, "Stop body transition rejected");
+    }
+    body = advanced->state;
+    // The speed seed follows the same wire/body law. Future speed remains a
+    // dynamic state: steering changes wheel forces and cannot coexist with a
+    // separately imposed v0 + a*t equality. Only terminal rest is hard.
+    candidate.request.states[stage + 1U].reference[model::kVelocityIndex] =
+      body.forward_velocity_mps;
   }
   if (candidate.request.states.back().reference[model::kVelocityIndex] > 0.0) {
     // A normal horizon can end before braking reaches rest. Overwriting only
@@ -187,6 +185,8 @@ StopCandidateResult impose_maximum_braking_law(
       Reason::InvalidBrakingEnvelope,
       "maximum-braking Stop horizon ends before terminal rest");
   }
+  candidate.request.states.back().lower[model::kVelocityIndex] = 0.0;
+  candidate.request.states.back().upper[model::kVelocityIndex] = 0.0;
   // The maximum-braking law is already hard. Stop's remaining task is to
   // find a physically clear trajectory through rest; continuing to optimize
   // the inherited racing-line/progress objective gives it a different mission.
@@ -262,7 +262,8 @@ StopCandidateResult build_maximum_braking_candidate(
       source.request.initial_state[model::kVelocityIndex],
       source.request.initial_state[model::kProgressIndex],
       source.request.current_steering_rad,
-      source.request.current_response_steering_rad});
+      source.request.current_response_steering_rad,
+      source.request.current_lateral_velocity_mps, source.request.current_yaw_rate_radps});
   if (!continuation.exact_trajectory.has_value() ||
     !std::isfinite(continuation.publisher_interval_end_steering_rad) ||
     !std::isfinite(
@@ -324,6 +325,9 @@ StopCandidateResult build_maximum_braking_candidate(
     continuation.publisher_interval_end_steering_rad;
   candidate.request.current_response_steering_rad =
     continuation.publisher_interval_end_response_steering_rad;
+  candidate.request.current_lateral_velocity_mps =
+    continuation.publisher_interval_end_lateral_velocity_mps;
+  candidate.request.current_yaw_rate_radps = continuation.publisher_interval_end_yaw_rate_radps;
   candidate.request.previous_input[model::kAccelerationIndex] =
     normal_execution.control_stages.front().acceleration_mps2;
   candidate.request.previous_input[model::kSteeringRateIndex] =
@@ -408,7 +412,10 @@ StopCandidateResult build_current_world_complete_rest_candidate(
   {
     return reject_stop(Reason::InvalidBrakingEnvelope, "source bounds exclude complete rest");
   }
-  double minimum_terminal_velocity = request.initial_state[model::kVelocityIndex];
+  mpcc_vehicle_model::State braking_body{0, 0, 0,
+    request.initial_state[model::kVelocityIndex], request.current_lateral_velocity_mps,
+    request.current_yaw_rate_radps, request.current_steering_rad,
+    request.current_response_steering_rad};
   for (auto & input : request.inputs) {
     const auto bounds = mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
       input.lower[model::kAccelerationIndex], input.upper[model::kAccelerationIndex],
@@ -417,9 +424,15 @@ StopCandidateResult build_current_world_complete_rest_candidate(
       return reject_stop(Reason::InvalidBrakingEnvelope, "complete-rest braking bound unavailable");
     }
     input.stage_dt_sec = dt;
-    minimum_terminal_velocity = std::max(0.0, minimum_terminal_velocity + bounds->lower * dt);
+    const auto next = mpcc_vehicle_model::advance(
+      braking_body, {bounds->lower, 0.0}, request.vehicle_model, dt);
+    if (!next) {
+      return reject_stop(Reason::InvalidBrakingEnvelope, "complete-rest body transition rejected");
+    }
+    braking_body = next->state;
   }
-  if (minimum_terminal_velocity > 0.0) {
+  if (braking_body.forward_velocity_mps != 0.0 || braking_body.lateral_velocity_mps != 0.0 ||
+    braking_body.yaw_rate_radps != 0.0) {
     return reject_stop(Reason::InvalidBrakingEnvelope, "source maximum stage clock ends before rest");
   }
   candidate.execution_prefix_steps = request.horizon_steps;
@@ -440,6 +453,13 @@ StopCandidateResult build_current_world_complete_rest_candidate(
       return reject_stop(Reason::InvalidSource, "complete-rest progress domain is empty");
     }
   }
+  // Nominal settled-contact rest is invariant only with nonpositive wire
+  // input. A tiny positive QP input can satisfy a numerical zero-speed row
+  // while immediately leaving rest in the native body model. Declare the
+  // terminal mode's input condition before the common solver inset; never
+  // round or clamp an accepted serialized command after solving.
+  request.inputs.back().upper[model::kAccelerationIndex] = std::min(
+    request.inputs.back().upper[model::kAccelerationIndex], 0.0);
   request.states.back().reference[model::kVelocityIndex] = 0.0;
   request.states.back().lower[model::kVelocityIndex] = 0.0;
   request.states.back().upper[model::kVelocityIndex] = 0.0;

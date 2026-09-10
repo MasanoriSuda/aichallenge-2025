@@ -359,10 +359,11 @@ ExecutionArtifactBuildResult build_execution_artifact(
     snapshot.request.current_steering_rad;
   execution_artifact.semantic_initial_response_steering_rad =
     snapshot.request.current_response_steering_rad;
+  execution_artifact.vehicle_model = snapshot.request.vehicle_model;
+  execution_artifact.terminal_body_rest_required = execution_horizon == horizon &&
+    snapshot.request.states.back().lower[model::kVelocityIndex] == 0.0 &&
+    snapshot.request.states.back().upper[model::kVelocityIndex] == 0.0;
   execution_artifact.wheelbase_m = snapshot.request.wheelbase_m;
-  execution_artifact.yaw_response_gain = snapshot.request.yaw_response_gain;
-  execution_artifact.yaw_response_time_constant_sec =
-    snapshot.request.yaw_response_time_constant_sec;
   execution_artifact.minimum_frenet_denominator =
     snapshot.request.minimum_frenet_denominator;
   execution_artifact.maximum_abs_steering_rad =
@@ -404,7 +405,9 @@ ExecutionArtifactBuildResult build_execution_artifact(
         primal[state_offset + model::kVelocityIndex],
         primal[state_offset + model::kProgressIndex],
         primal[state_offset + model::kSteeringIndex],
-        primal[state_offset + model::kResponseSteeringIndex]});
+        primal[state_offset + model::kResponseSteeringIndex],
+        primal[state_offset + model::kLateralVelocityIndex],
+        primal[state_offset + model::kYawRateIndex]});
     execution_artifact.lateral_lower_m.push_back(
       final_problem.state_lower[
         state_offset + model::kLateralIndex]);
@@ -423,7 +426,8 @@ ExecutionArtifactBuildResult build_execution_artifact(
     snapshot.request.initial_state[model::kVelocityIndex],
     snapshot.request.initial_state[model::kProgressIndex],
     snapshot.request.current_steering_rad,
-    snapshot.request.current_response_steering_rad};
+    snapshot.request.current_response_steering_rad,
+    snapshot.request.current_lateral_velocity_mps, snapshot.request.current_yaw_rate_radps};
   execution_artifact.control_stages.reserve(
     static_cast<std::size_t>(execution_horizon));
   for (int stage = 0; stage < execution_horizon; ++stage) {
@@ -563,10 +567,11 @@ RecedingWarmStartResolution resolve_receding_warm_start(
   if (
     previous_context.formulation !=
     mpcc_execution_contract::Formulation::
-    VelocitySteeringYawResponseProgress7State ||
+    VelocitySteeringTireBodyProgress9State ||
     current_context.formulation != previous_context.formulation ||
     current_context.horizon_steps != horizon ||
     previous_horizon == 0U ||
+    previous_context.vehicle_model_fingerprint != current_context.vehicle_model_fingerprint ||
     previous_context.state_schema_id != current_context.state_schema_id ||
     previous_context.input_schema_id != current_context.input_schema_id ||
     previous_context.bounds_schema_id != current_context.bounds_schema_id ||
@@ -586,7 +591,7 @@ RecedingWarmStartResolution resolve_receding_warm_start(
     if (
       previous_context.formulation !=
       mpcc_execution_contract::Formulation::
-      VelocitySteeringYawResponseProgress7State ||
+      VelocitySteeringTireBodyProgress9State ||
       current_context.formulation != previous_context.formulation)
     {
       resolution.diagnostic = "formulation";
@@ -1015,10 +1020,12 @@ TimeAlignedSuffixResult resolve_time_aligned_suffix(
       !std::isfinite(latest.progress_m) ||
       !std::isfinite(latest.steering_rad) ||
       !std::isfinite(latest.response_steering_rad) ||
+      !std::isfinite(latest.lateral_velocity_mps) ||
+      !std::isfinite(latest.yaw_rate_radps) ||
       std::abs(latest.steering_rad) >
       source.request.maximum_abs_steering_rad ||
       std::abs(latest.response_steering_rad) >
-      source.request.maximum_abs_steering_rad)
+      source.request.vehicle_model.maximum_wire_steering_rad * source.request.vehicle_model.tire_grip)
     {
       return reject(
         TimeAlignedSuffixReason::InvalidRequest,
@@ -1129,6 +1136,8 @@ TimeAlignedSuffixResult resolve_time_aligned_suffix(
     suffix.request.current_steering_rad = latest.steering_rad;
     suffix.request.current_response_steering_rad =
       latest.response_steering_rad;
+    suffix.request.current_lateral_velocity_mps = latest.lateral_velocity_mps;
+    suffix.request.current_yaw_rate_radps = latest.yaw_rate_radps;
     suffix.request.previous_input[0] =
       request.previous_input[model::kAccelerationIndex];
     suffix.request.previous_input[2] =
@@ -1449,7 +1458,8 @@ TimeAlignedFeedbackProblemResult build_time_aligned_feedback_problem(
     for (int stage = 1; stage <= new_horizon; ++stage) {
       const int state = stage * nx;
       for (const int element :
-        {model::kSteeringIndex, model::kResponseSteeringIndex})
+        {model::kSteeringIndex, model::kResponseSteeringIndex,
+          model::kLateralVelocityIndex, model::kYawRateIndex})
       {
         feedback.state_reference[state + element] =
           semantic->problem.state_reference[state + element];
@@ -1701,11 +1711,11 @@ build_reachable_bridge_feedback_problem(
           input[model::kSteeringRateIndex],
           input[model::kVirtualProgressSpeedIndex],
           semantic_input.path_curvature_radpm, semantic.wheelbase_m,
-          semantic.yaw_response_gain,
-          semantic.yaw_response_time_constant_sec, dt_sec,
+          dt_sec,
           semantic.minimum_frenet_denominator,
           semantic.minimum_stage_dt_sec, semantic.maximum_stage_dt_sec,
-          semantic.course_frame});
+          semantic.course_frame, state[model::kLateralVelocityIndex],
+          state[model::kYawRateIndex], semantic.vehicle_model});
       if (!transition.has_value()) {
         return reject(
           ReachableBridgeReason::NonlinearTransitionRejected,
@@ -1826,10 +1836,8 @@ PhysicalProofSampleResult locate_physical_proof_sample(
       result.detail = "semantic stage duration is invalid";
       return result;
     }
-    const auto substep_count = static_cast<std::size_t>(std::max(
-      1.0, std::ceil(
-        duration_sec / mpcc_rate_resolved::
-        kMaximumPhysicalIntegrationStepSec)));
+    const auto substep_count = static_cast<std::size_t>(mpcc_vehicle_model::integration_steps(
+      duration_sec, snapshot.request.vehicle_model.maximum_step_sec));
     const int past_last_dense_sample = first_dense_sample +
       static_cast<int>(substep_count);
     if (dense_sample_index < past_last_dense_sample) {
@@ -1941,9 +1949,8 @@ build_selected_nonlinear_interior_wall_problem_impl(
           NonlinearInteriorWallReason::InvalidRequest,
           "semantic stage duration is invalid");
       }
-      const auto substep_count = static_cast<std::size_t>(std::max(
-        1.0, std::ceil(
-          duration_sec / model::kMaximumPhysicalIntegrationStepSec)));
+      const auto substep_count = static_cast<std::size_t>(mpcc_vehicle_model::integration_steps(
+        duration_sec, snapshot.request.vehicle_model.maximum_step_sec));
       if (
         sample.substep_count != substep_count || sample.substep_index == 0U ||
         sample.substep_index >= substep_count)
@@ -1970,12 +1977,11 @@ build_selected_nonlinear_interior_wall_problem_impl(
           input[model::kVirtualProgressSpeedIndex],
           semantic_input.path_curvature_radpm,
           snapshot.request.wheelbase_m,
-          snapshot.request.yaw_response_gain,
-          snapshot.request.yaw_response_time_constant_sec,
           partial_duration_sec,
           snapshot.request.minimum_frenet_denominator,
           partial_duration_sec, partial_duration_sec,
-          snapshot.request.course_frame});
+          snapshot.request.course_frame, state[model::kLateralVelocityIndex],
+          state[model::kYawRateIndex], snapshot.request.vehicle_model});
       if (!linearization.has_value()) {
         return reject(
           NonlinearInteriorWallReason::TransitionLinearizationRejected,
@@ -2149,10 +2155,8 @@ build_structured_nonlinear_interior_wall_problem(
       result.detail = "structured interior wall stage duration is invalid";
       return result;
     }
-    const auto substep_count = static_cast<std::size_t>(std::max(
-      1.0, std::ceil(
-        duration_sec /
-        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec)));
+    const auto substep_count = static_cast<std::size_t>(mpcc_vehicle_model::integration_steps(
+      duration_sec, snapshot.request.vehicle_model.maximum_step_sec));
     if (substep_count <= 1U) {
       continue;
     }
@@ -2204,10 +2208,8 @@ NonlinearInteriorWallProblemResult build_nonlinear_interior_wall_problem(
       result.detail = "semantic stage duration is invalid";
       return result;
     }
-    const auto substep_count = static_cast<std::size_t>(std::max(
-      1.0, std::ceil(
-        duration_sec /
-        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec)));
+    const auto substep_count = static_cast<std::size_t>(mpcc_vehicle_model::integration_steps(
+      duration_sec, snapshot.request.vehicle_model.maximum_step_sec));
     for (std::size_t substep = 1U; substep < substep_count; ++substep) {
       samples.push_back(
         NonlinearInteriorWallSample{stage, substep, substep_count});
@@ -2264,14 +2266,14 @@ LatestStateFeedbackResult LatestStateFeedbackSolverContext::evaluate(
     Eigen::Matrix<double, model::kStateDimension, 1> initial_state;
     initial_state << state.lateral_m, state.lag_m, state.heading_offset_rad,
       state.velocity_mps, state.progress_m, state.steering_rad,
-      state.response_steering_rad;
+      state.response_steering_rad, state.lateral_velocity_mps, state.yaw_rate_radps;
     const auto & source = request.preparation->snapshot;
     if (
       !initial_state.allFinite() || state.velocity_mps < 0.0 ||
       std::abs(state.steering_rad) >
       source.request.maximum_abs_steering_rad ||
       std::abs(state.response_steering_rad) >
-      source.request.maximum_abs_steering_rad ||
+      source.request.vehicle_model.maximum_wire_steering_rad * source.request.vehicle_model.tire_grip ||
       source.request.horizon_steps <= 0 ||
       source.request.inputs.empty())
     {
@@ -2289,6 +2291,8 @@ LatestStateFeedbackResult LatestStateFeedbackSolverContext::evaluate(
     feedback_snapshot.request.current_steering_rad = state.steering_rad;
     feedback_snapshot.request.current_response_steering_rad =
       state.response_steering_rad;
+    feedback_snapshot.request.current_lateral_velocity_mps = state.lateral_velocity_mps;
+    feedback_snapshot.request.current_yaw_rate_radps = state.yaw_rate_radps;
     feedback_problem.initial_state = initial_state;
     feedback_problem.previous_input = request.previous_input;
 
@@ -3069,6 +3073,8 @@ Result SolverContext::evaluate_impl(
     !artifact::identity_valid(snapshot.identity) ||
     snapshot.identity.source_context.state_schema_id !=
     mpcc_rate_resolved::kCoordinateStateSchema ||
+    snapshot.identity.source_context.vehicle_model_fingerprint !=
+    mpcc_vehicle_model::fingerprint(snapshot.request.vehicle_model) ||
     (snapshot.physical_wall_refinement_active &&
     snapshot.wall_course_frame_knots.size() < 2U) ||
     !std::isfinite(snapshot.control_prediction_origin_sec) ||
@@ -4414,9 +4420,15 @@ Result SolverContext::evaluate_impl(
   // Only a demonstrated model/proof gap requests a current-problem SQP
   // correction.  Every correction preserves the complete refined problem and
   // is rechecked by the same exact proof before artifact publication.
+  // Complete Stop owns physical rest as well as lateral geometry. A tangent
+  // inside the absorbing rest branch has zero rows and is only locally valid;
+  // a later QP may move its predecessor out of that branch. Detect this in the
+  // same exact proof before considering the existing bounded SQP corrections.
   const bool physical_problem_refined =
-    result.progress_wall_refinement_solved ||
-    result.dynamic_obstacle_refinement_solved;
+    result.progress_wall_refinement_solved || result.dynamic_obstacle_refinement_solved ||
+    (snapshot.execution_prefix_steps == snapshot.request.horizon_steps &&
+    snapshot.request.states.back().lower[mpcc_rate_resolved::kVelocityIndex] == 0.0 &&
+    snapshot.request.states.back().upper[mpcc_rate_resolved::kVelocityIndex] == 0.0);
   mpcc_rate_resolved_physical_adapter::Result post_refinement_proof;
   ExecutionArtifactBuildResult post_refinement_artifact_build;
   const auto evaluate_post_refinement_proof = [&]() {
@@ -4439,9 +4451,10 @@ Result SolverContext::evaluate_impl(
   }
   while (
     physical_problem_refined &&
+    (post_refinement_proof.reason ==
+    mpcc_rate_resolved_physical_adapter::RejectReason::ExactTrajectoryRejected ||
     post_refinement_proof.reason ==
-    mpcc_rate_resolved_physical_adapter::RejectReason::
-    ExactTrajectoryRejected &&
+    mpcc_rate_resolved_physical_adapter::RejectReason::TerminalRestNotReached) &&
     result.post_refinement_linearization_count <
     kMaximumPhysicalProofSqpCorrections)
   {

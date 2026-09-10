@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
 #ifndef MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_ADAPTER_HPP_
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_ADAPTER_HPP_
 
@@ -54,15 +55,14 @@ struct Request
   /// Physical-equivalent steering command at the control origin.  This is
   /// the state driven exactly by the optimized steering-rate input and the
   /// sole origin used by command extraction.  It is not a measured tire
-  /// angle; actuator and yaw lag are represented by the response state.
+  /// angle; tire response and body motion are separate dynamic states.
   double current_steering_rad{};
-  /// Effective steering reconstructed from observed yaw motion at the same
-  /// control origin.  It influences vehicle yaw but never initializes the
-  /// serialized command trajectory.
+  /// Physical tire angle at the control origin from public stamped steering
+  /// observations and the shared published-input predictor. It never initializes
+  /// the serialized desired-command trajectory.
   double current_response_steering_rad{};
   double wheelbase_m{};
-  double yaw_response_gain{1.0};
-  double yaw_response_time_constant_sec{};
+  double curvature_reference_gain{1.0};
   double maximum_abs_steering_rad{};
   double maximum_abs_steering_rate_radps{};
   double minimum_frenet_denominator{0.20};
@@ -75,6 +75,12 @@ struct Request
   Eigen::Matrix<double, kLegacyInputDimension, 1> input_delta_weight{
     Eigen::Matrix<double, kLegacyInputDimension, 1>::Zero()};
   mpcc_rate_resolved::CourseFrame course_frame;
+  double current_lateral_velocity_mps{};
+  double current_yaw_rate_radps{};
+  mpcc_vehicle_model::Parameters vehicle_model;
+  bool maximum_braking_feasibility{false};
+  /// Absent only for explicitly synthetic/offline problems.
+  std::optional<mpcc_vehicle_model::ObservationProvenance> observation_provenance;
 };
 
 struct Result
@@ -92,7 +98,7 @@ struct Result
 };
 
 /// Recognize the sealed feasibility contract: no tracking objective, a fixed
-/// nonincreasing velocity law, matching acceleration references, and rest.
+/// maximum wire-braking law, shared-body velocity seeds, and terminal rest.
 /// Full execution-horizon ownership is checked by the snapshot consumer.
 bool is_braking_feasibility_request(const Request & request) noexcept;
 

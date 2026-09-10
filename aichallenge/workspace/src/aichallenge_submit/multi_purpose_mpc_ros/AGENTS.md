@@ -4,7 +4,7 @@ Repository-root AGENTS.md applies. These rules add the controller-specific contr
 
 ## Normal authority
 
-The current normal formulation is the canonical seven-state rate-resolved MPCC.
+The current normal formulation is the canonical nine-state rate-resolved MPCC.
 Track, Cruise, Follow, Hold, Stop, ShiftOut, Pass, Return and Rejoin are intents/constraints.
 Target selection, homotopy, map processing and supervision may remain separate components.
 
@@ -57,7 +57,7 @@ During comparison, keep production authority and runtime parameters unchanged. C
 
 | Arm | Method |
 |---|---|
-| A | Persistent Mission with current seven-state SQP |
+| A | Persistent Mission with current nine-state SQP |
 | B | Stateless receding ManeuverBundle with the same SQP |
 | C | Independent rough spline/polynomial/lattice with the same refinement |
 | D | Bounded offline multi-SQP or nonlinear feasibility solve |

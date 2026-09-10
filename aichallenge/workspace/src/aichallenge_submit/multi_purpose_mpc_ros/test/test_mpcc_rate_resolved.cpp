@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 
 #include <gtest/gtest.h>
@@ -25,8 +26,7 @@ rate::LinearizationRequest nominal_request()
   request.reference_virtual_progress_speed_mps = 6.8;
   request.reference_path_curvature_radpm = 0.04;
   request.wheelbase_m = 2.0;
-  request.yaw_response_gain = 0.75;
-  request.yaw_response_time_constant_sec = 0.13;
+  request.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   request.stage_dt_sec = 0.12;
   return request;
 }
@@ -44,7 +44,8 @@ TEST(MpccRateResolved, ReferencePointSatisfiesAffineDynamics)
     request.reference_lateral_m, request.reference_lag_m,
     request.reference_heading_rad, request.reference_velocity_mps,
     request.reference_progress_m, request.reference_steering_rad,
-    request.reference_response_steering_rad;
+    request.reference_response_steering_rad,
+    request.reference_lateral_velocity_mps, request.reference_yaw_rate_radps;
   Eigen::Matrix<double, rate::kInputDimension, 1> input;
   input <<
     request.reference_acceleration_mps2,
@@ -56,7 +57,7 @@ TEST(MpccRateResolved, ReferencePointSatisfiesAffineDynamics)
     linearization->equality_offset;
   const auto nonlinear = rate::evaluate_temporal_frenet_transition(request);
   ASSERT_TRUE(nonlinear.has_value());
-  EXPECT_EQ(nonlinear->integration_substep_count, 12U);
+  EXPECT_EQ(nonlinear->integration_substep_count, 24U);
   EXPECT_TRUE(next.isApprox(nonlinear->next_state, 1e-10));
 }
 
@@ -96,13 +97,10 @@ TEST(MpccRateResolved, AffineStateRowsUseExactAnalyticCoefficients)
   const auto linearization = rate::linearize_temporal_frenet(request);
   ASSERT_TRUE(linearization.has_value());
 
-  EXPECT_DOUBLE_EQ(
-    linearization->state_matrix(rate::kVelocityIndex, rate::kVelocityIndex),
-    1.0);
-  EXPECT_DOUBLE_EQ(
-    linearization->input_matrix(
-      rate::kVelocityIndex, rate::kAccelerationIndex),
+  EXPECT_LT(
+    linearization->input_matrix(rate::kVelocityIndex, rate::kAccelerationIndex),
     request.stage_dt_sec);
+  EXPECT_NE(linearization->state_matrix(rate::kVelocityIndex, rate::kVelocityIndex), 1.0);
   EXPECT_DOUBLE_EQ(
     linearization->state_matrix(rate::kProgressIndex, rate::kProgressIndex),
     1.0);
@@ -118,24 +116,18 @@ TEST(MpccRateResolved, AffineStateRowsUseExactAnalyticCoefficients)
       rate::kSteeringIndex, rate::kSteeringRateIndex),
     request.stage_dt_sec);
 
-  const double decay = std::exp(
-    -request.stage_dt_sec / request.yaw_response_time_constant_sec);
-  const double rate_integral =
-    request.stage_dt_sec - request.yaw_response_time_constant_sec *
-    (1.0 - decay);
-  EXPECT_DOUBLE_EQ(
-    linearization->state_matrix(
-      rate::kResponseSteeringIndex, rate::kSteeringIndex),
-    1.0 - decay);
-  EXPECT_DOUBLE_EQ(
-    linearization->state_matrix(
-      rate::kResponseSteeringIndex, rate::kResponseSteeringIndex),
-    decay);
-  EXPECT_DOUBLE_EQ(
-    linearization->input_matrix(
-      rate::kResponseSteeringIndex, rate::kSteeringRateIndex),
-    rate_integral);
-
+  // The nine-state tire/body rows are derivatives of the shared transition.
+  // They are not the retired surrogate exponential or affine velocity rows.
+  auto perturbed = request;
+  constexpr double delta = 1e-5;
+  perturbed.reference_lateral_velocity_mps += delta;
+  const auto reference = rate::evaluate_temporal_frenet_transition(request);
+  const auto next = rate::evaluate_temporal_frenet_transition(perturbed);
+  ASSERT_TRUE(reference);
+  ASSERT_TRUE(next);
+  const auto tangent = reference->next_state +
+    delta * linearization->state_matrix.col(rate::kLateralVelocityIndex);
+  EXPECT_LT((next->next_state - tangent).norm(), 1e-9);
   for (int column = 0; column < rate::kStateDimension; ++column) {
     if (column != rate::kProgressIndex) {
       EXPECT_DOUBLE_EQ(
@@ -165,7 +157,7 @@ TEST(MpccRateResolved, RejectsInvalidGeometryAndTiming)
   EXPECT_FALSE(rate::linearize_temporal_frenet(request).has_value());
 }
 
-TEST(MpccRateResolved, VirtualProgressCannotChangeAnalyticalBodyMotion)
+TEST(MpccRateResolved, VirtualProgressCannotChangeBodyMotion)
 {
   for (double curvature : {-0.2, 0.0, 0.2}) {
     for (double speed : {0.0, 8.0}) {
@@ -195,7 +187,11 @@ TEST(MpccRateResolved, VirtualProgressCannotChangeAnalyticalBodyMotion)
           std::sin(angle) * next[rate::kLateralIndex];
         const double y = frame_y + std::sin(angle) * next[rate::kLagIndex] +
           std::cos(angle) * next[rate::kLateralIndex];
-        EXPECT_NEAR(x, -0.3 + speed * 0.1, 1e-10);
+        const auto physical = multi_purpose_mpc_ros::mpcc_vehicle_model::advance(
+          {-0.3, request.reference_lateral_m, 0, speed, 0, 0, 0, 0},
+          {0, 0}, request.vehicle_model, .1);
+        ASSERT_TRUE(physical);
+        EXPECT_NEAR(x, physical->state.x_m, 1e-10);
         EXPECT_NEAR(y, request.reference_lateral_m, 1e-10);
         EXPECT_NEAR(angle + next[rate::kHeadingIndex], 0.0, 1e-10);
       }
@@ -234,8 +230,10 @@ TEST(MpccRateResolved, PiecewiseCourseCannotDeflectStraightPhysicalMotion)
   const double y0 = start->y_m + request.reference_lag_m * std::sin(start->heading_rad) +
     request.reference_lateral_m * std::cos(start->heading_rad);
   const double yaw = start->heading_rad + request.reference_heading_rad;
-  const double distance = request.reference_velocity_mps * request.stage_dt_sec +
-    0.5 * request.reference_acceleration_mps2 * request.stage_dt_sec * request.stage_dt_sec;
+  const auto physical = multi_purpose_mpc_ros::mpcc_vehicle_model::advance(
+    {x0, y0, yaw, request.reference_velocity_mps, 0, 0, 0, 0},
+    {request.reference_acceleration_mps2, 0}, request.vehicle_model, request.stage_dt_sec);
+  ASSERT_TRUE(physical);
   for (double progress_speed : {0.0, 3.0, 7.0, 10.83925988}) {
     request.reference_virtual_progress_speed_mps = progress_speed;
     const auto result = rate::evaluate_temporal_frenet_transition(request);
@@ -248,8 +246,8 @@ TEST(MpccRateResolved, PiecewiseCourseCannotDeflectStraightPhysicalMotion)
       next[rate::kLateralIndex] * std::sin(end->heading_rad);
     const double y = end->y_m + next[rate::kLagIndex] * std::sin(end->heading_rad) +
       next[rate::kLateralIndex] * std::cos(end->heading_rad);
-    EXPECT_NEAR(x, x0 + distance * std::cos(yaw), 3e-10);
-    EXPECT_NEAR(y, y0 + distance * std::sin(yaw), 3e-10);
+    EXPECT_NEAR(x, physical->state.x_m, 3e-10);
+    EXPECT_NEAR(y, physical->state.y_m, 3e-10);
     EXPECT_NEAR(end->heading_rad + next[rate::kHeadingIndex], yaw, 1e-12);
     const auto tangent = rate::linearize_temporal_frenet(request);
     ASSERT_TRUE(tangent);

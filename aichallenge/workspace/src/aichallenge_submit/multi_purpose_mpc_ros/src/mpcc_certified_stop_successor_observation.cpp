@@ -136,6 +136,9 @@ Result evaluate(
   result.expected_steering_rad = angle(
     evidence.actuation_samples[result.lower_sample_index].end_steering_rad,
     evidence.actuation_samples[result.upper_sample_index].end_steering_rad);
+  const double expected_tire_rad = angle(
+    evidence.actuation_samples[result.lower_sample_index].end_response_steering_rad,
+    evidence.actuation_samples[result.upper_sample_index].end_response_steering_rad);
   result.position_error_m = std::hypot(
     current.x_m - result.expected_x_m, current.y_m - result.expected_y_m);
   result.yaw_error_rad = std::abs(angle_error(
@@ -149,8 +152,7 @@ Result evaluate(
   }
   if (std::isfinite(current.response_control_origin_steering_rad)) {
     result.response_control_origin_steering_error_rad = angle_error(
-      current.response_control_origin_steering_rad,
-      result.expected_steering_rad);
+      current.response_control_origin_steering_rad, expected_tire_rad);
   }
   if (std::isfinite(current.previous_published_steering_rad)) {
     result.previous_published_steering_error_rad = angle_error(

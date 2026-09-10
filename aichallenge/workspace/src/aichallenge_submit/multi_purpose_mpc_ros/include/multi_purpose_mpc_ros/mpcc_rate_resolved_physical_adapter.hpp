@@ -20,6 +20,7 @@ enum class RejectReason
   IntentMismatch,
   StageGeometryMismatch,
   ExactTrajectoryRejected,
+  TerminalRestNotReached,
   Count,
 };
 
@@ -50,7 +51,7 @@ struct Result
   exact_trajectory;
 };
 
-/// Convert one immutable seven-state solve into the established exact physical
+/// Convert one immutable nine-state solve into the established exact physical
 /// pose contract.  State zero describes the source observation; the physical
 /// horizon is states 1..N and is later swept from the current measured pose.
 Result build(
@@ -61,16 +62,7 @@ Result build(
 /// Current physical state at the latency-compensated control origin.  The
 /// progress coordinate stays on the immutable artifact axis while lag records
 /// the current vehicle displacement from that axis.
-struct ContinuationInitialState
-{
-  double lateral_m{};
-  double lag_m{};
-  double heading_offset_rad{};
-  double velocity_mps{};
-  double progress_m{};
-  double steering_rad{};
-  double response_steering_rad{};
-};
+using ContinuationInitialState = mpcc_rate_resolved_execution_artifact::PredictedState;
 
 enum class ContinuationRejectReason
 {
@@ -101,8 +93,8 @@ struct PhysicalActuationSample
   double duration_sec{std::numeric_limits<double>::quiet_NaN()};
   /// Acceleration command owned by this serialized command interval.
   double acceleration_mps2{std::numeric_limits<double>::quiet_NaN()};
-  /// Acceleration used by the nonlinear plant after applying its zero-speed
-  /// saturation.  It may become zero without creating a new command.
+  /// Mean COM forward acceleration over this body-model substep.
+  /// Wire input remains acceleration_mps2, including while the body is at rest.
   double effective_acceleration_mps2{
     std::numeric_limits<double>::quiet_NaN()};
   double steering_rate_radps{std::numeric_limits<double>::quiet_NaN()};
@@ -122,6 +114,8 @@ struct PhysicalActuationSample
   /// index.  It allows an exact physical rollout to be reified into the
   /// publisher-sized control stages owned by ExecutionArtifact.
   std::size_t command_interval_index{};
+  double end_lateral_velocity_mps{};
+  double end_yaw_rate_radps{};
 };
 
 struct ContinuationResult
@@ -150,6 +144,10 @@ struct ContinuationResult
   std::vector<double> stage_end_steering_rad;
   /// Applied controls and actuator states aligned with every dense sample.
   std::vector<PhysicalActuationSample> actuation_samples;
+  double publisher_interval_end_lateral_velocity_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double publisher_interval_end_yaw_rate_radps{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 /// Replay the unconsumed control suffix from the current physical state.
@@ -197,7 +195,7 @@ struct StopCourseGeometry
 };
 
 /// Immutable lateral candidate for a terminal Stop.  The coordinate is the
-/// same artifact-local progress used by the nonlinear seven-state rollout;
+/// same artifact-local progress used by the nonlinear nine-state rollout;
 /// no elapsed-time or Mission-age interpretation is permitted.  A profile is
 /// valid only over its declared closed interval and is never extrapolated.
 struct StopLateralTargetProfile

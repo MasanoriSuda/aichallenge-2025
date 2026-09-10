@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp"
 
 #include <gtest/gtest.h>
@@ -23,6 +24,8 @@ namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 contract::MpccProblemContext context(const std::uint64_t sequence)
 {
   contract::MpccProblemContext value;
+  value.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   value.decision_id = sequence + 10U;
   value.intent = contract::ControlIntent::Track;
   value.intent_generation = 1U;
@@ -30,7 +33,9 @@ contract::MpccProblemContext context(const std::uint64_t sequence)
   value.stage_geometry_id = sequence + 30U;
   value.horizon_steps = 2U;
   value.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  value.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   value.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   value.input_schema_id = "accel-steering-rate-progress-rate-v1";
@@ -43,6 +48,7 @@ execution::ExecutionArtifact artifact(
   const std::uint64_t sequence, const double lateral_offset_m)
 {
   execution::ExecutionArtifact value;
+  value.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   value.identity = execution::Identity{sequence, context(sequence), 10.0};
   value.prediction_origin_sec = 10.0;
   value.publication_interval_sec = 0.025;

@@ -44,7 +44,8 @@ bool finite_state(const State & state) noexcept
          std::isfinite(state.velocity_mps) &&
          std::isfinite(state.absolute_progress_m) &&
          std::isfinite(state.steering_rad) &&
-         std::isfinite(state.response_steering_rad);
+         std::isfinite(state.response_steering_rad) &&
+         std::isfinite(state.lateral_velocity_mps) && std::isfinite(state.yaw_rate_radps);
 }
 
 std::optional<State> sample(
@@ -100,7 +101,9 @@ std::optional<State> sample(
       affine_start.steering_rad, affine_end.steering_rad, stage_fraction),
     interpolate(
       affine_start.response_steering_rad,
-      affine_end.response_steering_rad, stage_fraction)};
+      affine_end.response_steering_rad, stage_fraction),
+    interpolate(affine_start.lateral_velocity_mps, affine_end.lateral_velocity_mps, stage_fraction),
+    interpolate(affine_start.yaw_rate_radps, affine_end.yaw_rate_radps, stage_fraction)};
   State physical_end = physical_start;
   double physical_start_sec{};
 
@@ -158,7 +161,9 @@ std::optional<State> sample(
       affine_start.steering_rad, affine_end.steering_rad, stage_fraction),
     interpolate(
       affine_start.response_steering_rad,
-      affine_end.response_steering_rad, stage_fraction)};
+      affine_end.response_steering_rad, stage_fraction),
+    interpolate(affine_start.lateral_velocity_mps, affine_end.lateral_velocity_mps, stage_fraction),
+    interpolate(affine_start.yaw_rate_radps, affine_end.yaw_rate_radps, stage_fraction)};
   if (!finite_state(state)) {
     return std::nullopt;
   }
@@ -194,13 +199,9 @@ bool compatible_model(
       candidate.physical_global_tolerance});
   return lhs.formulation == rhs.formulation &&
          lhs.state_schema_id == rhs.state_schema_id &&
+         lhs.vehicle_model_fingerprint == rhs.vehicle_model_fingerprint &&
          lhs.input_schema_id == rhs.input_schema_id &&
-         std::abs(parent.wheelbase_m - candidate.wheelbase_m) <= tolerance &&
-         std::abs(parent.yaw_response_gain - candidate.yaw_response_gain) <=
-         tolerance &&
-         std::abs(
-           parent.yaw_response_time_constant_sec -
-           candidate.yaw_response_time_constant_sec) <= tolerance;
+         std::abs(parent.wheelbase_m - candidate.wheelbase_m) <= tolerance;
 }
 
 }  // namespace
@@ -321,6 +322,8 @@ Result evaluate(const Request & request) noexcept
   result.response_steering_difference_rad =
     candidate_state->response_steering_rad -
     parent_state->response_steering_rad;
+  result.lateral_velocity_difference_mps = candidate_state->lateral_velocity_mps - parent_state->lateral_velocity_mps;
+  result.yaw_rate_difference_radps = candidate_state->yaw_rate_radps - parent_state->yaw_rate_radps;
   result.position_tolerance_m = std::max(
     {kIdentityTolerance,
       request.parent->physical_snapshot->bound_tolerance_m,
@@ -337,6 +340,8 @@ Result evaluate(const Request & request) noexcept
     std::abs(result.lag_difference_m) <= result.position_tolerance_m &&
     std::abs(result.progress_difference_m) <= result.position_tolerance_m;
   const bool model_matches =
+    std::abs(result.lateral_velocity_difference_mps) <= result.model_tolerance &&
+    std::abs(result.yaw_rate_difference_radps) <= result.model_tolerance &&
     std::abs(result.heading_difference_rad) <= result.model_tolerance &&
     std::abs(result.velocity_difference_mps) <= result.model_tolerance &&
     std::abs(result.steering_difference_rad) <= result.model_tolerance &&

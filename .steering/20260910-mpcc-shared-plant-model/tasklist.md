@@ -6,7 +6,7 @@
 - [x] Native post-receiver actuator/Drive/contact-qualified sleep functions and20147tick replay.
 - [x] Cache contact direction at its prior physics epoch; preserve nonpromotable body comparison.
 - [x] Drive/contact/receive-phase Stop counterexamples and explicit conditional scope.
-- [ ] Resolve empirical acceptance versus guaranteed application/contact bounds; question pending.
+- [x] User accepts empirical simulator validation and explicit unverified limits; proceed autonomously.
 - [ ] Full Rest/gear/contact/application uncertainty contract; conditional Drive parity alone is insufficient.
 - [ ] Select and implement shared model/schema; retire old producer/consumer laws.
 - [ ] Tangent, physical, Stop, artifact, async/serialization regression and build.

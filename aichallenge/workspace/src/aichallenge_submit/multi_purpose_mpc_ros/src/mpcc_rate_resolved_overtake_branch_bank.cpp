@@ -55,6 +55,7 @@ bool same_source_epoch(
     actual.horizon_steps == expected.horizon_steps &&
     actual.formulation == expected.formulation &&
     actual.state_schema_id == expected.state_schema_id &&
+    actual.vehicle_model_fingerprint == expected.vehicle_model_fingerprint &&
     actual.input_schema_id == expected.input_schema_id &&
     actual.bounds_schema_id == expected.bounds_schema_id &&
     actual.cost_schema_id == expected.cost_schema_id;

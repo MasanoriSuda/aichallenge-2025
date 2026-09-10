@@ -73,7 +73,9 @@ artifact::PredictedState interpolate_expected_state(
     interpolate(start.progress_m, end.progress_m),
     interpolate(start.steering_rad, end.steering_rad),
     interpolate(
-      start.response_steering_rad, end.response_steering_rad)};
+      start.response_steering_rad, end.response_steering_rad),
+    interpolate(start.lateral_velocity_mps, end.lateral_velocity_mps),
+    interpolate(start.yaw_rate_radps, end.yaw_rate_radps)};
 }
 
 struct ExactPhysicalState
@@ -182,7 +184,8 @@ artifact::PredictedState as_predicted_state(
     physical_state.velocity_mps,
     physical_state.absolute_progress_m - progress_origin_m,
     command_state.steering_rad,
-    command_state.response_steering_rad};
+    command_state.response_steering_rad,
+    command_state.lateral_velocity_mps, command_state.yaw_rate_radps};
 }
 
 struct LiftResult
@@ -668,6 +671,8 @@ static Result evaluate_with_stop_profile(
     !std::isfinite(request.current_time_steering_rad) ||
     !std::isfinite(request.current_steering_rad) ||
     !std::isfinite(request.current_response_steering_rad) ||
+    !std::isfinite(request.current_lateral_velocity_mps) ||
+    !std::isfinite(request.current_yaw_rate_radps) ||
     !std::isfinite(request.previous_published_steering_rad) ||
     !std::isfinite(request.previous_published_command_age_sec) ||
     request.previous_published_command_age_sec < 0.0 ||
@@ -720,6 +725,8 @@ static Result evaluate_with_stop_profile(
   result.current_steering_rad = request.current_steering_rad;
   result.current_response_steering_rad =
     request.current_response_steering_rad;
+  result.current_lateral_velocity_mps = request.current_lateral_velocity_mps;
+  result.current_yaw_rate_radps = request.current_yaw_rate_radps;
   result.previous_published_steering_rad =
     request.previous_published_steering_rad;
   const auto lift = lift_progress(
@@ -774,7 +781,8 @@ static Result evaluate_with_stop_profile(
     request.control_origin_speed_mps,
     expected.progress_m,
     request.current_steering_rad,
-    request.current_response_steering_rad};
+    request.current_response_steering_rad,
+      request.current_lateral_velocity_mps, request.current_yaw_rate_radps};
   result.current_control_state = current_control_state;
   result.current_control_state_available = true;
   const double prediction_delay_sec =
@@ -952,18 +960,12 @@ static Result evaluate_with_stop_profile(
     };
   const double velocity_reachability_duration_sec =
     request.control_origin_sec - request.now_sec;
-  const double velocity_lower_mps = std::max(
-    0.0, request.current_speed_mps +
-    request.minimum_acceleration_mps2 * velocity_reachability_duration_sec -
-    execution.physical_global_tolerance);
-  const double velocity_upper_mps = std::max(
-    0.0, request.current_speed_mps +
-    request.maximum_acceleration_mps2 * velocity_reachability_duration_sec +
-    execution.physical_global_tolerance);
+  // Wire acceleration is not net acceleration. A two-endpoint wire sweep
+  // would not bound coupled tire/body motion either, so the retired envelope
+  // stays explicitly unavailable. Current-world physical replay owns the
+  // retained command; the old-versus-current speed remains diagnostic.
   result.velocity_difference_mps =
     actuation.actuation->predicted_speed_mps - request.current_speed_mps;
-  result.reachable_velocity_lower_mps = velocity_lower_mps;
-  result.reachable_velocity_upper_mps = velocity_upper_mps;
   result.velocity_reachability_duration_sec =
     velocity_reachability_duration_sec;
 
@@ -995,7 +997,8 @@ static Result evaluate_with_stop_profile(
       current_control_state.velocity_mps,
       current_control_state.progress_m,
       continuation_initial_steering_rad,
-      request.current_response_steering_rad});
+      request.current_response_steering_rad,
+      request.current_lateral_velocity_mps, request.current_yaw_rate_radps});
   const auto continuation_built = SteadyClock::now();
   result.runtime.continuation_build_ms = elapsed_ms(
     continuation_build_started, continuation_built);
@@ -1305,7 +1308,8 @@ static Result evaluate_with_stop_profile(
         current_control_state.velocity_mps,
         current_control_state.progress_m,
         continuation_initial_steering_rad,
-        request.current_response_steering_rad},
+        request.current_response_steering_rad,
+      request.current_lateral_velocity_mps, request.current_yaw_rate_radps},
       source.terminal_stop_course_geometry,
       request.stop_lateral_policy,
       request.minimum_acceleration_mps2, 0.0, stop_profile);
@@ -1681,6 +1685,8 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
     request.control_origin_speed_mps < 0.0 ||
     !std::isfinite(request.current_steering_rad) ||
     !std::isfinite(request.current_response_steering_rad) ||
+    !std::isfinite(request.current_lateral_velocity_mps) ||
+    !std::isfinite(request.current_yaw_rate_radps) ||
     !std::isfinite(request.minimum_acceleration_mps2) ||
     request.minimum_acceleration_mps2 >= 0.0 ||
     request.measured_to_control_path.empty() ||
@@ -1772,7 +1778,8 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
       current_frenet->heading_offset_rad,
       request.control_origin_speed_mps,
       absolute_progress_m - execution.course_progress_origin_m,
-      request.current_steering_rad, request.current_response_steering_rad},
+      request.current_steering_rad, request.current_response_steering_rad,
+      request.current_lateral_velocity_mps, request.current_yaw_rate_radps},
     source.terminal_stop_course_geometry, request.stop_lateral_policy,
     request.minimum_acceleration_mps2);
   result.physical_reason = successor.reason;
@@ -1799,7 +1806,9 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
       result.exact_trajectory.progress_m[index] -
       execution.course_progress_origin_m,
       result.actuation_samples[index].end_steering_rad,
-      result.actuation_samples[index].end_response_steering_rad};
+      result.actuation_samples[index].end_response_steering_rad,
+      result.actuation_samples[index].end_lateral_velocity_mps,
+      result.actuation_samples[index].end_yaw_rate_radps};
     const auto pose = reconstruct_pose(source, state);
     if (!pose.has_value()) {
       result.reason = StopSuccessorReason::CourseFrameUnavailable;

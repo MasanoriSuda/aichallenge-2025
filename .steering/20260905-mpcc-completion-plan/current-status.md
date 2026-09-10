@@ -4,6 +4,14 @@
 Current baseline9bca3af6, MPCC1c4f377e. The measured-heading producer repair
 is locally committed/built/tested and single-run accepted; coupled acceptance remains open.
 
+2026-09-10user clarification: empirical simulator acceptance with explicit
+unverified guarantees is accepted; proceed through full completion without
+routine confirmations. The pending external-bound question below is historical.
+Continue the [shared empirical plant migration](../20260910-mpcc-empirical-plant/design.md)
+from6b0f1880. Actual failed runs/hard constraints remain failures; universal
+communication/contact guarantees are not claimed or required for this local
+empirical acceptance. No further permission is needed for ordinary implementation.
+
 Current next step: finish model selection at the correct base_link reference and
 with an explicit application/contact/Stop uncertainty contract, then replace all
 shared consumers. [Latest comparison](../20260910-mpcc-shared-plant-model/results.md)

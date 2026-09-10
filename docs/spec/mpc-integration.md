@@ -8,6 +8,37 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 9状態共通モデルへの移行中（2026-09-10）
+
+現在の作業候補は`VelocitySteeringTireBodyProgress9State`であり、状態順は
+`ey, e_lag, e_psi, COM u, progress, desired steering, physical tire, COM vy, body yaw rate`。
+状態schemaは`ey-elag-epsi-u-progress-steering-tire-vy-yaw-rate-cartesian-step-v4`。
+以下の過去日付に付いたseven-state/yaw-responseの説明は旧モデルの履歴であり、
+現候補の物理応答には適用しない。統合受入れ・多車両・提出評価はまだ未完了。
+
+`mpcc_vehicle_model`の一つのnative kernelをQP接線、非線形軌道、artifactの
+actuation抽出、現在worldの継続・Stop、公開入力履歴によるprefix予測で使う。
+固定四輪の前後力・横力・yaw moment、COMとbase_linkの変換、drag、実タイヤ応答を
+`config/mpcc_plant_awsim_2025.yaml`に明示し、全係数のfingerprintをproblemに封印する。
+wire加速度は車体の正味加速度と等しくない。速度のaffine上書き、yaw/速度からの
+操舵逆算、prefixだけの固定加速度残差を通常実行から外す。従来のwire上下限、
+壁・他車・最終指令の認証条件は維持する。
+
+制御開始時刻の0.13秒は公称の予定時刻。入力履歴は実際にserializeしてpublishした
+加速度・操舵を保持し、縦入力0秒、操舵0.1秒の公称適用遅延の後に機械応答を積分する。
+送信を実適用のackと扱わない。元pose・速度・IMU・タイヤ角の時刻、初期body state、
+送信履歴と公称遅延はimmutable snapshotへ保存し、再現fingerprintに含める。
+派生候補やasync workerも元観測を保持する。必要な公開入力は
+[参加者契約](../interface/participant-interface.md)に記載する。
+
+低速での停止は、この2025由来の接地条件を仮定したモデル内のrest分岐であり、
+未来の実接地状態を知るものではない。StopはCOM前後・横速度とyaw rateが
+モデル内で停止するまで同じ入力則を使い、停止後もserialize済み制動値を変えない。
+正の入力による再発進も同じモデルで計算する。公開入力による保留窓の比較では
+1秒位置誤差MAE約0.194 m、最大約0.676 mが残る。長時間予測、接触、地形、輸送遅延、
+実車の保証は未確認であり、実測平均値を安全上限とはしない。採用判断は新しい
+通常単車・多車両・Stop/再発進の実測と全受入れ条件で行う。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）
@@ -4191,3 +4222,9 @@ pose原点の違いを確認した。横速度・yaw rateを持つmovingモデ�
 公開25msの制動は100msの最新値選択で上書きされ得るため、公開列と適用列を同一視
 しない。停止反例の数値は条件付きのnative平面モデルであり、実車体の停止距離ではない。
 実測範囲の検証と、保証上限に基づく停止証明は別の受入れ条件として扱う。
+
+2026-09-10のユーザー確認により、今回の完遂は実測に基づくシミュレータ受入れとする。
+通信・接地・地形を含む未確認範囲は明記し、普遍的な停止保証や実車保証は主張しない。
+壁/他車制約、数値許容差、失敗runの判定は維持する。9状態の共有物理モデルを実装候補に
+選び、独立runを含めて停止・再発進・多車両・提出評価まで確認する。
+[移行設計](../../.steering/20260910-mpcc-empirical-plant/design.md)を参照。

@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp"
 
 #include <gtest/gtest.h>
@@ -11,6 +12,8 @@ namespace {
 
 artifact::Identity identity(const int side) {
   contract::MpccProblemContext context;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.decision_id = 71U;
   context.intent = contract::ControlIntent::ShiftOut;
   context.intent_generation = 4U;
@@ -25,7 +28,9 @@ artifact::Identity identity(const int side) {
   context.dynamic_obstacle_side_sign = side;
   context.horizon_steps = 20U;
   context.formulation =
-      contract::Formulation::VelocitySteeringYawResponseProgress7State;
+      contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id = "state";
   context.input_schema_id = "input";
   context.bounds_schema_id = "bounds";

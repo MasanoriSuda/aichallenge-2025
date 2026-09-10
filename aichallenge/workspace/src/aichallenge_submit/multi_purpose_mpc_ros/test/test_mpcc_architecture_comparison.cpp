@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp"
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
@@ -47,7 +48,9 @@ shadow::Snapshot source_snapshot()
   context.dynamic_obstacle_side_sign = 1;
   context.horizon_steps = 3U;
   context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "input-3";
@@ -66,8 +69,8 @@ shadow::Snapshot source_snapshot()
   request.current_steering_rad = 0.0;
   request.current_response_steering_rad = 0.0;
   request.wheelbase_m = 1.0;
-  request.yaw_response_gain = 1.0;
-  request.yaw_response_time_constant_sec = 0.1;
+  request.curvature_reference_gain = 1.0;
+  request.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   request.maximum_abs_steering_rad = 0.5;
   request.maximum_abs_steering_rate_radps = 1.0;
   request.previous_input << 0.0, 0.0, 2.0;
@@ -92,7 +95,8 @@ shadow::Snapshot source_snapshot()
     input.stage_dt_sec = 0.1;
   }
   source.progress_aligned_wall_refinement_active = true;
-  source.wall_reference_progress_m = {0.0, 0.4, 0.8, 1.2};
+  // The source includes enough observed road for the empirical body's Stop.
+  source.wall_reference_progress_m = {0.0, 1.0, 2.0, 3.0};
   source.wall_lower_m = {-2.0, -2.0, -2.0, -2.0};
   source.wall_upper_m = {2.0, 2.0, 2.0, 2.0};
   source.dynamic_obstacle_refinement_active = true;
@@ -149,7 +153,7 @@ shadow::Snapshot source_snapshot()
 shadow::Snapshot stoppable_source_snapshot()
 {
   auto source = source_snapshot();
-  constexpr int horizon = 12;
+  constexpr int horizon = 16;
   source.identity.source_context.horizon_steps = horizon;
   source.identity.source_context = contract::seal_problem_context(
     source.identity.source_context);
@@ -881,24 +885,30 @@ TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
     adapted->problem.state_upper.head<
       mpcc_rate_resolved_adapter::kLegacyStateDimension>(),
     stop.candidate.request.initial_state);
-  double previous_velocity =
-    stop.candidate.request.initial_state[model::kVelocityIndex];
-  for (std::size_t stage = 1U;
-    stage < stop.candidate.request.states.size(); ++stage)
-  {
-    const auto & state = stop.candidate.request.states[stage];
-    EXPECT_DOUBLE_EQ(
-      state.lower[model::kVelocityIndex],
-      state.upper[model::kVelocityIndex]);
-    EXPECT_LE(state.lower[model::kVelocityIndex], previous_velocity + 1e-12);
-    const auto & input = stop.candidate.request.inputs[stage - 1U];
-    EXPECT_NEAR(
-      state.lower[model::kVelocityIndex],
-      previous_velocity + input.reference[model::kAccelerationIndex] * input.stage_dt_sec,
-      1e-12);
-    previous_velocity = state.lower[model::kVelocityIndex];
+  const auto & request = stop.candidate.request;
+  mpcc_vehicle_model::State body{0, 0, 0, request.initial_state[model::kVelocityIndex],
+    request.current_lateral_velocity_mps, request.current_yaw_rate_radps,
+    request.current_steering_rad, request.current_response_steering_rad};
+  for (std::size_t stage = 1U; stage < request.states.size(); ++stage) {
+    const auto & input = request.inputs[stage - 1U];
+    const auto next = mpcc_vehicle_model::advance(
+      body, {input.reference[model::kAccelerationIndex], 0.0},
+      request.vehicle_model, input.stage_dt_sec);
+    ASSERT_TRUE(next.has_value());
+    EXPECT_LE(next->state.forward_velocity_mps, body.forward_velocity_mps + 1e-12);
+    EXPECT_NEAR(request.states[stage].reference[model::kVelocityIndex],
+      next->state.forward_velocity_mps, 1e-12);
+    if (stage + 1U < request.states.size()) {
+      EXPECT_EQ(request.states[stage].lower[model::kVelocityIndex],
+        source.request.states[stage].lower[model::kVelocityIndex]);
+      EXPECT_EQ(request.states[stage].upper[model::kVelocityIndex],
+        source.request.states[stage].upper[model::kVelocityIndex]);
+    }
+    body = next->state;
   }
-  EXPECT_NEAR(previous_velocity, 0.0, 1e-12);
+  EXPECT_DOUBLE_EQ(body.forward_velocity_mps, 0.0);
+  EXPECT_DOUBLE_EQ(request.states.back().lower[model::kVelocityIndex], 0.0);
+  EXPECT_DOUBLE_EQ(request.states.back().upper[model::kVelocityIndex], 0.0);
 }
 
 TEST(MpccArchitectureComparison, MaximumBrakingStopHasFeasibilityObjectiveAndPreservesHardBounds)
@@ -955,7 +965,7 @@ TEST(MpccArchitectureComparison, BrakingFeasibilityClassificationRejectsOtherMis
     auto changed = valid;
     switch (mutation) {
       case 0: changed.states.back().lower[model::kVelocityIndex] = 0.1; break;
-      case 1: changed.states[1].upper[model::kVelocityIndex] += 0.1; break;
+      case 1: changed.maximum_braking_feasibility = false; break;
       case 2: changed.states.back().linear_cost[model::kProgressIndex] = -1.0; break;
       case 3: changed.inputs[0].reference[model::kAccelerationIndex] += 0.1; break;
       case 4: changed.inputs.pop_back(); break;
@@ -1248,6 +1258,9 @@ TEST(MpccArchitectureComparison, CurrentWorldStopBuildsCertifiedObservation)
       result.certified_stop_plan->solver_source_snapshot->identity,
       result.certified_stop_plan->execution_artifact->identity));
   const auto & candidate = *result.certified_stop_plan->solver_source_snapshot;
+  EXPECT_LE(candidate.request.inputs.back().upper[model::kAccelerationIndex], 0.0);
+  EXPECT_LT(result.certified_stop_plan->execution_artifact->control_stages.back().acceleration_mps2, 0.0);
+  EXPECT_TRUE(result.certified_stop_plan->execution_artifact->terminal_body_rest_required);
   for (std::size_t stage = 1U; stage < candidate.request.states.size(); ++stage) {
     EXPECT_LE(candidate.request.states[stage].upper[model::kProgressIndex],
       candidate.wall_reference_progress_m.back());

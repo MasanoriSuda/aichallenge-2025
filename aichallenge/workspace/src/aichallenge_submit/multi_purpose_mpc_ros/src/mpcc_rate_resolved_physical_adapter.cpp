@@ -11,16 +11,7 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter
 namespace
 {
 
-struct NonlinearState
-{
-  double lateral_m{};
-  double lag_m{};
-  double heading_offset_rad{};
-  double velocity_mps{};
-  double progress_m{};
-  double steering_rad{};
-  double response_steering_rad{};
-};
+using NonlinearState = mpcc_rate_resolved_execution_artifact::PredictedState;
 
 bool finite(const NonlinearState & state) noexcept
 {
@@ -29,7 +20,8 @@ bool finite(const NonlinearState & state) noexcept
          std::isfinite(state.velocity_mps) &&
          std::isfinite(state.progress_m) &&
          std::isfinite(state.steering_rad) &&
-         std::isfinite(state.response_steering_rad);
+         std::isfinite(state.response_steering_rad) &&
+         std::isfinite(state.lateral_velocity_mps) && std::isfinite(state.yaw_rate_radps);
 }
 
 bool advance_nonlinear_state(
@@ -46,15 +38,15 @@ bool advance_nonlinear_state(
   request.reference_progress_m = state.progress_m;
   request.reference_steering_rad = state.steering_rad;
   request.reference_response_steering_rad = state.response_steering_rad;
+  request.reference_lateral_velocity_mps = state.lateral_velocity_mps;
+  request.reference_yaw_rate_radps = state.yaw_rate_radps;
+  request.vehicle_model = artifact.vehicle_model;
   request.reference_acceleration_mps2 = control.acceleration_mps2;
   request.reference_steering_rate_radps = control.steering_rate_radps;
   request.reference_virtual_progress_speed_mps =
     control.virtual_progress_speed_mps;
   request.reference_path_curvature_radpm = control.path_curvature_radpm;
   request.wheelbase_m = artifact.wheelbase_m;
-  request.yaw_response_gain = artifact.yaw_response_gain;
-  request.yaw_response_time_constant_sec =
-    artifact.yaw_response_time_constant_sec;
   request.stage_dt_sec = step_sec;
   request.minimum_frenet_denominator = artifact.minimum_frenet_denominator;
   request.minimum_stage_dt_sec = step_sec;
@@ -75,6 +67,8 @@ bool advance_nonlinear_state(
   state.steering_rad = next[mpcc_rate_resolved::kSteeringIndex];
   state.response_steering_rad =
     next[mpcc_rate_resolved::kResponseSteeringIndex];
+  state.lateral_velocity_mps = next[mpcc_rate_resolved::kLateralVelocityIndex];
+  state.yaw_rate_radps = next[mpcc_rate_resolved::kYawRateIndex];
   return finite(state);
 }
 
@@ -139,7 +133,8 @@ std::optional<SampledCourseGeometry> sample_course_geometry(
 
 std::optional<double> physical_progress_speed(
   const NonlinearState & state, const double curvature_radpm,
-  const double minimum_frenet_denominator) noexcept
+  const double minimum_frenet_denominator,
+  const mpcc_vehicle_model::Parameters & vehicle) noexcept
 {
   const double denominator = 1.0 - curvature_radpm * state.lateral_m;
   if (
@@ -149,7 +144,10 @@ std::optional<double> physical_progress_speed(
     return std::nullopt;
   }
   const double speed_mps =
-    state.velocity_mps * std::cos(state.heading_offset_rad) / denominator;
+    ((state.velocity_mps + state.yaw_rate_radps * vehicle.com_left_m) *
+    std::cos(state.heading_offset_rad) -
+    (state.lateral_velocity_mps - state.yaw_rate_radps * vehicle.com_forward_m) *
+    std::sin(state.heading_offset_rad)) / denominator;
   if (!std::isfinite(speed_mps) || speed_mps < 0.0) {
     return std::nullopt;
   }
@@ -248,6 +246,7 @@ const char * to_string(const RejectReason reason) noexcept
     case RejectReason::StageGeometryMismatch: return "stage-geometry-mismatch";
     case RejectReason::ExactTrajectoryRejected:
       return "exact-trajectory-rejected";
+    case RejectReason::TerminalRestNotReached: return "terminal-body-rest-not-reached";
     case RejectReason::Count: break;
   }
   return "unknown";
@@ -342,10 +341,8 @@ Result build(
   const std::size_t state_count = artifact.predicted_states.size();
   std::size_t rollout_sample_count{};
   for (const auto & control : artifact.control_stages) {
-    rollout_sample_count += static_cast<std::size_t>(std::max(
-      1.0, std::ceil(
-        control.duration_sec /
-        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec)));
+    rollout_sample_count += mpcc_vehicle_model::integration_steps(
+      control.duration_sec, artifact.vehicle_model.maximum_step_sec);
   }
   race::ExactPhysicalExecutionTrajectory exact;
   exact.progress_origin_m = artifact.course_progress_origin_m;
@@ -390,17 +387,12 @@ Result build(
         transition.virtual_progress_lower_mps * transition.duration_sec));
   }
   const auto & initial = artifact.semantic_initial_state.value();
-  NonlinearState nonlinear{
-    initial.lateral_m, initial.lag_m, initial.heading_offset_rad,
-    initial.velocity_mps, initial.progress_m, initial.steering_rad,
-    initial.response_steering_rad};
+  NonlinearState nonlinear = initial;
   double elapsed_sec{};
   for (std::size_t stage = 0U; stage < artifact.control_stages.size(); ++stage) {
     const auto & control = artifact.control_stages[stage];
-    const auto substep_count = static_cast<std::size_t>(std::max(
-      1.0, std::ceil(
-        control.duration_sec /
-        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec)));
+    const auto substep_count = mpcc_vehicle_model::integration_steps(
+      control.duration_sec, artifact.vehicle_model.maximum_step_sec);
     const double step_sec =
       control.duration_sec / static_cast<double>(substep_count);
     const double path_start_m = artifact.nominal_path_distance_m[stage];
@@ -439,6 +431,14 @@ Result build(
           nonlinear.lateral_m - lower_m,
           upper_m - nonlinear.lateral_m));
     }
+  }
+  if (artifact.terminal_body_rest_required &&
+    (nonlinear.velocity_mps != 0.0 || nonlinear.lateral_velocity_mps != 0.0 ||
+    nonlinear.yaw_rate_radps != 0.0))
+  {
+    result.reason = RejectReason::TerminalRestNotReached;
+    result.rejected_stage = static_cast<int>(artifact.control_stages.size());
+    return result;
   }
   if (std::isfinite(exact.minimum_lateral_bound_reserve_m)) {
     exact.minimum_lateral_bound_reserve_m = std::max(
@@ -487,21 +487,14 @@ ContinuationResult build_continuation(
     std::max(1e-9, artifact.physical_global_tolerance);
   const double lateral_tolerance_m =
     execution::physical_lateral_bound_tolerance_m(artifact);
-  NonlinearState nonlinear{
-    initial_state.lateral_m,
-    initial_state.lag_m,
-    initial_state.heading_offset_rad,
-    initial_state.velocity_mps,
-    initial_state.progress_m,
-    initial_state.steering_rad,
-    initial_state.response_steering_rad};
+  NonlinearState nonlinear = initial_state;
   if (
     !finite(nonlinear) || !std::isfinite(lateral_tolerance_m) ||
     nonlinear.velocity_mps < -global_tolerance ||
     std::abs(nonlinear.steering_rad) >
     artifact.maximum_abs_steering_rad + global_tolerance ||
     std::abs(nonlinear.response_steering_rad) >
-    artifact.maximum_abs_steering_rad + global_tolerance)
+    artifact.vehicle_model.maximum_wire_steering_rad * artifact.vehicle_model.tire_grip + global_tolerance)
   {
     result.reason = ContinuationRejectReason::InvalidInitialState;
     return result;
@@ -650,7 +643,7 @@ ContinuationResult build_continuation(
     double stage_rollout_sec{};
     while (stage_rollout_sec < duration_sec - 1e-12) {
       double step_sec = std::min(
-        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec,
+        artifact.vehicle_model.maximum_step_sec,
         duration_sec - stage_rollout_sec);
       if (
         elapsed_sec < artifact.publication_interval_sec - 1e-12 &&
@@ -674,6 +667,7 @@ ContinuationResult build_continuation(
         // different command from the one that actually crossed the wire.
         applied_control.steering_rate_radps = 0.0;
       }
+      const double velocity_before_mps = nonlinear.velocity_mps;
       if (!advance_nonlinear_state(
           nonlinear, applied_control, artifact, step_sec))
       {
@@ -689,7 +683,7 @@ ContinuationResult build_continuation(
         std::abs(nonlinear.steering_rad) >
         artifact.maximum_abs_steering_rad + global_tolerance ||
         std::abs(nonlinear.response_steering_rad) >
-        artifact.maximum_abs_steering_rad + global_tolerance)
+        artifact.vehicle_model.maximum_wire_steering_rad * artifact.vehicle_model.tire_grip + global_tolerance)
       {
         result.reason = ContinuationRejectReason::ActuatorEnvelopeRejected;
         result.rejected_stage = static_cast<int>(exact.path_distance_m.size());
@@ -724,10 +718,11 @@ ContinuationResult build_continuation(
       }
       result.actuation_samples.push_back(PhysicalActuationSample{
         elapsed_sec, step_sec, applied_control.acceleration_mps2,
-        applied_control.acceleration_mps2, applied_control.steering_rate_radps,
+        (nonlinear.velocity_mps - velocity_before_mps) / step_sec,
+        applied_control.steering_rate_radps,
         nonlinear.velocity_mps, nonlinear.steering_rad, nonlinear.response_steering_rad,
         applied_control.path_curvature_radpm, applied_control.virtual_progress_speed_mps,
-        command_interval_index});
+        command_interval_index, nonlinear.lateral_velocity_mps, nonlinear.yaw_rate_radps});
 
       exact.progress_m.push_back(
         artifact.course_progress_origin_m + nonlinear.progress_m);
@@ -747,6 +742,8 @@ ContinuationResult build_continuation(
         result.publisher_interval_end_steering_rad = nonlinear.steering_rad;
         result.publisher_interval_end_response_steering_rad =
           nonlinear.response_steering_rad;
+        result.publisher_interval_end_lateral_velocity_mps = nonlinear.lateral_velocity_mps;
+        result.publisher_interval_end_yaw_rate_radps = nonlinear.yaw_rate_radps;
       }
     }
     result.stage_end_velocity_mps.push_back(nonlinear.velocity_mps);
@@ -812,18 +809,14 @@ StopContingencyResult build_stop_contingency(
     result.reason = StopContingencyRejectReason::InvalidCursor;
     return result;
   }
-  NonlinearState nonlinear{
-    initial_state.lateral_m, initial_state.lag_m,
-    initial_state.heading_offset_rad, initial_state.velocity_mps,
-    initial_state.progress_m, initial_state.steering_rad,
-    initial_state.response_steering_rad};
+  NonlinearState nonlinear = initial_state;
   const double tolerance = std::max(1e-9, artifact.physical_global_tolerance);
   if (
     !finite(nonlinear) || nonlinear.velocity_mps < -tolerance ||
     std::abs(nonlinear.steering_rad) >
     artifact.maximum_abs_steering_rad + tolerance ||
     std::abs(nonlinear.response_steering_rad) >
-    artifact.maximum_abs_steering_rad + tolerance)
+    artifact.vehicle_model.maximum_wire_steering_rad * artifact.vehicle_model.tire_grip + tolerance)
   {
     result.reason = StopContingencyRejectReason::InvalidInitialState;
     return result;
@@ -870,16 +863,10 @@ StopContingencyResult build_stop_contingency(
     return result;
   }
 
-  const double braking_duration_sec =
-    std::max(
-    0.0, nonlinear.velocity_mps +
-    std::max(0.0, current_actuation.acceleration_mps2) *
-    artifact.publication_interval_sec) /
-    -minimum_acceleration_mps2;
-  const std::size_t reserve_count = static_cast<std::size_t>(std::max(
-      1.0, std::ceil(
-        (artifact.publication_interval_sec + braking_duration_sec) /
-        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec))) + 1U;
+  // Reserve is an allocation hint only. Stop duration is established by the
+  // same body/rest transition as normal execution, never by wire a * t.
+  constexpr std::size_t reserve_count = 512U;
+  constexpr std::size_t maximum_stop_substeps = 10000U;
   race::ExactPhysicalExecutionTrajectory exact;
   exact.progress_origin_m = artifact.course_progress_origin_m;
   exact.elapsed_time_sec.reserve(reserve_count);
@@ -918,23 +905,15 @@ StopContingencyResult build_stop_contingency(
       const double requested_acceleration_mps2,
       const double requested_steering_rate_radps) -> bool
     {
+      const double requested_end_sec = elapsed_sec + requested_duration_sec;
       double remaining_sec = requested_duration_sec;
       while (remaining_sec > 1e-12) {
-        double step_sec = std::min(
-          mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec,
-          remaining_sec);
-        double effective_acceleration_mps2 = requested_acceleration_mps2;
-        if (
-          nonlinear.velocity_mps <= tolerance &&
-          effective_acceleration_mps2 < 0.0)
-        {
-          effective_acceleration_mps2 = 0.0;
-        } else if (
-          effective_acceleration_mps2 < 0.0 &&
-          nonlinear.velocity_mps + effective_acceleration_mps2 * step_sec < 0.0)
-        {
-          step_sec = nonlinear.velocity_mps / -effective_acceleration_mps2;
+        if (result.actuation_samples.size() >= maximum_stop_substeps) {
+          result.reason = StopContingencyRejectReason::NonlinearModelRejected;
+          return false;
         }
+        const double step_sec = std::min(
+          artifact.vehicle_model.maximum_step_sec, remaining_sec);
         if (!std::isfinite(step_sec) || step_sec <= 0.0) {
           return false;
         }
@@ -947,14 +926,14 @@ StopContingencyResult build_stop_contingency(
         }
         const auto progress_speed = physical_progress_speed(
           nonlinear, geometry->curvature_radpm,
-          artifact.minimum_frenet_denominator);
+          artifact.minimum_frenet_denominator, artifact.vehicle_model);
         if (!progress_speed.has_value()) {
           result.reason =
             StopContingencyRejectReason::CourseGeometryUnavailable;
           return false;
         }
         execution::ControlStage control;
-        control.acceleration_mps2 = effective_acceleration_mps2;
+        control.acceleration_mps2 = requested_acceleration_mps2;
         control.steering_rate_radps = requested_steering_rate_radps;
         control.virtual_progress_speed_mps = progress_speed.value();
         control.duration_sec = step_sec;
@@ -978,14 +957,11 @@ StopContingencyResult build_stop_contingency(
           std::abs(nonlinear.steering_rad) >
           artifact.maximum_abs_steering_rad + tolerance ||
           std::abs(nonlinear.response_steering_rad) >
-          artifact.maximum_abs_steering_rad + tolerance)
+          artifact.vehicle_model.maximum_wire_steering_rad * artifact.vehicle_model.tire_grip + tolerance)
         {
           result.reason =
             StopContingencyRejectReason::ActuatorEnvelopeRejected;
           return false;
-        }
-        if (nonlinear.velocity_mps < 0.0) {
-          nonlinear.velocity_mps = 0.0;
         }
         const auto endpoint_geometry = sample_course_geometry(
           course_geometry, tolerance, nonlinear.progress_m);
@@ -996,6 +972,7 @@ StopContingencyResult build_stop_contingency(
         }
         elapsed_sec += step_sec;
         remaining_sec -= step_sec;
+        if (remaining_sec <= 1e-12) elapsed_sec = requested_end_sec;
         path_distance_m += 0.5 *
           (std::max(0.0, velocity_before_mps) + nonlinear.velocity_mps) *
           step_sec;
@@ -1039,11 +1016,12 @@ StopContingencyResult build_stop_contingency(
         result.actuation_samples.push_back(
           StopContingencyResult::ActuationSample{
             elapsed_sec, step_sec, requested_acceleration_mps2,
-            effective_acceleration_mps2,
+            (nonlinear.velocity_mps - velocity_before_mps) / step_sec,
             requested_steering_rate_radps, nonlinear.velocity_mps,
             nonlinear.steering_rad, nonlinear.response_steering_rad,
             geometry->curvature_radpm, progress_speed.value(),
-            command_interval_index});
+            command_interval_index, nonlinear.lateral_velocity_mps,
+            nonlinear.yaw_rate_radps});
       }
       return true;
     };
@@ -1061,7 +1039,11 @@ StopContingencyResult build_stop_contingency(
   ++command_interval_index;
   result.publisher_interval_end_steering_rad = nonlinear.steering_rad;
   result.publisher_interval_sample_count = result.actuation_samples.size();
-  while (nonlinear.velocity_mps > tolerance) {
+  const auto at_rest = [&]() {
+      return nonlinear.velocity_mps == 0.0 && nonlinear.lateral_velocity_mps == 0.0 &&
+             nonlinear.yaw_rate_radps == 0.0;
+    };
+  while (!at_rest()) {
     const auto geometry = sample_course_geometry(
       course_geometry, tolerance, nonlinear.progress_m);
     if (!geometry.has_value()) {
@@ -1088,10 +1070,7 @@ StopContingencyResult build_stop_contingency(
       result.reason = StopContingencyRejectReason::InvalidLateralPolicy;
       return result;
     }
-    const double stop_duration_sec = nonlinear.velocity_mps /
-      -minimum_acceleration_mps2;
-    const double command_duration_sec = std::min(
-      artifact.publication_interval_sec, stop_duration_sec);
+    const double command_duration_sec = artifact.publication_interval_sec;
     if (!append_duration(
         command_duration_sec, minimum_acceleration_mps2,
         lateral_command->steering_rate_radps))
@@ -1104,7 +1083,7 @@ StopContingencyResult build_stop_contingency(
     ++command_interval_index;
   }
   result.braking_suffix_final_steering_rad = nonlinear.steering_rad;
-  if (exact.elapsed_time_sec.empty() || nonlinear.velocity_mps > tolerance) {
+  if (exact.elapsed_time_sec.empty() || !at_rest()) {
     result.reason = StopContingencyRejectReason::ExactTrajectoryRejected;
     return result;
   }

@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
@@ -45,7 +46,9 @@ mpcc_rate_resolved_shadow::Snapshot make_snapshot(
   snapshot.identity.source_context.horizon_steps = 1U;
   snapshot.identity.source_context.formulation =
     mpcc_execution_contract::Formulation::
-    VelocitySteeringYawResponseProgress7State;
+    VelocitySteeringTireBodyProgress9State;
+  snapshot.identity.source_context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   snapshot.identity.source_context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   snapshot.identity.source_context.input_schema_id = "input";
@@ -72,8 +75,8 @@ mpcc_rate_resolved_shadow::Snapshot make_interaction_snapshot(
   snapshot.request.current_steering_rad = 0.02;
   snapshot.request.current_response_steering_rad = 0.01;
   snapshot.request.wheelbase_m = 1.0;
-  snapshot.request.yaw_response_gain = 1.0;
-  snapshot.request.yaw_response_time_constant_sec = 0.1;
+  snapshot.request.curvature_reference_gain = 1.0;
+  snapshot.request.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   snapshot.request.maximum_abs_steering_rad = 0.5;
   snapshot.request.maximum_abs_steering_rate_radps = 1.0;
   snapshot.request.states.resize(2U);
@@ -206,6 +209,7 @@ TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)
   source.request.current_response_steering_rad = 0.0;
   source.request.initial_state[3] = 2.0;
   execution::ExecutionArtifact artifact;
+  artifact.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   artifact.identity = source.identity;
   artifact.prediction_origin_sec = source.control_prediction_origin_sec;
   artifact.publication_interval_sec = 0.025;
@@ -323,6 +327,7 @@ PublishedExecutionObservation make_publication_observation()
   source.request.current_response_steering_rad = 0.0;
   source.request.initial_state[3] = 2.0;
   execution::ExecutionArtifact artifact;
+  artifact.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   artifact.identity = source.identity;
   artifact.prediction_origin_sec = source.control_prediction_origin_sec;
   artifact.publication_interval_sec = 0.025;
@@ -920,14 +925,17 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
 {
   const auto root = output_root("interaction-roundtrip");
   std::filesystem::remove_all(root);
-  const auto snapshot = make_interaction_snapshot(
+  auto snapshot = make_interaction_snapshot(
     mpcc_execution_contract::ControlIntent::Pass);
+  snapshot.request.observation_provenance = mpcc_vehicle_model::ObservationProvenance{
+    {19.8, {1, 2, .1, 2, .2, .3, .05, .04}}, 19.79, 19.8, 19.78,
+    20.0, 20.1, 0, .1, {{19.0, 1.0, .1}, {19.9, -3.0, .2}}};
   auto assembly = make_assembly_request();
   mpcc_rate_resolved_problem::DynamicObstacleConstraint plane;
   plane.state_stage = 1;
   plane.upper = 0.4;
   Eigen::Matrix<double, mpcc_rate_resolved::kStateDimension, 1> coefficients;
-  coefficients << 0.2, -0.1, 0.3, 0.0, 0.7, 0.0, 0.0;
+  coefficients << 0.2, -0.1, 0.3, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0;
   plane.physical_state_coefficients = coefficients;
   assembly.dynamic_obstacle_constraints.push_back(plane);
   const auto written = record_failure(
@@ -981,6 +989,20 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   EXPECT_TRUE(
     loaded->assembly_request->input_reference.isApprox(
       make_assembly_request().input_reference));
+
+  ASSERT_TRUE(loaded->source.request.observation_provenance.has_value());
+  EXPECT_DOUBLE_EQ(loaded->source.request.observation_provenance->velocity_source_sec, 19.79);
+  EXPECT_DOUBLE_EQ(loaded->source.request.observation_provenance->initial.state.yaw_rate_radps, .3);
+  for (bool change_epoch : {false, true}) {
+    auto changed = loaded->source;
+    auto & provenance = *changed.request.observation_provenance;
+    if (change_epoch) provenance.tire_source_sec -= .01;
+    else provenance.commands.back().wire_acceleration_mps2 += .1;
+    EXPECT_FALSE(interaction_snapshot_matches_fingerprint(changed, loaded->interaction_fingerprint));
+  }
+  auto invalid = loaded->source;
+  invalid.request.observation_provenance->velocity_source_sec = 20.1;
+  EXPECT_FALSE(interaction_snapshot_complete(invalid));
 
   auto vehicle_mutated = loaded->source;
   vehicle_mutated.replay_world->obstacles.front().x_m += 0.01;

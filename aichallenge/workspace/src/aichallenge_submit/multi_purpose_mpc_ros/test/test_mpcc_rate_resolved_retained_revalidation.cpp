@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp"
@@ -30,6 +31,8 @@ contract::MpccProblemContext source_context(
   const contract::ControlIntent intent = contract::ControlIntent::Track)
 {
   contract::MpccProblemContext context;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.decision_id = 11U;
   context.intent = intent;
   context.intent_generation = 1U;
@@ -44,7 +47,9 @@ contract::MpccProblemContext source_context(
   context.stage_geometry_id = 31U;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
@@ -57,6 +62,7 @@ artifact::ExecutionArtifact execution_artifact(
   const contract::ControlIntent intent = contract::ControlIntent::Track)
 {
   artifact::ExecutionArtifact value;
+  value.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   value.identity = {1U, source_context(intent), 1.0};
   value.prediction_origin_sec = 1.0;
   value.publication_interval_sec = 0.025;
@@ -365,18 +371,15 @@ TEST(MpccRateResolvedRetainedRevalidation, StopCertificateTracksTheSolvedNormalG
 {
   namespace adapter = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
   auto value = execution_artifact();
-  // This synthetic vehicle can stop inside the fixture's 0.4 m solved path.
-  // Both the artifact and request declare its braking bound; no production
-  // parameter or physical acceptance tolerance is changed.
-  for (auto & control : value.control_stages) {
-    control.acceleration_lower_mps2 = -10.0;
-  }
   const auto execution = std::make_shared<const artifact::ExecutionArtifact>(value);
   const auto snapshot = source_snapshot(execution->identity);
   const auto built = certified::build(execution, snapshot, accepted_result(snapshot));
   ASSERT_EQ(built.reason, certified::RejectReason::None);
   auto request = accepted_request(built.plan);
-  request.minimum_acceleration_mps2 = -10.0;
+  // A fresh 1m/s origin stops within the short synthetic normal-path profile
+  // under the unchanged production wire-braking bound and native body model.
+  request.current_speed_mps = 1.0;
+  request.control_origin_speed_mps = 1.0;
   const auto result = retained::evaluate(request);
   ASSERT_TRUE(result.proof.has_value());
   const auto profile = adapter::build_normal_path_stop_profile(*execution);
@@ -603,7 +606,7 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  UsesObservationToControlDurationForVelocityReachability)
+  UsesCurrentPhysicalOriginWithoutAWireEqualsNetVelocityEnvelope)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
@@ -619,9 +622,14 @@ TEST(
 
   ASSERT_EQ(result.reason, retained::Reason::Accepted);
   ASSERT_TRUE(result.proof.has_value());
-  EXPECT_NEAR(result.proof->velocity_difference_mps, 0.05, 1e-9);
-  EXPECT_NEAR(result.proof->reachable_velocity_lower_mps, 1.849999, 1e-9);
-  EXPECT_NEAR(result.proof->reachable_velocity_upper_mps, 2.050001, 1e-9);
+  const auto cursor = artifact::resolve_cursor(*plan->execution_artifact, request.control_origin_sec);
+  const auto historical = artifact::extract_actuation(*plan->execution_artifact, cursor);
+  ASSERT_TRUE(historical.actuation);
+  EXPECT_NEAR(result.proof->velocity_difference_mps,
+    historical.actuation->predicted_speed_mps - request.current_speed_mps, 1e-9);
+  EXPECT_TRUE(std::isnan(result.proof->reachable_velocity_lower_mps));
+  EXPECT_TRUE(std::isnan(result.proof->reachable_velocity_upper_mps));
+  EXPECT_DOUBLE_EQ(result.proof->actuation.predicted_speed_mps, request.control_origin_speed_mps);
   EXPECT_NEAR(result.proof->velocity_reachability_duration_sec, 0.05, 1e-9);
 }
 
@@ -742,7 +750,7 @@ TEST(
   // The fast crossing peer reaches the old second-stage endpoint, but has
   // already crossed the short maximum-braking path when ego arrives there.
   request.obstacles.obstacles.push_back(
-    {"later-crossing", {51.1187, 0.0527, -5.0, 0.0, 0.001}});
+    {"later-crossing", {51.056, 0.054, -5.0, 0.0, 0.001}});
 
   const auto result = retained::evaluate(request);
 
@@ -1581,7 +1589,7 @@ TEST(
   request.current_steering_rad = 0.0;
   request.current_response_steering_rad = 0.0;
   request.previous_published_steering_rad = 0.0;
-  request.obstacles.obstacles.push_back({"rear", {49.60, 0.0, 2.2, 0.0, 0.05}});
+  request.obstacles.obstacles.push_back({"rear", {49.60, 0.0, 1.5, 0.0, 0.05}});
 
   const auto result = retained::evaluate(request);
   ASSERT_EQ(result.reason, retained::Reason::Accepted);
@@ -1605,18 +1613,29 @@ TEST(
   ASSERT_TRUE(authority.authority.has_value());
   EXPECT_DOUBLE_EQ(authority.authority->command.acceleration_mps2, 1.0);
 
-  // The original solved endpoint is still rest, but fresh velocity changes
-  // either leave residual motion or exhaust the braking law before its end.
-  // Neither an old rest label nor a clear first interval grants this proof.
+  // Current-state changes must be replayed. In the absorbing rest model,
+  // nearby speeds can still end at rest; they are valid only after fresh proof.
   for (const double speed : {1.95, 2.05}) {
     auto changed = request;
     changed.current_speed_mps = speed;
     changed.control_origin_speed_mps = speed;
-    const auto rejected = retained::evaluate(changed);
-    EXPECT_NE(rejected.reason, retained::Reason::Accepted);
-    EXPECT_FALSE(rejected.terminal_stop_uses_solved_suffix);
-    EXPECT_FALSE(rejected.proof.has_value());
+    const auto checked = retained::evaluate(changed);
+    EXPECT_EQ(checked.reason, retained::Reason::Accepted);
+    EXPECT_TRUE(checked.terminal_stop_uses_solved_suffix);
+    ASSERT_TRUE(checked.proof);
+    EXPECT_DOUBLE_EQ(checked.proof->terminal_stop_trajectory.velocity_mps.back(), 0.0);
   }
+  auto slower = request;
+  slower.current_speed_mps = 1.5;
+  slower.control_origin_speed_mps = 1.5;
+  EXPECT_NE(retained::evaluate(slower).reason, retained::Reason::Accepted);
+  auto faster_peer = request;
+  faster_peer.obstacles.obstacles.front().circle.velocity_x_mps = 2.2;
+  EXPECT_NE(retained::evaluate(faster_peer).reason, retained::Reason::Accepted);
+  auto residual_motion = request;
+  residual_motion.current_speed_mps = 3.0;
+  residual_motion.control_origin_speed_mps = 3.0;
+  EXPECT_FALSE(retained::evaluate(residual_motion).terminal_stop_uses_solved_suffix);
 }
 
 TEST(

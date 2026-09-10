@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp"
 #include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 
@@ -249,6 +250,56 @@ YAML::Node assembly_request_node(const problem::AssemblyRequest & request)
   return node;
 }
 
+YAML::Node observation_provenance_node(const mpcc_vehicle_model::ObservationProvenance & v)
+{
+  YAML::Node node;
+  node["pose_source_sec"] = v.initial.source_sec;
+  node["velocity_source_sec"] = v.velocity_source_sec;
+  node["yaw_rate_source_sec"] = v.yaw_rate_source_sec;
+  node["tire_source_sec"] = v.tire_source_sec;
+  node["now_sec"] = v.now_sec;
+  node["control_origin_sec"] = v.control_origin_sec;
+  node["nominal_acceleration_application_delay_sec"] = v.acceleration_delay_sec;
+  node["nominal_steering_application_delay_sec"] = v.steering_delay_sec;
+  const auto & state = v.initial.state;
+  node["initial_x_y_yaw_u_vy_r_desired_tire"] = std::vector<double>{
+    state.x_m, state.y_m, state.yaw_rad, state.forward_velocity_mps,
+    state.lateral_velocity_mps, state.yaw_rate_radps, state.desired_steering_rad,
+    state.tire_steering_rad};
+  YAML::Node history(YAML::NodeType::Sequence);
+  for (const auto & command : v.commands) {
+    history.push_back(std::vector<double>{command.published_sec,
+      command.wire_acceleration_mps2, command.wire_steering_rad});
+  }
+  node["published_time_wire_acceleration_wire_steering"] = history;
+  return node;
+}
+
+std::optional<mpcc_vehicle_model::ObservationProvenance> load_observation_provenance(
+  const YAML::Node & node)
+{
+  if (!node.IsMap()) return std::nullopt;
+  mpcc_vehicle_model::ObservationProvenance v;
+  v.initial.source_sec = node["pose_source_sec"].as<double>();
+  v.velocity_source_sec = node["velocity_source_sec"].as<double>();
+  v.yaw_rate_source_sec = node["yaw_rate_source_sec"].as<double>();
+  v.tire_source_sec = node["tire_source_sec"].as<double>();
+  v.now_sec = node["now_sec"].as<double>();
+  v.control_origin_sec = node["control_origin_sec"].as<double>();
+  v.acceleration_delay_sec = node["nominal_acceleration_application_delay_sec"].as<double>();
+  v.steering_delay_sec = node["nominal_steering_application_delay_sec"].as<double>();
+  const auto state = node["initial_x_y_yaw_u_vy_r_desired_tire"].as<std::vector<double>>();
+  if (state.size() != 8U) return std::nullopt;
+  v.initial.state = {state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7]};
+  const auto history = node["published_time_wire_acceleration_wire_steering"];
+  if (!history.IsSequence()) return std::nullopt;
+  for (const auto & item : history) {
+    if (!item.IsSequence() || item.size() != 3U) return std::nullopt;
+    v.commands.push_back({item[0].as<double>(), item[1].as<double>(), item[2].as<double>()});
+  }
+  return mpcc_vehicle_model::valid(v) ? std::optional{std::move(v)} : std::nullopt;
+}
+
 YAML::Node semantic_request_node(
   const mpcc_rate_resolved_adapter::Request & request)
 {
@@ -258,10 +309,15 @@ YAML::Node semantic_request_node(
   node["current_steering_rad"] = request.current_steering_rad;
   node["current_response_steering_rad"] =
     request.current_response_steering_rad;
+  node["current_lateral_velocity_mps"] = request.current_lateral_velocity_mps;
+  node["current_yaw_rate_radps"] = request.current_yaw_rate_radps;
+  node["vehicle_model"] = mpcc_vehicle_model::encode_parameters(request.vehicle_model);
+  node["maximum_braking_feasibility"] = request.maximum_braking_feasibility;
+  if (request.observation_provenance) {
+    node["observation_provenance"] = observation_provenance_node(*request.observation_provenance);
+  }
   node["wheelbase_m"] = request.wheelbase_m;
-  node["yaw_response_gain"] = request.yaw_response_gain;
-  node["yaw_response_time_constant_sec"] =
-    request.yaw_response_time_constant_sec;
+  node["curvature_reference_gain"] = request.curvature_reference_gain;
   node["maximum_abs_steering_rad"] = request.maximum_abs_steering_rad;
   node["maximum_abs_steering_rate_radps"] =
     request.maximum_abs_steering_rate_radps;
@@ -431,6 +487,7 @@ YAML::Node problem_context_node(const contract::MpccProblemContext & context)
   problem_context["bounds_schema_id"] = context.bounds_schema_id;
   problem_context["cost_schema_id"] = context.cost_schema_id;
   problem_context["fingerprint"] = context.fingerprint;
+  problem_context["vehicle_model_fingerprint"] = context.vehicle_model_fingerprint;
   return problem_context;
 }
 
@@ -930,6 +987,9 @@ std::optional<contract::Formulation> parse_formulation(
   if (value == "velocity-steering-yaw-response-progress-7state") {
     return Formulation::VelocitySteeringYawResponseProgress7State;
   }
+  if (value == "velocity-steering-tire-body-progress-9state") {
+    return Formulation::VelocitySteeringTireBodyProgress9State;
+  }
   if (value == "solver-derived-bypass") {
     return Formulation::SolverDerivedBypass;
   }
@@ -956,10 +1016,18 @@ std::optional<mpcc_rate_resolved_adapter::Request> load_semantic_request(
   request.current_steering_rad = node["current_steering_rad"].as<double>();
   request.current_response_steering_rad =
     node["current_response_steering_rad"].as<double>();
+  const auto vehicle = mpcc_vehicle_model::decode_parameters(node["vehicle_model"]);
+  if (!vehicle) return std::nullopt;
+  request.vehicle_model = *vehicle;
+  request.maximum_braking_feasibility = node["maximum_braking_feasibility"].as<bool>(false);
+  if (node["observation_provenance"]) {
+    request.observation_provenance = load_observation_provenance(node["observation_provenance"]);
+    if (!request.observation_provenance) return std::nullopt;
+  }
+  request.current_lateral_velocity_mps = node["current_lateral_velocity_mps"].as<double>();
+  request.current_yaw_rate_radps = node["current_yaw_rate_radps"].as<double>();
   request.wheelbase_m = node["wheelbase_m"].as<double>();
-  request.yaw_response_gain = node["yaw_response_gain"].as<double>();
-  request.yaw_response_time_constant_sec =
-    node["yaw_response_time_constant_sec"].as<double>();
+  request.curvature_reference_gain = node["curvature_reference_gain"].as<double>();
   request.maximum_abs_steering_rad =
     node["maximum_abs_steering_rad"].as<double>();
   request.maximum_abs_steering_rate_radps =
@@ -1123,6 +1191,7 @@ std::optional<shadow::Snapshot> load_source_snapshot(
   context.bounds_schema_id = problem_context["bounds_schema_id"].as<std::string>();
   context.cost_schema_id = problem_context["cost_schema_id"].as<std::string>();
   context.fingerprint = problem_context["fingerprint"].as<std::uint64_t>();
+  context.vehicle_model_fingerprint = problem_context["vehicle_model_fingerprint"].as<std::uint64_t>(0U);
   source.control_prediction_origin_sec =
     node["control_prediction_origin_sec"].as<double>();
   source.course_progress_origin_m =
@@ -1497,10 +1566,15 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
       !request.input_delta_weight.allFinite() ||
       !std::isfinite(request.current_steering_rad) ||
       !std::isfinite(request.current_response_steering_rad) ||
+      !std::isfinite(request.current_lateral_velocity_mps) ||
+      !std::isfinite(request.current_yaw_rate_radps) ||
+      !mpcc_vehicle_model::valid(request.vehicle_model) ||
+      (request.observation_provenance &&
+      !mpcc_vehicle_model::valid(*request.observation_provenance)) ||
+      source.identity.source_context.vehicle_model_fingerprint !=
+      mpcc_vehicle_model::fingerprint(request.vehicle_model) ||
       !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
-      !std::isfinite(request.yaw_response_gain) ||
-      !std::isfinite(request.yaw_response_time_constant_sec) ||
-      request.yaw_response_time_constant_sec <= 0.0 ||
+      !std::isfinite(request.curvature_reference_gain) ||
       !std::isfinite(request.maximum_abs_steering_rad) ||
       request.maximum_abs_steering_rad <= 0.0 ||
       !std::isfinite(request.maximum_abs_steering_rate_radps) ||
@@ -1835,9 +1909,16 @@ std::uint64_t fingerprint_interaction_snapshot(
   builder.append_eigen(request.initial_state);
   builder.append_double(request.current_steering_rad);
   builder.append_double(request.current_response_steering_rad);
+  builder.append_double(request.current_lateral_velocity_mps);
+  builder.append_double(request.current_yaw_rate_radps);
+  builder.append_u64(mpcc_vehicle_model::fingerprint(request.vehicle_model));
+  builder.append_bool(request.maximum_braking_feasibility);
+  builder.append_bool(request.observation_provenance.has_value());
+  if (request.observation_provenance) {
+    builder.append_string(YAML::Dump(observation_provenance_node(*request.observation_provenance)));
+  }
   builder.append_double(request.wheelbase_m);
-  builder.append_double(request.yaw_response_gain);
-  builder.append_double(request.yaw_response_time_constant_sec);
+  builder.append_double(request.curvature_reference_gain);
   builder.append_double(request.maximum_abs_steering_rad);
   builder.append_double(request.maximum_abs_steering_rate_radps);
   builder.append_double(request.minimum_frenet_denominator);
@@ -2020,13 +2101,15 @@ YAML::Node execution_evidence_node(
   node["semantic_initial_state"]["progress_m"] = initial.progress_m;
   node["semantic_initial_state"]["steering_rad"] = initial.steering_rad;
   node["semantic_initial_state"]["response_steering_rad"] = initial.response_steering_rad;
+  node["semantic_initial_state"]["lateral_velocity_mps"] = initial.lateral_velocity_mps;
+  node["semantic_initial_state"]["yaw_rate_radps"] = initial.yaw_rate_radps;
+  node["vehicle_model"] = mpcc_vehicle_model::encode_parameters(value.vehicle_model);
   node["wheelbase_m"] = value.wheelbase_m;
-  node["yaw_response_gain"] = value.yaw_response_gain;
-  node["yaw_response_time_constant_sec"] = value.yaw_response_time_constant_sec;
   node["minimum_frenet_denominator"] = value.minimum_frenet_denominator;
   node["maximum_abs_steering_rad"] = value.maximum_abs_steering_rad;
   node["maximum_abs_steering_rate_radps"] = value.maximum_abs_steering_rate_radps;
   node["physical_global_tolerance"] = value.physical_global_tolerance;
+  node["terminal_body_rest_required"] = value.terminal_body_rest_required;
   node["maximum_constraint_violation"] = value.maximum_constraint_violation;
   node["maximum_normalized_constraint_violation"] = value.maximum_normalized_constraint_violation;
   node["terminal_intent_contract"]["active"] =
@@ -2057,6 +2140,8 @@ YAML::Node execution_evidence_node(
     entry["progress_m"] = item.progress_m;
     entry["steering_rad"] = item.steering_rad;
     entry["response_steering_rad"] = item.response_steering_rad;
+    entry["lateral_velocity_mps"] = item.lateral_velocity_mps;
+    entry["yaw_rate_radps"] = item.yaw_rate_radps;
     node["predicted_states"].push_back(entry);
   }
   node["control_stages"] = YAML::Node(YAML::NodeType::Sequence);
@@ -2304,6 +2389,8 @@ static YAML::Node revalidation_evidence_node(
   value["current_time_steering_rad"] = r.current_time_steering_rad;
   value["current_steering_rad"] = r.current_steering_rad;
   value["current_response_steering_rad"] = r.current_response_steering_rad;
+  value["current_lateral_velocity_mps"] = r.current_lateral_velocity_mps;
+  value["current_yaw_rate_radps"] = r.current_yaw_rate_radps;
   value["previous_published_steering_rad"] = r.previous_published_steering_rad;
   value["previous_published_command_age_sec"] = r.previous_published_command_age_sec;
   value["minimum_acceleration_mps2"] = r.minimum_acceleration_mps2;

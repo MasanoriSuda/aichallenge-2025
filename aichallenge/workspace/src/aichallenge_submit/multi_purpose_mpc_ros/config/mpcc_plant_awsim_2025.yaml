@@ -1,0 +1,28 @@
+# Local 2025-derived empirical AWSIM model. Not a 2026 official or real-vehicle
+# calibration. Contact weights: fixed single run16..35s; no fitted residual.
+profile_id: awsim-2025-empirical-body-tire-settled-contact-v1
+mass_kg: 160.0
+yaw_inertia_kgm2: 82.59312438964844
+com_forward_m: 0.17599235378250895
+com_left_m: 0.0
+rolling_mps2: 0.37
+drag_per_sec: 0.03
+angular_drag_per_sec: 1.0
+maximum_wire_acceleration_mps2: 1.37
+maximum_wire_deceleration_mps2: 8.0
+sleep_speed_mps: 0.02
+minimum_force_interval_sec: 0.01
+tire_lag_sec: 0.02
+tire_slew_radps: 1.3962634015954636
+tire_grip: 0.7
+# Same existing serializer gain; must agree with the active immutable command
+# conversion context. This is not the former kinematic yaw-response gain.
+steering_wire_gain: 1.435
+maximum_wire_steering_rad: 0.5235987755982988
+maximum_step_sec: 0.005
+nominal_settled_contact: true
+wheels:
+  - {com_forward_m: 0.8744786771038298, com_left_m: 0.5072737518304533, traction_fraction: 0.1343421052631579, cornering_per_sec: 2.0513201191213755, steerable: true}
+  - {com_forward_m: 0.8744786771038298, com_left_m: -0.5072737518304533, traction_fraction: 0.1343421052631579, cornering_per_sec: 2.0513201191213755, steerable: true}
+  - {com_forward_m: -0.2116674484901988, com_left_m: 0.6348682240371797, traction_fraction: 0.2105921052631579, cornering_per_sec: 16.69623236385852, steerable: false}
+  - {com_forward_m: -0.2116674484901988, com_left_m: -0.6348682240371797, traction_fraction: 0.2105921052631579, cornering_per_sec: 16.69623236385852, steerable: false}

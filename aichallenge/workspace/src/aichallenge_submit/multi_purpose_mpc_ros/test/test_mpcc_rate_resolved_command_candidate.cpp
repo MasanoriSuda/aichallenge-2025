@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp"
 
@@ -27,6 +28,8 @@ contract::MpccProblemContext source_context(
   const contract::ControlIntent intent = contract::ControlIntent::Cruise)
 {
   contract::MpccProblemContext context;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.decision_id = 11U;
   context.intent = intent;
   context.intent_generation = 2U;
@@ -41,7 +44,9 @@ contract::MpccProblemContext source_context(
   context.stage_geometry_id = 17U;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
@@ -54,6 +59,7 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   const contract::ControlIntent intent = contract::ControlIntent::Cruise)
 {
   auto execution = std::make_shared<artifact::ExecutionArtifact>();
+  execution->vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   execution->identity = {7U, source_context(intent), 1.0};
   execution->prediction_origin_sec = 1.0;
   execution->publication_interval_sec = 0.025;
@@ -201,10 +207,10 @@ TEST(RateResolvedCommandCandidate, PreservesRetainedIdentityAndActuation) {
   EXPECT_EQ(candidate.source_context.intent, contract::ControlIntent::Cruise);
   EXPECT_EQ(
     candidate.source_context.formulation,
-    contract::Formulation::VelocitySteeringYawResponseProgress7State);
+    contract::Formulation::VelocitySteeringTireBodyProgress9State);
   EXPECT_STREQ(
     contract::to_string(candidate.source_context.formulation),
-    "velocity-steering-yaw-response-progress-7state");
+    "velocity-steering-tire-body-progress-9state");
   EXPECT_EQ(candidate.control_stage_index, 1U);
   EXPECT_DOUBLE_EQ(candidate.predicted_speed_mps, 4.2);
   EXPECT_DOUBLE_EQ(candidate.acceleration_mps2, 0.8);
@@ -241,7 +247,7 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
   EXPECT_TRUE(contract::solution_certified(authority.solution));
   EXPECT_EQ(
     authority.problem.formulation,
-    contract::Formulation::VelocitySteeringYawResponseProgress7State);
+    contract::Formulation::VelocitySteeringTireBodyProgress9State);
   EXPECT_EQ(authority.command.decision_id, 23U);
   EXPECT_EQ(authority.command.execution_plan_id, 7U);
   EXPECT_EQ(authority.command.execution_certificate_decision_id, 23U);
@@ -250,7 +256,7 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
     contract::CanonicalNormalAuthoritySource::RetainedCertified);
   EXPECT_EQ(
     authority.command.formulation,
-    contract::Formulation::VelocitySteeringYawResponseProgress7State);
+    contract::Formulation::VelocitySteeringTireBodyProgress9State);
   EXPECT_TRUE(authority.command.retained_solution);
   EXPECT_DOUBLE_EQ(authority.command.predicted_speed_mps, 4.2);
   EXPECT_DOUBLE_EQ(authority.command.acceleration_mps2, 0.8);
@@ -432,7 +438,7 @@ TEST(RateResolvedProductionAdapter, FinalTraceAcceptsExactSixStateIdentity)
   EXPECT_EQ(decision.reason, "matching-certified-solution");
   EXPECT_EQ(
     decision.formulation,
-    contract::Formulation::VelocitySteeringYawResponseProgress7State);
+    contract::Formulation::VelocitySteeringTireBodyProgress9State);
   EXPECT_EQ(decision.execution_plan_id, 7U);
   EXPECT_EQ(decision.execution_certificate_decision_id, 23U);
 }

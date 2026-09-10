@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
 
 #include <gtest/gtest.h>
@@ -19,7 +20,7 @@ problem::AssemblyRequest straight_request(const int horizon = 3)
 {
   problem::AssemblyRequest request;
   request.horizon_steps = horizon;
-  request.initial_state << 0.0, 0.0, 0.0, 2.0, 0.0, 0.10, 0.08;
+  request.initial_state << 0.0, 0.0, 0.0, 2.0, 0.0, 0.10, 0.08, 0.0, 0.0;
   request.linearizations.reserve(static_cast<std::size_t>(horizon));
   for (int stage = 0; stage < horizon; ++stage) {
     model::LinearizationRequest linearization_request;
@@ -29,8 +30,7 @@ problem::AssemblyRequest straight_request(const int horizon = 3)
     linearization_request.reference_response_steering_rad = 0.08;
     linearization_request.reference_virtual_progress_speed_mps = 2.0;
     linearization_request.wheelbase_m = 2.0;
-    linearization_request.yaw_response_gain = 0.75;
-    linearization_request.yaw_response_time_constant_sec = 0.13;
+    linearization_request.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
     linearization_request.stage_dt_sec = 0.10;
     const auto linearization = model::linearize_temporal_frenet(
       linearization_request);
@@ -84,7 +84,7 @@ TEST(MpccRateResolvedProblem, AssemblesPhysicalPlaneHeadingAndProgressIndependen
   row.axis = problem::DynamicObstacleConstraintAxis::Lateral;
   row.upper = 1.5;
   Eigen::Matrix<double, model::kStateDimension, 1> coefficients;
-  coefficients << 0.3, 0.7, -0.2, 0.0, 0.9, 0.0, 0.0;
+  coefficients << 0.3, 0.7, -0.2, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0;
   row.physical_state_coefficients = coefficients;
   request.dynamic_obstacle_constraints.push_back(row);
   const auto qp = problem::assemble(request);

@@ -83,6 +83,9 @@ TEST(CertifiedStopSuccessorObservation, SamplesTheNextControlOrigin)
 TEST(CertifiedStopSuccessorObservation, ClassifiesEachSteeringOwnerIndependently)
 {
   auto source = published();
+  for (auto & sample : source.evidence.actuation_samples) {
+    sample.end_response_steering_rad = sample.end_steering_rad - .03;
+  }
   const observation::CurrentControlOrigin current{
     11U, true, 1.0, 1.025, 10.15, 1.0, -3.125, 1.85,
     0.115, 0.105, 0.125, 0.110};
@@ -93,7 +96,7 @@ TEST(CertifiedStopSuccessorObservation, ClassifiesEachSteeringOwnerIndependently
   EXPECT_NEAR(result.steering_error_rad, 0.0, 1e-12);
   EXPECT_NEAR(result.current_time_steering_error_rad, -0.010, 1e-12);
   EXPECT_NEAR(
-    result.response_control_origin_steering_error_rad, 0.010, 1e-12);
+    result.response_control_origin_steering_error_rad, 0.040, 1e-12);
   EXPECT_NEAR(result.previous_published_steering_error_rad, -0.005, 1e-12);
 }
 

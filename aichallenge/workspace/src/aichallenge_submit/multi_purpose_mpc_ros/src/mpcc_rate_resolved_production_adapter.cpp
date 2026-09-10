@@ -126,7 +126,7 @@ Result build(const retained::Result & retained_result) noexcept
     !contract::problem_context_complete(source_context) ||
     !artifact::supports_intent(source_context.intent) ||
     source_context.formulation !=
-    contract::Formulation::VelocitySteeringYawResponseProgress7State ||
+    contract::Formulation::VelocitySteeringTireBodyProgress9State ||
     proof.decision_id == 0U)
   {
     result.reason = Reason::InvalidIdentity;

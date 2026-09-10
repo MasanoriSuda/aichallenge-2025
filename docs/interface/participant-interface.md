@@ -95,7 +95,7 @@ aichallenge_submit.launch.xml
 
 | `control_method` | 起動するノード（パッケージ） | 主な入力トピック |
 |---|---|---|
-| `mpc`（既定） | `multi_purpose_mpc_ros`（C++、`mpc_controller_cpp`） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
+| `mpc`（既定） | `multi_purpose_mpc_ros`（C++、`mpc_controller_cpp`） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory`、下記の速度・IMU・操舵入力 |
 | `pure_pursuit` | `simple_pure_pursuit`（C++） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
 | `tiny_lidar_net` | `tiny_lidar_net_controller`（Python） | `/scan`（`sensor_msgs/LaserScan`） |
 | `pilot_net` | `pilot_net_controller`（Python） | `/image_raw`（`sensor_msgs/Image`） |
@@ -119,14 +119,27 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 
 | トピック | 型 | 確認元 |
 |---|---|---|
-| `/sensing/imu/imu_raw` | `sensor_msgs/Imu` | `reference.launch.xml`（imu_corrector 入力） |
+| `/sensing/imu/imu_raw` | `sensor_msgs/Imu` | `reference.launch.xml`（imu_corrector 入力）、MPCCの実yaw rate入力 |
 | `/sensing/gnss/nav_sat_fix` | `sensor_msgs/NavSatFix` | `reference.launch.xml`（racing_kart_gnss_poser 入力） |
-| `/vehicle/status/velocity_status` | `autoware_auto_vehicle_msgs/VelocityReport` | `reference.launch.xml`（vehicle_velocity_converter 入力） |
-| `/vehicle/status/steering_status` | `autoware_auto_vehicle_msgs/SteeringReport` | `reference.launch.xml`（raw_vehicle_cmd_converter 入力、実車経路のみ） |
+| `/vehicle/status/velocity_status` | `autoware_auto_vehicle_msgs/VelocityReport` | `reference.launch.xml`（vehicle_velocity_converter 入力）、MPCCのCOM前後・横速度入力 |
+| `/vehicle/status/steering_status` | `autoware_auto_vehicle_msgs/SteeringReport` | MPCCの実タイヤ角入力、実車のraw_vehicle_cmd_converter入力 |
 | `/vehicle/status/gear_status` | `autoware_auto_vehicle_msgs/GearReport` | 2026公式gear状態。gear変更またはスタック復帰を行う場合の任意入力 |
 | `/clock` | `rosgraph_msgs/Clock` | シミュレーション時間（`use_sim_time=true`） |
 | `/awsim/status` | `std_msgs/Float32MultiArray` | 2026公式AWSIM状態。index 5=`boostRemaining`、6=`isBoosting` |
 | `/awsim/state` | `std_msgs/String` | 車両FSM。`Spawned, Grounded, Ready, Start, Finish` |
+
+MPCCの9状態モデル移行（2026-09-10、2025由来のローカル暫定）では、上記の
+`VelocityReport`、`Imu`、`SteeringReport`を同じ車両Domainで直接購読する。
+既存topic名・型・管理面の責務は変更しない。位置は引き続き
+`/localization/kinematic_state`のbase_link poseを使う。速度はCOMの前後・横速度、
+yaw rateはIMUのangular_velocity.z、操舵は実タイヤ角であり、
+`VelocityReport.heading_rate`から操舵角を逆算しない。
+
+poseの元時刻以前に受信済みの各センサ値を選び、元時刻と受信時刻の鮮度を確認する。
+送信済み指令履歴とともに共通モデルで現在・制御開始時刻へ予測する。
+必要な公開入力や履歴が欠けた場合は通常解へ進まず、既存の停止出力を使う。
+実車での同じ座標・信号意味と2026公式plant値は未検証。再生bagはこれらの
+topicと元stampを含める必要があり、旧bagの欠測を暗黙のゼロ入力で補わない。
 
 `tiny_lidar_net` 使用時の追加入力（要確認: AWSIM 側の `/scan` publisher 名は本リポジトリ外）:
 

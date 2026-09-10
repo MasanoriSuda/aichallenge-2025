@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp"
 
 #include <gtest/gtest.h>
@@ -25,6 +26,8 @@ contract::MpccProblemContext source_context(
   const contract::ControlIntent intent = contract::ControlIntent::Pass)
 {
   contract::MpccProblemContext context;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.decision_id = sequence + 100U;
   context.intent = intent;
   context.intent_generation = 3U;
@@ -39,7 +42,9 @@ contract::MpccProblemContext source_context(
   context.dynamic_obstacle_side_sign = side_sign;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  context.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   context.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
@@ -64,6 +69,7 @@ execution::ExecutionArtifact artifact(
   const contract::ControlIntent intent = contract::ControlIntent::Pass)
 {
   execution::ExecutionArtifact value;
+  value.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   value.identity = execution::Identity{
     sequence, source_context(sequence, side_sign, intent),
     10.0 + static_cast<double>(sequence)};

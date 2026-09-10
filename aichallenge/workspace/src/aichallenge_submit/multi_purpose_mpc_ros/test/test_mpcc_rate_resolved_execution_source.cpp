@@ -1,3 +1,4 @@
+#include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp"
 
 #include <gtest/gtest.h>
@@ -22,6 +23,8 @@ namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 contract::MpccProblemContext context()
 {
   contract::MpccProblemContext value;
+  value.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   value.decision_id = 10U;
   value.observation_generation = 10U;
   value.intent = contract::ControlIntent::ShiftOut;
@@ -32,7 +35,9 @@ contract::MpccProblemContext context()
   value.stage_geometry_id = 20U;
   value.horizon_steps = 2U;
   value.formulation =
-    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+    contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  value.vehicle_model_fingerprint = multi_purpose_mpc_ros::mpcc_vehicle_model::fingerprint(
+    multi_purpose_mpc_ros::test::vehicle_model());
   value.state_schema_id =
     multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   value.input_schema_id = "accel-steering-rate-progress-rate-v1";
@@ -45,6 +50,7 @@ std::shared_ptr<const certified::CertifiedPlan> plan(
   std::vector<double> exact_progress_m = {50.3, 50.6})
 {
   execution::ExecutionArtifact artifact;
+  artifact.vehicle_model = multi_purpose_mpc_ros::test::vehicle_model();
   artifact.identity = execution::Identity{3U, context(), 12.0};
   artifact.prediction_origin_sec = 12.02;
   artifact.publication_interval_sec = 0.025;

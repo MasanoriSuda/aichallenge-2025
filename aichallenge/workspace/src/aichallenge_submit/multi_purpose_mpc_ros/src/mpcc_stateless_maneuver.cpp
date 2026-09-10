@@ -63,8 +63,7 @@ std::optional<int> steering_reachable_full_side_stage(
     request.maximum_abs_steering_rad < 0.0 ||
     !std::isfinite(request.maximum_abs_steering_rate_radps) ||
     request.maximum_abs_steering_rate_radps <= kNumericalTolerance ||
-    !std::isfinite(request.yaw_response_time_constant_sec) ||
-    request.yaw_response_time_constant_sec < 0.0)
+    !mpcc_vehicle_model::valid(request.vehicle_model))
   {
     return std::nullopt;
   }
@@ -75,7 +74,7 @@ std::optional<int> steering_reachable_full_side_stage(
   const double reachability_duration_sec =
     std::abs(side_steering_limit_rad - request.current_steering_rad) /
     request.maximum_abs_steering_rate_radps +
-    request.yaw_response_time_constant_sec;
+    request.vehicle_model.tire_lag_sec;
   double cumulative_duration_sec = 0.0;
   for (int full_side_stage = 1; full_side_stage < horizon; ++full_side_stage) {
     const double stage_dt_sec = request.inputs[

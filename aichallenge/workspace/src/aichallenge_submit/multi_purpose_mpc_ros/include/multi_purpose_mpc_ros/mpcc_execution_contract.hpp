@@ -30,6 +30,7 @@ enum class Formulation
   Unresolved,
   VelocitySteeringYawResponseProgress7State,
   SolverDerivedBypass,
+  VelocitySteeringTireBodyProgress9State,
 };
 
 const char * to_string(ControlIntent intent) noexcept;
@@ -336,6 +337,7 @@ struct MpccProblemContext
   std::string bounds_schema_id;
   std::string cost_schema_id;
   std::uint64_t fingerprint{};
+  std::uint64_t vehicle_model_fingerprint{};
 };
 
 std::uint64_t problem_context_fingerprint(

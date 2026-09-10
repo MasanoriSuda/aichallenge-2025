@@ -8010,6 +8010,15 @@ struct RateResolvedStopLatticeShadowTelemetryWindow
   bool last_current_world_alternate_available{false};
 };
 
+struct NormalJoinTimingObservation
+{
+  double primary_ms{};
+  double stop_lattice_ms{};
+  double stop_successor_ms{};
+  double output_ms{};
+  double snapshots_ms{};
+};
+
 struct ControlCallbackTimingObservation
 {
   std::uint64_t decision_id{};
@@ -8022,6 +8031,7 @@ struct ControlCallbackTimingObservation
   double publication_successor_ms{};
   double prediction_marker_ms{};
   std::size_t prediction_marker_points{};
+  NormalJoinTimingObservation normal_join;
   const char * checkpoint{"entry"};
 };
 
@@ -25377,7 +25387,11 @@ struct MPC
     if (outcome == "terminal-contingency-unavailable") {
       boundary = mpcc_architecture_snapshot::AuthorityFailureBoundary::TerminalContingency;
     } else if (outcome == "normal-authority-unavailable") {
-      boundary = mpcc_architecture_snapshot::AuthorityFailureBoundary::FinalAuthority;
+      // Observation-only classification, matching the campaign's moving
+      // threshold. Keep the startup bucket and preserve the first moving loss.
+      boundary = std::isfinite(current_speed_mps_) && current_speed_mps_ > 0.1 ?
+        mpcc_architecture_snapshot::AuthorityFailureBoundary::MovingFinalAuthority :
+        mpcc_architecture_snapshot::AuthorityFailureBoundary::FinalAuthority;
     } else {
       return false;
     }
@@ -30719,6 +30733,11 @@ struct MPC
     const double production_total_ms =
       std::chrono::duration<double, std::milli>(
       production_finished - production_started).count();
+    last_normal_join_timing = NormalJoinTimingObservation{
+      primary_retained_ms, stop_lattice_ms, stop_successor_ms + published_stop_join_ms,
+      std::chrono::duration<double, std::milli>(
+        production_finished - retained_join_finished).count(),
+      failure_snapshot_ms + normal_authority_snapshot_ms};
     if (production_total_ms > 20.0) {
       static rclcpp::Clock runtime_log_clock{RCL_STEADY_TIME};
       RCLCPP_WARN_THROTTLE(
@@ -30773,12 +30792,14 @@ struct MPC
   }
 
   double last_problem_initialization_ms{};
+  NormalJoinTimingObservation last_normal_join_timing;
 
   MpcControlCycleResult get_control(
     const double now_sec, const std::uint64_t decision_id)
   {
     active_control_decision_id_ = decision_id;
     last_problem_initialization_ms = 0.0;
+    last_normal_join_timing = {};
     pending_canonical_normal_actuation_.reset();
     pending_rate_resolved_publication_successor_.reset();
     last_overtake_authority_trace_.reset();
@@ -58441,13 +58462,17 @@ private:
         "regions=pre_mpc:%.3f/mpc:%.3f/post_mpc:%.3f/recovery:%.3f/"
         "publish:%.3f/unattributed:%.3fms, checkpoint=%s, "
         "nested=problem_initialization:%.3f/publication_successor:%.3f/"
-        "prediction_marker:%.3fms/points:%zu, observation_only=1",
+        "prediction_marker:%.3fms/points:%zu, "
+        "normal_join=primary:%.3f/stop_lattice:%.3f/stop_successor:%.3f/"
+        "output:%.3f/snapshots:%.3fms, observation_only=1",
         static_cast<unsigned long>(timing.decision_id), elapsed_ms, period_ms,
         timing.pre_mpc_ms, timing.mpc_ms, timing.post_mpc_ms,
         timing.recovery_ms, timing.publish_ms, unattributed_ms,
         timing.checkpoint, timing.problem_initialization_ms,
         timing.publication_successor_ms, timing.prediction_marker_ms,
-        timing.prediction_marker_points);
+        timing.prediction_marker_points, timing.normal_join.primary_ms,
+        timing.normal_join.stop_lattice_ms, timing.normal_join.stop_successor_ms,
+        timing.normal_join.output_ms, timing.normal_join.snapshots_ms);
     }
 
     if (!last_control_callback_telemetry_steady_.has_value()) {
@@ -58798,6 +58823,7 @@ private:
     callback_timing.mpc_ms = std::chrono::duration<double, std::milli>(
       post_mpc_start - mpc_start).count();
     callback_timing.problem_initialization_ms = mpc_->last_problem_initialization_ms;
+    callback_timing.normal_join = mpc_->last_normal_join_timing;
     callback_timing.checkpoint = "mpc-complete";
     auto u = mpc_cycle.control;
     const auto canonical_normal_command =

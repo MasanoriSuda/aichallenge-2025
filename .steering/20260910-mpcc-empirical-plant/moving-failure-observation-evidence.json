@@ -1,0 +1,146 @@
+{
+  "baseline_commit": "edad4e32dc1ce425691cc537b247ca2d6636f7a9",
+  "authority_change": false,
+  "integrated_acceptance": false,
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r10/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/autoware.log",
+      "sha256": "4a03480ab28fba121796b63a2407b7d87513a7087c8aea511a430013564b8dc6"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "sha256": "6bc6c01be42f9bba9ac341247f2f265cc5e9d51834318e9c04c3fb832e825fcc"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d1/mpcc_architecture_snapshots/000000001668-817559151f829c17-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/d2/autoware.log",
+      "sha256": "82db2dfc6733c1c5e329f1b754c5df21536051b514e4b7430800efae646c344e"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/manifest.json",
+      "sha256": "ae569b6aaa278d81f61b832717a2af32c13c27a44aca80a066debae87bf70419"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10/monitor-summary.json",
+      "sha256": "11fa815466330583c616c451f44b6c3afac694e5d0de083693961567bdba6bd1"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-causal-r1/architecture.log",
+      "sha256": "46dd64b5f49587f07ed01eb9a3ea06b8a3e46cc93a73e058f8208974aafa293d"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-causal-r1/complete-rest.log",
+      "sha256": "2b0b25a1e2a031dfa806327a5664ea70c5ba2b0c1ff58e6dea4a20972612678c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-causal-r1/exact-pair.log",
+      "sha256": "257b4d0f394a0e8ff4e22779a5c8f7e73928cb17f6841bd398b0e2ad60c666e4"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-causal-r1/exact-pair.yaml",
+      "sha256": "257b4d0f394a0e8ff4e22779a5c8f7e73928cb17f6841bd398b0e2ad60c666e4"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-causal-r1/manifest.json",
+      "sha256": "13a9445b9c1e71889487a27aea3bb2fc353e5bad984a62af7266c915343752ee"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-causal-r1/public-interval.log",
+      "sha256": "dfd86e68ad40149baabaeb5eb1517e06d6a9f6d5c8b9724f41f848daa68a3bab"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-metrics/d1-callback-samples.json",
+      "sha256": "f1717229b8ece90951280a259160d136441eb83903eea115a95593643d3a443b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-metrics/d1-command-clock-anomalies.json",
+      "sha256": "53b4b1fa6efadd73d340cb3a0fde3e7904c41d8638e1e0a2b0731ad9467b3c39"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-metrics/d1-prediction-samples.json",
+      "sha256": "3d2c42cc2656b515070bd84c4462e93deac34ebd2c05cb10f57d652fc186b728"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-metrics/d2-callback-samples.json",
+      "sha256": "48395895ed45256b8623bc01231487fe5c1c4fbf015a12ea191230312ae4d945"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-metrics/d2-command-clock-anomalies.json",
+      "sha256": "0235167fed4809079c5895ffab251d959856cce200a5ba4542259e5992e10265"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-metrics/d2-prediction-samples.json",
+      "sha256": "563b966b690f7cc9b970e8d8452e2e4b3dba3a82d5bbca13469eb665585cd259"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-metrics/report.json",
+      "sha256": "83e4c78cc33d1b62f6dae2530876cc90a3084e970118faeebfbc25c82e638df1"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r10-public-interval-r2/d1-public-interval.json",
+      "sha256": "483add3d53c2058942077cc1d500369b8d9b85be4fbaaec20b8698f1a03a8361"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r24/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r24/manifest.json",
+      "sha256": "ef9e9eab202dda8efe783c6f591c4c1b822f8610064b84be05b233aa5e095fdb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r24/replay",
+      "sha256": "94762856710987b0414b6b848d9235cf30a1356381849d73ea1a0f3b86051250"
+    }
+  ],
+  "checks": {
+    "build_r25": "26packages pass/4min36s; existing setuptools warning",
+    "tests_r19": "2402entries/62CTestgroups/0errors/failures/skips",
+    "dev2_r10": "rejected D1moving Emergency1670; bothlaunch and D2negativeShiftOut/Pass observed; no6lapcompletion",
+    "exact_pair": "1667accepted0.461575247m;1668terminaldynamicrejected-0.005066955m",
+    "rebound_brake_diagnostic": "1668accepted1.212136504m; capturedscalarprogressanchor; materialized/nativejoined; no runtime promotion",
+    "architecture": "A solved then terminaldynamicreject;B/C/D/Gtargettubeunavailable inconclusive; fullrest2clocks4000iterationreject; physicalimpossibilitynotproven",
+    "tool_error": "initial publicinterval extraction import failed before bagread, source preserved; corrected ROS convert import extraction r2passes",
+    "timing": "1668callback164.662143ms, bagcommandreceiptgap178.093672ms. Packetstamp28.284999367 while bracketingclock28.434999364/28.439999364. Bagreceipt is not actualphysicsapplicationtime",
+    "diagnostic_provenance_limit": "Architecture comparison ran before observation build against edad source; runner did not preserve/hash the standalone comparison executable. Native replay executable/toolr24hash is preserved."
+  }
+}

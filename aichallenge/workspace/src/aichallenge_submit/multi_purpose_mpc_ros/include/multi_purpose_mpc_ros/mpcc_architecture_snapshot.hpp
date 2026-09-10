@@ -118,6 +118,7 @@ enum class AuthorityFailureBoundary
 {
   TerminalContingency,
   FinalAuthority,
+  MovingFinalAuthority,
 };
 
 const char * to_string(AuthorityFailureBoundary boundary) noexcept;

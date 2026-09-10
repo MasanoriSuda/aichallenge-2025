@@ -412,3 +412,14 @@ Nativebeforefails; originalTrack294sourcebuilders solve/prove for both cars.
 CurrentD1source840solves/proves, currentD2source819solverrejects at4000iterations,
 kept separately. Details/evidence in bootstrap-bound-design.md and JSON.
 Freshcommitted dev2-r10next; M4–M6and full integrated acceptance remain open.
+
+2026-09-10: edad4e32dev2-r10 rejected on D1moving Emergency1670. Bothcars
+launch; D2negativeShiftOut reachesPass. Ordinary1667/1668 exactnativepair
+reproduces terminaldynamic boundary; reboundbraking1668passes1.212136504m.
+Actual1669/1670pair missing because stationaryCruise833consumed finalbucket.
+D1callback1668=164.662143ms; packetstamp28.284999367 arrives between public
+clock28.434999364/28.439999364. Backdatedhistory is a causal hypothesis;
+actualphysicsapplicationepoch and heavycallbackproducer need further evidence.
+Observation adds separate firstmovingfailure bucket and eachoverrun's joincosts.
+Buildr25passes26packages; testsr19passes2402entries/62groups/0errors/fails/skips.
+Freshdev2-r11 next; sameM4–M6 remainopen. See moving-failure-observation-design.md.

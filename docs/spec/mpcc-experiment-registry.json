@@ -817,6 +817,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/bootstrap-bound-evidence.json",
       "replay_ready": true,
       "reason": "r9firstCruiseRequests include still-Track294; exact intent mismatch retained, named same-source-intent comparison exposes point-corridor defect; current and inspected sources separate"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r10-moving-loss",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/moving-failure-observation-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact ordinary1667/1668Requests available; later firstmoving1669/1670pairmissing due startupCruise833bucket. Keep event identities distinct."
     }
   ],
   "experiments": [
@@ -5738,6 +5744,76 @@
       "production_impact": "Initial physical bound producer only; all future bounds/proofs and prospective packet binding maintained. Fresh integration pending.",
       "deleted_code": [],
       "revisit_condition": "Different immutableworld or new causal solver evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r10-moving-loss-integrated",
+      "baseline_commit": "edad4e32dc1ce425691cc537b247ca2d6636f7a9",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r10-moving-loss"
+      ],
+      "hypothesis": "Initial physical support repair closes dev2",
+      "changed_dimension": "Fresh edad4e32 bothcars/sixlapattempt",
+      "result": "rejected",
+      "reason": "Bothlaunch;D2negativeShiftOut/Pass;D1Emergency1670. D1/D2adjacentoverrunpairs2/10, no final acceptance",
+      "production_impact": "Observation only; normal authority/model/proofs/settings unchanged. M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh observation-only moving-failure capture and timing attribution"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r10-moving-loss-exact_pair",
+      "baseline_commit": "edad4e32dc1ce425691cc537b247ca2d6636f7a9",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r10-moving-loss"
+      ],
+      "hypothesis": "Ordinary terminal viability boundary reproduces in native code",
+      "changed_dimension": "Same saved1667/1668 histories/body/proposedpacket/source1148/peers",
+      "result": "accepted",
+      "reason": "Accepted0.461575247m ->terminaldynamicrejected-0.005066955m; allnormalconditions unchanged",
+      "production_impact": "Observation only; normal authority/model/proofs/settings unchanged. M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed inputs or changed sharedmodel/proof"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r10-moving-loss-brake",
+      "baseline_commit": "edad4e32dc1ce425691cc537b247ca2d6636f7a9",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r10-moving-loss"
+      ],
+      "hypothesis": "Immediate braking can remain physically feasible at1668",
+      "changed_dimension": "Rebound braking packet/body, original scalar progress anchor; same source/world",
+      "result": "accepted",
+      "reason": "Stopdynamicclearance1.212136504m, materialized/joined. Not actual1670or livewaypointreplay; no authoritypromotion",
+      "production_impact": "Observation only; normal authority/model/proofs/settings unchanged. M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Exact movingfailure scene and callbackcost reveal causal producer"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r10-moving-loss-architecture",
+      "baseline_commit": "edad4e32dc1ce425691cc537b247ca2d6636f7a9",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r10-moving-loss"
+      ],
+      "hypothesis": "Mission replacement resolves the sealed1668scene",
+      "changed_dimension": "A/B/C/D/G and current-world complete-rest2clocks",
+      "result": "inconclusive",
+      "reason": "A solved15.0498ms thenpeerproofreject;B/C/D/Gtargetunavailable;complete-rest4000iterationreject. No global infeasibility certificate",
+      "production_impact": "Observation only; normal authority/model/proofs/settings unchanged. M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Capture relevant target tube or new causal formulation evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r10-moving-loss-recording",
+      "baseline_commit": "edad4e32dc1ce425691cc537b247ca2d6636f7a9",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r10-moving-loss"
+      ],
+      "hypothesis": "First-failure buckets preserve first moving loss after startup",
+      "changed_dimension": "Add third finite boundary; carry existing timing breakdown into eachoverrun",
+      "result": "accepted",
+      "reason": "Queue regression preserves first startupandmoving world/artifact whileblocked;buildr25/package2402pass. No control/solver/model/thresholdchange",
+      "production_impact": "Observation only; normal authority/model/proofs/settings unchanged. M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh dev2-r11 must preserve firstmovingworld; diagnostic code may not be counted as a controller repair"
     }
   ]
 }

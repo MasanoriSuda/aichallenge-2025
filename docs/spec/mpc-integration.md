@@ -4347,3 +4347,10 @@ dev2-r5では相対進捗中止を確認した一方、ShiftOut中の連続callb
 既存の超過ログに問題初期化・公開後の候補生成・予測markerの時間内訳を追加し、
 制御周期・物理証明・出力を変更せず原因を測定する。
 [観測範囲と残る受入れ](../../.steering/20260910-mpcc-empirical-plant/timing-attribution-design.md)を参照。
+
+起動中の最初の失敗が、走行中の最初のnormal authority喪失の記録枠を使い切らないよう、
+観測分類に`moving-normal-authority-unavailable`を加える。既存のterminal/最終失敗を
+残し、intent・side・3分類ごとに最初の不変入力だけを保存する。有限速度が0.1m/sを
+超える分類は評価監視と同じ観測条件であり、制御判断には使わない。超過callbackには
+既存のprimary/lattice/Stop/output/snapshot内訳を載せ、集約ログのthrottleによる
+初回の計測欠落を防ぐ。[根拠と検証](../../.steering/20260910-mpcc-empirical-plant/moving-failure-observation-design.md)を参照。

@@ -503,11 +503,17 @@ TEST(MpccArchitectureSnapshot, FirstBoundaryRecorderPreservesQueuedFinalWorldAnd
     ObservationAdmission::Queued);
   EXPECT_EQ(recorder.submit(observation(1003U, AuthorityFailureBoundary::FinalAuthority)),
     ObservationAdmission::Duplicate);
+  // A startup failure cannot consume the first moving failure's evidence.
+  EXPECT_EQ(recorder.submit(observation(1003U, AuthorityFailureBoundary::MovingFinalAuthority)),
+    ObservationAdmission::Queued);
+  EXPECT_EQ(recorder.submit(observation(1004U, AuthorityFailureBoundary::MovingFinalAuthority)),
+    ObservationAdmission::Duplicate);
   release.set_value();
   recorder.stop();
-  ASSERT_EQ(completed.size(), 2U);
+  ASSERT_EQ(completed.size(), 3U);
   EXPECT_EQ(completed[0].first, 1001U);
   EXPECT_EQ(completed[1].first, 1002U);
+  EXPECT_EQ(completed[2].first, 1003U);
   EXPECT_TRUE(io_off_callback);
   ASSERT_EQ(completed[1].second.status, RecordStatus::Written) << completed[1].second.detail;
   const auto node = YAML::LoadFile(completed[1].second.snapshot_file.string());
@@ -519,6 +525,12 @@ TEST(MpccArchitectureSnapshot, FirstBoundaryRecorderPreservesQueuedFinalWorldAnd
   ASSERT_EQ(previous["status"].as<std::string>(), "present");
   EXPECT_EQ(previous["request"]["decision_id"].as<std::uint64_t>(), 1001U);
   EXPECT_EQ(previous["inspected_artifact"]["source_sequence"].as<std::uint64_t>(), 10020U);
+  ASSERT_EQ(completed[2].second.status, RecordStatus::Written) << completed[2].second.detail;
+  const auto moving = YAML::LoadFile(completed[2].second.snapshot_file.string());
+  EXPECT_EQ(moving["source"]["sequence"].as<std::uint64_t>(), 1003U);
+  EXPECT_EQ(moving["failure_outcome"].as<std::string>(), "moving-normal-authority-unavailable");
+  EXPECT_EQ(moving["publication_bundle"]["execution_evidence"]["source_sequence"].as<std::uint64_t>(),
+    10030U);
   EXPECT_EQ(recorder.submit(observation(1004U, AuthorityFailureBoundary::FinalAuthority)),
     ObservationAdmission::Stopped);
   std::filesystem::remove_all(root);

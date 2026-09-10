@@ -663,7 +663,10 @@ if(BUILD_TESTING)
     ament_target_dependencies(test_prediction_markers rclcpp visualization_msgs std_msgs)
   endif()
   ament_add_gtest(test_mpcc_vehicle_model test/test_mpcc_vehicle_model.cpp)
-  target_link_libraries(test_mpcc_vehicle_model ${PROJECT_NAME}_mpcc_vehicle_model)
+  target_link_libraries(test_mpcc_vehicle_model
+    ${PROJECT_NAME}_mpcc_vehicle_model
+    ${PROJECT_NAME}_recovery_footprint
+  )
   find_package(ament_cmake_pytest REQUIRED)
 
   ament_add_gtest(test_mpcc_steering_state_contract

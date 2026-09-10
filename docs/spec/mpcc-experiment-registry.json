@@ -955,6 +955,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/common-stop-candidate-evidence.json",
       "replay_ready": true,
       "reason": "Exact first D1953/source261wall failure, separate previous952/source270, terminal programme comparison under the original physical gates"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-peer-separation-r22",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/peer-separation-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact first D11024/source338 and separate previous1023/source365, original common programme and enclosing rectangle versus interval support separation"
     }
   ],
   "experiments": [
@@ -8022,6 +8028,294 @@
         "Assumption that only two lateral tracking references can supply a feasible stopping programme"
       ],
       "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-integrated-r22",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Common Stop candidate closes moving authority",
+      "changed_dimension": "Fresh same-build dev2",
+      "result": "rejected",
+      "reason": "First D1Emergency1024/2.73mps; p99/adjacent overruns still fail. Captured338 and actualprevious365 are distinct. D2failure follows D1Emergency.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-exact-r102",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Frozen native replay reproduces the actual last-reference rejection",
+      "changed_dimension": "Exact original request replay",
+      "result": "accepted",
+      "reason": "D11024wall12.999999729matches; separateprevious1023source365accepts.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-persistent-a-1",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: persistent-a",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=16382678420452771870 solver=solved solve_ms=20.3694 terminal_progress=6.66519 terminal_velocity=3.93023 lateral_reserve=1.15674 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-stateless-left-b-2",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: stateless-left-b",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=stateless-left-b stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-stateless-right-b-3",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: stateless-right-b",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=stateless-right-b stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-rough-left-c-4",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: rough-left-c",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=rough-left-c stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-rough-right-c-5",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: rough-right-c",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=rough-right-c stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-offline-left-d-6",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: offline-left-d",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=offline-left-d stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-offline-right-d-7",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: offline-right-d",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=offline-right-d stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-production-left-g-8",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: production-left-g",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=production-left-g stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-architecture-production-right-g-9",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: production-right-g",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=production-right-g stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=12838376885074605643 solver=solve-rejected solve_ms=111.065 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0832563, dua_res=0.00162939, failed_iterate_row=432, value=-3.15355, bounds=[-2.9596,1.3296], violation=0.193954, tolerance=0.00415355, normalized=46.6958, row_semantic=input-box/stage=18/element=0, first_vtheta=coupled/inconclusive/declared:[0,10.5776]/implied:[0,10.5776]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000001024-b22b13c19f75364b-cruise-side-neutral-initial-solve-rejected/snapshot.yaml; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-complete-rest-current-world-complete-rest-y-2",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=2375278954737456923 solver=solved solve_ms=24.0833 terminal_progress=14.9148 terminal_velocity=0 lateral_reserve=1.14362 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.62457,1.12943]/mean=-0.361174/bounds=0 steer_rate=[-0.606692,0.581717]/mean=-0.0427449/bounds=0/sign_changes=7 sequence=[0.25:1.03839:-0.537453;0.25:1.0968:-0.603689;0.25:0.730023:-0.229484;0.25:0.92099:0.454179;0.25:1.11132:0.225858;0.25:1.12943:-0.33049;0.25:0.99234:-0.179847;0.25:0.870127:0.142191;0.25:0.770852:0.480253;0.25:0.953511:0.205529;0.25:0.579505:-0.0950485;0.25:-0.729254:-0.606692;0.25:-2.17221:-0.37929;0.25:-1.85377:0.0187449;0.25:-1.95688:0.52415;0.25:-2.15755:0.581717;0.25:-2.2879:0.192091;0.25:-1.91115:-0.392568;0.25:-1.7235:-0.556424;0.25:-2.62457:0.231375] detail=accepted; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-prior-programme-r105",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Retaining actual previous common programme suffices for current join",
+      "changed_dimension": "Derived current-world materialization and original publication-clock suffix",
+      "result": "rejected",
+      "reason": "Derived previous1023/source365Stop at1024has full programme but current peer rejects13.514999729, minimum−0.153464524m. No source association repaired.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-support-r106",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Unused corners of the enlarged rectangle cause common programme peer rejection",
+      "changed_dimension": "Diagnostic outward support enclosure",
+      "result": "accepted",
+      "reason": "Full unchanged x/y/yaw population and CA1circle separate throughrest with128candidate plane directions; min0.09378643m. Directions are proof hypotheses, not response sampling.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-one-direction-r107",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "Nearest enclosing rectangle point supplies a sufficient proof direction",
+      "changed_dimension": "One analytic candidate direction, no search budget increase",
+      "result": "accepted",
+      "reason": "One direction per rejected pose population proves full programme, minimum0.02546312m.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-all-proof-r108",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "The independent separation proof closes all existing authority joins",
+      "changed_dimension": "Isolated applied peer geometry only",
+      "result": "accepted",
+      "reason": "Isolated exact D11024accepts11.82ms through full certificate/production/materialization/join. D2stillrejects originalpeer15.014999681.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-peer-separation-r22-production-local",
+      "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+      "snapshot_ids": [
+        "20260911-nine-state-peer-separation-r22"
+      ],
+      "hypothesis": "The integrated geometric bound preserves every physical and identity gate",
+      "changed_dimension": "Conservative separating-plane helper and peer gate",
+      "result": "accepted",
+      "reason": "Buildr47/testsr39pass; new captured/contact/random geometry tests and fresh native regressions pass. Missing-history and later D2peer cases remain rejected. r46test linker failure corrected by explicit dependency.",
+      "production_impact": "Second conservative geometric proof only; original full physical population and all hard gates remain. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Exclusive use of one enlarged footprint rectangle for peer separation"
+      ],
+      "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
     }
   ]
 }

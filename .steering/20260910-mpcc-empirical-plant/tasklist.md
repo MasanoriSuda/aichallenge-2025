@@ -19,7 +19,8 @@
 - [x] Capture r19slow alternates; stream required checks and remove duplicate solved-suffix proof; native regressions/buildr43/testsr36.
 - [x] Reproduce r20wall failure with original final reference; intersect independent numerical images; wall fixture/native/buildr44/testsr37.
 - [x] Audit r21wall and previous Stop programme; compare and certify a common constant-steering terminal candidate; buildr45/testsr38/native regressions.
-- [ ] Validate fresh moving failures and actual publication timing after the terminal candidate repair.
+- [x] Diagnose r22common-program peer rejection as unused enclosing-rectangle corners; independent interval separation, buildr47/testsr39/native regressions.
+- [ ] Validate fresh moving failures and actual publication timing after the peer geometry repair.
 - [ ] Validate integrated applied-program behavior and25ms timing in fresh runs.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.
 - [ ] Fresh single/dev2 acceptance and causal repair of any first failure.

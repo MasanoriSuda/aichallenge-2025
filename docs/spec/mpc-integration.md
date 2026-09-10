@@ -136,6 +136,13 @@ testsr37=2433記録/62groupで失敗0。別の相手車拒否、実走25ms・再
 buildr45=26、testsr38=2434記録/62groupで失敗0。実走25ms・再発進・完走は未検証。
 [停止候補の比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/common-stop-candidate-design.md)を参照。
 
+2026-09-11のdev2-r22はD1decision1024、2.73m/sで通常認証を失った。定操舵停止候補は壁を通るが、
+車体群を包む長方形の余分な角が相手車と重なる。元の全姿勢範囲・車体余裕・相手車円を保ち、
+全車体頂点の区間射影による分離証明を追加した。長方形が重なる場合だけ1方向を確認する。
+元のD1入力は完全認証・最終指令・停止計画引き継ぎまで合格し、後続D2の拒否は維持する。
+buildr47=26、testsr39=2437記録/62groupで失敗0。実走25ms・再発進・完走は未検証。
+[相手車との幾何分離](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/peer-separation-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

@@ -1,20 +1,20 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。直近dev2-r21はD1953、1.88m/sでEmergency・25ms未達。**
+**全体は未完。直近dev2-r22はD11024、2.73m/sでEmergency・25ms未達。**
 
-- 元の最初の通常指令を保ち、次周期から同じ操舵値で制動する停止候補を追加した。
-  元の壁・相手車・Follow・入力全応答・完全停止・指令同一性条件はすべて維持する。
-- 過去の壁拒否2件と相手車拒否1件は、完全認証・最終指令・停止計画引き継ぎまで合格。
-  完成済み停止軌道や実際の入力履歴欠落の拒否も維持する。
-- buildr45:26package、testsr38:2434記録/62group、error/failure/skip0。
-  対象83testsと元入力の新規native再生も合格。数値モデルは4210fa89から変更なし。
-- 次はこの修正の新規dev2-r22。ローカル再生時間を実走25msの合格には扱わない。
+- 全車体姿勢を包む長方形の余分な角による相手車拒否を再現した。
+  元の全範囲・車体余裕・相手車円を維持し、全頂点の区間射影による分離証明を追加した。
+- 元D11024は完全認証・最終指令・停止計画引き継ぎまで合格。
+  後続D2の相手車拒否と実際の入力履歴欠落は引き続き拒否する。
+- buildr46で新テストのリンク依存欠落を検出・修正。buildr47:26package、
+  testsr39:2437記録/62group、error/failure/skip0。新規native再生も合格。
+- 次は新規dev2-r23。ローカル再生時間を実走25msの合格には扱わない。
 
-[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/common-stop-candidate-design.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/common-stop-candidate-evidence.json)、
+[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/peer-separation-design.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/peer-separation-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-実送信と認証時刻の整合、M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
+相手車モデルの更新、実送信と認証時刻の整合、M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
 同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
 モデル誤差・接触・輸送の保証は未検証。安全余裕・合格基準は維持する。
 

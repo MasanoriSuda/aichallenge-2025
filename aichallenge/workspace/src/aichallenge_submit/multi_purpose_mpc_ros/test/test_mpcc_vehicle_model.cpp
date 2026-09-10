@@ -1,4 +1,5 @@
 #include "multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp"
+#include "multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
 #include "mpcc_resting_packet_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
@@ -590,4 +591,115 @@ TEST(MpccAppliedInput, AcceptingValidatorPreservesEveryOriginalSampleAndComplete
   EXPECT_EQ(checked.tube->context_fingerprint, original.tube->context_fingerprint);
   EXPECT_DOUBLE_EQ(checked.tube->rest_sec, original.tube->rest_sec);
   EXPECT_DOUBLE_EQ(checked.tube->source_to_rest.back().endpoint_body[3].upper, 0);
+}
+
+TEST(MpccVehicleModel, CapturedPeerSeparatesFromAllFootprintsDespiteEnclosingCorner)
+{
+  namespace num = vehicle::numerical;
+  namespace rec = multi_purpose_mpc_ros::recovery_footprint;
+  // dev2-r22 D1 decision1024/source338, first common-program peer rejection.
+  // Original full swept pose ranges, source pose, footprint and CA1 peer.
+  auto box = num::point(vehicle::State{});
+  box[0] = {1.5779542437334122, 2.6294458569680037};
+  box[1] = {.091724902986313681, .62188217282684899};
+  box[2] = {.20418834353971457, .45957083474776345};
+  const rec::Pose2D origin{89628.34931049822, 43132.880683355696, 1.8705564481804007};
+  const rec::FootprintExtents original{1.615, .51, .768, .768, .05};
+  rec::CircleObstacle peer{89632.56551890414, 43131.87186630296,
+    -.6553381184394249, .7952964318769234, 1.9309999998882412,
+    -.7593027315952433, .5258057092313208, 1};
+  const double t0 = 13.559999728999999 - 12.104999729, t1 = t0 + .005;
+  peer.radius_m = num::up(peer.radius_m +
+    num::up(peer.maximum_speed(t0, t1) * num::up((t1 - t0) / 2)));
+  const auto center = peer.predicted_center((t0 + t1) / 2);
+  const auto enclosure = num::footprint(box, original);
+  const auto to_world = [&](const rec::Pose2D & p) {
+    return rec::Pose2D{
+      origin.x_m + std::cos(origin.yaw_rad) * p.x_m - std::sin(origin.yaw_rad) * p.y_m,
+      origin.y_m + std::sin(origin.yaw_rad) * p.x_m + std::cos(origin.yaw_rad) * p.y_m,
+      origin.yaw_rad + p.yaw_rad};
+  };
+  const auto enclosing = rec::circle_obstacle_clearance_at_time(
+    enclosure.extents, to_world(enclosure.pose), peer, (t0 + t1) / 2);
+  ASSERT_TRUE(enclosing);
+  EXPECT_LT(*enclosing, 0);
+  const auto separated = num::separating_circle_clearance(
+    box, original, origin, enclosure, center[0], center[1], peer.radius_m);
+  ASSERT_TRUE(separated);
+  EXPECT_GT(*separated, .11);
+  for (const double x : {box[0].lo, box[0].hi}) {
+    for (const double y : {box[1].lo, box[1].hi}) {
+      for (int i = 0; i <= 64; ++i) {
+        const double yaw = box[2].lo + (box[2].hi - box[2].lo) * i / 64;
+        const auto exact = rec::circle_obstacle_clearance_at_time(
+          original, to_world({x, y, yaw}), peer, (t0 + t1) / 2);
+        ASSERT_TRUE(exact);
+        EXPECT_LE(*separated, *exact);
+      }
+    }
+  }
+}
+
+TEST(MpccVehicleModel, SeparatingPlaneBoundsIndependentNativeFootprintSamples)
+{
+  namespace num = vehicle::numerical;
+  namespace rec = multi_purpose_mpc_ros::recovery_footprint;
+  std::mt19937_64 random(20260911);
+  std::uniform_real_distribution<double> unit(0, 1);
+  const rec::FootprintExtents original{1.615, .51, .768, .768, .05};
+  std::size_t certified = 0;
+  for (std::size_t scene = 0; scene < 1000; ++scene) {
+    const rec::Pose2D origin{90000 + 10 * unit(random), 40000 + 10 * unit(random),
+      2 * M_PI * unit(random) - M_PI};
+    auto box = num::point(vehicle::State{});
+    for (std::size_t j = 0; j < 3; ++j) {
+      const double mid = 2 * unit(random) - 1;
+      const double radius = unit(random) * (j == 2 ? 3.2 : .7);
+      box[j] = {mid - radius, mid + radius};
+    }
+    const auto enclosure = num::footprint(box, original);
+    const rec::CircleObstacle peer{origin.x_m + 12 * unit(random) - 6,
+      origin.y_m + 12 * unit(random) - 6, 0, 0, .1 + 2 * unit(random)};
+    const auto separated = num::separating_circle_clearance(
+      box, original, origin, enclosure, peer.x_m, peer.y_m, peer.radius_m);
+    if (!separated) continue;
+    ++certified;
+    ASSERT_GE(*separated, 0);
+    for (std::size_t sample = 0; sample < 32; ++sample) {
+      std::array<double, 3> pose;
+      for (std::size_t j = 0; j < 3; ++j) {
+        const double fraction = sample < 8 ? static_cast<double>((sample >> j) & 1) : unit(random);
+        pose[j] = box[j].lo + (box[j].hi - box[j].lo) * fraction;
+      }
+      const rec::Pose2D world{
+        origin.x_m + std::cos(origin.yaw_rad) * pose[0] - std::sin(origin.yaw_rad) * pose[1],
+        origin.y_m + std::sin(origin.yaw_rad) * pose[0] + std::cos(origin.yaw_rad) * pose[1],
+        origin.yaw_rad + pose[2]};
+      const auto exact = rec::circle_obstacle_clearance_at_time(original, world, peer, 0);
+      ASSERT_TRUE(exact);
+      EXPECT_LE(*separated, *exact);
+    }
+  }
+  EXPECT_GT(certified, 100U);
+}
+
+TEST(MpccVehicleModel, SeparatingPlaneRejectsContactUncertainRotationAndInvalidInput)
+{
+  namespace num = vehicle::numerical;
+  namespace rec = multi_purpose_mpc_ros::recovery_footprint;
+  const rec::FootprintExtents original{1.615, .51, .768, .768, .05};
+  const rec::Pose2D origin{};
+  auto box = num::point(vehicle::State{});
+  const auto enclosure = num::footprint(box, original);
+  for (const double peer_x : {0., 1.615 + .05 + 1 - 1e-6, 1.615 + .05 + 1}) {
+    EXPECT_FALSE(num::separating_circle_clearance(box, original, origin, enclosure, peer_x, 0, 1));
+  }
+  EXPECT_TRUE(num::separating_circle_clearance(
+    box, original, origin, enclosure, 1.615 + .05 + 1 + 1e-6, 0, 1));
+  box[2] = {-M_PI, M_PI};
+  EXPECT_FALSE(num::separating_circle_clearance(
+    box, original, origin, num::footprint(box, original), 2, 0, 1));
+  box[0] = {NAN, NAN};
+  EXPECT_THROW(num::separating_circle_clearance(
+    box, original, origin, enclosure, 5, 0, 1), std::runtime_error);
 }

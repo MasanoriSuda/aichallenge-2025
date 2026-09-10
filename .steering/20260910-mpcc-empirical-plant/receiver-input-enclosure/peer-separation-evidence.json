@@ -1,0 +1,1716 @@
+{
+  "baseline_commit": "5f67351769de19e704bc1b1ef9d5e7a55ff8af77",
+  "integrated_acceptance": false,
+  "run": "output/20260910-nine-state-dev2-r22",
+  "first_failure": {
+    "domain": 1,
+    "decision": 1024,
+    "speed_mps": 2.73,
+    "waypoint": 35,
+    "wall_sec": 1789072121.8430176,
+    "previous_decision": 1023,
+    "previous_published_source": 365,
+    "exact_inspected_source": 338,
+    "final_reference_reason": "AppliedProgram/WallRejected at12.999999729",
+    "first_common_programme_reason": "AppliedProgram/PeerRejected d2 from13.559999729; full minimum−0.101961831m"
+  },
+  "chronology": "D2decision1083peer failure occurs after D1Emergency; do not treat it as an independent first failure.",
+  "change": "When the enclosing footprint rectangle overlaps a peer circle, try one separating direction from its nearest point. Outward interval projection of all original margin-expanded corners across the complete x/y/yaw ranges must prove separation from the original swept CA1 peer circle. No state/input/model/margin/rate/solver/authority change.",
+  "causal_evidence": "r105previous actual programme suffix also fails current peer. r106128directions proves full common programme separated; r107one nearest-rectangle direction suffices. r108isolated full production/materialization/join accepts exact D11024; D21083remains rejected at original time.",
+  "validation": {
+    "build": "r46failed: new test missed recovery_footprint link dependency; corrected r47:26packages/13.4s",
+    "package": "r39:2437records/62groups/zeroerrors-failures-skips/29.00s",
+    "geometry": "Captured unused enclosing corner;1000random pose populations with independent native footprint samples; contact/tangent/full-rotation/invalid ranges. No finite sampling used as runtime proof.",
+    "native": {
+      "wall-r22": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 1023,
+          "source": 365,
+          "captured_request": {
+            "elapsed_ms": 13.971473,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 13.57499973,
+            "program_commands": 2,
+            "samples": 301,
+            "peer_clearance_m": 0.14943943369418045,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 13.970512,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 13.57499973,
+            "program_commands": 2,
+            "samples": 301,
+            "peer_clearance_m": 0.14943943369418045,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1024,
+          "source": 338,
+          "captured_request": {
+            "elapsed_ms": 11.733733,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 13.614999728999999,
+            "program_commands": 2,
+            "samples": 303,
+            "peer_clearance_m": 0.006229782068236656,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 11.723855,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 13.614999728999999,
+            "program_commands": 2,
+            "samples": 303,
+            "peer_clearance_m": 0.006229782068236656,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "peer-r22": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1082,
+          "source": 597,
+          "captured_request": {
+            "elapsed_ms": 11.787975,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.664999682,
+            "program_commands": 2,
+            "samples": 289,
+            "peer_clearance_m": 0.24907738556940817,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 11.386503,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.664999682,
+            "program_commands": 2,
+            "samples": 289,
+            "peer_clearance_m": 0.24907738556940817,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1083,
+          "source": 597,
+          "captured_request": {
+            "elapsed_ms": 21.614105,
+            "reason": "applied-program-unavailable",
+            "applied_reason": 7,
+            "program_reason": 0,
+            "prediction_reason": 8,
+            "rejected_sec": 15.014999681,
+            "rejected_peer": "d1",
+            "production": "retained-proof-unavailable"
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 21.586373,
+            "reason": "applied-program-unavailable",
+            "applied_reason": 7,
+            "program_reason": 0,
+            "prediction_reason": 8,
+            "rejected_sec": 15.014999681,
+            "rejected_peer": "d1",
+            "production": "retained-proof-unavailable"
+          }
+        }
+      },
+      "wall-r21": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 952,
+          "source": 270,
+          "captured_request": {
+            "elapsed_ms": 10.602805,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.824999760999999,
+            "program_commands": 2,
+            "samples": 230,
+            "peer_clearance_m": 0.7807584055114809,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 10.461921,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.824999760999999,
+            "program_commands": 2,
+            "samples": 230,
+            "peer_clearance_m": 0.7807584055114809,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 953,
+          "source": 261,
+          "captured_request": {
+            "elapsed_ms": 9.880893,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.87499976,
+            "program_commands": 2,
+            "samples": 231,
+            "peer_clearance_m": 0.7978390058828739,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 9.867759,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.87499976,
+            "program_commands": 2,
+            "samples": 231,
+            "peer_clearance_m": 0.7978390058828739,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "wall-r20": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 963,
+          "source": 277,
+          "captured_request": {
+            "elapsed_ms": 11.45975,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.424999751,
+            "program_commands": 2,
+            "samples": 260,
+            "peer_clearance_m": 1.390907809840646,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 11.137697,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.424999751,
+            "program_commands": 2,
+            "samples": 260,
+            "peer_clearance_m": 1.390907809840646,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 964,
+          "source": 260,
+          "captured_request": {
+            "elapsed_ms": 9.983685,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.45499975,
+            "program_commands": 2,
+            "samples": 263,
+            "peer_clearance_m": 1.41015037083353,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 9.952698,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.45499975,
+            "program_commands": 2,
+            "samples": 263,
+            "peer_clearance_m": 1.41015037083353,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "peer-r19": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000001071-d426f9a520aa2c4e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1070,
+          "source": 692,
+          "captured_request": {
+            "elapsed_ms": 8.354545,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.619999691,
+            "program_commands": 2,
+            "samples": 169,
+            "peer_clearance_m": 0.04887960476041098,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 8.219352,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.619999691,
+            "program_commands": 2,
+            "samples": 169,
+            "peer_clearance_m": 0.04887960476041098,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1071,
+          "source": 692,
+          "captured_request": {
+            "elapsed_ms": 8.074681,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.664999691,
+            "program_commands": 2,
+            "samples": 170,
+            "peer_clearance_m": 0.005183089134396246,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 8.037722,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.664999691,
+            "program_commands": 2,
+            "samples": 170,
+            "peer_clearance_m": 0.005183089134396246,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "accepted-r17": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r17/d1/mpcc_architecture_snapshots/000000001020-7b13fc78d1f505da-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 1019,
+          "source": 544,
+          "captured_request": {
+            "elapsed_ms": 6.459366,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.409999661999999,
+            "program_commands": 2,
+            "samples": 66,
+            "peer_clearance_m": 0.6299779555727445,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 6.372894,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.409999661999999,
+            "program_commands": 2,
+            "samples": 66,
+            "peer_clearance_m": 0.6299779555727445,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1020,
+          "source": 619,
+          "captured_request": {
+            "elapsed_ms": 6.616079,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.429999662,
+            "program_commands": 1,
+            "samples": 67,
+            "peer_clearance_m": 0.6284901853970306,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 6.613765,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.429999662,
+            "program_commands": 1,
+            "samples": 67,
+            "peer_clearance_m": 0.6284901853970306,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "signed-r16": {
+        "authority": false,
+        "source": 124,
+        "decision": 795,
+        "captured": {
+          "elapsed_ms": 0.027652,
+          "reason": "intent-mismatch",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 1,
+          "program_reason": 1,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "intent-mismatch"
+        },
+        "published_upstream_retained": {
+          "elapsed_ms": 0.867755,
+          "reason": "accepted",
+          "production": "available",
+          "applied_certificate": true,
+          "rest_sec": 7.9149998230000005,
+          "minimum_peer_clearance_m": 1.0726770723374652,
+          "applied_reason": 0,
+          "program_reason": 0,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "invalid-current-state"
+        },
+        "published_stop": "accepted",
+        "bundle": "available",
+        "joined_published_stop": {
+          "elapsed_ms": 0.243586,
+          "reason": "accepted",
+          "production": "available",
+          "applied_certificate": true,
+          "rest_sec": 7.9149998230000005,
+          "minimum_peer_clearance_m": 1.0726770723374652,
+          "applied_reason": 0,
+          "program_reason": 0,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "invalid-current-state"
+        }
+      },
+      "gap-r18": {
+        "authority": false,
+        "source": 249,
+        "decision": 839,
+        "captured": {
+          "elapsed_ms": 0.024576,
+          "reason": "intent-mismatch",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 1,
+          "program_reason": 1,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "intent-mismatch"
+        },
+        "published_upstream_retained": {
+          "elapsed_ms": 1.568037,
+          "reason": "applied-program-unavailable",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 3,
+          "program_reason": 0,
+          "prediction_reason": 5,
+          "rejected_sec": null,
+          "nominal_only": "accepted",
+          "direct_applied_reason": 3,
+          "direct_prediction": 5
+        },
+        "published_stop": "accepted",
+        "bundle": "available",
+        "joined_published_stop": {
+          "elapsed_ms": 0.937626,
+          "reason": "applied-program-unavailable",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 3,
+          "program_reason": 0,
+          "prediction_reason": 5,
+          "rejected_sec": null,
+          "nominal_only": "accepted",
+          "direct_applied_reason": 3,
+          "direct_prediction": 5
+        }
+      }
+    }
+  },
+  "run_callback": {
+    "d1": {
+      "count": 1403,
+      "mean_ms": 9.360789152530291,
+      "p95_ms": 24.09171699999999,
+      "p99_ms": 36.669880479999996,
+      "maximum_ms": 123.524797,
+      "overflow": 0,
+      "adjacent_overrun_pairs": 28,
+      "meaning": "All emitted individual callback measurements, including startup/finish. Final incomplete telemetry window is unobserved. Duration ends before its own telemetry emission."
+    },
+    "d2": {
+      "count": 1379,
+      "mean_ms": 7.961672351704133,
+      "p95_ms": 22.55152229999999,
+      "p99_ms": 28.68667404,
+      "maximum_ms": 69.41765,
+      "overflow": 0,
+      "adjacent_overrun_pairs": 6,
+      "meaning": "All emitted individual callback measurements, including startup/finish. Final incomplete telemetry window is unobserved. Duration ends before its own telemetry emission."
+    }
+  },
+  "current_limits": "Freshdev2-r23next. Peer-model evolution, actual publication-clock agreement, live recursive Stop/rest/restart and25ms, M4–M6remain open. Replay times do not establish live acceptance.",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r22/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "ddc32d119df6b7cc1f0102f3cd60006cbf4ac4e94075a3b02d91f3f6dcd5a606"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "7bcdfa3172eb624355e88365433bfd76e2a5b3d81800b11e957f5444ffc47c1f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/launch.log",
+      "sha256": "415c0e95773e64aa0ec6ca41e81568b28bb9598fcb1184033e907b2513abdef9"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/manifest.json",
+      "sha256": "daa8e7ae5e861bc672bb7d7d5fd1b33f10f55a29e41ff952834b9d0cf5e1042d"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/monitor-summary.json",
+      "sha256": "0f886923d59d2eb6877abeb269b9e51505dfdae549816c5f79833e83aa7bacde"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r22/mpcc-source.patch",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r105/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r105/manifest.json",
+      "sha256": "5eb9032f340df9297856fe75a8b756a3ac8c56dbe9eaacb78bc5ae30ff6f04d7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r105/r22d1.yaml",
+      "sha256": "90f9974809998ed5c09d79d32f0c97902bf9122c1eb405e5fcc7622931091089"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r105/r22d2.yaml",
+      "sha256": "c7a402651c72e12609a884d8d6e6b3500546c5dd2e02e90b887e17ac7a94f8b4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r105/replay",
+      "sha256": "b7bad977057b938547e7f4925f823b4d3de8c4d125ed02fd0c6a1f3552d37487"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r106/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r106/manifest.json",
+      "sha256": "75ba390d31a56fc515f734a8e89f96242cf5915222e1e8795ed895a25cacfc99"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r106/r22d1.yaml",
+      "sha256": "5269a77960f3cda002a1842f6d5cfa7547439c38f0ef5cfc0941dd3b3fef17a1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r106/r22d2.yaml",
+      "sha256": "313028d4cb77c78fbd5876591dc0dd66ca91dfd34a0d5b140b8e0e893842db1a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r106/replay",
+      "sha256": "c544c8bdb1c31a3384dd354d9391c836c40c29fe1d1eb10d48aea8e77203eeb8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r106/source.cpp",
+      "sha256": "321df24d143f1d9da48a2af8272b7706ef4019368fc26b0037b7f8cda0296137"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r107/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r107/manifest.json",
+      "sha256": "98543360c71ee57c186f7a06804e4ebca7d8668b7af7d8aa24e9f031d413b269"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r107/r22d1.yaml",
+      "sha256": "0807d64d8d9b4b3f287c2d4cd19f5dffb01bfbdb40ee934613adbb10ff96990c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r107/replay",
+      "sha256": "4dfb83c1b886bc93d170d6409e7bb1a1331d7b917b9c0f5ce9f33e045d94552c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r107/source.cpp",
+      "sha256": "0609c0c83963ff8cc4ff606b10fc10c5ed0b80f95670d6d5866f58c3129b1625"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/generator.py",
+      "sha256": "12dc7d334902971e5ca290806e04aea9720e93480a1e57775a99297549e2522e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/include/multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp",
+      "sha256": "9aff9c988f6d23f476df212ae2afcff3c53740fb175bc5fbb17758d9d5c14416"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/manifest.json",
+      "sha256": "a774427c4045a1c561c0ea408d5ad56abee9104e85f0e2dae4de826159de3180"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "98392826409d140ec9a582ebb1f192ae7ec5e120a0f3dce739d905397767448b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/r22d1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/r22d1.yaml",
+      "sha256": "00eaca5f0c28412ae1c16279cb42128f1b7cb2a0be439420ad3bab8e5bd52d3c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/r22d2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/r22d2.yaml",
+      "sha256": "1126191311c71e403ac0b9e543c4e762f9c5c1fcacbb72e7050ea00423b10cc0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/replay",
+      "sha256": "4dcd093b1cfd086429f6cb768f2e5cd9edd075b5b8c572f32b1a0a1e0b5b00fd"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r108/separation.inc",
+      "sha256": "4e5b29f319c661de07e8fca9f307cae1e37bb0ad124fdd3a71d18b04421e9b74"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r109/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r109/manifest.json",
+      "sha256": "158943e28d165fbe8e982b12e4d7c14be1a155fe95660deac1f0075403bb1470"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r109/replay",
+      "sha256": "6277d67009ada5ef9e85d1957ed1328f07ea8f368d96b1f6c34979e94a76d1ee"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r110/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r110/manifest.json",
+      "sha256": "86c87c9b349c8430f7700b895f2f6ceee862dbd0ecde04aa0c13de74a1d99880"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r110/replay",
+      "sha256": "3424fa2f729a9cf7725406b774a732d6efee9ba601e51b4a7fa1ea1616c06f9e"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/architecture.log",
+      "sha256": "2424f90cd2179663c6bfe6643ca7fcd1342005c39f1f747b1d10e073984063f3"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/complete-rest.log",
+      "sha256": "84501cbb1415c268423eb54ed60f91fffbeb71d76b8a73203a5d3aafd82ff377"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/exact-pair.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/exact-pair.yaml",
+      "sha256": "0dde03040856805a90c5a9b6ac7802f18ea72f435ea9ba0527d6036f5fac3b92"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/manifest.json",
+      "sha256": "6cec470b10dc95bfd090b500bff406ac817482cc7bfca2035a08e5117acbbe3f"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/metrics/d1-callback-samples.json",
+      "sha256": "43cf8e45161a0900c64ab00e5a0f60d95de090165f8e92a735b4528c50ee4a45"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/metrics/d1-command-clock-anomalies.json",
+      "sha256": "37a138d1c04b2ecd533fae63c97b67457920d1d08cc31834da872802a76db663"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/metrics/d1-prediction-samples.json",
+      "sha256": "accb2464f50f747c2e136e03de6c61152d7cf586000e7fd1d422d400e0be577e"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/metrics/d2-callback-samples.json",
+      "sha256": "22c0eb4cda3a491bcff20e6943d6c6474378467891674c5ef3885970ba57ac04"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/metrics/d2-command-clock-anomalies.json",
+      "sha256": "8f2682a39a5271cff3402dbb8753ec4eaacae8135c56fc231a36934b0f8b667a"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/metrics/d2-prediction-samples.json",
+      "sha256": "b0a5317a1248e20852303f40fe665204664b14cd111317fb1c4d789a3b27688b"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/metrics/report.json",
+      "sha256": "b9900cdf4e2592f232d11c9adc49913f4903e24dedf1746df802864c219821da"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/metrics.log",
+      "sha256": "5e8ff7d52f0c1c55a5ecbdb0a9141a7216b17aa422d1dd47d9169bba95a8f593"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r22/mpcc_architecture_compare",
+      "sha256": "df529027c48ef982e34dc3547f252657cb45c57fd646d55ddf90bdd39d1118b6"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc-nine-state-build-r46.log",
+      "sha256": "2c751bfc0963a20babcd781a64a8aaae7ddf40719d9c06337084cbcd33223174"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc-nine-state-build-r47.log",
+      "sha256": "0e8bc263556da0ecba515bb813e4e6cd5d5772234f8bbdd958386cd3a6efd72a"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc-nine-state-tests-r39.log",
+      "sha256": "1963b6d369b5c89c51416df8fddcf47c79541dae0c3553c56fa9c72e5cab34e0"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc-r22-peer-axis-r1.log",
+      "sha256": "50c830d966cac86c7e2a0f55eafe61d3c31e004f921e555165234e80faf1a1fc"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc-r22-peer-geometry-r1.log",
+      "sha256": "b6197d545f2965fd2f6bc813f5d374a1bfd5ed90991d4cf60405a84d57cecf83"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc-r22-peer-variant-r1.log",
+      "sha256": "4488684e1f4d87c6c0f097b42ac42bc784a7ff665747a43b747e9434403eb39c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc-r22-stop-audit-r1.log",
+      "sha256": "062844741a54342aeddd42de20f5f1febdbd405f8745e06017cc842bd0c28677"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc_peer_separation_native_suite.py",
+      "sha256": "ddfc06dbacf76c62d6edc465c3b9de6988d9e52c0e39c27f335a653eccb076af"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-evidence/mpcc_record_peer_separation.py",
+      "sha256": "8b64c34fa23a21a60c6b25d80ca90924f1a1fd9403acb3ca24007839757621b2"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/accepted-r17.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/accepted-r17.yaml",
+      "sha256": "8a6a1c6b4188a5272bb270faf334e7b1ffcd45762d77bebbc41014295584f294"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/commands.json",
+      "sha256": "e524960c128c7e9e70290b6efccc98cdbdcca3fff3628043578505ab76549622"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/compile-r109.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/compile-r110.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/files.json",
+      "sha256": "c1f1d7f2c3f64a6269b30840d7742fd5ccda7f15c90ebbbad64717b31108acd2"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros.so",
+      "sha256": "2f9e9f09888de16443d689a651d92a6184746407405f523def87e03d6d2b6d4c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_boost_start_dash.so",
+      "sha256": "16f5e37b07209aef64088993ad544261bd556702ee394ee54c2bcf1fa96e29d9"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_control_mode_guard.so",
+      "sha256": "2f3790bca465a63e121105e4fc0bc96535b6edefb1dbff6ed896e4de030518f2"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_bounded_single_job_executor.so",
+      "sha256": "ca1e7df3df184f761e5ad594cbe44764cb531d13d6b6eb987ee7871d3667b249"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan.so",
+      "sha256": "ce489bd98b8d0b855a5e6b842ff12ae378dece831253def49529643bcf28e0fb"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan_adapter.so",
+      "sha256": "376476c63bdda01b91604b19452a16319320e3de2562ccd64927a6f66a976e0c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_revalidation.so",
+      "sha256": "754b45878217fe33a560124c1521b8e9ec448b269de408a21282143c9deb9202"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_world_revalidation.so",
+      "sha256": "608e8991a459d47eb00cb6f1491d1b3225c432d5b71da067998fb010bfdbb00e"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_follow_canonical_async.so",
+      "sha256": "16b17f5148aaabf53dfc9616217914e0923f83ae3b79b819cc5105cff4bc7dac"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_latest_only_worker.so",
+      "sha256": "4ea3676fa3fb92a6b61aef2f4549b9c1401a2848a5102ebc2faa4254672cf388"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_stage_geometry.so",
+      "sha256": "0387d075bfe4dac3f0a44ec2ab9adbcb9b02adab62154230245a646d72e9a514"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "sha256": "db812e64db8a9cc000767a0c27e6018139f31508112c5d54b55d0e65adf88043"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_velocity_limit.so",
+      "sha256": "5edfd8b8848f3810edb7c7b11963b0c60f601538dbf059fc4a991ddc45d99395"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_association.so",
+      "sha256": "f605749b6b1d1dc2920d61540e946ebf45bdcc0a191504919294806d38efcebe"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_preview.so",
+      "sha256": "51acc1153014fba2c6f38cf304a6a8033e43707fec5f083ddaad345e2e03b00e"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_comparison.a",
+      "sha256": "fd329cc3c696ac98ceb2c5206acf9547700a7b8c6def4c064ce3866c4ee8512f"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_snapshot.a",
+      "sha256": "c41d7c8e9b8aee7b60b50c52082bb179781aa7285738d4ee438ddea9c8f4934e"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_certified_stop_successor_observation.a",
+      "sha256": "621b4f2e8d6d3224c3084980248625f1c04a0be1c78ea7cfde90cbd61e790c3d"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_execution_contract.so",
+      "sha256": "100686e2eb897b01442195e8d17faa7ef3a354ab2ed61430e9761cd772af57fc"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_latest_state_feedback.a",
+      "sha256": "54a428855c52451b7cd412de820f8e190408f76446a621b2be12e1e0f6f7d992"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_on_trajectory_connector.a",
+      "sha256": "2860432af2629c54f69756a2771eb70fc2d3ee8bc8862c682135eb0ac5587f82"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_overtake_sibling_adoption.a",
+      "sha256": "49cb2198bf9d9751ba58afcd6f9e98ae23718e44f5f63e78994a33dc8d223028"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_progress.so",
+      "sha256": "d064d8d232f31cc7be383243b6df983fcef70c6b0c6a7d6796851d06c11451e6"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.a",
+      "sha256": "e7c029456c8dd126cf41daf1b60298f0fbeee39c63d45eb9ca6f8f5a49c49186"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.so",
+      "sha256": "c01addb1368825d92a3337e6f4946201b42bafcf72f9802c36eb0bc441cffb12"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_adapter.a",
+      "sha256": "87de34de6da68634540063a4c7f4f7e76dc069e49e684a24bde2af1eee76cb67"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_certified_plan.a",
+      "sha256": "6ede9c573e7fb85641c3728d3acc9d9bca0f49e2b076b84a6caadbdcd8f1a9d6"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_command_candidate.a",
+      "sha256": "bcc0796ca19a609f8ac9dc8ad6f5d988269f451213d40ad77532c6fb8bb23792"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_dynamic_proof.a",
+      "sha256": "99092fe7fd1502e32951cd62dea1a0af679444e8cd0b8a14336f76ece1f8d25b"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_artifact.a",
+      "sha256": "820ee6b8478704b2518184c0be9f3818a4cb49307e112932582bd4cc8b978bea"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_source.a",
+      "sha256": "65a8d51933811ad552daa26319c6edc04f181f3b755675c1a7778aab6993a731"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_normal_branch_bank.a",
+      "sha256": "66c6eea82bd89cfa4e4cd10c0f571bd387420c706f87409b61ccaca5208b2aaf"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_overtake_branch_bank.a",
+      "sha256": "0262ea8ae93d91eb706b411bcbefef60020e4d6201a558f00c58bd834a93e547"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_adapter.a",
+      "sha256": "70070b6a7ce14fccf59990704a1ddee204714f025d0acae9e6213460256c0c7b"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_wall.a",
+      "sha256": "f4aa95ce288b650e23f1569d5faf2775640a723285efb444ef7ff4a2306ea6d3"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_problem.a",
+      "sha256": "79db324f8a13adf327e12c95d8678c4adaf14074e2cae5eaa581a1ea0cbe9914"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_production_adapter.a",
+      "sha256": "2c100ea84710cb3032742f9af4aa11dfc7f837ae2740de62456271acb1c1c85a"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_retained_revalidation.a",
+      "sha256": "2c6ceaea70ff68fe24f8f13880cc643cabee6cda10d7d7dc38e0bec38d2cdc3c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_shadow.a",
+      "sha256": "068a4b9df465db4465be5150ef1e2269c016c5a2d6a29858eb32e9d74d20058a"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_control_lattice.a",
+      "sha256": "f360472032396b6e5617af632eaa2d3b633a844b548a77e457ada8dd3f98dc0c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_lattice_shadow.a",
+      "sha256": "f21db286f49f515ddb36c25f0b88280770ee115f981a1923f3e74861dc8a01c0"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_successor_bundle.a",
+      "sha256": "36bc3329471dd76003b68ff8de68c807e00169602e4d8a274585df23bd22f11e"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_stateless_maneuver.a",
+      "sha256": "6a3324e7dae8478245dd76445a407dd201d696b6beab742d2dddc3ca47c453ed"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_steering_state_contract.so",
+      "sha256": "03eaf0f72437c114269b7f9252fabff6ff8267da7657671c6bc1f133e151d886"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "57fd8728ba7e88e669a8a66c688033608670edcda64a293bca0146e40dfa062c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_decision_trace.so",
+      "sha256": "5e439e7d0c7a06a22b1c9d50ba0b5078a2ba4383249179ad07cda96e462a71f6"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_execution_orchestrator.so",
+      "sha256": "8fdb9e8fcd846b3195dd59b3033cb6f77934593e5ccfc0c3a7f058ea52b53451"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_path_core.so",
+      "sha256": "520c4afe066b0d7e55a84c32b2a13961ca912771a00d97a960820a00e6aa28c5"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_persistent_osqp.so",
+      "sha256": "4a8c23ce5fecdf903b401b25537ccef660dad85cbd79f77b21746718f361a944"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_race_mpcc_foundation.so",
+      "sha256": "8e333d2a791fcd20e17ba14689afa75e15cb6658c85e1a0277cc331444626450"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_footprint.so",
+      "sha256": "d060bf3ad237a337f05b3c8e94bce75964fbaea1346a8dc0a31ca53727995ff4"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_mpc.so",
+      "sha256": "f8bb0ec2af86c20e784c792c5cf9a23576f3edddd90c9c8f31c4847394a7da59"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_runtime_speed_profile.so",
+      "sha256": "f3bde7a7d3deb6df958555323c3c5c12deb22263963938c9e10fef328def4316"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_start_grid_grace.so",
+      "sha256": "4579a4d9b9a97c635206f5417ff369486c15e4d2dc6305b392fa9a298e3b88e1"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_stuck_recovery_core.so",
+      "sha256": "1af4df45e4353d8d7680462cd5b964c695c00bc3403b1ffed041ee8d36303ba0"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_v2x_overtake_core.so",
+      "sha256": "1a43451a6033eb064a91789f5964682d57c23f83967b8183dde3d8c5079fd260"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_boost_start_dash.hpp",
+      "sha256": "6377ee258ce094dd481807b3570045253e0de438684c0f72f5fa1f706cd746c8"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_control_mode_guard.hpp",
+      "sha256": "5f4afa91011e2e66d06087604d90ada5946a434d099c497ec67adafa8393bf01"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "994779bfa1d00f20514b91beb9efaff5425ffd369514487605a1ca86b5e56a95"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp",
+      "sha256": "d74bfd0a9b237ebbed9674ca82e7989a6c9123679c9e814367aa85907c946d24"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp",
+      "sha256": "949760419e4af9e86f72ddc70ec29078156e1687c42f2e41209e262f5598ec54"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/external_speed_loss_monitor.hpp",
+      "sha256": "82a5a738a12dfa667c6733baf1a8a460f945b02ed91439d703233dccff52164f"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/latest_only_worker.hpp",
+      "sha256": "39f4f298180d8f68d94795961498b46546def7309ac1f2b3b85be33fd6097e35"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp",
+      "sha256": "3cddd30e326339caaa731541bb11f848594975a8cc3c89b3955f46d2fbfe1176"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_stage_geometry.hpp",
+      "sha256": "142723ce37e57380e0aff8a90edb78f5dace8f39768ab84cc7b827cef30a6744"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_velocity_limit.hpp",
+      "sha256": "546d086bbcf361e6306c0d7d8a37582b231d51b8c3f2493712cb3e98e5abbf54"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_association.hpp",
+      "sha256": "0fb2ac6660a90f6a1dfae3b851441eeeb317389601235f9ecfaa3c23c2daa007"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_preview.hpp",
+      "sha256": "8b800bf50f09944346fcb2658fffd6dd20f7e925a69273738823fb85aa90a259"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp",
+      "sha256": "827a5491270ef35682271c842c6ce2215ab02b63ff474a0502151989adf703df"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp",
+      "sha256": "f28ddd28e53bbbd21d70bd565bb199505f05a368b9beb8bfb052516eaf2f2bb7"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp",
+      "sha256": "5eef64d2cce3ee7da13c1cf625f6550eb4e64ac77a99dae93f06c65178cd2bff"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "sha256": "5782909e01b8caf818e66a92b4c8339af08447acf03456ff3e1ec511a9cb4557"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp",
+      "sha256": "491bdcffd46304bacc3b0b5c45a9868548aaa78c2f549526129349468e718231"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp",
+      "sha256": "83431e813c50c8df07e5dbf28d45f84f726d7bd74ce9492f3a55957f7b8da43f"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp",
+      "sha256": "6b4ed1169b37d66d6bbc411c3ca604d7e9764ed2e4de2ee311a36c253b32fcc4"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp",
+      "sha256": "93eb1a2c4332ebb40a53ecd5b91cf90f66a1821036d2f6ad20523dfa653eab73"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp",
+      "sha256": "6e744a67b5be270df16338ed6a497abe47da54d45f187aca2fd3d8ffe6d7c02f"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_progress.hpp",
+      "sha256": "e21c57a0e3a4cd2d1b30ace01c0c84587b42d4a58a03b02881544d78418cbc8d"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "sha256": "4191fa5f1c5382df303be3bf5491b28ed574d015fffb9a1fa1c3514c29d33341"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "sha256": "b7a425fc0efd4ffd8b60c12f19025aa3f3a546642557619bd4c548122796b4af"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp",
+      "sha256": "0f7d46d68cd6ee525e32cca1955b2e8b99342507b1bde0e249762f7a4a693ee2"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp",
+      "sha256": "94bbdafc08578fbebf85af15b90583f1c7452cdf3ab842689281249d0d191b48"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp",
+      "sha256": "c1d150c48b877ceeb29392dde137754279d2c03d9bf3990e7b2fa430fa07b946"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp",
+      "sha256": "e32649cd1f157eac6266c2e80a4ab8a4731e864b92f2cd7b20c292045097dae2"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp",
+      "sha256": "fb31dbf1370c6fa8d4e539d4da090ae677be08934425210ed3c6320b8acf11ea"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "sha256": "81eef27e7e53d57731971258f1477e46f4ce6354467352c26059859c9f2a2a57"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp",
+      "sha256": "3f158a9210e3b5de76ec4df6abb0b4c6eecc575a3d7553850e1c3c16279164bc"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp",
+      "sha256": "464fc3fbf29043c28eb1e27fa12593be6c8dcbd5b87961a312aaf4e178866b1e"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp",
+      "sha256": "cb5dd1b7c5e898f20b0ad712edde7da8ae1a3aaa31125e7cebcb4b23d50b6daa"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp",
+      "sha256": "ad68f2f69c5363e9602eda375958fc825aaa4d1581bae6e220f9a8920c237d4e"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp",
+      "sha256": "8f872a0c8a86f65db032918e191baef626fbcf6466ec9c27e53cc3c979195f8d"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp",
+      "sha256": "2735504de4cf98be0a0fdf9bf08ee337ba0a9d898549e706b9660c8f63ae03ed"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp",
+      "sha256": "e650a5491e34e5c64820cd379ca26289a9fdacb09e65accb6d3e82fd644db64d"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "3e38067df4b04cc39f912db9db6e4c638a5eee1ef825998d11256424003826ac"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp",
+      "sha256": "ec16338fe4cc96a8eaf0676362ab53a94c79ddeb05135b2a93749017f12cdad6"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp",
+      "sha256": "84eaaf7054fbe43addaa0d1833f2dc7face00fcb34aaef8c022da6c888c32b20"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp",
+      "sha256": "fda7709abdc9d50c80279e7e0b0f4dd4e9ef8a295959b0caaae3d3427e51b9eb"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp",
+      "sha256": "c0364be0c57498691256882b8de9b3f0e9acd9ced3f2ccba590b4d8d1efc4725"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp",
+      "sha256": "3adc114489f24bf75e8fddeab46e8d4eb937a4f3b7bfd506d7b03f1ac6789e9f"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp",
+      "sha256": "e786ef0ea30461c7ad1ca6d43b371c77484cc1c8f3fa7f2e64761b6a6dbfcb47"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp",
+      "sha256": "00e48a55c54aaebc70dc9c5352116f12556de4e5261d32a7ad9818e41b9b96ac"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stop_input_program.hpp",
+      "sha256": "4f229f7f22dad4a40d4901c1bf9e43075c93468434e1e1f4a0ba5150470ae520"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp",
+      "sha256": "d83d7d2185e11200ff1e1f656018994fb3424599011a0c3904c0c5aa66b0b536"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp",
+      "sha256": "8afc0766959fa3477a4a17ed37f2f32c65eaf2bf66ced4cbcdc081ad92d35735"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_wire_command.hpp",
+      "sha256": "c0734bed816636bd6db4bbc3cb56bff4df7c90868297949ecedba545ba315a86"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_decision_trace.hpp",
+      "sha256": "91d7fef94540c0b6ce89ec0139cfb76f8021085eb16563b01b88c076c356e52f"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp",
+      "sha256": "21eae46391377403be955bddab2f38fc2b5857ca3287b6c271db539cb6e51a0c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/path_core.hpp",
+      "sha256": "648e041b4400b57d268967d4df2f2075516b3eda682de5e9ea39178bf9f80e56"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/persistent_osqp.hpp",
+      "sha256": "c6d015467d5aa82267bc1fdb6bad25efc9cc644fad057e89d49e6a34f4afaab3"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp",
+      "sha256": "445983d9732dd2329633cd952dcb1dc682522911541fd2318a69aee2745cd8c0"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/race_mpcc_foundation.hpp",
+      "sha256": "918837e27ff9b3a2b65924b4fb22ef958f879bfe7f67f47fc2bcb88a6a2c28a1"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp",
+      "sha256": "41dd3feb125fbda04e1e340d7088180fc031ac2de8ede0fcedad4c724a82052b"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_mpc.hpp",
+      "sha256": "f3b918005ea4979ca93dee7c869945556e05555fb51d5cd89d9680721c9f0f73"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/runtime_speed_profile.hpp",
+      "sha256": "247ac0bb446518c83181a8e21ecfb8b738e02fe90818b38c7151045390b31311"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/start_grid_grace.hpp",
+      "sha256": "d263d2e4644b0ebbcfbdda0df0bb6335b1e3beadd8143d29ef34e094985afd23"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp",
+      "sha256": "334696d66637e231e8721d553de390252958985a090026ebed4766a99e2dfa4e"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/v2x_overtake_core.hpp",
+      "sha256": "d8b5d96d02c2759fb0204ee8fbbe73a430e680e39d99c3d63d5ae634ad086f4a"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "f5bb1d6ed3fe8e9dff4dd7c03c27947d569f3a43102f6961759e418d8a4d27ae"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_applied_input_prediction.cpp",
+      "sha256": "0f668168485065d199ab2447e13fc365c51286b5d22733968616aa0bf376a31c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_compare.cpp",
+      "sha256": "d6bdc82964b018fbf8c1201bd49d66670a3437591114e119f3cdd91696f82ddd"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "b8b04216f3395ef7b7b95b0207b3d91ba8ddd78a2422a85168533a5daf83c32b"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "279020e563325c0001ac1574386ebaf70a74bb661ede22cbf66c17c16da35039"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_certified_stop_successor_observation.cpp",
+      "sha256": "6788f885a2a98efcc2acc960e798913f00e3639be390905cf90f72414c92bd06"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_execution_contract.cpp",
+      "sha256": "04e2bfe3868b70a7413427a4da9e10d896ceaff3da9214c4d5b33c81a3f93805"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_latest_state_feedback.cpp",
+      "sha256": "80a3763903df1a57286fb8920a757cdc1fb7fa77288be792eaa30d5a2a3ed012"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_maneuver_replay.cpp",
+      "sha256": "5c3fbe0193a06f32cf509a7ea94ce038aa91918e19634224219c612ea59b56b8"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_on_trajectory_connector.cpp",
+      "sha256": "b58a8dc7a1a66db0c293028fd9ade33089313df4175f21314b3c601377e8d200"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_overtake_sibling_adoption.cpp",
+      "sha256": "a7a153f33cc97dc0436f9ed4eb2ac925b15e7c3e70b0e17f0a9752b3fc49ac7e"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_prepared_suffix_replay.cpp",
+      "sha256": "c1b0698a5e321a480c28940e9fec7dbe87df7536532dab65e0d213469a1f9b80"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_progress.cpp",
+      "sha256": "c0a12fc5f8c2d7f59a0d22d6162adef6a7aff410b046f12281c5996d403554c7"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_qp_replay.cpp",
+      "sha256": "221d714ce6bba36c629d2ada6378c2288fcc7e0fda5d4c96babefbac7fb7cf00"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "sha256": "c0e544311e4be6c0bde46b1170de7240c8ee7e8aef357793b9fdee99a6e4fa1b"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "sha256": "819ed260d526674e054197ddd014d50652b03d059d001a71d4d6aae7185ce3b2"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "98392826409d140ec9a582ebb1f192ae7ec5e120a0f3dce739d905397767448b"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp",
+      "sha256": "985a0d1486eed1a216ad6a59ac7ddc2c6e5fdb59b4a1de91d3224f1bd233bf83"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_obstacle.cpp",
+      "sha256": "57d007dc8d778466a4b0927dd5cfdd1cfbc92ac8aee3f70adc923e304df00698"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "fb762cff5ef44a824652c6fb23859a5b193c22b8e169d48d16a688cb4316d291"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "sha256": "9fc64832fc88f09fb87b5d8698035beb1116a98e116bf4ba36a3fcd2783c5a75"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_source.cpp",
+      "sha256": "caf792a10e99ad20a0e7744d615a8d828bf0828bf82f2c02dbb830a3c2ffb353"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_normal_branch_bank.cpp",
+      "sha256": "a3acd9dbf24757b42e55783aaaff8dfea51bac4c480650fcdeca1658533058be"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "sha256": "f6c7ba9bd6cf7a022c92ad45c1cd2903857021117fa8f25470403485574e0412"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "sha256": "983407accd00e52c523cb32106d6054d59df519bc164a01ef7e9e50d79107286"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_wall.cpp",
+      "sha256": "10881540d46e51a8efa277026e421528ba1d93d9df20d3094b69c943d4bba8a9"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_problem.cpp",
+      "sha256": "1a81899496f7a33d699c92cbd61e926bf7548520e0fcb442499c6218b3cbe3d3"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_production_adapter.cpp",
+      "sha256": "e6d22be4e4e0366d31e650c8c3fc574914820770128c0fdf5f6c014eca057964"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "1e138ef996f3846d64b83f21be4995dd7525b15ed8fee4dd8f15b3a738e94aaa"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "sha256": "946f8c080197fed9aa53f1583f11162f2ef0749f42642ed7bfdfbdea9b6196fe"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a9b458c34a29a607d7a30217fb0e713c1fb77f90db12e66c17d7c91072e8f4d2"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "sha256": "11e83eb28126834a8837289518f0023bd6dd72669f4b5622214639a8c82e1f92"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "00a31e1e4b63fc9fe6d669f10568be58e850c510d3b5acc7172ff0d96e764ceb"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_wall_refinement.cpp",
+      "sha256": "cf521297f83fb6371548607b7437d090b7bb2aaca41243fba5354ff170167b58"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stateless_maneuver.cpp",
+      "sha256": "c7d940bfab89072cb120df5945dd99eb8c35cb5aee1f6cf9009c1624517ee3d8"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_steering_state_contract.cpp",
+      "sha256": "b530641c709927a3864c513eaf1752fc7f5d21e84a6c371a3b7bd2819853a3f9"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stop_input_program.cpp",
+      "sha256": "ce2a115cf4a461660494c7cf6e17d3b5a14d163f0ce8ed2144959c821cf8ecca"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r16/d2/mpcc_architecture_snapshots/000000000795-01e3e7cbcf62d2f4-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "ec728c76a7c82708b8e8e64c8837b0a17d3dc69d3d4ef258ecb0208bdb4ee97c"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r17/d1/mpcc_architecture_snapshots/000000001020-7b13fc78d1f505da-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b77c6467c1f38503207c9afe37abcacb493b14530fb92032315ea48542d077ce"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b7cbe726c7098ab94ce00e36358856a3d33f1062018befdc5e650ab6d28befb2"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000001071-d426f9a520aa2c4e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "02578477116e07e451922a4ac84860d27480015d743316371ee87b30e645b99a"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "c85a1768009807665aad446597a76a212d999a425685735374a85c27d766693f"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "cef01e7c52de54904e7c8ac249752fa2676121c2eeaac6520378c5b975d37026"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "ddc32d119df6b7cc1f0102f3cd60006cbf4ac4e94075a3b02d91f3f6dcd5a606"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "7bcdfa3172eb624355e88365433bfd76e2a5b3d81800b11e957f5444ffc47c1f"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/frozen-inputs/task-tmp/mpcc_peer_separation_native_suite.py",
+      "sha256": "ddfc06dbacf76c62d6edc465c3b9de6988d9e52c0e39c27f335a653eccb076af"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/gap-r18.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/gap-r18.yaml",
+      "sha256": "064a8f491aa89c1ad6aaae5ed2b7f6d011cb4294580bfffbc6ba122f86699592"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/peer-r19.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/peer-r19.yaml",
+      "sha256": "f05e597259a6c0e7f986434c9d5b26804a1ad4da4a83c28ec211422c68a1f61d"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/peer-r22.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/peer-r22.yaml",
+      "sha256": "4d7d213c762bedc953ba6b5d21b518e1761525909a302f27df829dcfe0f8bb6a"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/signed-r16.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/signed-r16.yaml",
+      "sha256": "43d28b431c0e9f8678f2b4ae9b92d964d741354fc6ef413cce0cea78d2a77f37"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/wall-r20.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/wall-r20.yaml",
+      "sha256": "87157aebe326015297bad87836d3ca529ea8e49aff69a2dd82073021c0917175"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/wall-r21.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/wall-r21.yaml",
+      "sha256": "51f2e62873ee7e43190ba27f7608e2390fcd8cb42eed73fa3ec7e783ed692e13"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/wall-r22.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-peer-separation-native-r1/wall-r22.yaml",
+      "sha256": "50e0a8ad2424e745adcfe0c4c5c2feda5ec5fc084258382f7fec049edc8e6fb6"
+    }
+  ]
+}

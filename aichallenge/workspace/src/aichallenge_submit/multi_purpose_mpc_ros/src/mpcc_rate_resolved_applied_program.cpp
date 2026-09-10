@@ -343,8 +343,18 @@ Result certify_terminal_stop(const retained::Request &request,
       circle.radius_m = numeric::up(
           circle.radius_m + numeric::up(circle.maximum_speed(t0, t1) *
                                         numeric::up((end - begin) / 2)));
-      const auto clearance = recovery::circle_obstacle_clearance_at_time(
+      auto clearance = recovery::circle_obstacle_clearance_at_time(
           ego.extents, to_world(ego.pose), circle, (t0 + t1) / 2);
+      if (clearance && *clearance < 0) {
+        const auto center = circle.predicted_center((t0 + t1) / 2);
+        const auto &origin = observation.initial.state;
+        const auto separated = numeric::separating_circle_clearance(
+            state, request.current_footprint,
+            {origin.x_m, origin.y_m, origin.yaw_rad}, ego,
+            center[0], center[1], circle.radius_m);
+        if (separated)
+          clearance = *separated;
+      }
       if (!clearance || *clearance < 0) {
         result.rejected_peer_id = obstacle.id;
         return Reason::PeerRejected;

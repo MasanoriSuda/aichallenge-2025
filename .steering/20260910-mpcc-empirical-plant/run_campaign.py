@@ -1,4 +1,4 @@
-"""Fresh uninstrumented empirical nine-state MPCC acceptance, same inputs per run."""
+"""Frozen empirical MPCC runs; application probes are explicitly diagnostic only."""
 from pathlib import Path
 import hashlib
 import json
@@ -15,18 +15,21 @@ package = Path('aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_r
 mode = sys.argv[1]
 attempt = sys.argv[2] if len(sys.argv)>2 else 'r1'
 timing_diagnostic = len(sys.argv)>3 and sys.argv[3]=='timing'
-assert len(sys.argv)<=3 or timing_diagnostic
+application_diagnostic = len(sys.argv)>3 and sys.argv[3]=='application'
+assert len(sys.argv)<=3 or timing_diagnostic or application_diagnostic
 assert re.fullmatch(r'r[1-9][0-9]*', attempt)
 assert mode in ['single','dev2','dev3','dev4']
 target = 'dev' if mode=='single' else mode
 vehicle_count = 1 if mode == 'single' else int(mode[-1])
 domains = [f'd{i}' for i in range(1, vehicle_count + 1)]
 projects = [str(i) for i in range(1, vehicle_count + 1)]
-root = Path('output/20260910-nine-state-'+mode+'-'+attempt)
+run_kind = 'application-' if application_diagnostic else ''
+root = Path('output/20260910-nine-state-'+run_kind+mode+'-'+attempt)
+host_duration_sec = 120 if application_diagnostic else 840
 assert not subprocess.check_output(['docker', 'ps', '-q']).strip(), 'Other containers running'
-test_log = Path('/tmp/mpcc-nine-state-tests-r21.log')
-build_log = Path('/tmp/mpcc-nine-state-build-r27.log')
-assert 'Summary: 2404 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
+test_log = Path('/tmp/mpcc-nine-state-tests-r22.log')
+build_log = Path('/tmp/mpcc-nine-state-build-r28.log')
+assert 'Summary: 2406 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
 assert 'Summary: 26 packages finished' in build_log.read_text()
 original_dll = Path('aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll')
 assert hashlib.sha256(original_dll.read_bytes()).hexdigest() == '703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172'
@@ -36,8 +39,9 @@ manifest = dict(run_id=root.name, kind='empirical-nine-state-'+mode,
                 baseline_commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
                 initial_conditions='standard '+mode+' with6laps/600s only; noNPCs/collisions on/handicap off/wall recovery off',
                 seed='AWSIM default; explicit seed unavailable, no determinism claimed',
-                termination='all vehicles finished, first active moving Emergency/Recovery, or840s host deadline',
+                termination=f'all vehicles finished, first active moving Emergency/Recovery, or{host_duration_sec}s host deadline',
                 command=f'make {target} LOG_DIR=/{root}', timing_diagnostic=timing_diagnostic,
+                application_diagnostic=application_diagnostic,
                 tactical_rejoin_policy='Record committed-pass longitudinal watchdog Recovery phase separately; final moving Emergency/Recovery overrides and every other Recovery entry still terminate', files=[], binaries=[])
 paths = {item['path'] for item in template['files']}
 paths.update(str(x) for x in package.rglob('*') if x.is_file() and '__pycache__' not in x.parts)
@@ -88,8 +92,24 @@ original = Path('aichallenge/simulator_scripts/dev.sh').read_text()
 assert '--laps unlimited' in original and '--timeout 10000000.0' in original
 script = root/'dev-six-lap.sh'
 script.write_text(original.replace('--laps unlimited','--laps 6').replace('--timeout 10000000.0','--timeout 600'))
+if application_diagnostic:
+    script.write_text(script.read_text().replace('--lidar off', '--lidar off -logFile /'+str(root)+'/unity-player.log'))
 overlay = root/'compose-six-lap.yml'
 overlay.write_text('services:\n  simulator:\n    volumes:\n      - '+str((repo/script).resolve())+':/aichallenge/simulator_scripts/dev.sh:ro\n')
+if application_diagnostic:
+    probe_root = Path('output/20260909-actuation-instrumentation-r2')
+    validation = json.loads((probe_root/'cil-validation-r2.json').read_text())
+    assert not validation['differences'] and len(validation['probe_calls']) == 4
+    assert hashlib.sha256(original_dll.read_bytes()).hexdigest() == validation['original_sha256']
+    assert hashlib.sha256((probe_root/'Assembly-CSharp.dll').read_bytes()).hexdigest() == validation['instrumented_sha256']
+    manifest['instrumentation'] = dict(validation=validation, files=[])
+    manifest['acceptance'] = 'diagnostic only; added receiver/application logging changes timing'
+    for name in ('Assembly-CSharp.dll', 'ObservationProbe.dll'):
+        source = probe_root/name
+        with overlay.open('a') as stream:
+            stream.write('      - '+str((repo/source).resolve())+':/aichallenge/simulator/AWSIM/AWSIM_Data/Managed/'+name+':ro\n')
+        shutil.copy2(source, root/'binaries'/('probe-'+name))
+        manifest['instrumentation']['files'].append(dict(path=str(source),sha256=hashlib.sha256(source.read_bytes()).hexdigest()))
 environment = os.environ.copy()
 base = environment.get('COMPOSE_FILE')
 if not base:
@@ -100,9 +120,9 @@ shutil.copy2(__file__,root/'run_campaign.py')
 for src in [Path(__file__),script,overlay]:
     manifest['files'].append(dict(path=str(src),sha256=hashlib.sha256(src.read_bytes()).hexdigest()))
 (root/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-(steering/(mode+'-'+attempt+'-manifest.json')).write_text(json.dumps(manifest,indent=2)+'\n')
+(steering/(run_kind+mode+'-'+attempt+'-manifest.json')).write_text(json.dumps(manifest,indent=2)+'\n')
 summary = {}
-termination = '840s host deadline'
+termination = f'{host_duration_sec}s host deadline'
 try:
     manifest['launch_started_wall_sec'] = time.time()
     with (root/'launch.log').open('w') as log:
@@ -111,10 +131,16 @@ try:
     manifest['runtime_mounts'] = {name: json.loads(subprocess.check_output(['docker','inspect','--format','{{json .Mounts}}',name],text=True)) for name in containers}
     manifest['running_images'] = {name: subprocess.check_output(['docker','inspect','--format','{{.Image}}',name],text=True).strip() for name in containers}
     (root/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-    (steering/(mode+'-'+attempt+'-manifest.json')).write_text(json.dumps(manifest,indent=2)+'\n')
-    deadline = time.monotonic()+840
+    (steering/(run_kind+mode+'-'+attempt+'-manifest.json')).write_text(json.dumps(manifest,indent=2)+'\n')
+    deadline = time.monotonic()+host_duration_sec
     while time.monotonic() < deadline:
         failed,complete = False,True
+        if application_diagnostic:
+            player = root/'unity-player.log'
+            player_text = player.read_text(errors='replace') if player.exists() else ''
+            if any(error in player_text for error in ('MPCC_INPUT_OBS error', 'FileNotFoundException', 'InvalidProgramException')):
+                termination = 'instrumentation error; inconclusive diagnostic'
+                break
         for domain in domains:
             log = root/domain/'autoware.log'
             lines = re.sub(r'\x1b\[[0-9;]*m','',log.read_text(errors='replace')).splitlines() if log.exists() else []
@@ -224,4 +250,5 @@ finally:
             assert restored == item['sha256']
             receipt.append(dict(path=str(src), generated_sha256=current, restored_sha256=restored))
         (root/'artifact-restoration.json').write_text(json.dumps(receipt,indent=2)+'\n')
+    assert hashlib.sha256(original_dll.read_bytes()).hexdigest() == '703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172'
     print(termination,flush=True)

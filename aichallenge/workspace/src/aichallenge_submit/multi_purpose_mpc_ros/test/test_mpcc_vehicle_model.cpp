@@ -97,6 +97,47 @@ TEST(MpccVehiclePrediction, SeparatesChannelDelayFromMechanicalTireResponse)
   EXPECT_FALSE(vehicle::predict_published_history(initial, 1, 1.2, history, p, 0, .1));
 }
 
+TEST(MpccVehiclePrediction, DelayedPublicationCannotRetroactivelyBrakeTheBody)
+{
+  const auto p = vehicle_model();
+  const vehicle::TimedState initial{1, {0, 0, 0, 8, 0, 0, 0, 0}};
+  std::vector<vehicle::PublishedCommand> history{{0, 1, 0}};
+  ASSERT_TRUE(vehicle::record_serialized_publication(history, {1, -3, 0}, 1.15, .63));
+  const auto predicted = vehicle::predict_published_history(initial, 1.2, 1.2, history, p, 0, .1);
+  ASSERT_TRUE(predicted);
+  const auto before_publication = vehicle::advance(initial.state, {1, 0}, p, .15);
+  ASSERT_TRUE(before_publication);
+  const auto after_publication = vehicle::advance(before_publication->state, {-3, 0}, p, .05);
+  ASSERT_TRUE(after_publication);
+  EXPECT_NEAR(predicted->current.x_m, after_publication->state.x_m, 1e-10);
+  EXPECT_NEAR(predicted->current.forward_velocity_mps,
+    after_publication->state.forward_velocity_mps, 1e-10);
+  EXPECT_DOUBLE_EQ(history.back().published_sec, 1.15);
+}
+
+TEST(MpccVehiclePrediction, PublicationHistoryPreservesCausalityAcrossClockBoundaries)
+{
+  std::vector<vehicle::PublishedCommand> history;
+  ASSERT_TRUE(vehicle::record_serialized_publication(history, {1, 1, 0}, .995, .5));
+  EXPECT_DOUBLE_EQ(history.back().published_sec, 1);
+  ASSERT_TRUE(vehicle::record_serialized_publication(history, {1, -3, .1}, 1.01, .5));
+  ASSERT_TRUE(vehicle::record_serialized_publication(history, {1.01, 0, .2}, 1.01, .5));
+  ASSERT_EQ(history.size(), 2U);
+  EXPECT_DOUBLE_EQ(history.back().wire_acceleration_mps2, 0);
+  EXPECT_DOUBLE_EQ(history.back().wire_steering_rad, .2);
+  EXPECT_FALSE(vehicle::record_serialized_publication(history, {NAN, 1, 0}, 2, .5));
+  EXPECT_FALSE(vehicle::record_serialized_publication(history, {2, 1, 0}, NAN, .5));
+  EXPECT_FALSE(vehicle::record_serialized_publication(history, {2, NAN, 0}, 2, .5));
+  EXPECT_FALSE(vehicle::record_serialized_publication(history, {2, 1, 0}, 2, -1));
+  EXPECT_EQ(history.size(), 2U);
+  ASSERT_TRUE(vehicle::record_serialized_publication(history, {2, 1, 0}, 2.1, .5));
+  ASSERT_EQ(history.size(), 2U);
+  EXPECT_DOUBLE_EQ(history.front().published_sec, 1.01);
+  ASSERT_TRUE(vehicle::record_serialized_publication(history, {.1, -3, 0}, .11, .5));
+  ASSERT_EQ(history.size(), 1U);
+  EXPECT_DOUBLE_EQ(history.back().published_sec, .11);
+}
+
 TEST(MpccVehiclePrediction, NewPacketCannotBorrowTheOldBrakingPrefix)
 {
   const auto parameters = vehicle_model();

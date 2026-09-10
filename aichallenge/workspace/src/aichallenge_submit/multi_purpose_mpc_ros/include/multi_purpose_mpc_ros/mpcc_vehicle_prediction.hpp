@@ -15,6 +15,13 @@ struct PublishedCommand
   double wire_steering_rad{};
 };
 
+/// Record the serialized packet at its observed publication epoch. The nominal
+/// decision epoch is a causal lower bound when the ROS clock cache trails it.
+/// Invalid inputs leave history unchanged; repeated epochs retain the last value.
+bool record_serialized_publication(
+  std::vector<PublishedCommand> & history, const PublishedCommand & nominal_packet,
+  double publication_clock_sec, double retain_sec) noexcept;
+
 struct TimedState
 {
   double source_sec{};

@@ -7,6 +7,25 @@
 namespace multi_purpose_mpc_ros::mpcc_vehicle_model
 {
 
+bool record_serialized_publication(
+  std::vector<PublishedCommand> & history, const PublishedCommand & nominal,
+  const double publication_clock_sec, const double retain_sec) noexcept
+{
+  if (!std::isfinite(nominal.published_sec) || nominal.published_sec < 0.0 ||
+    !std::isfinite(publication_clock_sec) || publication_clock_sec < 0.0 ||
+    !std::isfinite(nominal.wire_acceleration_mps2) ||
+    !std::isfinite(nominal.wire_steering_rad) ||
+    !std::isfinite(retain_sec) || retain_sec < 0.0) return false;
+  const double published = std::max(nominal.published_sec, publication_clock_sec);
+  if (!history.empty() && published < history.back().published_sec) history.clear();
+  if (!history.empty() && published == history.back().published_sec) history.pop_back();
+  history.push_back({published, nominal.wire_acceleration_mps2, nominal.wire_steering_rad});
+  while (history.size() > 2 && history[1].published_sec < published - retain_sec) {
+    history.erase(history.begin());
+  }
+  return true;
+}
+
 bool valid(const ObservationProvenance & v) noexcept
 {
   if (!finite(v.initial.state) || !std::isfinite(v.initial.source_sec) ||

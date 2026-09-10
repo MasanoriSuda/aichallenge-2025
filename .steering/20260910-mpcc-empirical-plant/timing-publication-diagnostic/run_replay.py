@@ -14,7 +14,7 @@ commands = [('exact-pair', [str(replay), str(snapshot), str(out / 'exact-pair.ya
             ('architecture', [str(compare), str(snapshot)]),
             ('complete-rest', [str(compare), str(snapshot), '--current-world-complete-rest-only']),
             ('public-interval', ['python3', str(Path(__file__).with_name('extract_interval.py')),
-                                 str(run), str(out / 'public-interval')])]
+                                 str(run), str(out / 'public-interval'), 'd1', '28.1', '28.65'])]
 manifest = {'source_commit': json.loads((run / 'manifest.json').read_text())['baseline_commit'],
             'snapshot': str(snapshot), 'snapshot_sha256': hashlib.sha256(snapshot.read_bytes()).hexdigest(),
             'authority': False, 'commands': []}

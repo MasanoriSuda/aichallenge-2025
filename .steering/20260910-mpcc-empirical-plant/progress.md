@@ -208,3 +208,21 @@ buildr27passes26packages,testsr21passes2404entries/62groups/0errors/fails/skips.
 Oldr10D1decision1668peerrejection remains, includingproductionadapter rejection;
 itsbackdatedpublication/largecallbackcause remainsopen. Freshcommitteddev2-r12
 next; M4–M6and fullintegratedacceptance stillopen. See terminal-reference-design.md.
+
+2026-09-10: 8bfdaa52 dev2-r12 fails D2 moving Emergency933 during certified
+Stop. Exact932/933source424 native peer clearance +0.042140739→-0.000833389m.
+Same-peer-generation, latest velocity still rises after firstbrake; application
+phase unknown in that run. Existing probes reused read-only in separate
+application-dev2-r1:627 exact applied-input joins, firstfailureD2 1294 is intent
+mismatch after ShiftOut→FollowPrepare→Idle. All evidence retained separately.
+Observed prescribed application improves148D2brake-crossing speedMAE0.068265→
+0.024975m/s; it is unavailable as production input and no r12 phase is inferred.
+Fix known backdating producer: serialize history uses fresh ROSclock immediately
+after publish with causal decision lower bound; packetstamp/prospective proof
+remain nominal. Before2regressionsfail; buildr28passes26packages/4min48s and
+testsr22passes2406records/62groups/0errors/failures/skips/28.78s. Receiver timing
+uncertainty remains open. Same1294 actualpublished778 completeStop rejectsCruise
+identity but accepts upstreamShiftOut/+10.061819599m/345samples, materialization/
+rejoin/productionadapter; observation only, explicitStop handoff repair next.
+AandrightB/C/D/G also certify1294; leftarms and2fullrestclocksreject. No
+integrated acceptance or M4–M6 closure. See publication-epoch-design.md/evidence.

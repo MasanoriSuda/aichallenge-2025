@@ -829,6 +829,18 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/terminal-reference-evidence.json",
       "replay_ready": true,
       "reason": "Exact moving2587/2588pair/source2047 fromr11; earlier1667/1668pair/source1148 retained as dynamicnegativecontrol; native original/candidate/reference identities recorded."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r12",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/publication-epoch-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen run, exact current-world/publication input, unavailable previous evidence explicitly retained for1294. Publication epoch regression and application trace are distinct causal observations."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-publication-epoch",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/publication-epoch-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen run, exact current-world/publication input, unavailable previous evidence explicitly retained for1294. Publication epoch regression and application trace are distinct causal observations."
     }
   ],
   "experiments": [
@@ -5906,6 +5918,386 @@
       "production_impact": "One normal authority. Explicitterminalreferencecompositiononly; nativecompleteRest/fullwall/peer/packet proofs unchanged. Integratedacceptance pending.",
       "deleted_code": [],
       "revisit_condition": "Changedpeerworld or causalinputpolicy"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-integration",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Terminal reference fix completes dev2",
+      "changed_dimension": "Fresh uninstrumented8bfdaa52",
+      "result": "rejected",
+      "reason": "D2firstmovingEmergency933; reference extension did not resolve current peer stopping obligation.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Causal producer repair and fresh fixed HEAD"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-producer",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Late callback may backdate braking before actual emission",
+      "changed_dimension": "Native delayed-publication regression and shared recorder",
+      "result": "accepted",
+      "reason": "Old recorder fails2 tests, including0.412372m/s velocity mismatch; record fresh ROS-clock causal maximum after publish. Buildr28/testsr22 pass.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [
+        "Callback-entry stamp used as already-published history epoch"
+      ],
+      "revisit_condition": "Fresh observed publication history contradiction"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-application",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Selected application differs from sequential publication schedule",
+      "changed_dimension": "Existing validated probe copy/current8bfdaa52; identical body parameters",
+      "result": "accepted",
+      "reason": "All627 apply calls match selected receive ID/source/float32 input. D2 brake-crossing speed MAE improves with application oracle; actual phase remains unavailable to participant.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Causal participant-visible input schedule candidate or independent observation"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-phase-transfer",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Application diagnostic reconstructs r12 phase",
+      "changed_dimension": "Fresh diagnostic run under same controller",
+      "result": "inconclusive",
+      "reason": "Different firstfailure1294/intent mismatch, not933peer; do not transfer sampling phase or reclassify old run.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Same-run application evidence or bounded explicit input-schedule comparison"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-transition-stop",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Intent change pre-empts last published stopping obligation",
+      "changed_dimension": "Same1294 world/actualpublished778, requestedCruise vs upstreamShiftOut Stop",
+      "result": "accepted",
+      "reason": "Cruise invalid-identity; upstreamStop accepted345samples/+10.061819599m, bundle/join/adapter available. Normal continuation is not promoted.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Separate explicit Stop ownership producer, regression and integration"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-1-persistent-a",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world persistent-a feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=persistent-a stage=solver-rejected candidate=17932919332092071422 solver=solve-rejected solve_ms=148.386 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.964774, dua_res=666.318, failed_iterate_row=579, value=0.857701, bounds=[-inf,-3.03966], violation=3.89736, tolerance=0.00403966, normalized=964.774, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000000933-f8de871eaf154dfe-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-2-stateless-left-b",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world stateless-left-b feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=stateless-left-b stage=solver-rejected candidate=4438868356229678315 solver=solve-rejected solve_ms=145.036 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.955001, dua_res=96.5926, failed_iterate_row=579, value=0.818216, bounds=[-inf,-3.03975], violation=3.85797, tolerance=0.00403975, normalized=955.001, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000000933-3d9a074079cac4eb-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-3-stateless-right-b",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world stateless-right-b feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=stateless-right-b stage=solver-rejected candidate=4711632218643098503 solver=solve-rejected solve_ms=141.455 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.964858, dua_res=498.028, failed_iterate_row=579, value=0.858057, bounds=[-inf,-3.03909], violation=3.89715, tolerance=0.00403909, normalized=964.858, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000000933-4163148a2081eb87-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-4-rough-left-c",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world rough-left-c feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=rough-left-c stage=solver-rejected candidate=2434744408856443586 solver=solve-rejected solve_ms=67.9828 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=1.38222, dua_res=465.957, failed_iterate_row=578, value=2.63745, bounds=[-inf,-3.284], violation=5.92146, tolerance=0.004284, normalized=1382.22, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-5-rough-right-c",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world rough-right-c feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=rough-right-c stage=solver-rejected candidate=16890447558105965082 solver=solve-rejected solve_ms=65.3657 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.521318, dua_res=735.967, failed_iterate_row=579, value=-0.98893, bounds=[-inf,-3.15501], violation=2.16608, tolerance=0.00415501, normalized=521.318, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-6-offline-left-d",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world offline-left-d feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=offline-left-d stage=solver-rejected candidate=2434744408856443586 solver=solve-rejected solve_ms=69.0579 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=1.38222, dua_res=465.957, failed_iterate_row=578, value=2.63745, bounds=[-inf,-3.284], violation=5.92146, tolerance=0.004284, normalized=1382.22, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-7-offline-right-d",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world offline-right-d feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=offline-right-d stage=solver-rejected candidate=16890447558105965082 solver=solve-rejected solve_ms=65.1555 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.521318, dua_res=735.967, failed_iterate_row=579, value=-0.98893, bounds=[-inf,-3.15501], violation=2.16608, tolerance=0.00415501, normalized=521.318, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-8-production-left-g",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world production-left-g feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=production-left-g stage=solver-rejected candidate=4438868356229678315 solver=solve-rejected solve_ms=69.148 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.955001, dua_res=96.5926, failed_iterate_row=579, value=0.818216, bounds=[-inf,-3.03975], violation=3.85797, tolerance=0.00403975, normalized=955.001, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-architecture-9-production-right-g",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world production-right-g feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=production-right-g stage=solver-rejected candidate=4711632218643098503 solver=solve-rejected solve_ms=67.9265 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.964858, dua_res=498.028, failed_iterate_row=579, value=0.858057, bounds=[-inf,-3.03909], violation=3.89715, tolerance=0.00403909, normalized=964.858, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-complete-rest-1-current-world-complete-rest-y",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world current-world-complete-rest-y feasibility",
+      "changed_dimension": "complete-rest frozen inputs",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=dynamic-proof-rejected candidate=15035026784266059900 solver=solved solve_ms=123.023 terminal_progress=1.03928 terminal_velocity=2.53742e-07 lateral_reserve=0.793506 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=obstacle=d1/checked=286/dynamic_side=-1/first_side_stage=0/behind_rows=0/side_rows=0/ahead_rows=0/diagonal_rows=20/physical_axis=1/physical_diagonal=1/reason=new_overlap/scope=candidate/qp_stage=19/rejected_t=0.705/rejected_clearance=-0.00465933/rejected_pose=[89631,43133.1,2.5855]/minimum_obstacle=d1/minimum_t=0.705/minimum_clearance=-0.00465933/affine_node_min=-0.0346846@19/nonlinear_node_min=-0.0342412@19/node_pose_error_max=0.000473637@19/full_disjunction_min=-0.196572@7/rejection_node_bracket=0.00121378@18->-0.0342412@19; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r12-complete-rest-2-current-world-complete-rest-y",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r12"
+      ],
+      "hypothesis": "Same-world current-world-complete-rest-y feasibility",
+      "changed_dimension": "complete-rest frozen inputs",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=12992497856347389564 solver=assembly-rejected solve_ms=19.3113 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle refinement rejected: invalid-input; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-1-persistent-a",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world persistent-a feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=15961274662287318559 solver=solved solve_ms=31.8971 terminal_progress=19.5985 terminal_velocity=3.57158 lateral_reserve=2.1614 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-2-stateless-left-b",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world stateless-left-b feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=stateless-left-b stage=solver-rejected candidate=16849675843303859137 solver=solve-rejected solve_ms=152.788 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.54415, dua_res=203.843, failed_iterate_row=597, value=-5.11839, bounds=[-inf,-12.4219], violation=7.30355, tolerance=0.0134219, normalized=544.15, row_semantic=dynamic-obstacle-physical-plane/stage=20/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000001294-e9d612e7f49b63c1-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-3-stateless-right-b",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world stateless-right-b feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "accepted",
+      "reason": "arm=stateless-right-b stage=accepted candidate=12745672180902324947 solver=solved solve_ms=29.3536 terminal_progress=19.5985 terminal_velocity=3.29328 lateral_reserve=2.16139 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-4-rough-left-c",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world rough-left-c feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=rough-left-c stage=solver-rejected candidate=13003644167330735507 solver=solve-rejected solve_ms=65.4911 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.747364, dua_res=1002.25, failed_iterate_row=579, value=-2.70748, bounds=[-inf,-13.6752], violation=10.9677, tolerance=0.0146752, normalized=747.364, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-5-rough-right-c",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world rough-right-c feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "accepted",
+      "reason": "arm=rough-right-c stage=accepted candidate=12331661054795155513 solver=solved solve_ms=27.8853 terminal_progress=19.5985 terminal_velocity=3.37662 lateral_reserve=2.16139 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=17 lattice_ahead=20 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=207 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=0/attempts=207/accepted; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-6-offline-left-d",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world offline-left-d feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=offline-left-d stage=solver-rejected candidate=13003644167330735507 solver=solve-rejected solve_ms=65.3938 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.747364, dua_res=1002.25, failed_iterate_row=579, value=-2.70748, bounds=[-inf,-13.6752], violation=10.9677, tolerance=0.0146752, normalized=747.364, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-7-offline-right-d",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world offline-right-d feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "accepted",
+      "reason": "arm=offline-right-d stage=accepted candidate=12331661054795155513 solver=solved solve_ms=76.494 terminal_progress=19.5985 terminal_velocity=3.41777 lateral_reserve=2.16139 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=17 lattice_ahead=20 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=207 sqp_depth=3 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=3/attempts=207/accepted, progress_wall=accepted/applied=1/solved=1/mismatch=1.6561m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1681/cache_hits=2/cache_misses=98/cache_scanned=8222/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, physical_dynamic_sqp_audit=applied/solved=1/limit=3/count=3/detail=bounded dynamics/obstacle/wall SQP solved; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-8-production-left-g",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world production-left-g feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "rejected",
+      "reason": "arm=production-left-g stage=solver-rejected candidate=16849675843303859137 solver=solve-rejected solve_ms=66.5594 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.54415, dua_res=203.843, failed_iterate_row=597, value=-5.11839, bounds=[-inf,-12.4219], violation=7.30355, tolerance=0.0134219, normalized=544.15, row_semantic=dynamic-obstacle-physical-plane/stage=20/element=-1; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-architecture-9-production-right-g",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world production-right-g feasibility",
+      "changed_dimension": "architecture frozen inputs",
+      "result": "accepted",
+      "reason": "arm=production-right-g stage=accepted candidate=12745672180902324947 solver=solved solve_ms=28.3658 terminal_progress=19.5985 terminal_velocity=3.29328 lateral_reserve=2.16139 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=1 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/candidate=direct-side; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-complete-rest-1-current-world-complete-rest-y",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world current-world-complete-rest-y feasibility",
+      "changed_dimension": "complete-rest frozen inputs",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=1587404309375138681 solver=solve-rejected solve_ms=112.168 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.360012, dua_res=0.0539827, failed_iterate_row=436, value=1.33135, bounds=[-0.714215,0.714215], violation=0.617138, tolerance=0.00233135, normalized=264.712, row_semantic=input-box/stage=19/element=1, first_vtheta=coupled/inconclusive/declared:[0,5.55556]/implied:[0,5.55556]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000001294-160797cf173abb79-cruise-side-neutral-initial-solve-rejected/snapshot.yaml; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-publication-epoch-complete-rest-2-current-world-complete-rest-y",
+      "baseline_commit": "8bfdaa523e9641e571fba7afb41e3488ed87da28",
+      "snapshot_ids": [
+        "20260910-nine-state-publication-epoch"
+      ],
+      "hypothesis": "Same-world current-world-complete-rest-y feasibility",
+      "changed_dimension": "complete-rest frozen inputs",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=6068046392130835883 solver=solve-rejected solve_ms=48.103 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.503702, dua_res=0.152483, failed_iterate_row=436, value=1.57767, bounds=[-0.714215,0.714215], violation=0.863453, tolerance=0.00257767, normalized=334.974, row_semantic=input-box/stage=19/element=1, first_vtheta=coupled/inconclusive/declared:[0,5.55556]/implied:[0,5.55556]/limit_state:[-1,-1]; rejected solve is not a physical infeasibility certificate.",
+      "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate representation, physical inputs or source contract"
     }
   ]
 }

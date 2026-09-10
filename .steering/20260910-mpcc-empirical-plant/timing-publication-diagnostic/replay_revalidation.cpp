@@ -17,6 +17,11 @@ int main(int argc, char ** argv)
   out["input"] = path.string();
   for (const auto key : {"previous_accepted_revalidation_evidence", "revalidation_evidence"}) {
     const auto e = root[key];
+    if (!e || !e["request"] || !e["certified_plan_evidence"]) {
+      out[key]["status"] = "unavailable";
+      out[key]["reason"] = e && e["reason"] ? e["reason"].as<std::string>() : "missing recorded request/plan";
+      continue;
+    }
     auto r = mpcc_observation::read_request(e["request"], path.parent_path());
     r.plan = read_plan(e["certified_plan_evidence"], path);
     auto row = out[key];
@@ -84,6 +89,41 @@ int main(int argc, char ** argv)
       const auto joined = retained::evaluate(r);
       row["join_elapsed_ms"] = std::chrono::duration<double, std::milli>(Clock::now() - join_start).count();
       row["join"] = retained::to_string(joined.reason);
+    }
+    const auto published = root["publication_bundle"]["certified_plan_evidence"];
+    if (std::string(key) == "revalidation_evidence" && published && published["publication"]) {
+      // A proposed intent may differ from the last actual publication. This
+      // counterfactual tests only that published source's full Stop obligation;
+      // it never authorizes continuing an expired tactical maneuver.
+      auto braking = r;
+      braking.plan = read_plan(published, path);
+      const auto publication = published["publication"];
+      braking.execution_clock = {retained::ExecutionClockKind::PublishedPlan,
+        publication["publication_control_origin_sec"].as<double>(),
+        publication["publication_artifact_elapsed_sec"].as<double>()};
+      const auto upstream = braking.plan->execution_artifact->identity.source_context.intent;
+      for (const auto name : {"requested-intent", "published-upstream-intent"}) {
+        braking.current_intent = std::string(name) == "requested-intent" ? r.current_intent : upstream;
+        auto diagnostic = row["actual_published_stop_diagnostic"][name];
+        diagnostic["authority"] = false;
+        diagnostic["source"] = braking.plan->execution_artifact->identity.sequence;
+        diagnostic["intent"] = m::mpcc_execution_contract::to_string(braking.current_intent);
+        const auto checked = retained::evaluate_stop_successor(braking);
+        diagnostic["stop"] = retained::to_string(checked.reason);
+        diagnostic["clearance"] = checked.dynamic_clearance.minimum_clearance_m;
+        diagnostic["samples"] = checked.actuation_samples.size();
+        const auto candidate = bundle::build(braking, checked, 200000U + r.decision_id);
+        diagnostic["bundle"] = bundle::to_string(candidate.reason);
+        if (candidate.plan) {
+          auto join = braking;
+          join.plan = candidate.plan;
+          join.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+          const auto result = retained::evaluate(join);
+          diagnostic["join"] = retained::to_string(result.reason);
+          diagnostic["production"] = m::mpcc_rate_resolved_production_adapter::to_string(
+            m::mpcc_rate_resolved_production_adapter::build(result).reason);
+        }
+      }
     }
   }
   YAML::Emitter emitter; emitter.SetDoublePrecision(17); emitter << out;

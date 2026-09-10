@@ -54758,17 +54758,23 @@ private:
   void record_published_vehicle_command(
     const rclcpp::Time & stamp, const double acceleration, const double wire_steering)
   {
-    auto & history = published_vehicle_commands_;
-    const double published = stamp.seconds();
-    if (!history.empty() && published < history.back().published_sec) history.clear();
-    if (!history.empty() && published == history.back().published_sec) history.pop_back();
-    history.push_back({published, acceleration, wire_steering});
+    // Called immediately after the final ROS publication. The packet stamp is
+    // the nominal decision epoch; it cannot backdate an already sent input.
+    // A causal observation may be one tick ahead of the independent ROS clock.
+    const auto publication_clock = now();
+    const auto publication_time = publication_clock < stamp ? stamp : publication_clock;
     // Keep a predecessor for both channels before the oldest accepted state.
     const double retain_sec = mpc_cfg_.odom_timeout_sec +
       mpc_cfg_.state_prediction_delay_sec;
-    while (history.size() > 2 && history[1].published_sec < published - retain_sec) {
-      history.erase(history.begin());
+    if (!mpcc_vehicle_model::record_serialized_publication(
+        published_vehicle_commands_, {stamp.seconds(), acceleration, wire_steering},
+        publication_clock.seconds(), retain_sec))
+    {
+      published_vehicle_commands_.clear();
+      last_published_steering_control_time_.reset();
+      return;
     }
+    last_published_steering_control_time_ = publication_time;
   }
 
   struct VehicleObservation
@@ -54886,7 +54892,6 @@ private:
     last_published_physical_steering_rad_ =
       safe_control[1];
     last_published_steering_steady_ = SteadyClock::now();
-    last_published_steering_control_time_ = stamp;
     const double actual_speed_mps =
       odom_ != nullptr && std::isfinite(odom_->twist.twist.linear.x) ?
       odom_->twist.twist.linear.x : std::numeric_limits<double>::quiet_NaN();
@@ -54928,7 +54933,6 @@ private:
     last_published_physical_steering_rad_ =
       raw_command.lateral.steering_tire_angle;
     last_published_steering_steady_ = SteadyClock::now();
-    last_published_steering_control_time_ = stamp;
     command_failsafe_active_ = false;
     return published_steering;
   }

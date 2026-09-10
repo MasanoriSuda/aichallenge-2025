@@ -28,6 +28,11 @@ wire加速度は車体の正味加速度と等しくない。速度のaffine上�
 加速度・操舵を保持し、縦入力0秒、操舵0.1秒の公称適用遅延の後に機械応答を積分する。
 送信を実適用のackと扱わない。元pose・速度・IMU・タイヤ角の時刻、初期body state、
 送信履歴と公称遅延はimmutable snapshotへ保存し、再現fingerprintに含める。
+履歴の時刻は最終ROS publish直後に観測したROS clockと、因果的なdecision時刻の
+遅い方を使う。callback開始時刻へ公開済み入力を遡らせない。wire packetのstampと
+今回のprospective proofは公称decision時刻を保持するため、両者を区別する。
+履歴の公開時刻修正はUnityでの受信・選択・適用の保証ではない。10Hzの最新値選択は
+指令を上書きし得る。保存済み実適用記録は事後比較に限り、通常制御へ流用しない。
 派生候補やasync workerも元観測を保持する。必要な公開入力は
 [参加者契約](../interface/participant-interface.md)に記載する。
 

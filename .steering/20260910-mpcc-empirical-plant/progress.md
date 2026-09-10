@@ -90,3 +90,12 @@ Canonical current-world complete-rest audit repair: buildr11passes26packages;
 package r8passes2388records/0errors/failures/skips. Rear/side-peer live/audit
 identities and proofs agree. The canonical CLI reproduces938candidate
 334c7985b802506b and its expected dynamic QP rejection. Diagnostic-only code.
+
+## Terminal-time structural candidate
+
+See `stop-terminal-time-design.md` and `terminal-time-audit-evidence.json`. Public
+peer and coherent-tangent alternatives are not promoted. Native0.8s complete-rest
+feasibility certifies938. Implemented explicit native/max-support terminal-clock
+population, zero-cost Stop objective, retimed all peers and distinct clock IDs.
+Buildr13passes26packages; testsr9pass2389records; canonical938replay accepted.
+Fresh dev2and M4–M6remain open.

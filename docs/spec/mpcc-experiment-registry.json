@@ -755,6 +755,11 @@
       "snapshot_id": "20260910-nine-state-dev2-diagnostics",
       "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-diagnostics-evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-nine-state-terminal-time-and-peer-audits",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/terminal-time-audit-evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -5192,6 +5197,90 @@
       "production_impact": "Diagnostic-only repair; no control change",
       "deleted_code": [],
       "revisit_condition": "Changed live complete-rest producer or audit semantics"
+    },
+    {
+      "experiment_id": "20260910-nine-state-peer-future-oracle",
+      "baseline_commit": "d0fdd338fbe94f729b7d7b311a9a002f81a126c8",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-time-and-peer-audits"
+      ],
+      "hypothesis": "Only peer prediction changes the exact938retained outcome",
+      "changed_dimension": "Initial-matched public future V2X, conservative observed-path speed subdivision",
+      "result": "accepted",
+      "reason": "Retained trajectory+terminal rest pass, clearance0.0189759246m; independent immediateStop still rejects. Future observations are scoring only, not guaranteed counterfactual peer behavior.",
+      "production_impact": "No production prediction change",
+      "deleted_code": [],
+      "revisit_condition": "Changed peer prediction hypothesis or new scene"
+    },
+    {
+      "experiment_id": "20260910-nine-state-peer-causal-cartesian",
+      "baseline_commit": "d0fdd338fbe94f729b7d7b311a9a002f81a126c8",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-time-and-peer-audits"
+      ],
+      "hypothesis": "Causal Cartesian history model alone repairs938",
+      "changed_dimension": "Existing tracked and0.25/0.5/1s quadratic-history velocity/acceleration, CV/CA/CTRA",
+      "result": "rejected",
+      "reason": "All12causal Cartesian forecasts reject the exact retained terminal. Latest input source10.049999775receipt1789016574.3958194 precedes failure1789016574.430577.",
+      "production_impact": "No model/gain changes",
+      "deleted_code": [],
+      "revisit_condition": "New causally supported model family"
+    },
+    {
+      "experiment_id": "20260910-nine-state-peer-map-holdout",
+      "baseline_commit": "d0fdd338fbe94f729b7d7b311a9a002f81a126c8",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-time-and-peer-audits"
+      ],
+      "hypothesis": "Known course offsets predict observed peer motion",
+      "changed_dimension": "Polyline diagnostic and smooth Frenet four-model frozen holdout",
+      "result": "rejected",
+      "reason": "Polyline variants pass938but do not preserve initial velocity; smooth offsets fail/singular. Frozen runs217anchors: low availability and poor conditional errors; subsets differ, not paired full-coverage superiority.",
+      "production_impact": "No map predictor promoted",
+      "deleted_code": [],
+      "revisit_condition": "Physically consistent predictor with valid full-coverage holdout"
+    },
+    {
+      "experiment_id": "20260910-nine-state-coherent-tangent",
+      "baseline_commit": "d0fdd338fbe94f729b7d7b311a9a002f81a126c8",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-time-and-peer-audits"
+      ],
+      "hypothesis": "Native coherent tangent seed restores current-world normal/Stop",
+      "changed_dimension": "Only adapter tangent sequence; baseline/reference/power/brake, OSQP/HiGHS",
+      "result": "rejected",
+      "reason": "No accepted normal orStop. HiGHS power process crashed and is inconclusive; remaining methods rejected. No physical infeasibility certificate.",
+      "production_impact": "No adapter/model/solver changes",
+      "deleted_code": [],
+      "revisit_condition": "New causal formulation evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-stop-clock-r1",
+      "baseline_commit": "d0fdd338fbe94f729b7d7b311a9a002f81a126c8",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-time-and-peer-audits"
+      ],
+      "hypothesis": "Nonmaximum terminal-clock comparison is valid",
+      "changed_dimension": "First diagnostic clock binding prototype",
+      "result": "inconclusive",
+      "reason": "Nonmaximum candidates fail the identity guard before solve; corrected by r2. Maximum clock reproduces old failure.",
+      "production_impact": "No production impact",
+      "deleted_code": [],
+      "revisit_condition": "Selected dt also declared as candidate maximum dt"
+    },
+    {
+      "experiment_id": "20260910-nine-state-stop-clock-r2",
+      "baseline_commit": "d0fdd338fbe94f729b7d7b311a9a002f81a126c8",
+      "snapshot_ids": [
+        "20260910-nine-state-terminal-time-and-peer-audits"
+      ],
+      "hypothesis": "A physical stopping-duration candidate can certify938",
+      "changed_dimension": "Maximum5s/original1.7991s/native0.8s, inherited vs feasibility objective",
+      "result": "accepted",
+      "reason": "Native0.8s zero-cost OSQP accepted24.4786ms; inherited HiGHS accepted60.0932ms. Other outcomes preserved; no cross-clock objective ranking.",
+      "production_impact": "Basis for explicit terminal-time feasibility population; runtime still required",
+      "deleted_code": [],
+      "revisit_condition": "Changed candidate/scene or integrated failure"
     }
   ]
 }

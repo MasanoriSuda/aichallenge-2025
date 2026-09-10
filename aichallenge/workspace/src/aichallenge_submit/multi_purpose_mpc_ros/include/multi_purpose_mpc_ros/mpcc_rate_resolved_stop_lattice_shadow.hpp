@@ -50,9 +50,9 @@ struct EvaluationControl
 
 enum class EvaluationMode
 {
-  /// Production worker: one bounded seven-state solve from the latest
-  /// immutable current-world state. An older control-lattice search must not block
-  /// the next current-world observation from reaching the worker.
+  /// Production worker: free nine-state feasibility under the native braking
+  /// and maximum support terminal clocks, stopping at the first certified result.
+  /// No historical steering lattice; supersession is checked between candidates.
   DirectSevenStateOnly,
   /// Offline/shadow comparison: retain the broader candidate population so
   /// candidate-generation limits remain observable without owning authority.

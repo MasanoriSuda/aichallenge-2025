@@ -1,0 +1,61 @@
+{
+  "baseline_commit": "d0fdd338fbe94f729b7d7b311a9a002f81a126c8",
+  "scope": "Complete-rest terminal-time candidate, package/replay verified; fresh runtime pending",
+  "build_packages": 26,
+  "test_records": 2389,
+  "errors": 0,
+  "failures": 0,
+  "skipped": 0,
+  "source_patch_sha256": "3c6f0c5bd30e9139f477b1b398d1c133a446232b83b462a418bac0b668637a62",
+  "sources": [
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp",
+      "sha256": "84eaaf7054fbe43addaa0d1833f2dc7face00fcb34aaef8c022da6c888c32b20",
+      "preserved": "output/20260910-nine-state-terminal-time-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp",
+      "sha256": "fda7709abdc9d50c80279e7e0b0f4dd4e9ef8a295959b0caaae3d3427e51b9eb",
+      "preserved": "output/20260910-nine-state-terminal-time-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "98a067ea0e1365f437a04b47e04341da064601201845ac06c24336234a5df195",
+      "preserved": "output/20260910-nine-state-terminal-time-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a8a26aa245d2949acee03848621936418bf3703547bba6c291f925d963fc4ff3",
+      "preserved": "output/20260910-nine-state-terminal-time-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "sha256": "f9488155aa11020e54268eb17c2d7633025069e4480b27b7a22d362cd5cdf9b1",
+      "preserved": "output/20260910-nine-state-terminal-time-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "sha256": "0ba0d43736a905689af8fb085452386e1074a8bcce5d954153275dafced27df4",
+      "preserved": "output/20260910-nine-state-terminal-time-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp"
+    }
+  ],
+  "logs": [
+    {
+      "path": "output/20260910-nine-state-terminal-time-candidate-r1/mpcc-nine-state-build-r13.log",
+      "sha256": "70b3eb10061d9d1416bc5f295c21ab5a3af692e42de6e88e0dafd41e25dc1fd2"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-time-candidate-r1/mpcc-nine-state-tests-r9.log",
+      "sha256": "0b7f3963fe38860e83624a3ed0f0b2a830b0e10a69120a8ff64f03333975995c"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-time-candidate-r1/mpcc-nine-state-stop-clock-production-replay-r1.log",
+      "sha256": "77d948688daf595ef368fff36035ef0d794bbfcd83389bf8563be9ee025716ce"
+    },
+    {
+      "path": "output/20260910-nine-state-terminal-time-candidate-r1/mpcc-nine-state-terminal-time-quality-r1.log",
+      "sha256": "bd4dc0f7e042ea2b2a59976ff3c077ba1ab69f7ad862a0f6d49101f69966b94e"
+    }
+  ],
+  "quality": "Applicable repository pre-commit hooks passed"
+}

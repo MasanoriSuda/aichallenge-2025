@@ -1,8 +1,9 @@
 # Current status and remaining completion work
 
 2026-09-10JST. Continue the authorized autonomous M1–M6 task without routine
-confirmations. Full completion is not claimed. Local HEAD is `b0478348` after
-`226f93e0`shared nine-state migration and the map-support repair. No push.
+confirmations. Full completion is not claimed. Baseline is `d0fdd338` (audit repair), with production control `b0478348` after
+`226f93e0`shared nine-state migration and map-support repair. The verified terminal
+time candidate below is prepared for local commit and fresh runtime. No push.
 
 Empirical simulator acceptance with explicit unverified guarantees is the user's
 accepted scope; universal transport/contact guarantees are not required for this
@@ -16,16 +17,13 @@ new terminal rejection to the updated peer field. No production repair is yet
 justified by a passing integrated dev2run.
 
 The [current dev2 evidence](../20260910-mpcc-empirical-plant/first-dev2-failure.md)
-is the active investigation record. Independent QP solvers establish affine
-feasibility of some rejected QPs but full trajectory/wall/Stop proofs still fail.
-Five alternate terminal lateral targets certify the938retained transaction only
-through actual rest. They do not prove the live five-second complete-rest problem.
-A stale comparison path used historical maximum braking instead of the live
-free-control complete-rest producer; direct live-producer comparisons are now
-recorded. The permanent live-producer audit entry and rear/side-peer equivalence
-regression are repaired; buildr11/testsr8pass26packages/2388records. Public V2X forecasts
-also differ materially from subsequent observations; causal prediction analysis
-is next. No future observations are allowed in live control.
+and [terminal-time repair](../20260910-mpcc-empirical-plant/stop-terminal-time-design.md)
+are active. A native0.8s free-control feasibility Stop certifies the unchanged938
+scene. Production now evaluates explicit native-braking and maximum-support clock
+candidates, preserving rear-peer delayed stopping, all hard proofs and per-solve
+budgets. Time-specific IDs and zero-cost meaning are sealed. Buildr13passes26
+packages, testsr9pass2389records, canonical938replay accepts. Fresh dev2is next.
+Peer forecast alternatives and coherent tangent seeds were not promoted.
 
 Remaining sequence: repair current dev2root cause, finish M4intent/Stop/restart/
 Recovery/Rejoin/Boost/async exercises, same-HEAD single/dev2three-trial campaign,

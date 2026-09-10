@@ -1298,6 +1298,78 @@ TEST(MpccArchitectureComparison, CurrentWorldStopBindsCertificateToSolvedTraject
   EXPECT_TRUE(result.dynamic_clear);
 }
 
+TEST(MpccArchitectureComparison, CompleteRestPopulationOwnsNativeClockAndFeasibility)
+{
+  const auto source = stoppable_source_snapshot();
+  const auto fingerprint = architecture::fingerprint_interaction_snapshot(source);
+  shadow::SolverContext solver;
+  const auto candidates = stop_lattice::build_current_world_complete_rest_population(
+    source, solver.physical_constraint_tolerance());
+  ASSERT_EQ(candidates.size(), 2U);
+  ASSERT_TRUE(candidates.front().accepted()) << candidates.front().detail;
+  ASSERT_TRUE(candidates.back().accepted()) << candidates.back().detail;
+  const auto & nominal = candidates.front().candidate;
+  const auto & maximum = candidates.back().candidate;
+  EXPECT_LT(nominal.request.maximum_stage_dt_sec, maximum.request.maximum_stage_dt_sec);
+  EXPECT_EQ(maximum.request.maximum_stage_dt_sec, source.request.maximum_stage_dt_sec);
+  EXPECT_NE(architecture::fingerprint_interaction_snapshot(nominal),
+    architecture::fingerprint_interaction_snapshot(maximum));
+  EXPECT_FALSE(mpcc_rate_resolved_execution_artifact::same_identity(
+    nominal.identity, maximum.identity));
+  EXPECT_FALSE(stop_lattice_shadow::same_current_world_stop_scope(
+    nominal.identity, maximum.identity));
+  for (const auto & candidate : candidates) {
+    const auto & request = candidate.candidate.request;
+    EXPECT_DOUBLE_EQ(candidate.candidate.control_prediction_origin_sec,
+      source.control_prediction_origin_sec);
+    EXPECT_EQ(candidate.candidate.replay_world->observation_generation,
+      source.replay_world->observation_generation);
+    EXPECT_EQ(candidate.candidate.replay_world->obstacles.size(),
+      source.replay_world->obstacles.size());
+    EXPECT_TRUE(request.input_delta_weight.isZero(0.0));
+    for (const auto & state : request.states) {
+      EXPECT_TRUE(state.weight.isZero(0.0));
+      EXPECT_TRUE(state.linear_cost.isZero(0.0));
+    }
+    mpcc_vehicle_model::State body{0, 0, 0, request.initial_state[3],
+      request.current_lateral_velocity_mps, request.current_yaw_rate_radps,
+      request.current_steering_rad, request.current_response_steering_rad};
+    for (const auto & input : request.inputs) {
+      EXPECT_DOUBLE_EQ(input.stage_dt_sec, request.maximum_stage_dt_sec);
+      EXPECT_TRUE(input.weight.isZero(0.0));
+      EXPECT_TRUE(input.linear_cost.isZero(0.0));
+      const auto bounds = mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+        input.lower[0], input.upper[0], solver.physical_constraint_tolerance());
+      ASSERT_TRUE(bounds.has_value());
+      const auto next = mpcc_vehicle_model::advance(body, {bounds->lower, 0.0},
+        request.vehicle_model, input.stage_dt_sec);
+      ASSERT_TRUE(next.has_value());
+      body = next->state;
+    }
+    EXPECT_DOUBLE_EQ(body.forward_velocity_mps, 0.0);
+    EXPECT_DOUBLE_EQ(body.lateral_velocity_mps, 0.0);
+    EXPECT_DOUBLE_EQ(body.yaw_rate_radps, 0.0);
+  }
+  EXPECT_EQ(architecture::fingerprint_interaction_snapshot(source), fingerprint);
+  const auto deduplicated = stop_lattice::build_current_world_complete_rest_population(
+    nominal, solver.physical_constraint_tolerance());
+  ASSERT_EQ(deduplicated.size(), 1U);
+  EXPECT_TRUE(deduplicated.front().accepted()) << deduplicated.front().detail;
+
+  auto resting = source;
+  resting.request.initial_state[3] = 0.0;
+  resting.request.current_lateral_velocity_mps = 0.0;
+  resting.request.current_yaw_rate_radps = 0.0;
+  resting.request.states.front().lower = resting.request.initial_state;
+  resting.request.states.front().upper = resting.request.initial_state;
+  const auto at_rest = stop_lattice::build_current_world_complete_rest_population(
+    resting, solver.physical_constraint_tolerance());
+  ASSERT_FALSE(at_rest.empty());
+  ASSERT_TRUE(at_rest.front().accepted()) << at_rest.front().detail;
+  EXPECT_GE(at_rest.front().candidate.request.inputs.front().stage_dt_sec,
+    source.publication_interval_sec);
+}
+
 TEST(MpccArchitectureComparison, CurrentWorldStopSolvesFreeControlsWithEveryObservedPeer)
 {
   auto source = stoppable_source_snapshot();
@@ -1359,7 +1431,7 @@ TEST(MpccArchitectureComparison, CurrentWorldStopSolvesFreeControlsWithEveryObse
   EXPECT_NE(candidate.identity.source_context.fingerprint, context.fingerprint);
   EXPECT_EQ(candidate.replay_world->obstacles.size(), 2U);
   EXPECT_GT(candidate.request.states[1].upper[3], candidate.request.states[1].lower[3]);
-  EXPECT_TRUE(candidate.request.states[1].weight.isApprox(source.request.states[1].weight));
+  EXPECT_TRUE(candidate.request.states[1].weight.isZero(0.0));
   EXPECT_DOUBLE_EQ(candidate.request.states.back().lower[3], 0.0);
   EXPECT_DOUBLE_EQ(candidate.request.states.back().upper[3], 0.0);
   EXPECT_NEAR(execution.predicted_states.back().velocity_mps, 0.0,
@@ -1370,13 +1442,37 @@ TEST(MpccArchitectureComparison, CurrentWorldStopSolvesFreeControlsWithEveryObse
   ASSERT_EQ(guided.outcome, shadow::Outcome::Solved) << guided.detail;
   EXPECT_EQ(guided.dynamic_obstacle_guidance_peer_count, 2U);
   EXPECT_EQ(guided.dynamic_obstacle_diagonal_row_count, 2U * horizon);
+  // A short certificate through rest does not test delayed stopping while a
+  // rear peer passes. Retain independent coverage of the maximum support arm.
+  const auto population = stop_lattice::build_current_world_complete_rest_population(
+    source, replay_solver.physical_constraint_tolerance());
+  ASSERT_FALSE(population.empty());
+  const auto & delayed = population.back().candidate;
+  shadow::SolverContext delayed_solver;
+  const auto delayed_result = delayed_solver.evaluate(delayed);
+  ASSERT_EQ(delayed_result.outcome, shadow::Outcome::Solved) << delayed_result.detail;
+  ASSERT_NE(delayed_result.execution_artifact, nullptr);
+  const auto delayed_exact = mpcc_rate_resolved_physical_adapter::build(
+    *delayed_result.execution_artifact, delayed.identity.source_context.intent,
+    delayed.identity.source_context.stage_geometry_id);
+  ASSERT_TRUE(delayed_exact.exact_trajectory.has_value());
+  auto delayed_physical = *result.certified_stop_plan->physical_snapshot;
+  delayed_physical.identity.artifact = delayed_result.identity;
+  delayed_physical.trajectory = *delayed_exact.exact_trajectory;
+  delayed_physical.bound_tolerance_m = delayed_physical.trajectory.lateral_bound_tolerance_m;
+  EXPECT_EQ(mpcc_rate_resolved_physical_wall::evaluate(delayed_physical).outcome,
+    mpcc_rate_resolved_physical_wall::Outcome::Accepted);
+  const auto delayed_peers = mpcc_rate_resolved_dynamic_proof::evaluate_current_world(
+    delayed, delayed_physical);
+  EXPECT_TRUE(delayed_peers.valid && delayed_peers.clear);
   // The audit must exercise the same free-control Stop that escapes the rear
   // peer, preserving all observed peers and the complete-rest clock. The old
   // maximum-braking audit is a different problem and cannot replace it.
   const auto audit = compare_current_world_complete_rest(recorded(source));
   ASSERT_TRUE(audit.source_accepted) << audit.detail;
-  ASSERT_EQ(audit.arms.size(), 1U);
-  const auto & audited = audit.arms.front();
+  ASSERT_EQ(audit.arms.size(), result.attempted_candidate_count);
+  ASSERT_FALSE(audit.arms.empty());
+  const auto & audited = audit.arms.back();
   EXPECT_EQ(audited.arm, Arm::CurrentWorldCompleteRestY);
   ASSERT_EQ(audited.stage, Stage::Accepted) << audited.detail;
   ASSERT_TRUE(audited.bundle.has_value());

@@ -105,3 +105,13 @@ The remaining task is a causal reset/restart exercise, not an assumed missing cl
 
 All native/public/solver evidence is empirical2025-derived simulation evidence.
 User JSON, original simulator DLL and existing artifacts remain protected.
+
+## Terminal-time candidate repair
+
+The newer [terminal-time design](stop-terminal-time-design.md) records a positive
+0.8s complete-rest solve under the unchanged physical scene. The live/audit
+population now owns native braking and maximum-support clocks with zero-cost
+feasibility. Per-clock artifact identity, publication-period floor, all peers,
+supersession and maximum-support rear-peer proof are covered. Buildr13passes26
+packages; package r9passes2389records/0errors/failures/skips. Canonical938replay
+accepts the first candidate. Fresh dev2acceptance is pending; no completion claim.

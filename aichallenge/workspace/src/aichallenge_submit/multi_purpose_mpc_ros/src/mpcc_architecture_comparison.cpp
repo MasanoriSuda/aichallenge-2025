@@ -2440,20 +2440,24 @@ Report compare_current_world_complete_rest(
   }
   report.source_accepted = true;
   shadow::SolverContext solver;
-  const auto stop = stop_lattice::build_current_world_complete_rest_candidate(
+  const auto population = stop_lattice::build_current_world_complete_rest_population(
     recorded.source, solver.physical_constraint_tolerance());
-  if (!stop.accepted()) {
-    report.detail = stop.detail;
-    report.arms.push_back(rejected_arm(
-      Arm::CurrentWorldCompleteRestY, Stage::CandidateRejected, fingerprint, stop.detail));
-    return report;
+  report.detail = "current-world complete-rest production population; declared clocks, zero-cost feasibility";
+  for (const auto & stop : population) {
+    if (!stop.accepted()) {
+      report.arms.push_back(rejected_arm(
+        Arm::CurrentWorldCompleteRestY, Stage::CandidateRejected, fingerprint, stop.detail));
+      continue;
+    }
+    report.arms.push_back(evaluate_arm(
+      Arm::CurrentWorldCompleteRestY, stop.candidate, fingerprint,
+      architecture::fingerprint_interaction_snapshot(stop.candidate),
+      resolve_audit_terminal_successor(stop.candidate), -1, -1, &solver, false,
+      std::nullopt, 0U, TerminalStopLateralAuditMode::SolvedStopTrajectory));
+    if (report.arms.back().stage == Stage::Accepted) {
+      break;
+    }
   }
-  report.detail = "current-world complete-rest production producer; unchanged objective and bounds";
-  report.arms.push_back(evaluate_arm(
-    Arm::CurrentWorldCompleteRestY, stop.candidate, fingerprint,
-    architecture::fingerprint_interaction_snapshot(stop.candidate),
-    resolve_audit_terminal_successor(stop.candidate), -1, -1, &solver, false,
-    std::nullopt, 0U, TerminalStopLateralAuditMode::SolvedStopTrajectory));
   return report;
 }
 

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -399,16 +400,16 @@ StopCandidateResult build_current_world_maximum_braking_candidate(
     source, solver_tolerance, "current-world Stop");
 }
 
-StopCandidateResult build_current_world_complete_rest_candidate(
+static StopCandidateResult build_complete_rest_candidate(
   const shadow::Snapshot & source,
-  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
+  const double dt) noexcept
 {
   if (!architecture::interaction_snapshot_complete(source)) {
     return reject_stop(Reason::InvalidSource, "current-world interaction snapshot incomplete");
   }
   auto candidate = source;
   auto & request = candidate.request;
-  const double dt = request.maximum_stage_dt_sec;
   if (!std::isfinite(dt) || dt < request.minimum_stage_dt_sec ||
     !std::isfinite(request.initial_state[model::kVelocityIndex]) ||
     request.initial_state[model::kVelocityIndex] < 0.0 ||
@@ -417,6 +418,21 @@ StopCandidateResult build_current_world_complete_rest_candidate(
   {
     return reject_stop(Reason::InvalidBrakingEnvelope, "source bounds exclude complete rest");
   }
+  if (dt > request.maximum_stage_dt_sec) {
+    return reject_stop(Reason::InvalidBrakingEnvelope, "Stop clock exceeds source support");
+  }
+  request.maximum_stage_dt_sec = dt;
+  // Stop asks whether a complete resting trajectory exists. Racing rewards
+  // must not drive an otherwise free feasibility trajectory during this task.
+  for (auto & state : request.states) {
+    state.weight.setZero();
+    state.linear_cost.setZero();
+  }
+  for (auto & input : request.inputs) {
+    input.weight.setZero();
+    input.linear_cost.setZero();
+  }
+  request.input_delta_weight.setZero();
   mpcc_vehicle_model::State braking_body{0, 0, 0,
     request.initial_state[model::kVelocityIndex], request.current_lateral_velocity_mps,
     request.current_yaw_rate_radps, request.current_steering_rad,
@@ -532,7 +548,14 @@ StopCandidateResult build_current_world_complete_rest_candidate(
   }
   // Both terminal meaning and the changed clock belong to this candidate;
   // neither may alias the rolling normal source in warm starts or artifacts.
+  // The numerical clock is also an artifact/warm-start identity, not just
+  // part of the larger interaction snapshot fingerprint.
+  std::uint64_t stage_dt_bits{};
+  static_assert(sizeof(stage_dt_bits) == sizeof(dt));
+  std::memcpy(&stage_dt_bits, &dt, sizeof(dt));
+  context.bounds_schema_id += "/terminal-dt-bits-" + std::to_string(stage_dt_bits);
   context.bounds_schema_id += shadow::kCompleteRestBoundsSchemaSuffix;
+  context.cost_schema_id += "/zero-cost-rest-feasibility-v1";
   context = contract::seal_problem_context(context);
   if (!architecture::interaction_snapshot_complete(candidate)) {
     return reject_stop(Reason::InvalidSource, "complete-rest interaction snapshot incomplete");
@@ -542,6 +565,74 @@ StopCandidateResult build_current_world_complete_rest_candidate(
   result.candidate = std::move(candidate);
   result.detail = "accepted/free-controls-through-rest";
   return result;
+}
+
+StopCandidateResult build_current_world_complete_rest_candidate(
+  const shadow::Snapshot & source,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept
+{
+  return build_complete_rest_candidate(source, solver_tolerance,
+    source.request.maximum_stage_dt_sec);
+}
+
+std::vector<StopCandidateResult> build_current_world_complete_rest_population(
+  const shadow::Snapshot & source,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance)
+{
+  auto maximum = build_current_world_complete_rest_candidate(source, solver_tolerance);
+  if (!maximum.accepted()) {
+    return {std::move(maximum)};
+  }
+  const auto & request = source.request;
+  // Use the weakest available braking bound so the candidate clock does not
+  // assume an input that a later stage excludes. This is a nominal seed only;
+  // the solved controls and complete physical rest still require certification.
+  double braking = -std::numeric_limits<double>::infinity();
+  for (const auto & input : request.inputs) {
+    const auto bounds = mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+      input.lower[model::kAccelerationIndex], input.upper[model::kAccelerationIndex],
+      solver_tolerance);
+    if (!bounds) {
+      return {std::move(maximum)};
+    }
+    braking = std::max(braking, bounds->lower);
+  }
+  mpcc_vehicle_model::State body{0, 0, 0,
+    request.initial_state[model::kVelocityIndex], request.current_lateral_velocity_mps,
+    request.current_yaw_rate_radps, request.current_steering_rad,
+    request.current_response_steering_rad};
+  const double step = model::kMaximumPhysicalIntegrationStepSec;
+  const double maximum_duration = request.horizon_steps * request.maximum_stage_dt_sec;
+  double elapsed = 0.0;
+  const auto resting = [](const auto & state) {
+      return state.forward_velocity_mps == 0.0 && state.lateral_velocity_mps == 0.0 &&
+             state.yaw_rate_radps == 0.0;
+    };
+  while (!resting(body) && elapsed + step <= maximum_duration + 1e-9) {
+    const auto next = mpcc_vehicle_model::advance(body, {braking, 0.0},
+      request.vehicle_model, step);
+    if (!next) {
+      return {std::move(maximum)};
+    }
+    body = next->state;
+    elapsed += step;
+  }
+  if (!resting(body)) {
+    return {std::move(maximum)};
+  }
+  const double nominal_dt = std::max({request.minimum_stage_dt_sec,
+    source.publication_interval_sec,
+    std::ceil(elapsed / request.horizon_steps / step) * step});
+  if (nominal_dt >= request.maximum_stage_dt_sec) {
+    return {std::move(maximum)};
+  }
+  auto nominal = build_complete_rest_candidate(source, solver_tolerance, nominal_dt);
+  if (!nominal.accepted()) {
+    return {std::move(maximum)};
+  }
+  nominal.detail = "native-braking-clock/" + nominal.detail;
+  maximum.detail = "maximum-support-clock/" + maximum.detail;
+  return {std::move(nominal), std::move(maximum)};
 }
 
 ScheduleResult build_schedule(

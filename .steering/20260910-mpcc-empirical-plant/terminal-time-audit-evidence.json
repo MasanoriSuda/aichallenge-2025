@@ -1,0 +1,695 @@
+{
+  "baseline_commit": "d0fdd338fbe94f729b7d7b311a9a002f81a126c8",
+  "authority": false,
+  "scope": "Frozen peer/tangent/terminal-time architecture comparisons before production candidate repair. No runtime acceptance claim.",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/compile_and_run.py",
+      "sha256": "10caac298e01035960365ddba773568f6fb946097f1192730a4146a023466968"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/dynamic.cpp",
+      "sha256": "b93a7b86a5d7ef938a4642b842c2bdc1f548bcfca06459a3b8a28e670d343018"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/manifest.json",
+      "sha256": "05abcba1b3ee6555a6dd7c786370956e8bbd131f523450bbf86fc52c05962bd1"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/peer_oracle.hpp",
+      "sha256": "71d38d04a04d0e057e8c0376f2fc4a45c8f134c51bd041beb71f5c70c6462fd4"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/replay_revalidation.cpp",
+      "sha256": "176517ced3cccddfb9babc6970d4f55d5b7c6a7ebb7b799b08b0bced0ef36c8e"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/result.yaml",
+      "sha256": "ca1247790440eef8ea1af8ce2ddce9787e193ab93bcef186f9fb44858f6f69d5"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/revalidation_input.hpp",
+      "sha256": "705c08c431a3f1b24deb5c8b926047d4e1d5c1a668062bec3a5bb811d4bd17bf"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-future-oracle-r1/run.log",
+      "sha256": "6ab36341b97ea2dc0a68cabc7ad6d7841a25b094d7102a3241c52396c8d998a9"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/compile_and_run.py",
+      "sha256": "f37c292043a4097465ddc61a585d8b796fb2b119f1615e9ca5b73f84938ee66f"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/dynamic.cpp",
+      "sha256": "b93a7b86a5d7ef938a4642b842c2bdc1f548bcfca06459a3b8a28e670d343018"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/manifest.json",
+      "sha256": "d558b75b05228619a8b79c5bba78b1dd63665160cf28b54cab60da3a02122355"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-ca1-decay-result.yaml",
+      "sha256": "6c262435aa30b639aef656d262638ab70bb0bf2ace4fe59cea705a1f4ecbc4ed"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-ca1-decay-run.log",
+      "sha256": "0e6b1a9a20d393b761e7b17e080d41cf983e8950117273bb51726df4027f511b"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-ca1-decay.json",
+      "sha256": "c49eb4fc7a3165afe5d449b0a6bc9cf497d8b0da81d32ebfff489b33c9938251"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-ca1-fixed-result.yaml",
+      "sha256": "9236eb3151e5afb66678fbb6edbb29dd1b93b83ca5b900d67dbdff77562cd536"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-ca1-fixed-run.log",
+      "sha256": "a42e82f53588e7a2f7cee0621d6fe6a65d42927eec58c5142549820279bbc52e"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-ca1-fixed.json",
+      "sha256": "0394dad348210b14855ba6ea3a2e41f48933ba71d1585a687442ae9475e216bb"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-cv-decay-result.yaml",
+      "sha256": "e8df154d07a931d8f0056ef245da84fd05a4470dabbc3b7101e9ca920e804f78"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-cv-decay-run.log",
+      "sha256": "d27d0cb8b5540d68f8bc8b204abe623d2c12cdd3e5191c3d5e548773f1a08d76"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-cv-decay.json",
+      "sha256": "369f01ab2e8c9d80ff51de8cbd8e6f2fb2066eb7087c327baed18bf949b0d4d3"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-cv-fixed-result.yaml",
+      "sha256": "2efc6780c592ea1a112da5c40e8c57727693758603d9a1ba027fde5fc20526d0"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-cv-fixed-run.log",
+      "sha256": "38e7155addbf7fe784200c4280cedc4e896a3ad134d629073afbf50b3966f6b9"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past0.5-cv-fixed.json",
+      "sha256": "90d4d731ba021710118b45eb011d0a29162405d77b97a7c1646fdc7e3b9062bd"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-ca1-decay-result.yaml",
+      "sha256": "d08aabb4c74a5b52bb8c2d371cbc40e8ac6e782e65f91a6b44e3f9af38bfa4e0"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-ca1-decay-run.log",
+      "sha256": "74e20c851a4fe4a036d9a2364216695a5a5ea8788fd6401a069436781a0cebb8"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-ca1-decay.json",
+      "sha256": "f3be9279c9069cca543ed4a581a20e5d5cdc2bdede7384bebf1de771d4369447"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-ca1-fixed-result.yaml",
+      "sha256": "fd887e5d298391f81a4e66c2c73a58f3d05c589f50c58c8b451181764aeafdfe"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-ca1-fixed-run.log",
+      "sha256": "b8736b6ccde93cc6c3af4c236d1e73583df56b3e5f76df814316bf93dfa8faa5"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-ca1-fixed.json",
+      "sha256": "8c9dff717b0ebada634c0b477cb81febc081a29bacab5ae3fdeb82b936252f92"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-cv-decay-result.yaml",
+      "sha256": "8e1b108648e4b6f5c6ff469e61534a3c51d6d27adaf16d9e771ccbb284544375"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-cv-decay-run.log",
+      "sha256": "24240b7ee8de29b56d9d515d1a2d7cb1ec7d2d277dae2234927251fc4bd1a82a"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-cv-decay.json",
+      "sha256": "275047b89e909e724cf0cc8ddd9a32042f93998a8461715700a7e6c8872c92d2"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-cv-fixed-result.yaml",
+      "sha256": "783bc5b9c2430230176199e02e6fba5eb52a558328edfec17d2b21f56c394d9c"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-cv-fixed-run.log",
+      "sha256": "0098d6435fe68f4c127525ac670bd88f967290923aed79e677ea7d74f94ee5d4"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-past1.0-cv-fixed.json",
+      "sha256": "4e36738bb92c7adfb8666d756f1294d08211e64d0d1379282cd9f321ed7d47a8"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-predictions-summary.json",
+      "sha256": "f909272fea01a25283757215c728268485d4cdeb53abbe017475f110582009f1"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-ca1-decay-result.yaml",
+      "sha256": "8416f95a3b17ae341c00a3405d8edcb39190d4234b8460dcb106cf0087e3ff1c"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-ca1-decay-run.log",
+      "sha256": "0456abc3131ab87490a8e28e4937df39102f41e922a28545995326d055856b5c"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-ca1-decay.json",
+      "sha256": "d67d5993643da6c3e1f569b802c05c5253c70f441d3238ddedac71f7bc7fe503"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-ca1-fixed-result.yaml",
+      "sha256": "ef5aa28df49879f28e5e10cd02efa5806a40967f7d7d22482496fa2d7061e3d7"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-ca1-fixed-run.log",
+      "sha256": "91fbec7500555699d7300970c219feb5cf553a1ff874b6a50af8f3d509fcd80b"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-ca1-fixed.json",
+      "sha256": "ce554b8773cdf86f727c3440942cd66cd0860a0e4a0e1be107cfbaf716f1a6f0"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-cv-decay-result.yaml",
+      "sha256": "c0270034456b7e64dcf06d0322736b21da0da3a6a565870bcb49475665fc5bb3"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-cv-decay-run.log",
+      "sha256": "b19a0411a6b3d1aa04deb59ee24b1bebecc7f85c2d1ce25be3a4543e742b480b"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-cv-decay.json",
+      "sha256": "76ebed220d291c7d41a7c97055b093c35d94cab2ee72a2d90314b8505dba226d"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-cv-fixed-result.yaml",
+      "sha256": "84deb97c2dcec210e8b12882d11479637905aad8ff14950cd84219986e7439e2"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-cv-fixed-run.log",
+      "sha256": "608029d355c0e123267f3b7288b7c59ad8526d66670c5764f3da498bb2a339e1"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/map-tracked-cv-fixed.json",
+      "sha256": "3937d240608658e3047deb55c1b0de2c56e51b98a69ecb5dffa7cb53bb8bfa43"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-ca-result.yaml",
+      "sha256": "feca8e35f969971acf180f82bdd408d713da9273fbe246fad2840c8d218f618f"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-ca-run.log",
+      "sha256": "f84edf1b5eff8a14b0bcfc897538f304665b280096213c6d50358a112452a596"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-ca.json",
+      "sha256": "f83b7f2e71e0d1046c0cb6bf42a8f6fd2dc9bf6bbb16bc0d413c108569bd186e"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-ctra-result.yaml",
+      "sha256": "677fdf933d7241b215f102e7436eddad8899501e7cb133eaa22b5d15883203ed"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-ctra-run.log",
+      "sha256": "f8c39efb16445a21357b0698f8483dca676c7ebbec757398f93f45fad19aefad"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-ctra.json",
+      "sha256": "f97c4507a7f5a497ec60d40dcadd46097f15f14ba0d4a7d71e693f1143c3ad4f"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-cv-result.yaml",
+      "sha256": "6866e70beb3a83b4efd8c64c26c2b064f903a7450ada30e5fa59b1df2c1bbce5"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-cv-run.log",
+      "sha256": "95e16837858b4fcfc4b6ef70bc1a934971dbfeed6616e47609413a2c2b555235"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.25-cv.json",
+      "sha256": "5fcb5e0ca4d041cb9f859e6e587729070644c11e8d29cc0fbff48bf48dd0071b"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-ca-result.yaml",
+      "sha256": "d6528ea4980d27bd98191a66533fa5c672d16bf9adb7868491a948921081bf4c"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-ca-run.log",
+      "sha256": "f5989dd0481736b2b69cf041d1040aa24f899bb1b87d3344d260e3f99af296fa"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-ca.json",
+      "sha256": "b4e31fb4f6cf364b5609013ac5f0d7834cfdfd7931786661193fda2957394876"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-ctra-result.yaml",
+      "sha256": "5a0fd070b9dc8f12865674bdef3935e9dc73fc0d9e514a2416159761e6c0c8dd"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-ctra-run.log",
+      "sha256": "500c6270b4bd0d99c554ca2a7e64b992e51214cc15a299ce2c3cf1453e49138e"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-ctra.json",
+      "sha256": "a0477244f8824b995cc3f077d8b355b156d5237821d33766a73bc93f04bf91cd"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-cv-result.yaml",
+      "sha256": "4e62081564120facdafffd984f418b6100c19e1ad8ebafe8b5a74994db069c08"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-cv-run.log",
+      "sha256": "fae07131a28a7979ff558f9d2d0a75d4a940a9fc3c0796192a4c439201867c09"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-0.5-cv.json",
+      "sha256": "5b5653cf20a1721b4746eb28da087a1d954d4bbb1c69a119161a104c3857f404"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-ca-result.yaml",
+      "sha256": "265ceebcb93a716088a33320318ec52fefd3b115b38a9143ad1224cf85bd34fa"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-ca-run.log",
+      "sha256": "042e2da9d04bb325c1379f478147b6dad1bcdcd0ad7973e736017a15230d6259"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-ca.json",
+      "sha256": "dead7d81e1a8230136cff8eb47a798ceddbf85d520f9104ee6220ea058757075"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-ctra-result.yaml",
+      "sha256": "364b9bb7cebe67630f3aa28993ac48f359bf037a6d576e9407806a277748f114"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-ctra-run.log",
+      "sha256": "f5aae452b841923e374b7a6ce248e0f9ffac83f2f0855b5af10a42eb5b8f7234"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-ctra.json",
+      "sha256": "9cb88aac7ab6885a442af0f71bc19e4df7741ae86543ec6ecf1b5b21ee966efc"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-cv-result.yaml",
+      "sha256": "3b0069eb030e5c2aa38639612ee03bca96c12b1397bd4470f52d27e397682389"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-cv-run.log",
+      "sha256": "880efaa4904aa14a9c583a946d2da96ea8daa177674cd1ba10ac21beebba7c4b"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/past-1.0-cv.json",
+      "sha256": "65ed9838946cb1f8efc583c077a24dce3efbb047fb28d1530afb31b1650d7563"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/peer_oracle.hpp",
+      "sha256": "cf4fe35485b3475edb9137bcca7b8ad244c088c1e69e4eda18894d2a8d670c1f"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/predictions.json",
+      "sha256": "a20d654ec5d172667aca714ec75b0fcf8fe6a7b0412e02051710652e8379a338"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/replay_revalidation.cpp",
+      "sha256": "ca4c70dc41987b4155df7f025ba616cfa6c2e8cd5f850a709f1e50bc5ca1105e"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/revalidation_input.hpp",
+      "sha256": "705c08c431a3f1b24deb5c8b926047d4e1d5c1a668062bec3a5bb811d4bd17bf"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/run_maps.py",
+      "sha256": "628ab43f7556392064c52f631db68a1b285cc8d9661eaaceb14c9b649329754f"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/run_smooth_maps.py",
+      "sha256": "d0457f75f81a5aad82a44b5f3f798868d8d9872cf7026a9c5bb962404f330928"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-ca-result.yaml",
+      "sha256": "e75cd68e82b9dc63d13e5ac67712946c9786b49dbcb4cfc82957e7d415666c93"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-ca-run.log",
+      "sha256": "636085400e87d55d337db66289c474a0ab2ab44273bc1993f301da2c8ebe26af"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-ca.json",
+      "sha256": "8df588b27e4e3bfe4c632d61df94632a1bfd1a54b1f39501c4fd30c463574636"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-ctra-result.yaml",
+      "sha256": "ca3e1132eb04d2c81147542b7dca8be240c9d91aa223a0ac462c7bfadab4a8a4"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-ctra-run.log",
+      "sha256": "6f585174a09c7275f80c9509456f8332d64544d24057867bea8ef04c64a82883"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-ctra.json",
+      "sha256": "42ab503c86f66dceb923b840117a4b72b166e61737986d8e5eb588ae76e6ee73"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-cv-result.yaml",
+      "sha256": "07ca6cd288de63a5ac7c3007542590dd8af04b8a825e5b0ca340a55799992b61"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-cv-run.log",
+      "sha256": "1e3f94283da533f02b817c01d1ecb958f4b81fb6197f3c5869aaf7ef6f54b96a"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-causal-oracle-r1/tracked-cv.json",
+      "sha256": "b2e14a079dc7b656750a7a36eafaf97ebcfb75c46404e9ffadfe46dc9ff013ad"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/20260907-mpcc-stop-ledger-dev2-scores.json",
+      "sha256": "c9c19be783efc6f20a33987c801064035dc6f97fe127b0f0c55cb62487c1042a"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/20260907-mpcc-stop-ledger-dev2.json",
+      "sha256": "712b8610fa0a4b336cdb7b0c50aa957b82f9a25846ffca88573f0c15ddc99e6d"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/20260908-mpcc-stateless-successor-dev2-scores.json",
+      "sha256": "4433688948d9f318314a96dbbe36eef23e225205328d96853a8007fa4e467907"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/20260908-mpcc-stateless-successor-dev2.json",
+      "sha256": "1831e4d42251adf9aee601a56dcc25898cb0cc62dfc47bcc34b77d881a03aa73"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/20260909-stop-viability-dev2-r1-scores.json",
+      "sha256": "3d4994351704d56b9d84aa8e68f8a1b66d81879e3e14969a5323165592dd4c33"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/20260909-stop-viability-dev2-r1.json",
+      "sha256": "569abf8dd5619bb47c2f6b5175814dc38e83e5b25927883743aed89974b7e47e"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/20260910-nine-state-dev2-r1-scores.json",
+      "sha256": "efab5228241b45e967a1cbfa67a5d4c3b03a9dc8b4b976a6e63b045fb48e34d2"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/20260910-nine-state-dev2-r1.json",
+      "sha256": "7359879d22d6fab94663057527dadf5911c0fd37f0f2a0ecc1229a2f64b53a7e"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/extract.py",
+      "sha256": "a8e341a09830a2941fbddbd070c9e3eaea237e8a92d95a7260d8f5c512cfb35b"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/model.py",
+      "sha256": "06e81d3943a76d8d67cbdabda7c33cc1a910f7593bc7921d9012c223f1b3e1e2"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/report.json",
+      "sha256": "d434d3f7ac6423a4eb10405a013258f285ad6078eba7061531ac7b66b87863b7"
+    },
+    {
+      "path": "output/20260910-nine-state-peer-holdout-r1/score.py",
+      "sha256": "2eb2465295024a41bd794c6570fa2a867b101cfb53c3249d9e6fc72d0437fa71"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/adapter-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/adapter.cpp",
+      "sha256": "e1f04ab997a680b802e3fe8627a5be2f89a332bb2e1ae2ba4c7f8d28347950e6"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/compile_and_run.py",
+      "sha256": "136dc0f6817cf2b5b6fb97c415748b8621d3e7626807def52b736e589f58a976"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/baseline-run.log",
+      "sha256": "0d73bc9fbc403eadbadc35c5fd77539dc09589d6dabe1c7a6526d4b9e45623a5"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/brake-run.log",
+      "sha256": "92491f7e49c40e74f4c8f4f9a13481139a0993b03d261a421cd7413922de9cdc"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/mpcc_architecture_snapshots/000000000938-334c7985b802506b-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "43e93c7728fb22b018a1d7794bf0248b007e84dc2c40fa16e71bcc00981cf474"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/mpcc_architecture_snapshots/000000000938-406c91f6d4fa54b5-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "c71370c68119d04eb92cdf43199607a6030f0feb576e6d86eda918d81c4b87ac"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/mpcc_architecture_snapshots/000000000938-632bf92969e489a9-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "02d1da80a9f58a3cef4e223927de0a1869e3a6bb631e4507eaa31d841b7d655d"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/mpcc_architecture_snapshots/000000000938-632bf92969e489a9-cruise-side-positive-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "sha256": "1e546fee5a2d918f4a94bf01f9270b365626f2c9667a49477f33f578c7cb635f"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/mpcc_architecture_snapshots/000000000938-649c33efa2495b32-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "46bfcd2cf476e7b43f57a80bcae84e5d6dd30a889320ee27d2d1865b502efc3a"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/power-run.log",
+      "sha256": "ab0c869ab6e0b6dbf0d67aee9d7867ab1615e77129033f63b06b984591c9792a"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/highs/reference-run.log",
+      "sha256": "066e0828fc68913043a723b620b8bc4b7c4fe3e543a289d1295baa66709b9980"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/manifest.json",
+      "sha256": "262e95d1ae9cf807ccee821501f0f7cd147486e330154f547a8aab3148bc8f6c"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/baseline-run.log",
+      "sha256": "e78fcaf814e3078af3b9feefd5f44b76089d68fdbcdc0a3c99e8140366ab1081"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/brake-run.log",
+      "sha256": "74d23c2ed0a2b08333f8324d78d65958fab6da15c142530aaf1b640602e45fe6"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/mpcc_architecture_snapshots/000000000938-334c7985b802506b-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "87c5a41a40c0bf31da18624277a4f0cb90fd9eabab467dc8676d05328f7b74c8"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/mpcc_architecture_snapshots/000000000938-632bf92969e489a9-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "2cb64611ea2a293bc12c2b952f6bc388ed2075cac0a93701db91a356dfc867b4"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/mpcc_architecture_snapshots/000000000938-649c33efa2495b32-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "001d5c1d224ed038febfd9db28a434eb4660a87c9dfcff1c63af3682d1e34c28"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/mpcc_architecture_snapshots/000000000938-c1ca3fcf77e3aab4-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "sha256": "f279a0d8f57dae907f251c2f2dde8fbb223094c44ed6c3e5729beecb3a31c764"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/mpcc_architecture_snapshots/000000000938-c1ca3fcf77e3aab4-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "sha256": "8c2ccebfb6e693ced85be5b9e419d945a67bbdfc6e273d3741668e6e7dd5be4b"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/power-run.log",
+      "sha256": "6f58ad84bf15694d68fce2cdfeac19459d1cfcdf831395bc3560e039a39f9e64"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/osqp/reference-run.log",
+      "sha256": "563100607919aa34853485eae7c26691ff86ecb01dd105090b3db395ab5525c6"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/persistent_osqp-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/persistent_osqp.cpp",
+      "sha256": "a62b61f12d23602570bd9f0e723dca78d318fe9b3e3b87d5c650325c18449517"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/replay-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/replay.cpp",
+      "sha256": "d305b40c6b94aac3488f311a9af67ecfb2fcab64e64c46740717691bfdcca790"
+    },
+    {
+      "path": "output/20260910-nine-state-coherent-tangent-r1/shadow.cpp",
+      "sha256": "b7324fa2b551fafb569715b2f5935a2447210512627b9420acddf82a3d2c4f77"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/compile_and_run.py",
+      "sha256": "029a4ae5a88c4df92d7ac7797542d70fcc2fb421b4fb292ef3fdf29a4fd1f4dc"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/highs/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/highs/maximum-run.log",
+      "sha256": "9d96539df3734b0c63a682a0bbb1fc4ed070e16575de32cd0105e6e470bffff2"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/highs/mpcc_architecture_snapshots/000000000938-334c7985b802506b-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "a1982e726d2d3ef4a8a65bea0beb7864e0b675e448d562afdfbfcae3dfbec99d"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/highs/mpcc_architecture_snapshots/000000000938-e986683e9f0e5eee-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "sha256": "6fb7ee938a8efa5aeec0713816f7162bae2e5392294e7923d55fa9ac1a2244ac"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/highs/nominal-rest-run.log",
+      "sha256": "aacfb32a3478cbecc668494221bbd681e8773c36276f1a9bd0895f2c138f93a8"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/highs/source-run.log",
+      "sha256": "1864f10a045fdaa5169b56d3eee74015ccd0a0446762ffac46ce677819f3fbf3"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/manifest.json",
+      "sha256": "0996a42bb3b67fd1e270e3d4b45df2a962577d70ddadf519f32e8e41c49677bf"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/osqp/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/osqp/maximum-run.log",
+      "sha256": "dbcf5c15c1a9149bbff947031378691f8369e86137110590e307a6e21f10ea60"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/osqp/mpcc_architecture_snapshots/000000000938-334c7985b802506b-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "7b6223350dbc2e0f7c705477d875df1361feafae3ef64ca371002a0ff7b7ff90"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/osqp/nominal-rest-run.log",
+      "sha256": "aacfb32a3478cbecc668494221bbd681e8773c36276f1a9bd0895f2c138f93a8"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/osqp/source-run.log",
+      "sha256": "1864f10a045fdaa5169b56d3eee74015ccd0a0446762ffac46ce677819f3fbf3"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/persistent_osqp-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/persistent_osqp.cpp",
+      "sha256": "a62b61f12d23602570bd9f0e723dca78d318fe9b3e3b87d5c650325c18449517"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/replay-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/replay.cpp",
+      "sha256": "10a79ae43c06d3c2a41f269430a38473e2cb63c98d270df77a5e941b1d69b08d"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/shadow.cpp",
+      "sha256": "b7324fa2b551fafb569715b2f5935a2447210512627b9420acddf82a3d2c4f77"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/stop-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r1/stop.cpp",
+      "sha256": "1edcd76dc321be04703567ea401a1c0ace2258079d13f43aae920827e949b3bb"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/compile_and_run.py",
+      "sha256": "5029a5da0d7daf3f0da49aeaf7f6cf99614a9d8636c4d56fd422a28570c93a96"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/highs/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/highs/mpcc_architecture_snapshots/000000000938-06b84bfa4d353317-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "36fbb135661a1d0cda47cbdb72e4a304b74e0381abc269e8a58e6b8caceec51a"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/highs/mpcc_architecture_snapshots/000000000938-efd4a38ff703733d-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "sha256": "33e6a51c322beca6eab40c1512319489be53784d2ec3383e19422fa90c83af62"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/highs/nominal-rest-run.log",
+      "sha256": "00086f4e3bd954209da220877933eadfa4d386f1993d39f138511ba50f26b6dd"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/highs/source-run.log",
+      "sha256": "9a79d0e7681d35eecf184ee58141e86ce3f232ddf48775a60a5fa787d856d1e1"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/manifest.json",
+      "sha256": "ddd9fc3f15b49a386f3cdddd254a5b5170a9dd027e7d66c0074fa986b430b8cf"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/osqp/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/osqp/mpcc_architecture_snapshots/000000000938-06b84bfa4d353317-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "4619c8940cb3f5d8cc362f367c9f4329c588d29a81b8be2977112d42e2a10d42"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/osqp/mpcc_architecture_snapshots/000000000938-daeb0acc4f629d94-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "sha256": "14831302f4713027cf2957b501307bcd0d0a672649801f1196ec39c237a07a4f"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/osqp/nominal-rest-run.log",
+      "sha256": "95b8adbafd29fd7b9ae1c4820ec1baa13073bf30e5d3b305fd13f8517cc9f4b2"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/osqp/source-run.log",
+      "sha256": "756fff5a2f7459a99b636e813856e79c0f0c7e29b7e4fa0ca8593f09e88a7943"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/persistent_osqp-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/persistent_osqp.cpp",
+      "sha256": "a62b61f12d23602570bd9f0e723dca78d318fe9b3e3b87d5c650325c18449517"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/replay-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/replay.cpp",
+      "sha256": "10a79ae43c06d3c2a41f269430a38473e2cb63c98d270df77a5e941b1d69b08d"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/shadow.cpp",
+      "sha256": "b7324fa2b551fafb569715b2f5935a2447210512627b9420acddf82a3d2c4f77"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/stop-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-clock-r2/stop.cpp",
+      "sha256": "5874deb0db81bcff2312506e3cfb9a5fd5883fade8796a2a44aa7ba6c6c489b1"
+    }
+  ]
+}

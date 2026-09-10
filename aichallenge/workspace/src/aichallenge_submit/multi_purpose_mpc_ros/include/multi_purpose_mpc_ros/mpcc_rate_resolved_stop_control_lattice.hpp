@@ -54,13 +54,20 @@ StopCandidateResult build_current_world_maximum_braking_candidate(
   const persistent_osqp::PhysicalConstraintTolerance
   & solver_tolerance) noexcept;
 
-/// Free canonical controls through terminal rest, retaining source weights,
+/// Free canonical controls through terminal rest with a zero-cost feasibility objective,
 /// physical boxes, geometry and observation origin. Uses the source maximum
 /// stage dt as an explicitly resealed Stop clock and recomputes peer stages.
 /// Construction is not a physical certificate and grants no authority.
 StopCandidateResult build_current_world_complete_rest_candidate(
   const shadow::Snapshot & source,
   const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept;
+
+/// Two explicit terminal clocks: native nominal braking duration, then maximum
+/// source support. Equal clocks are deduplicated. Each candidate owns its clock,
+/// zero-cost objective and retimed peers; construction grants no authority.
+std::vector<StopCandidateResult> build_current_world_complete_rest_population(
+  const shadow::Snapshot & source,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance);
 
 struct Schedule
 {

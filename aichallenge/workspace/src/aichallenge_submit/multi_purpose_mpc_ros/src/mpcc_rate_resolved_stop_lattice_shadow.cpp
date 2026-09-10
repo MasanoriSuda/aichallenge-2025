@@ -125,7 +125,8 @@ static Result evaluate_impl(
   const artifact::ExecutionArtifact * selected_normal_execution,
   shadow::SolverContext & private_solver_context,
   const EvaluationControl & control,
-  const EvaluationMode mode) noexcept
+  const EvaluationMode mode,
+  const lattice::StopCandidateResult * prepared_stop = nullptr) noexcept
 {
   const auto started = SteadyClock::now();
   Result result;
@@ -153,7 +154,7 @@ static Result evaluate_impl(
       result.detail = "selected snapshot/artifact identity mismatch";
       return finish();
     }
-    const auto stop = selected_normal_execution != nullptr ?
+    const auto stop = prepared_stop != nullptr ? *prepared_stop : selected_normal_execution != nullptr ?
       lattice::build_maximum_braking_candidate(
       selected_source, *selected_normal_execution,
       private_solver_context.physical_constraint_tolerance()) :
@@ -352,8 +353,44 @@ Result evaluate_current_world(
   const EvaluationControl & control,
   const EvaluationMode mode) noexcept
 {
-  return evaluate_impl(
-    current_source, nullptr, private_solver_context, control, mode);
+  const auto started = SteadyClock::now();
+  try {
+    const auto population = lattice::build_current_world_complete_rest_population(
+      current_source, private_solver_context.physical_constraint_tolerance());
+    Result result;
+    std::size_t attempts = 0U;
+    std::string rejected_details;
+    for (const auto & candidate : population) {
+      result = evaluate_impl(current_source, nullptr, private_solver_context,
+        control, mode, &candidate);
+      attempts += result.attempted_candidate_count;
+      result.attempted_candidate_count = attempts;
+      result.population_size = population.size();
+      result.detail = candidate.detail + '/' + result.detail;
+      if (result.accepted() || result.reason == Reason::Superseded) {
+        break;
+      }
+      rejected_details += result.detail + "; ";
+    }
+    if (!result.accepted() && result.reason != Reason::Superseded) {
+      result.detail = rejected_details;
+    }
+    result.total_compute_ms = std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - started).count();
+    return result;
+  } catch (const std::exception & error) {
+    Result result;
+    result.source_normal_identity = current_source.identity;
+    result.reason = Reason::Exception;
+    result.detail = error.what();
+    return result;
+  } catch (...) {
+    Result result;
+    result.source_normal_identity = current_source.identity;
+    result.reason = Reason::Exception;
+    result.detail = "unknown complete-rest population exception";
+    return result;
+  }
 }
 
 const char * to_string(const PublishReason reason) noexcept

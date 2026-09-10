@@ -380,3 +380,15 @@ observed, but no integrated acceptance. Native identical-point comparison accept
 SPHERE_LIST batching (native prototype and direct production builder comparisons retained). Producer now
 replaces complete display and clears legacy IDs; no control/proof/rate changes.
 Buildr19andtestsr15pass. Fresh dev2-r8 timing and remaining M4–M6 follow.
+
+2026-09-10:3ab839fadev2-r8fails moving Emergency atD2decision2144 after
+negative-side ShiftOut/Pass/Return/Idle. Marker cost0.092–0.329ms; raw adjacent
+overruns0/0, but only a short failed run, source duplicates10/10unattributed.
+Paired exact2143/2144replay shows predicted control-origin speed drives rejection,
+not peer update alone. The newly published acceleration can cancel the assumed
+braking prefix used to certify its initial state. Native current provenance
+replays exactly; prospective−3prefix yields a feasibleStop. Existing full5sStop
+SQP also certifies this world, so it is not physically impossible. Publication
+input binding is reopened within M1–M3; see publication-prefix-design.md.
+Next: complete candidate/packet-bound native proof, implement shared prospective
+prefix binding across normal/Stop/artifact/async, regress/build/run and M4–M6.

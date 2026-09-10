@@ -4,6 +4,7 @@
 - [x] Implement and validate shared native nominal body/tire/rest kernel.
 - [x] Freeze native/public-input comparison and empirical limitations.
 - [x] Migrate nine-state schema, QP, physical/Stop/artifact/prefix/async consumers.
+- [ ] Repair prospective publication/input-prefix binding exposed by dev2-r8; same kernel alone does not close this schedule contract.
 - [ ] Regressions, package build/tests and same-model architecture comparisons.
 - [ ] Fresh single/dev2 acceptance and causal repair of any first failure.
 - [ ] All intents, actual multi-tick Stop/rest/restart, Recovery/Rejoin and async.

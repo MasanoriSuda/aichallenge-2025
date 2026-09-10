@@ -176,5 +176,5 @@ int main(int argc,char **argv) {
    if(production.authority){row["speed"]=production.authority->command.predicted_speed_mps;row["acceleration"]=production.authority->command.acceleration_mps2;}
   }
  }
- YAML::Emitter e;e.SetDoublePrecision(17);e<<output;std::ofstream(argv[2])<<e.c_str()<<'\n';std::cout<<e.c_str()<<'\n';
+ YAML::Emitter e;e.SetDoublePrecision(17);e<<output;std::ofstream(argv[2])<<e.c_str()<<'\n';std::cout<<e.c_str()<<'\n';return 0;
 }

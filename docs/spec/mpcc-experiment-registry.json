@@ -799,6 +799,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/prediction-marker-checks.json",
       "replay_ready": false,
       "reason": "Synthetic924point serialization fixture, not runtime trajectory coordinates"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r8-publication-prefix",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r8-diagnostics-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact paired2143/2144requests and certified1673, current2144public body/history provenance; prior2143original body provenance is not separately captured"
     }
   ],
   "experiments": [
@@ -5574,6 +5580,76 @@
         "C++ per-point SPHERE publication loop"
       ],
       "revisit_condition": "Changed geometry/serialization or fresh runtime evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r8-integrated",
+      "baseline_commit": "3ab839fada5ae13638cf0691201f5a37e4e32f60",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r8-publication-prefix"
+      ],
+      "hypothesis": "Marker repair yields dev2six-lap acceptance",
+      "changed_dimension": "Fresh3ab839fafixed-input run",
+      "result": "rejected",
+      "reason": "Negative-side ShiftOut/Pass/Return/Idle observed; moving Emergency2144afterward. No six-lap acceptance. Short-run raw adjacent overruns0/0; marker0.092/0.329ms. Source duplicate intervals10/10 need attribution",
+      "production_impact": "Observation only; publication schedule contract reopened before new production repair",
+      "deleted_code": [],
+      "revisit_condition": "Causal command/prefix repair"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r8-peer-only",
+      "baseline_commit": "3ab839fada5ae13638cf0691201f5a37e4e32f60",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r8-publication-prefix"
+      ],
+      "hypothesis": "Peer update alone explains2143accepted→2144rejected",
+      "changed_dimension": "Advance exact previous CA1peer to current epoch, preserving remaining acceleration horizon",
+      "result": "rejected",
+      "reason": "Current normal and Stop remain rejected with the prior peer forecast. No obstacle/radius removal",
+      "production_impact": "Observation only; publication schedule contract reopened before new production repair",
+      "deleted_code": [],
+      "revisit_condition": "Different paired world or evidenced interaction"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r8-predicted-speed",
+      "baseline_commit": "3ab839fada5ae13638cf0691201f5a37e4e32f60",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r8-publication-prefix"
+      ],
+      "hypothesis": "Control-origin prediction changes drive the paired loss of viability",
+      "changed_dimension": "Exchange only predicted speed, leaving each other captured input unchanged",
+      "result": "accepted",
+      "reason": "2144with3.513718701accepts;2143with3.935095433rejects. Counterfactuals isolate sensitivity; not fabricated observed states",
+      "production_impact": "Observation only; publication schedule contract reopened before new production repair",
+      "deleted_code": [],
+      "revisit_condition": "Changed model or publication input schedule"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r8-prospective-prefix",
+      "baseline_commit": "3ab839fada5ae13638cf0691201f5a37e4e32f60",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r8-publication-prefix"
+      ],
+      "hypothesis": "A new acceleration command can invalidate the held-input prefix used to certify it",
+      "changed_dimension": "Exact2144native observation/history replay; hypothetical current−3vs+1.047703028wire input",
+      "result": "accepted",
+      "reason": "Native baseline position/speed error0. Braking prefixu3.572809757admits normal+1.047703025andStop; that normal packet instead producesu3.935095516and dynamic rejection. Prospective packet is never labelled historical publication",
+      "production_impact": "Observation only; publication schedule contract reopened before new production repair",
+      "deleted_code": [],
+      "revisit_condition": "Production binding and same-world replay"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r8-architecture",
+      "baseline_commit": "3ab839fada5ae13638cf0691201f5a37e4e32f60",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r8-publication-prefix"
+      ],
+      "hypothesis": "Existing architecture comparison shows physical infeasibility",
+      "changed_dimension": "Same frozen world A/B/C/D plus current-world complete-rest production clocks",
+      "result": "rejected",
+      "reason": "A solves35.180ms then terminaldynamicreject−.0121625m. B/C/D/Glack current targettube, inconclusive. Short Stopclockhits4000iterationlimit124.974ms; full5sStopclocksolves24.613ms and certifies complete rest. Feasible offline, no command authority",
+      "production_impact": "Observation only; publication schedule contract reopened before new production repair",
+      "deleted_code": [],
+      "revisit_condition": "Prospective publication binding or changed immutable world"
     }
   ]
 }

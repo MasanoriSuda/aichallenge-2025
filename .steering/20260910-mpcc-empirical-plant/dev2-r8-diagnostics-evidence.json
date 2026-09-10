@@ -1,0 +1,165 @@
+{
+  "run": "20260910-nine-state-dev2-r8",
+  "baseline_commit": "3ab839fada5ae13638cf0691201f5a37e4e32f60",
+  "authority": false,
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "e1414640d15750c192eb01b45b71f83444bb6b79c78416add23d6723e7aa1c9e"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8/d2/mpcc_architecture_snapshots/000000002144-2c67b444e00f72e6-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-architecture-r1/current-world-arms.log",
+      "sha256": "13f0c0d75931d02bbc05f205d325f1a5d69c4161c433021b58976647f3653151"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-architecture-r1/current-world-complete-rest.log",
+      "sha256": "94f219a6019b2e1ac6960c3b6e1683c9644d1ac9e62b2ee373d77d3be42e31be"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-architecture-r1/manifest.json",
+      "sha256": "d028a879f5e80109bf242b6bc3ef4950972bf09d6b95cfd4499c01a50d21c79f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r1/driver/dev2-r8-diagnostic/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r1/driver/dev2-r8-diagnostic/replay_revalidation.cpp",
+      "sha256": "1443205b22850ee6832e8b3215c299ae19ce5aba845ab6acbe31a440268f1248"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r1/driver/dev2-r8-diagnostic/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r1/driver/replay_certified_plan.cpp",
+      "sha256": "fa0a9f3949345e2455228e31d3f932deb50c15b64b213d4133693154d4d7037b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r1/manifest.json",
+      "sha256": "012d94668ac7acfed83698a22cf012ffb31c3232c6731a4dc1d2e156e7932340"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r1/native.log",
+      "sha256": "5461fed30fc556a3efbe7d00393b1d52af37cab4881b8b4c182857786833b7d7"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r1/result.yaml",
+      "sha256": "5461fed30fc556a3efbe7d00393b1d52af37cab4881b8b4c182857786833b7d7"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r2/manifest.json",
+      "sha256": "d353aa347c2914cc7534c769c1fc2cf6c4d2aae95fa10e36b29597ef26465d7b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r2/native.log",
+      "sha256": "c99ac91a873b90b44248afb9cb55c20ac62e538a1e7581ebb1efbab59ee72b02"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-factorial-r2/result.yaml",
+      "sha256": "c99ac91a873b90b44248afb9cb55c20ac62e538a1e7581ebb1efbab59ee72b02"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-metrics/d1-callback-samples.json",
+      "sha256": "c756f2ffb454d09162113ca1e0784689881ad8d3c558eddb6e3b065ff05780ff"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-metrics/d1-command-clock-anomalies.json",
+      "sha256": "67004effefe2728faef574b067d8086a65e61b0addcb739e4cb65d734e5b368a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-metrics/d1-prediction-samples.json",
+      "sha256": "962fdf08d1bf8241fc5faf99838ff2df05c543f23972891369b4175ecbec0916"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-metrics/d2-callback-samples.json",
+      "sha256": "122a4e753f53ea62c47b5326f51448c2060c45634165cbf386a6dacd7ed4c0fd"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-metrics/d2-command-clock-anomalies.json",
+      "sha256": "8404e075c8861505e9b4fa1fa6f5f86ac2aa7ef5048b53c5ad8986423e8d998a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-metrics/d2-prediction-samples.json",
+      "sha256": "1ee8452c88ff155c749fb78202ca95f6ef2ac6df01c50d7fd325312ad6cf7162"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-metrics/report.json",
+      "sha256": "2a48ea65c47757021803459d12b837b72c0e5fe232f742a6fa0326ab83e681b8"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-replay-r1/manifest.json",
+      "sha256": "2f692c08d26762730089aaa4cf11335a83b71768c5af96772303d82c1a70ab46"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-replay-r1/native.log",
+      "sha256": "e02a387c389df5a8764dc1178ffda44698b2140bc417a183c61d73930f2b788c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r8-replay-r1/result.yaml",
+      "sha256": "e02a387c389df5a8764dc1178ffda44698b2140bc417a183c61d73930f2b788c"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/dev2-r8-diagnostic/replay_revalidation.cpp",
+      "sha256": "1e3c5053ed80dd725543dd38a4249e0e0e32c565f6d5db1342e7469638cc1283",
+      "preserved": "output/20260910-nine-state-dev2-r8-diagnostics-evidence/sources/dev2-r8-diagnostic/replay_revalidation.cpp"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/dev2-r8-diagnostic/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a",
+      "preserved": "output/20260910-nine-state-dev2-r8-diagnostics-evidence/sources/dev2-r8-diagnostic/compile_replay.py"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/dev2-r8-diagnostic/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215",
+      "preserved": "output/20260910-nine-state-dev2-r8-diagnostics-evidence/sources/dev2-r8-diagnostic/revalidation_input.hpp"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/replay_certified_plan.cpp",
+      "sha256": "fa0a9f3949345e2455228e31d3f932deb50c15b64b213d4133693154d4d7037b",
+      "preserved": "output/20260910-nine-state-dev2-r8-diagnostics-evidence/sources/replay_certified_plan.cpp"
+    },
+    {
+      "path": ".steering/20260910-mpcc-empirical-plant/publication-prefix-design.md",
+      "sha256": "a81b7c75706e038cc57c9ffa77a9d82ddcc9b9e09289176742e6ac8872e526dc",
+      "preserved": "output/20260910-nine-state-dev2-r8-diagnostics-evidence/sources/publication-prefix-design.md"
+    }
+  ],
+  "preparation_failure": "Toolr16 compile failed on std::array field spelling; toolr17/r18 compile. Not a physical experiment outcome"
+}

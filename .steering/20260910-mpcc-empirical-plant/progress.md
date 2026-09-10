@@ -67,3 +67,10 @@ Repository applicable pre-commit hooks pass. Native/public comparisonr3 uses
 nativer2,8212values maximum4.4964e-15;1s holdout position MAE0.193661302m,
 maximum0.675902423m. `evidence.json` binds sources, patch and preserved logs.
 Earlier pending build/test statements above are historical. Fresh runtime follows.
+
+## First runtime and map-support correction
+
+226f93e0 single-r1 fails at2804; see `first-single-failure.md`. The same-input
+replay localizes missing map support; actual map extension certifies the Stop.
+Buildr9 passes26packages in4min53s; package r7 passes2388records with0errors,
+0failures and0skips. Fresh repaired runtime remains pending.

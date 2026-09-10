@@ -123,6 +123,10 @@ struct Snapshot
   std::shared_ptr<const recovery_footprint::OccupancyGrid> wall_grid;
   recovery_footprint::FootprintExtents wall_footprint;
   std::vector<mpc_stage_geometry::CourseFrameKnot> wall_course_frame_knots;
+  /// Map support through nominal stopping distance beyond the QP domain.
+  /// Sealed independently of QP boxes; swept grid/peer proofs remain mandatory.
+  std::optional<mpcc_rate_resolved_physical_adapter::StopCourseGeometry>
+    terminal_stop_course_geometry;
   double wall_lateral_sample_step_m{};
   double wall_heading_bucket_width_rad{0.025};
   double wall_translation_bucket_width_m{};

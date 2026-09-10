@@ -725,6 +725,21 @@
       "snapshot_id": "20260910-empirical-plant-integrated-promotion",
       "manifest": ".steering/20260910-mpcc-empirical-plant/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-empirical-plant-single-r1",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/map-support-evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-empirical-plant-map-support-only",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/map-support-evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-empirical-plant-map-support-regressions",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/map-support-evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -4918,6 +4933,54 @@
         "wire-times-duration velocity feasibility shortcut"
       ],
       "revisit_condition": "Fresh runtime and required M3-M6 evidence"
+    },
+    {
+      "experiment_id": "20260910-empirical-plant-single-r1",
+      "baseline_commit": "226f93e0148b3a4f7076bb05a43a120091e8238c",
+      "snapshot_ids": [
+        "20260910-empirical-plant-single-r1"
+      ],
+      "hypothesis": "Shared nine-state candidate226f93e0 completes fresh single six laps",
+      "changed_dimension": "Immutable map and Stop geometry support beyond normal QP domain",
+      "result": "rejected",
+      "reason": "First moving Emergency2804/source56.729998731/u9.76. Saved2253 source frame ends60.734594m while Stop still1.283204m/s. No causal-input gaps or reported callback overruns.",
+      "production_impact": "Map support producer correction; integrated M3-M6 remains open",
+      "deleted_code": [
+        "QP progress extent as sole Stop map coverage"
+      ],
+      "revisit_condition": "Changed map support producer or a separately established cause"
+    },
+    {
+      "experiment_id": "20260910-empirical-plant-map-support-only",
+      "baseline_commit": "226f93e0148b3a4f7076bb05a43a120091e8238c",
+      "snapshot_ids": [
+        "20260910-empirical-plant-map-support-only"
+      ],
+      "hypothesis": "Actual map coverage beyond QP progress supports the same published-input complete Stop",
+      "changed_dimension": "Immutable map and Stop geometry support beyond normal QP domain",
+      "result": "accepted",
+      "reason": "All21source map knots reproduced; append actual map points, reseal candidate, same controls/current Request/grid/peer limits. Failed2804 accepts prefix plus complete Stop and independent Stop. Fresh persistent A also certifies; avoidance B/C/D not applicable without target.",
+      "production_impact": "Map support producer correction; integrated M3-M6 remains open",
+      "deleted_code": [
+        "QP progress extent as sole Stop map coverage"
+      ],
+      "revisit_condition": "Changed map/model/producer or new frozen coverage failure"
+    },
+    {
+      "experiment_id": "20260910-empirical-plant-map-support-regressions",
+      "baseline_commit": "226f93e0148b3a4f7076bb05a43a120091e8238c",
+      "snapshot_ids": [
+        "20260910-empirical-plant-map-support-regressions"
+      ],
+      "hypothesis": "Map support can be sealed without changing QP or physical safety contracts",
+      "changed_dimension": "Immutable map and Stop geometry support beyond normal QP domain",
+      "result": "accepted",
+      "reason": "Shared-model map allocation, snapshot roundtrip/mutation/out-of-frame rejection, origin rebase; build26packages and2388tests pass. No horizon/margin/tolerance/budget change. Fresh run pending.",
+      "production_impact": "Map support producer correction; integrated M3-M6 remains open",
+      "deleted_code": [
+        "QP progress extent as sole Stop map coverage"
+      ],
+      "revisit_condition": "Changed source/geometry consumers or new integrated failure"
     }
   ]
 }

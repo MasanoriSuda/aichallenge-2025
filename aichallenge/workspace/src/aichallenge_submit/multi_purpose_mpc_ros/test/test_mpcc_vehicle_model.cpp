@@ -62,6 +62,19 @@ TEST(MpccVehicleModel, ProfileRoundTripAndIdentityBindEveryPhysicalParameter)
   EXPECT_FALSE(vehicle::decode_parameters(missing));
 }
 
+TEST(MpccVehicleModel, StopMapSupportAccountsForWireBodyMismatch)
+{
+  const auto p = vehicle_model();
+  const auto support = vehicle::nominal_stop_map_distance(p, 9.8235232703, 1.37, -3, .025);
+  ASSERT_TRUE(support);
+  // At decision2804 only19.033846m remained in the original map window.
+  // Affine wire=net stopping distance would incorrectly fit in that map.
+  EXPECT_GT(*support, 19.0338463966);
+  EXPECT_LT(9.8235232703 * 9.8235232703 / 6.0, 19.0338463966);
+  EXPECT_FALSE(vehicle::nominal_stop_map_distance(p, 2, 1, 0, .025));
+  EXPECT_FALSE(vehicle::nominal_stop_map_distance({}, 2, 1, -3, .025));
+}
+
 TEST(MpccVehiclePrediction, SeparatesChannelDelayFromMechanicalTireResponse)
 {
   const auto p = vehicle_model();

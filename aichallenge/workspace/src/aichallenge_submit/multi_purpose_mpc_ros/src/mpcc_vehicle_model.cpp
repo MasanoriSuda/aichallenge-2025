@@ -215,4 +215,33 @@ std::optional<Transition> advance(
   return Transition{state, count, nominal_rest_applied};
 }
 
+std::optional<double> nominal_stop_map_distance(
+  const Parameters & parameters, const double speed_mps,
+  const double maximum_wire_acceleration_mps2,
+  const double braking_wire_acceleration_mps2,
+  const double publication_interval_sec) noexcept
+{
+  if (!valid(parameters) || !std::isfinite(speed_mps) || speed_mps < 0.0 ||
+    !std::isfinite(maximum_wire_acceleration_mps2) ||
+    !std::isfinite(braking_wire_acceleration_mps2) ||
+    braking_wire_acceleration_mps2 >= 0.0 ||
+    !std::isfinite(publication_interval_sec) || publication_interval_sec <= 0.0)
+  {
+    return std::nullopt;
+  }
+  auto prefix = advance({0, 0, 0, speed_mps, 0, 0, 0, 0},
+    {maximum_wire_acceleration_mps2, 0}, parameters, publication_interval_sec);
+  if (!prefix) return std::nullopt;
+  State state = prefix->state;
+  for (std::size_t step = 0; step < 10000U; ++step) {
+    if (state.forward_velocity_mps == 0.0 && state.lateral_velocity_mps == 0.0 &&
+      state.yaw_rate_radps == 0.0) return state.x_m;
+    const auto next = advance(state, {braking_wire_acceleration_mps2, 0},
+      parameters, parameters.maximum_step_sec);
+    if (!next || next->state.forward_velocity_mps < 0.0) return std::nullopt;
+    state = next->state;
+  }
+  return std::nullopt;
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_vehicle_model

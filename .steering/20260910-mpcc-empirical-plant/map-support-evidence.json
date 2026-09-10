@@ -1,0 +1,59 @@
+{
+  "baseline_commit": "226f93e0148b3a4f7076bb05a43a120091e8238c",
+  "files": [
+    {
+      "path": "/tmp/mpcc-nine-state-build-r9.log",
+      "sha256": "bbac8354b7c88b6045960bf9f59f1cb7974069cbe9bff0ff19720814e72fd97b",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/tmp/mpcc-nine-state-build-r9.log"
+    },
+    {
+      "path": "/tmp/mpcc-nine-state-tests-r7.log",
+      "sha256": "4b6002ef0f03568867de3d5fa9a09f6cde44644b8a5790927f687c32ad59bc48",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/tmp/mpcc-nine-state-tests-r7.log"
+    },
+    {
+      "path": "/tmp/mpcc-nine-state-first-failure-replay-r1.log",
+      "sha256": "dd0e8339671ba246cb33886f5975a0674fef0ab48fb201f04c28df272303391f",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/tmp/mpcc-nine-state-first-failure-replay-r1.log"
+    },
+    {
+      "path": "/tmp/mpcc-nine-state-first-failure-comparison-r1.log",
+      "sha256": "227a67675fc1f73bc663b4dcbfe5e16550a464b98bbd1b5046f331dd30bb607f",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/tmp/mpcc-nine-state-first-failure-comparison-r1.log"
+    },
+    {
+      "path": "/tmp/mpcc-nine-state-stop-diagnostic-r1.log",
+      "sha256": "b545133194ce2bd8c5cdde2648cacf0f715b27c447adab426c36a27ffe995719",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/tmp/mpcc-nine-state-stop-diagnostic-r1.log"
+    },
+    {
+      "path": "/tmp/mpcc-nine-state-stop-support-r1.log",
+      "sha256": "8c0f9bbd40c3bd0249df11a3dbbb8feafafaa01881ce78e36c1e3d7e24748735",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/tmp/mpcc-nine-state-stop-support-r1.log"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-support-r1/map-tail.yaml",
+      "sha256": "30e73570af0a74ad588a90e45eb88c761c926964b8131f2e4a0b7c4195478fe8",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/output/20260910-nine-state-stop-support-r1/map-tail.yaml"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-support-r1/result.yaml",
+      "sha256": "d35be8e8f78b9a526d5b1f2c558a60e2d8ecc64d222eebd391754bd746b13036",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/output/20260910-nine-state-stop-support-r1/result.yaml"
+    },
+    {
+      "path": "output/20260910-nine-state-single-r1/monitor-summary.json",
+      "sha256": "95c4ff8939890400160146502ca29e2854485072b8db569a157ca3763759a2a5",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/output/20260910-nine-state-single-r1/monitor-summary.json"
+    },
+    {
+      "path": "output/20260910-nine-state-single-r1/manifest.json",
+      "sha256": "4fcb0562ba5764a2627cf04ac45528d5ad596011b1d7d4262162e2c4ec04b501",
+      "preserved": "output/20260910-nine-state-map-support-evidence-r1/output/20260910-nine-state-single-r1/manifest.json"
+    }
+  ],
+  "patch_sha256": "71dca78fc57dddc6dd50f1543bf15d0afeb6757aff3856358f51c1b141d153f9",
+  "tests": "26packages buildr9;2388tests0errors0failures0skips r7",
+  "runtime": "single-r1 rejected on226f93e0; repaired runtime pending",
+  "rollback": "focused revert of the upcoming map-support commit"
+}

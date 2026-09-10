@@ -578,6 +578,14 @@ YAML::Node source_node(
     course_knots.push_back(item);
   }
   node["wall_course_frame_knots"] = course_knots;
+  if (source.terminal_stop_course_geometry) {
+    const auto & support = *source.terminal_stop_course_geometry;
+    auto saved = node["terminal_stop_course_geometry"];
+    saved["progress_m"] = support.progress_m;
+    saved["curvature_radpm"] = support.curvature_radpm;
+    saved["lateral_lower_m"] = support.lateral_lower_m;
+    saved["lateral_upper_m"] = support.lateral_upper_m;
+  }
   node["wall_lateral_sample_step_m"] = source.wall_lateral_sample_step_m;
   node["wall_heading_bucket_width_rad"] =
     source.wall_heading_bucket_width_rad;
@@ -1314,6 +1322,14 @@ std::optional<shadow::Snapshot> load_source_snapshot(
   }
   source.wall_lateral_sample_step_m =
     node["wall_lateral_sample_step_m"].as<double>();
+  if (const auto saved = node["terminal_stop_course_geometry"]) {
+    source.terminal_stop_course_geometry =
+      mpcc_rate_resolved_physical_adapter::StopCourseGeometry{
+      saved["progress_m"].as<std::vector<double>>(),
+      saved["curvature_radpm"].as<std::vector<double>>(),
+      saved["lateral_lower_m"].as<std::vector<double>>(),
+      saved["lateral_upper_m"].as<std::vector<double>>()};
+  }
   if (!source.wall_course_frame_knots.empty()) {
     source.request.course_frame = {
       std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
@@ -1777,6 +1793,17 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
         return false;
       }
     }
+    if (source.terminal_stop_course_geometry) {
+      const auto & support = *source.terminal_stop_course_geometry;
+      if (!mpcc_rate_resolved_physical_adapter::stop_course_geometry_valid(support) ||
+        support.progress_m.front() + source.course_progress_origin_m <
+        source.wall_course_frame_knots.front().progress_m - 1e-9 ||
+        support.progress_m.back() + source.course_progress_origin_m >
+        source.wall_course_frame_knots.back().progress_m + 1e-9)
+      {
+        return false;
+      }
+    }
     const auto & world = source.replay_world.value();
     if (
       !world.current || world.observation_generation == 0U ||
@@ -2010,6 +2037,16 @@ std::uint64_t fingerprint_interaction_snapshot(
   builder.append_double(source.wall_heading_bucket_width_rad);
   builder.append_double(source.wall_translation_bucket_width_m);
   builder.append_double(source.wall_boundary_guard_m);
+  if (source.terminal_stop_course_geometry) {
+    builder.append_string("terminal-stop-map-support-v1");
+    const auto & support = *source.terminal_stop_course_geometry;
+    for (const auto * values : {&support.progress_m, &support.curvature_radpm,
+      &support.lateral_lower_m, &support.lateral_upper_m})
+    {
+      builder.append_u64(values->size());
+      for (const auto value : *values) builder.append_double(value);
+    }
+  }
   const auto & world = source.replay_world.value();
   builder.append_u64(world.observation_generation);
   builder.append_double(world.observed_sec);

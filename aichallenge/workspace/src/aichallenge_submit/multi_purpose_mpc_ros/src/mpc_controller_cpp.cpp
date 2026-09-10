@@ -7332,6 +7332,8 @@ void bind_rate_resolved_physical_wall_refinement(
   solver_snapshot.wall_footprint = clearance_footprint.value();
   solver_snapshot.wall_course_frame_knots =
     physical_snapshot.course_frame_knots;
+  solver_snapshot.terminal_stop_course_geometry =
+    physical_snapshot.terminal_stop_course_geometry;
   solver_snapshot.request.course_frame = {
     std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
       solver_snapshot.wall_course_frame_knots),
@@ -24818,6 +24820,21 @@ struct MPC
         maximum_progress_m,
         solver_snapshot.course_progress_origin_m + upper_progress_m);
     }
+    // The QP progress box is not the map domain of a complete stopping proof.
+    // Retained execution may begin anywhere in that box. Preserve actual map
+    // points beyond it using a shared-model allocation hint; proof still fails
+    // closed if an actual turning Stop exceeds the available map or hits a wall.
+    const auto stop_map_distance = mpcc_vehicle_model::nominal_stop_map_distance(
+      solver_snapshot.request.vehicle_model,
+      std::max(cfg.v_max, solver_snapshot.request.initial_state[
+        mpcc_rate_resolved::kVelocityIndex]),
+      cfg.a_max, cfg.a_min, solver_snapshot.publication_interval_sec);
+    if (!stop_map_distance) {
+      rejection.outcome = RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
+      rejection.detail = "nominal Stop map support unavailable";
+      return std::nullopt;
+    }
+    maximum_progress_m += *stop_map_distance;
     const auto course_frame_knots = build_progress_course_frame_knots(
       problem.progress_stage_geometry,
       solver_snapshot.course_progress_origin_m,
@@ -24927,6 +24944,26 @@ struct MPC
       rejection.outcome =
         RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
       rejection.detail = "terminal Stop course geometry invalid";
+      return std::nullopt;
+    }
+    // Extend only map/tracking support. The optimized stage count, progress
+    // boxes and wall/peer limits above remain the same. Widths come from the
+    // already loaded map; they are approximate support, not swept-wall proof.
+    for (std::size_t index = 1U; index < snapshot.course_frame_knots.size(); ++index) {
+      const auto & knot = snapshot.course_frame_knots[index];
+      const double progress_m = knot.progress_m - solver_snapshot.course_progress_origin_m;
+      if (progress_m <= terminal_geometry.progress_m.back() + 1e-9) continue;
+      const auto & previous_knot = snapshot.course_frame_knots[index - 1U];
+      const auto & previous_waypoint = model->reference_path->get_waypoint(previous_knot.waypoint);
+      const auto & waypoint = model->reference_path->get_waypoint(knot.waypoint);
+      terminal_geometry.curvature_radpm.push_back(previous_waypoint.kappa);
+      terminal_geometry.progress_m.push_back(progress_m);
+      terminal_geometry.lateral_lower_m.push_back(waypoint.lb);
+      terminal_geometry.lateral_upper_m.push_back(waypoint.ub);
+    }
+    if (!rate_resolved_physical::stop_course_geometry_valid(terminal_geometry)) {
+      rejection.outcome = RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
+      rejection.detail = "extended Stop map support invalid";
       return std::nullopt;
     }
     if (!rate_resolved_physical_wall::identity_valid(snapshot.identity)) {

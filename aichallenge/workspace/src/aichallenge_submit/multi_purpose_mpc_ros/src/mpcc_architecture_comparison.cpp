@@ -678,6 +678,9 @@ wall::Snapshot wall_snapshot(
     result.terminal_stop_course_geometry.curvature_radpm.push_back(
       input.path_curvature_radpm);
   }
+  if (candidate.terminal_stop_course_geometry) {
+    result.terminal_stop_course_geometry = *candidate.terminal_stop_course_geometry;
+  }
   result.hard_wall_clearance_m = replay.hard_wall_clearance_m;
   // This is a post-solve physical certificate. Its tolerance is sealed by the
   // exact execution trajectory, not by the pre-solve ReplayWorld baseline.

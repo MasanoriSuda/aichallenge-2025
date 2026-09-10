@@ -930,6 +930,10 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   snapshot.request.observation_provenance = mpcc_vehicle_model::ObservationProvenance{
     {19.8, {1, 2, .1, 2, .2, .3, .05, .04}}, 19.79, 19.8, 19.78,
     20.0, 20.1, 0, .1, {{19.0, 1.0, .1}, {19.9, -3.0, .2}}};
+  snapshot.wall_course_frame_knots.push_back({5.0, 2.0, 0.0, .1, 12});
+  snapshot.terminal_stop_course_geometry =
+    mpcc_rate_resolved_physical_adapter::StopCourseGeometry{
+    {0, 1, 2}, {0, .1}, {-2, -2, -1.5}, {2, 2, 1.5}};
   auto assembly = make_assembly_request();
   mpcc_rate_resolved_problem::DynamicObstacleConstraint plane;
   plane.state_stage = 1;
@@ -961,6 +965,16 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
     interaction_snapshot_matches_fingerprint(
       loaded->source, loaded->interaction_fingerprint));
   ASSERT_TRUE(loaded->source.replay_world.has_value());
+  ASSERT_TRUE(loaded->source.terminal_stop_course_geometry);
+  EXPECT_EQ(loaded->source.terminal_stop_course_geometry->progress_m,
+    (std::vector<double>{0, 1, 2}));
+  auto support_mutated = loaded->source;
+  support_mutated.terminal_stop_course_geometry->curvature_radpm.back() += .01;
+  EXPECT_FALSE(interaction_snapshot_matches_fingerprint(
+      support_mutated, loaded->interaction_fingerprint));
+  support_mutated = loaded->source;
+  support_mutated.terminal_stop_course_geometry->progress_m.back() = 3;
+  EXPECT_FALSE(interaction_snapshot_complete(support_mutated));
   EXPECT_EQ(loaded->source.identity.source_context.target_id, "d2");
   EXPECT_TRUE(
     loaded->source.identity.source_context.dynamic_obstacle_constraint_active);

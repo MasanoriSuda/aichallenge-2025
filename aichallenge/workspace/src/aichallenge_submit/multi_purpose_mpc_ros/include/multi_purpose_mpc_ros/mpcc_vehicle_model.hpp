@@ -106,6 +106,14 @@ std::optional<Transition> advance(
   State state, const Input & input, const Parameters & parameters,
   double duration_sec) noexcept;
 
+/// Map-allocation hint from a straight nominal rollout: one publication at
+/// maximum wire input, then braking through rest. This is not a stopping bound
+/// or a certificate; actual turning Stop still requires full nonlinear proof.
+std::optional<double> nominal_stop_map_distance(
+  const Parameters & parameters, double speed_mps,
+  double maximum_wire_acceleration_mps2, double braking_wire_acceleration_mps2,
+  double publication_interval_sec) noexcept;
+
 }  // namespace multi_purpose_mpc_ros::mpcc_vehicle_model
 
 #endif  // MULTI_PURPOSE_MPC_ROS__MPCC_VEHICLE_MODEL_HPP_

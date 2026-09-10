@@ -24,6 +24,8 @@ int main(int argc, char ** argv)
     argc == 3 && std::string{argv[2]} == "--wall-restoration-only";
   const bool stop_physical_support_only =
     argc == 3 && std::string{argv[2]} == "--stop-physical-support-only";
+  const bool current_world_complete_rest_only =
+    argc == 3 && std::string{argv[2]} == "--current-world-complete-rest-only";
   const bool stop_horizon_only =
     argc == 3 && std::string{argv[2]} == "--target-free-stop-horizon-only";
   const bool wall_buckets_only =
@@ -69,13 +71,14 @@ int main(int argc, char ** argv)
     !rejected_primal_only && !rejected_primal_physical_only &&
     !warm_start_primal_physical_only &&
     !kkt_equilibration_only &&
-    !terminal_stop_lateral_only && !stop_physical_support_only && !stop_horizon_only)
+    !terminal_stop_lateral_only && !stop_physical_support_only && !stop_horizon_only &&
+    !current_world_complete_rest_only)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
                  "[--target-stage-time-only <recorded-dt> <lateral-horizon> <max-time> | "
                  "--stop-control-schedule <sign> <first-switch> <second-switch> | "
                  "--stop-control-support-schedule <sign> <first-switch> <second-switch> | "
-                 "--stop-physical-support-only | "
+                 "--stop-physical-support-only | --current-world-complete-rest-only | "
                  "--target-free-stop-horizon-only | "
                  "--wall-restoration-only | --wall-buckets-only | "
                  "--physical-dynamic-sqp-only | "
@@ -100,7 +103,9 @@ int main(int argc, char ** argv)
     return 3;
   }
   comparison::Report report;
-  if (stop_horizon_only) {
+  if (current_world_complete_rest_only) {
+    report = comparison::compare_current_world_complete_rest(recorded.value());
+  } else if (stop_horizon_only) {
     report = comparison::compare_target_free_stop_horizon(recorded.value());
   } else if (stop_physical_support_only) {
     report = comparison::compare_stop_physical_support(recorded.value());

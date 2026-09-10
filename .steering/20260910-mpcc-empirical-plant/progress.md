@@ -74,3 +74,19 @@ Earlier pending build/test statements above are historical. Fresh runtime follow
 replay localizes missing map support; actual map extension certifies the Stop.
 Buildr9 passes26packages in4min53s; package r7 passes2388records with0errors,
 0failures and0skips. Fresh repaired runtime remains pending.
+
+## Current runtime and dev2 audit
+
+HEAD b0478348single-r2finishes6laps241.24130249023438s/penalty0. Dev2-r1rejects
+at D1decision938. [First dev2 failure](first-dev2-failure.md) records the exact
+937/938replay, all rejected backend/formulation comparisons, the historical-vs-live
+Stop comparison coverage defect and positive terminal-target witnesses.
+No diagnostic backend, target or input sequence is production authority.
+The live complete-rest producer retains the source objective; only the historical
+maximum-braking builder owns zero-cost feasibility. Earlier broad free-Stop
+wording above does not establish otherwise. Same-HEAD M3–M6 remains open.
+
+Canonical current-world complete-rest audit repair: buildr11passes26packages;
+package r8passes2388records/0errors/failures/skips. Rear/side-peer live/audit
+identities and proofs agree. The canonical CLI reproduces938candidate
+334c7985b802506b and its expected dynamic QP rejection. Diagnostic-only code.

@@ -1,0 +1,35 @@
+{
+  "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+  "production_changed": false,
+  "build": {
+    "command": "make autoware-build",
+    "passed_packages": 26
+  },
+  "tests": {
+    "command": "colcon test --packages-select multi_purpose_mpc_ros; colcon test-result --test-result-base build/multi_purpose_mpc_ros --verbose",
+    "records": 2388,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0
+  },
+  "cli": {
+    "argument": "--current-world-complete-rest-only",
+    "source_fingerprint": 5538338864624173385,
+    "candidate_fingerprint": 3696463009389105259,
+    "result": "Expected dynamic QP rejection reproduced; same live producer/objective/bounds"
+  },
+  "logs": [
+    {
+      "path": "output/20260910-nine-state-current-stop-tool-r1/mpcc-nine-state-build-r11.log",
+      "sha256": "dab94814894c5ad3f3b7d79f972031535bb10f02ee493668d249a85d1dee6324"
+    },
+    {
+      "path": "output/20260910-nine-state-current-stop-tool-r1/mpcc-nine-state-tests-r8.log",
+      "sha256": "eacc61e8ae40cad4b1055e3d57c1ad79f677273329727b6351d53a6045c1dff5"
+    },
+    {
+      "path": "output/20260910-nine-state-current-stop-tool-r1/mpcc-nine-state-current-stop-tool-r1.log",
+      "sha256": "b0d2d332953348d0a69ed5cf107dcb03971a0460325484c1405d50bd1c07b8e5"
+    }
+  ]
+}

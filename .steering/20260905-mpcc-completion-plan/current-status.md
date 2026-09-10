@@ -1,61 +1,39 @@
 # Current status and remaining completion work
 
-2026-09-10JST. Continue the existing autonomous M1–M6 task; no completion claim.
-Current baseline9bca3af6, MPCC1c4f377e. The measured-heading producer repair
-is locally committed/built/tested and single-run accepted; coupled acceptance remains open.
+2026-09-10JST. Continue the authorized autonomous M1–M6 task without routine
+confirmations. Full completion is not claimed. Local HEAD is `b0478348` after
+`226f93e0`shared nine-state migration and the map-support repair. No push.
 
-2026-09-10user clarification: empirical simulator acceptance with explicit
-unverified guarantees is accepted; proceed through full completion without
-routine confirmations. The pending external-bound question below is historical.
-Continue the [shared empirical plant migration](../20260910-mpcc-empirical-plant/design.md)
-from6b0f1880. Actual failed runs/hard constraints remain failures; universal
-communication/contact guarantees are not claimed or required for this local
-empirical acceptance. No further permission is needed for ordinary implementation.
+Empirical simulator acceptance with explicit unverified guarantees is the user's
+accepted scope; universal transport/contact guarantees are not required for this
+local acceptance. Physical margins, tolerances and failed-run criteria remain.
 
-Current next step: finish model selection at the correct base_link reference and
-with an explicit application/contact/Stop uncertainty contract, then replace all
-shared consumers. [Latest comparison](../20260910-mpcc-shared-plant-model/results.md)
-corrects a diagnostic Rigidbody/base_link origin mismatch(0.485m). GNSS horizontal
-pose independently matches physics-derived base_link within4.013mm. Wire=net
-remains contradicted; a dynamic lateral/yaw model improves held-out0.5sposition
-MAE0.194635->0.056545m but1smaximum0.675902m remains. No new model selected.
-Past-contact estimation and fitted coefficients do not generalize sufficiently;
-source-only tire propagation does not fix the application discrepancy. No tuning.
-Native actual-receiver actuator/contact law matches20147physics ticks and80588
-wheel values, with0sleep mismatch. Private contact/application replay inputs are
-not promoted to live control. M1must still bind uncertainty and complete Stop.
-Cached contact directions match the previous physics body/tire epoch far better,
-but its causal body rollout still has1smaximum0.692849m; correction alone rejected.
-Native latest-value selection gives different motion from the same25msbrake
-stream. The required distinction between empirical simulator acceptance and
-guaranteed communication/contact bounds has been asked of the user. Reply is
-pending; no empirical maximum is promoted to a guarantee in the meantime.
+The shared native body/tire/rest model and normal/Stop/prefix/artifact/async
+consumers are implemented. Buildr9passes26packages; tests r7pass2388records,
+0errors/failures/skips. Single-r2passes6laps241.24130249023438s/penalty0.
+Dev2-r1fails at D1decision938/world4cdc21da9faa0149. Exact replay attributes the
+new terminal rejection to the updated peer field. No production repair is yet
+justified by a passing integrated dev2run.
 
-The earlier current-state defect is repaired: local simulation body→IMU yaw+pi/2,
-exact-epoch GNSS/IMU attitude before lever arm, shared measured initial pose and
-source-stamped /set_initial_pose. Raw-IMU fallback removed, real vehicle mode kept.
-Final build26packages, GNSS39records0errors/0failures/7wrapper skips, initializer11
-and MPCC2381records pass. Final actual-node replay281/281outputs and initial poses
-exactly match the prior passing node version. See [repair/evidence](../20260909-mpcc-measured-initial-heading/results.md).
+The [current dev2 evidence](../20260910-mpcc-empirical-plant/first-dev2-failure.md)
+is the active investigation record. Independent QP solvers establish affine
+feasibility of some rejected QPs but full trajectory/wall/Stop proofs still fail.
+Five alternate terminal lateral targets certify the938retained transaction only
+through actual rest. They do not prove the live five-second complete-rest problem.
+A stale comparison path used historical maximum braking instead of the live
+free-control complete-rest producer; direct live-producer comparisons are now
+recorded. The permanent live-producer audit entry and rear/side-peer equivalence
+regression are repaired; buildr11/testsr8pass26packages/2388records. Public V2X forecasts
+also differ materially from subsequent observations; causal prediction analysis
+is next. No future observations are allowed in live control.
 
-Uninstrumented single6laps251.15843200683594s/penalty0/no moving override passes.
-Dev2first moving D1Emergency933/source10.309999769/v1.8082220948765995 rejects.
-Both runs precede only the final independent GNSSfix-status publication change;
-that change passes native and exact-output node replay. Same-HEAD final campaign
-is still required. D1heading MAE versus calibrated rawIMU falls0.28548->0.002084rad.
+Remaining sequence: repair current dev2root cause, finish M4intent/Stop/restart/
+Recovery/Rejoin/Boost/async exercises, same-HEAD single/dev2three-trial campaign,
+dev3/dev4sixlaps and gate1/2/3, then the same submitted tar/image/eval and evidence
+closure/local commits. [Design](../20260910-mpcc-empirical-plant/design.md),
+[tasklist](../20260910-mpcc-empirical-plant/tasklist.md).
 
-New933 uses actual/inspectedartifact382, fp18084597137145989003. Source-free native
-replay reproduces932terminal peer+0.00239983282409m and933−0.0000303259375765m;
-independentStop−0.00178549315808m. Wall/steering join pass. Control-origin velocity
-1.91152601996m/s differs from artifact2.21718518754m/s. Peer-only substitutions
-preserve outcomes. All9normal+4Stop architecture arms reject/Unknown. Do not mix
-this new933with prior933/artifact371 or force-run928. No safety/gain/delay tuning.
-
-M1full shared model and M2replacement; M3coupled acceptance; M4all intents and
-Stop/restart/async; M5three single/dev2 trials, dev3/dev4sixlaps and gate1/2/3;
-M6same-artifact submission/eval remain required. Plan is
-[completion-plan.md](../20260909-mpcc-longitudinal-model-contract/completion-plan.md).
-OriginalDLL/protected userJSON restored; generated outputs remain outside commits.
+## Earlier evidence (historical, not current HEAD acceptance)
 
 Previous direct input audit ae2efe6a:
 

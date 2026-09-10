@@ -740,6 +740,21 @@
       "snapshot_id": "20260910-empirical-plant-map-support-regressions",
       "manifest": ".steering/20260910-mpcc-empirical-plant/map-support-evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-nine-state-single-r2",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/single-r2-manifest.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r1",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r1-manifest.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-diagnostics",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-diagnostics-evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -4250,7 +4265,7 @@
       "hypothesis": "Constant applied wire acceleration equals body velocity derivative",
       "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
       "result": "rejected",
-      "reason": "9.309999791..9.799999780s raw15velocity samples gain0.365482807m/s versus wire integration0.651501815m/s; actual input1.32959557..1.32959855m/s². Not a full plant fit.",
+      "reason": "9.309999791..9.799999780s raw15velocity samples gain0.365482807m/s versus wire integration0.651501815m/s; actual input1.32959557..1.32959855m/s\u00b2. Not a full plant fit.",
       "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
       "deleted_code": [],
       "revisit_condition": "causal unified longitudinal model or independent calibration"
@@ -4981,6 +4996,202 @@
         "QP progress extent as sole Stop map coverage"
       ],
       "revisit_condition": "Changed source/geometry consumers or new integrated failure"
+    },
+    {
+      "experiment_id": "20260910-nine-state-single-r2",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-single-r2"
+      ],
+      "hypothesis": "Map support repair restores single six-lap execution",
+      "changed_dimension": "Map/Stop support producer on b0478348",
+      "result": "accepted",
+      "reason": "Six laps241.24130249023438s, penalty0, no active moving override. Callback max26.879ms, one overrun. Same-HEAD repeated campaign remains open.",
+      "production_impact": "Local runtime acceptance only; no complete campaign claim",
+      "deleted_code": [],
+      "revisit_condition": "New source/config or required predeclared repeat campaign"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r1",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r1"
+      ],
+      "hypothesis": "Shared nine-state candidate supports ordinary coupled execution",
+      "changed_dimension": "Fresh standard dev2 runtime",
+      "result": "rejected",
+      "reason": "First moving D1Emergency938, peer-limited retained terminal rejection; no six-lap acceptance.",
+      "production_impact": "Coupled acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "Causal producer repair and required build/tests"
+    },
+    {
+      "experiment_id": "20260910-nine-state-peer-only-revalidation",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Updated peer observation flips retained Stop viability",
+      "changed_dimension": "Other observed peer field projected to the same ego clock; zero solves",
+      "result": "accepted",
+      "reason": "937+0.0185712m vs938-0.00170420m; previous peer at938passes+0.00501269m. Publication-anchor substitution does not repair938.",
+      "production_impact": "Causal observation only; no substituted world may execute",
+      "deleted_code": [],
+      "revisit_condition": "Changed current-world producer or new matching artifact/input evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-kkt-pipeline",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Numerical equilibration alone restores a certified trajectory",
+      "changed_dimension": "Exact-QP and two full-pipeline KKT variants",
+      "result": "rejected",
+      "reason": "QP solve can succeed but exact wall proof rejects; subsequent coupled QP also hits4000iterations.",
+      "production_impact": "No production preconditioner change",
+      "deleted_code": [],
+      "revisit_condition": "Different evidenced formulation/seed or backend, not tolerance/budget change"
+    },
+    {
+      "experiment_id": "20260910-nine-state-independent-qp",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Rejected dynamic/coupled QPs can be feasible",
+      "changed_dimension": "HiGHS and ProxQP on original physical QPs",
+      "result": "accepted",
+      "reason": "HiGHS violations2.43e-10/7.31e-9, ProxQP2.31e-6/2.18e-6. Affine results do not certify physical trajectories.",
+      "production_impact": "Independent diagnostic only; no backend dependency added",
+      "deleted_code": [],
+      "revisit_condition": "Changed QP or need for a new whole-pipeline comparison"
+    },
+    {
+      "experiment_id": "20260910-nine-state-highs-pipeline-r1-r2",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "C API whole-pipeline comparison preserves the same objective",
+      "changed_dimension": "Local HiGHS binding prototypes",
+      "result": "inconclusive",
+      "reason": "r1ignored upper-triangle entries; r2square format unsupported. Invalid comparisons, corrected by r3.",
+      "production_impact": "No production impact",
+      "deleted_code": [],
+      "revisit_condition": "Correct Hessian mapping plus independent stationarity validation"
+    },
+    {
+      "experiment_id": "20260910-nine-state-highs-pipeline-r3-r5",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "HiGHS and common dynamics/peer/wall linearization restore normal authority",
+      "changed_dimension": "Valid lower-triangle HiGHS binding, common-primal and physical-rollout SQP",
+      "result": "rejected",
+      "reason": "r3optimal QPs still fail exact wall; r4/r5next affine problem infeasible. Physical state defect0.0641809; no physical infeasibility certificate.",
+      "production_impact": "No production backend/solver-loop change",
+      "deleted_code": [],
+      "revisit_condition": "New causally evidenced candidate/geometry/observation formulation"
+    },
+    {
+      "experiment_id": "20260910-nine-state-terminal-target-scan",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Current scene has alternate complete-stop terminal policies",
+      "changed_dimension": "43constant lateral targets on the exact retained938Request",
+      "result": "accepted",
+      "reason": "Targets0.8..1.2m certify through rest, clearances0.00750..0.04259m. They do not establish the live five-second problem.",
+      "production_impact": "Nonexecuting physical witnesses only; no constant target promoted",
+      "deleted_code": [],
+      "revisit_condition": "Live same-formulation candidate generation and execution/provenance validation"
+    },
+    {
+      "experiment_id": "20260910-nine-state-historical-stop-seeds",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Coherent seed or fixed-rate schedule repairs historical max-braking Stop",
+      "changed_dimension": "Coherent hold-steering seed and three fixed schedules, paired before/after native seed",
+      "result": "rejected",
+      "reason": "All reject. This is the historical constrained producer, not the live complete-rest producer.",
+      "production_impact": "No production changes or live Stop infeasibility claim",
+      "deleted_code": [],
+      "revisit_condition": "Changed historical input or a specifically relevant bounded comparison"
+    },
+    {
+      "experiment_id": "20260910-nine-state-production-stop-comparison",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Actual free-control complete-rest producer can certify938",
+      "changed_dimension": "Direct live producer; OSQP/HiGHS and objective-only feasibility",
+      "result": "rejected",
+      "reason": "Original objective rejects dynamic QP on both backends. Feasibility OSQP also rejects; HiGHS fails exact body rest after all3corrections. Historical tool coverage was incomplete.",
+      "production_impact": "No production objective/backend change; canonical audit entry needs repair",
+      "deleted_code": [],
+      "revisit_condition": "Causal candidate-generation/prediction fix with same hard proof"
+    },
+    {
+      "experiment_id": "20260910-nine-state-production-normal-comparison",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Actual bounded Cruise avoidance population succeeds with independent QP backend",
+      "changed_dimension": "Both live normal sides under OSQP and HiGHS",
+      "result": "rejected",
+      "reason": "OSQP both reject; HiGHS left reaches hard-wall rejection, right rejects obstacle QP.",
+      "production_impact": "No production changes",
+      "deleted_code": [],
+      "revisit_condition": "Changed evidenced producer/formulation"
+    },
+    {
+      "experiment_id": "20260910-nine-state-complete-rest-shooting",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Bounded native control shooting finds a five-second physical Stop witness",
+      "changed_dimension": "225constant-target and576single-switch power/brake trajectories, no QP solves",
+      "result": "inconclusive",
+      "reason": "No witness; dynamic/wall/artifact-bound rejections recorded. Bounded population failure remains Unknown.",
+      "production_impact": "No production controls or algorithm promoted",
+      "deleted_code": [],
+      "revisit_condition": "New causal prediction evidence or materially different justified trajectory family"
+    },
+    {
+      "experiment_id": "20260910-nine-state-public-peer-forecast",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Constant Cartesian peer forecast differs from public subsequent observations",
+      "changed_dimension": "Same-run V2X scoring with initial-position offset separated",
+      "result": "accepted",
+      "reason": "Matched error0.13849m@0.5s,0.44233m@1s,1.61082m@2s,8.10457m@5s. Later behavior may respond to Emergency. No future observations enter control.",
+      "production_impact": "Diagnostic model-error evidence only; no forecast change yet",
+      "deleted_code": [],
+      "revisit_condition": "Causal-history/map alternatives and frozen holdout comparison"
+    },
+    {
+      "experiment_id": "20260910-nine-state-current-stop-tool",
+      "baseline_commit": "b0478348fda0986ae46c005fd574852154f4d6a1",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-diagnostics"
+      ],
+      "hypothesis": "Canonical diagnostic uses the actual live complete-rest producer",
+      "changed_dimension": "New audit API/CLI and coupled rear/side-peer equivalence regression",
+      "result": "accepted",
+      "reason": "26packages build;2388test records pass. Live/audit identities and proofs agree;938expected rejection and candidate334c7985b802506b reproduced.",
+      "production_impact": "Diagnostic-only repair; no control change",
+      "deleted_code": [],
+      "revisit_condition": "Changed live complete-rest producer or audit semantics"
     }
   ]
 }

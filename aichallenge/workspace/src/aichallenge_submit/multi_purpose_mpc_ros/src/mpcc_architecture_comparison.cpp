@@ -1805,6 +1805,8 @@ const char * to_string(const Arm arm) noexcept
       return "follow-stay-behind-w";
     case Arm::SemanticTargetTimeX:
       return "semantic-target-time-x";
+    case Arm::CurrentWorldCompleteRestY:
+      return "current-world-complete-rest-y";
   }
   return "unknown";
 }
@@ -2378,7 +2380,7 @@ Report compare_stop_physical_support(
   stop.candidate.request.input_delta_weight = recorded.source.request.input_delta_weight;
   auto fingerprint = architecture::fingerprint_interaction_snapshot(stop.candidate);
   report.source_accepted = true;
-  report.detail = "free Stop: support-only, historical, explicit feasibility, production feasibility";
+  report.detail = "historical maximum-braking Stop: support-only, inherited objective, feasibility";
   const auto successor = resolve_audit_terminal_successor(stop.candidate);
   auto support_fingerprint = fingerprint;
   append_fingerprint_double(support_fingerprint, 1.0);
@@ -2419,6 +2421,39 @@ Report compare_stop_physical_support(
     resolve_audit_terminal_successor(feasibility_stop),
     -1, -1, nullptr, false, std::nullopt, 0U,
     TerminalStopLateralAuditMode::SolvedStopTrajectory));
+  return report;
+}
+
+Report compare_current_world_complete_rest(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  Report report;
+  const auto fingerprint = recorded.interaction_fingerprint;
+  report.source_interaction_fingerprint = fingerprint;
+  if (!architecture::interaction_snapshot_complete(recorded.source) ||
+    !architecture::interaction_snapshot_matches_fingerprint(recorded.source, fingerprint))
+  {
+    report.detail = "source interaction snapshot rejected";
+    report.arms.push_back(rejected_arm(
+      Arm::CurrentWorldCompleteRestY, Stage::SourceRejected, fingerprint, report.detail));
+    return report;
+  }
+  report.source_accepted = true;
+  shadow::SolverContext solver;
+  const auto stop = stop_lattice::build_current_world_complete_rest_candidate(
+    recorded.source, solver.physical_constraint_tolerance());
+  if (!stop.accepted()) {
+    report.detail = stop.detail;
+    report.arms.push_back(rejected_arm(
+      Arm::CurrentWorldCompleteRestY, Stage::CandidateRejected, fingerprint, stop.detail));
+    return report;
+  }
+  report.detail = "current-world complete-rest production producer; unchanged objective and bounds";
+  report.arms.push_back(evaluate_arm(
+    Arm::CurrentWorldCompleteRestY, stop.candidate, fingerprint,
+    architecture::fingerprint_interaction_snapshot(stop.candidate),
+    resolve_audit_terminal_successor(stop.candidate), -1, -1, &solver, false,
+    std::nullopt, 0U, TerminalStopLateralAuditMode::SolvedStopTrajectory));
   return report;
 }
 
@@ -2955,11 +2990,9 @@ Report compare_terminal_stop_lateral_contract(
       Arm::ProductionLeftNormalPathStopT, source, source_fingerprint, 1,
       ProductionEvaluationMode::SingleSqp,
       TerminalStopLateralAuditMode::NormalPathProfile));
-    // The live independent Stop worker owns a current-world producer that
-    // does not depend on a normal execution artifact.  The observation-only
-    // comparison must exercise that same hypothesis: requiring a successful
-    // normal solve here made normal-solver failures indistinguishable from
-    // physical Stop infeasibility.
+    // Preserve this historical maximum-braking hypothesis for old replay
+    // comparisons. The live free-control producer is exercised separately by
+    // compare_current_world_complete_rest(), including its retimed peer field.
     shadow::SolverContext stop_source_solver;
     const auto solved_stop =
       stop_lattice::build_current_world_maximum_braking_candidate(

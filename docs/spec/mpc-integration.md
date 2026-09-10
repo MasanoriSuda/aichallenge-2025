@@ -4235,3 +4235,16 @@ pose原点の違いを確認した。横速度・yaw rateを持つmovingモデ�
 壁/他車制約、数値許容差、失敗runの判定は維持する。9状態の共有物理モデルを実装候補に
 選び、独立runを含めて停止・再発進・多車両・提出評価まで確認する。
 [移行設計](../../.steering/20260910-mpcc-empirical-plant/design.md)を参照。
+
+#### 現行完全停止producerの監査入口（2026-09-10）
+
+`mpcc_architecture_compare <snapshot.yaml> --current-world-complete-rest-only`は、
+実行中の独立Stopワーカーと同じ`build_current_world_complete_rest_candidate`を使う。
+自由な加速度・操舵、候補の時間軸と再配置された全peer、元の目的関数、終端の車体静止を維持し、
+通常軌道のsolveを前提にしない。結果の`current-world-complete-rest-y`は観測用で、実行権限を持たない。
+
+`--stop-physical-support-only`と旧Stop操舵schedule比較は、最大制動を固定する過去方式の比較である。
+その失敗を現行の自由入力Stopの失敗として扱わない。現行producerは元の重みを引き継ぎ、
+過去の最大制動producerだけがゼロ目的関数のfeasibilityを使う。
+最新の実走行・同一入力比較は[dev2監査記録](../../.steering/20260910-mpcc-empirical-plant/first-dev2-failure.md)を参照。
+単独6周の合格は、2台走行・反復campaign・提出評価の合格を意味しない。

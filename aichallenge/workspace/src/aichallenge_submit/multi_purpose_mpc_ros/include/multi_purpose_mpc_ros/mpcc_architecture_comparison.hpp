@@ -59,6 +59,7 @@ enum class Arm
   SevenStateStopControlLatticeV,
   FollowStayBehindW,
   SemanticTargetTimeX,
+  CurrentWorldCompleteRestY,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -177,7 +178,15 @@ Report compare_stop_schedule(
   int initial_rate_sign, int first_switch_stage, int second_switch_stage,
   bool witness_physical_separation_audit = false) noexcept;
 
+/// Historical maximum-braking support comparisons; not the live free-control
+/// complete-rest producer.
 Report compare_stop_physical_support(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded) noexcept;
+
+/// Exercise the same current-world free-control producer as the live Stop
+/// worker, including its retimed peer field, objective and exact rest proof.
+/// No normal solve or historical maximum-braking candidate is substituted.
+Report compare_current_world_complete_rest(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded) noexcept;
 
 /// Observation only: use the source's maximum permitted stage duration. No

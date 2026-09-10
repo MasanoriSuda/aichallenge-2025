@@ -1370,12 +1370,31 @@ TEST(MpccArchitectureComparison, CurrentWorldStopSolvesFreeControlsWithEveryObse
   ASSERT_EQ(guided.outcome, shadow::Outcome::Solved) << guided.detail;
   EXPECT_EQ(guided.dynamic_obstacle_guidance_peer_count, 2U);
   EXPECT_EQ(guided.dynamic_obstacle_diagonal_row_count, 2U * horizon);
+  // The audit must exercise the same free-control Stop that escapes the rear
+  // peer, preserving all observed peers and the complete-rest clock. The old
+  // maximum-braking audit is a different problem and cannot replace it.
+  const auto audit = compare_current_world_complete_rest(recorded(source));
+  ASSERT_TRUE(audit.source_accepted) << audit.detail;
+  ASSERT_EQ(audit.arms.size(), 1U);
+  const auto & audited = audit.arms.front();
+  EXPECT_EQ(audited.arm, Arm::CurrentWorldCompleteRestY);
+  ASSERT_EQ(audited.stage, Stage::Accepted) << audited.detail;
+  ASSERT_TRUE(audited.bundle.has_value());
+  EXPECT_EQ(audited.candidate_fingerprint,
+    architecture::fingerprint_interaction_snapshot(candidate));
+  EXPECT_EQ(audited.source_interaction_fingerprint, original_fingerprint);
+  EXPECT_DOUBLE_EQ(audited.bundle->terminal_stop_trajectory.velocity_mps.back(), 0.0);
+
   auto stale_secondary = source;
   ++stale_secondary.replay_world->obstacles.back().observation_generation;
   const auto stale = stop_lattice_shadow::evaluate_current_world(
     stale_secondary, replay_solver, {}, stop_lattice_shadow::EvaluationMode::DirectSevenStateOnly);
   EXPECT_EQ(stale.reason, stop_lattice_shadow::Reason::CandidateBuildRejected);
   EXPECT_EQ(stale.attempted_candidate_count, 0U);
+  const auto stale_audit = compare_current_world_complete_rest(recorded(stale_secondary));
+  ASSERT_EQ(stale_audit.arms.size(), 1U);
+  EXPECT_FALSE(stale_audit.arms.front().bundle.has_value());
+  EXPECT_NE(stale_audit.arms.front().stage, Stage::Accepted);
 }
 
 TEST(MpccArchitectureComparison, LiveStopShadowStopsAfterSupersededSolve)

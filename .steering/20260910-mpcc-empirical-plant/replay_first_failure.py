@@ -5,16 +5,18 @@ import json
 import shutil
 import subprocess
 import yaml
+import sys
 
-run = Path('/output/20260910-nine-state-single-r1')
+run = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('/output/20260910-nine-state-single-r1')
 assert (run/'monitor-summary.json').exists(), 'Simulator must finish first'
-out = Path('/output/20260910-nine-state-revalidation-r1')
+out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path('/output/20260910-nine-state-revalidation-r1')
 out.mkdir(exist_ok=False)
-binary = Path('/output/20260910-nine-state-revalidation-tool-r1/replay')
+binary = Path(sys.argv[3]) if len(sys.argv) > 3 else Path('/output/20260910-nine-state-revalidation-tool-r1/replay')
+pattern = sys.argv[4] if len(sys.argv) > 4 else '000000002804*'
 b = Path('/aichallenge/workspace/build/multi_purpose_mpc_ros')
 records = []
 for domain in ['d1']:
-    for path in sorted((run/domain/'mpcc_architecture_snapshots').glob('000000002804*/snapshot.yaml')):
+    for path in sorted((run/domain/'mpcc_architecture_snapshots').glob(pattern+'/snapshot.yaml')):
         document = yaml.load(path.read_bytes(), Loader=yaml.CSafeLoader)
         for key in ['revalidation_evidence', 'previous_accepted_revalidation_evidence']:
             observation = document.get(key, {})

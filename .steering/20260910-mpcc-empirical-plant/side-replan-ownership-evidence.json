@@ -1,0 +1,141 @@
+{
+  "baseline_commit": "21b025f3856139724ce1cac01e6b529759ed51fa",
+  "production_candidate": true,
+  "integrated_acceptance": false,
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r14-architecture/bounded.log",
+      "sha256": "056a81f3d181ac16bea81db73099712a7fd7219ce6c87106ba42340a80d19c22"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r14-architecture/manifest.json",
+      "sha256": "11cbd73034a86a1157c7bd852446b67aef55607a82a4b03aa904903fd0e2f2d1"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r14-metrics/d1-callback-samples.json",
+      "sha256": "cb0c04ae131a1dd9398d3c7387e99c84ad7a40429558105242dd839e6d4be360"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r14-metrics/d1-command-clock-anomalies.json",
+      "sha256": "7abfdb51c3f7d74a502a0b26bd629bc6eff09111f40c5dd22bb97ef3264f5c1c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r14-metrics/d1-prediction-samples.json",
+      "sha256": "a34b9637791e04137a6e560ebaa85fae52157a05e2e6205f63636c45b1050920"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r14-metrics/d2-callback-samples.json",
+      "sha256": "1fc80dd45e906aa130281d7b5ac8a819b6d359d57008ba1d40d51535eb82952e"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r14-metrics/d2-command-clock-anomalies.json",
+      "sha256": "da945dd5dd820d0ae56616a56414e6ead8d3fa2019ca4ef85c84b2dc8dea2de6"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r14-metrics/d2-prediction-samples.json",
+      "sha256": "3f3ab154090b65efc1e9cf24700dbca01034851bc2a7295ca73c84542fed6bc7"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r14-metrics/report.json",
+      "sha256": "e15d3a61e1a18f513c434d073a087d5039e5397167affc4ae36af69c37045502"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r38/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r38/manifest.json",
+      "sha256": "73ea4d3d7690684fd672881721458d9a53fb1f012233c3e12adb15ee8ea5b38b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r38/replay",
+      "sha256": "9e4e5e78462d375a84fcb5f63eaab66d5d835d47e424b71338f285a4f9b432b1"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc-nine-state-build-r32.log",
+      "sha256": "cef9fd29eb76ecb964a5f8bb8957a243c532c526f590bc7b74c48c919ec76b36"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc-nine-state-dev2-r14-architecture.log",
+      "sha256": "64fc5b94dc0263c1898c5ce92484579db502f0897d682cbfcb8d16ea7b9f385d"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc-nine-state-dev2-r14-campaign.log",
+      "sha256": "a8ee4d9f6b3ccb7a11327372a693ab57cfa13abe0bd6ecff03987112d65e8e07"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc-nine-state-dev2-r14-metrics.log",
+      "sha256": "5e316820619a694c45a9269d23583940688355467b0a0134a29bf60577af1012"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc-nine-state-r14-architecture-build.log",
+      "sha256": "fc74c1c3209b2291b80aed579f572088c1773f56fc2347d39c34d0188b9b266d"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc-nine-state-side-owner-before.log",
+      "sha256": "558ba5b6c9907e9a46b22742b5042dafb08ff23322efdac4561021d8b39b6161"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc-nine-state-tests-r27.log",
+      "sha256": "07c536ab35377583a3683a50c092bdabc2875cf6825cc8035e9fa05161fc2f75"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc_r14_architecture.py",
+      "sha256": "84861ebd740d50210afff4c041a9bcc262fec9a7579a8a335137d63f97401ea2"
+    },
+    {
+      "path": "output/20260910-nine-state-side-owner-evidence/mpcc_side_owner_before.py",
+      "sha256": "814f60157fbb5d59c58ae132333a3077ed7db7a4579666bb210363cddd7cd444"
+    }
+  ],
+  "causal": {
+    "run": "20260910-nine-state-dev2-r14",
+    "domain": "d2",
+    "published_source": 589,
+    "published_decision": 1100,
+    "generation": 1,
+    "side_change": [
+      -1,
+      1
+    ],
+    "publication_wall_time": 1789043932.8008971,
+    "first_recovery_decision": 1112,
+    "first_recovery_wall_time": 1789043933.0910342,
+    "first_recovery_reason": "selected pass side became occupied",
+    "physical_guard_flags": {
+      "wall_contact": 0,
+      "wall_margin": 0,
+      "wall_unknown": 0,
+      "watchdog": 0,
+      "side_abort": 1
+    },
+    "final_authority": "certified Stop604; no live moving Emergency before shutdown",
+    "shutdown_started_wall_sec": 1789043945.0891376,
+    "causal_observation_failure": "528 at rest0m/s; later1628 moving4.68m/s is after shutdown; neither causes1112",
+    "snapshot_limit": "589negative candidate world is earlier; exact1112world and runtimepositive589warm-start/candidate absent"
+  },
+  "validation": {
+    "before": "one native regression fails unchanged library",
+    "build_r32": "26packages/4m15s/pass",
+    "tests_r27": "2410records/62groups/0errors/failures/skips/29.62s",
+    "architecture": "15boundedA/B/C/Dcandidates all solver-rejected; Unknown, no feasibility certificate",
+    "timing_r14": {
+      "d1_p95_p99_max_ms": [
+        12.362149,
+        15.521216,
+        26.403146
+      ],
+      "d2_p95_p99_max_ms": [
+        14.782569,
+        20.082579,
+        27.403
+      ],
+      "adjacent_overrun_pairs": [
+        0,
+        0
+      ],
+      "scope": "all emitted samples including startup/finish, not final incomplete window; r14 still failed"
+    }
+  },
+  "open": "Fixedcommitdev2-r15 then remainingM4–M6"
+}

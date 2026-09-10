@@ -3332,6 +3332,14 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
     assert "mission_generation" in source_predicate
     assert "pass_side_sign != 0" in source_predicate
 
+    replan_start = SOURCE.index("overtake_core::EarlyShiftOutSideReplanRequest early_side_replan_request;")
+    replan_end = SOURCE.index("// Shadow evaluation must not steer the vehicle.", replan_start)
+    replan = SOURCE[replan_start:replan_end]
+    assert "early_side_replan_request.published_stateless_source_active =\n      publisher_bound_stateless_overtake_source_active();" in replan
+    assert "early_side_replan_request.frozen_mission_source_active =\n      overtake_line_state_.mission_path_frozen;" in replan
+    assert replan.count("early_side_replan_active") == 4
+    assert "resolve_early_shiftout_side_replan(early_side_replan_request)" in replan
+
     behavior_start = SOURCE.index(
         "const bool published_stateless_overtake_execution_source ="
     )

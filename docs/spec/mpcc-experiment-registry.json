@@ -859,6 +859,18 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/stop-packet-schedule-evidence.json",
       "replay_ready": true,
       "reason": "Exact oldmodel closure plus continuous counterfactual, bounded architectures, corrected native proofs and packet-schedule regression."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r14",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r14-manifest.json",
+      "replay_ready": true,
+      "reason": "Frozen21b025f3run fails on D2unexpectedRecovery1112; Stop604stillcertified."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-side-replan-ownership",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/side-replan-ownership-evidence.json",
+      "replay_ready": true,
+      "reason": "Publishedowner policy regression and bounded earlier589world architecture comparison."
     }
   ],
   "experiments": [
@@ -6466,6 +6478,53 @@
       "production_impact": "Single certified Stop path; no margin, hold grace, solver budget or final authority relaxation. Live acceptance remains open.",
       "deleted_code": [],
       "revisit_condition": "New fixedcommit dev2 evidence, new exactbody/packet counterexample, or independently certified candidate; no unchanged all-method retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-side-replan-ownership-runtime",
+      "baseline_commit": "21b025f3856139724ce1cac01e6b529759ed51fa",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r14",
+        "20260910-nine-state-side-replan-ownership"
+      ],
+      "hypothesis": "Publishedstatelesssource preserves committed tactical ownership",
+      "changed_dimension": "Early side-replan source applicability only; no model/solver/safety changes",
+      "result": "rejected",
+      "reason": "Geometryretirement reopens uncommitted earlysideplanner; ordering alone yieldsRecovery1112 although finalStopstillcertifies.",
+      "production_impact": "Single actualpublication owner; unchanged canonical command certification and physical supervisors",
+      "deleted_code": [],
+      "revisit_condition": "New fixedcommitrun, exactnewworld/candidate or failedownershipregression; no unchanged rejectedarm retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-side-replan-ownership-architecture",
+      "baseline_commit": "21b025f3856139724ce1cac01e6b529759ed51fa",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r14",
+        "20260910-nine-state-side-replan-ownership"
+      ],
+      "hypothesis": "Boundedalternative candidates solve earlier589world",
+      "changed_dimension": "Early side-replan source applicability only; no model/solver/safety changes",
+      "result": "inconclusive",
+      "reason": "All15A/B/C/Dfixedcandidates solverreject; no physicalinfeasibilitycertificate. Actualpublishedpositive589uses different candidate/warmstart; exact1112world unavailable.",
+      "production_impact": "Single actualpublication owner; unchanged canonical command certification and physical supervisors",
+      "deleted_code": [],
+      "revisit_condition": "New fixedcommitrun, exactnewworld/candidate or failedownershipregression; no unchanged rejectedarm retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-side-replan-ownership-ownership-producer",
+      "baseline_commit": "21b025f3856139724ce1cac01e6b529759ed51fa",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r14",
+        "20260910-nine-state-side-replan-ownership"
+      ],
+      "hypothesis": "Sharedapplicability can distinguish retiredgeometry from uncommittedencounter",
+      "changed_dimension": "Early side-replan source applicability only; no model/solver/safety changes",
+      "result": "accepted",
+      "reason": "Oldnativefails; newpublished/frozen/uncommittedcases plus controllerwiring and existingphysicalguardtests pass. Build26/test2410; integratedacceptance pending.",
+      "production_impact": "Single actualpublication owner; unchanged canonical command certification and physical supervisors",
+      "deleted_code": [
+        "Three geometry-only early side-replan applicability paths"
+      ],
+      "revisit_condition": "New fixedcommitrun, exactnewworld/candidate or failedownershipregression; no unchanged rejectedarm retry"
     }
   ]
 }

@@ -11527,12 +11527,20 @@ bool selected_pass_side_ordering_conflict(
          ordering_margin_m + 1e-9;
 }
 
+bool early_shiftout_side_replan_available(
+  const EarlyShiftOutSideReplanRequest & request) noexcept
+{
+  return request.enabled && request.shiftout_phase &&
+         !request.frozen_mission_source_active &&
+         !request.published_stateless_source_active;
+}
+
 EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(
   const EarlyShiftOutSideReplanRequest & request) noexcept
 {
   EarlyShiftOutSideReplanResolution result;
   if (
-    !request.enabled || !request.shiftout_phase || request.lateral_clearance_latched ||
+    !early_shiftout_side_replan_available(request) || request.lateral_clearance_latched ||
     !is_configured_side(request.locked_side) ||
     !std::isfinite(request.lateral_progress_m) || request.lateral_progress_m < 0.0 ||
     !std::isfinite(request.maximum_lateral_progress_m) ||

@@ -12946,6 +12946,54 @@ TEST(V2XOvertakeCoreSideReplan, DetectsTargetBeyondEgoOnSelectedSide)
       false, -1, true, false, 1.0, 8.0, -0.93, 0.10));
 }
 
+TEST(V2XOvertakeCoreSideReplan, PublishedStatelessEncounterCannotReopenEarlyReplan)
+{
+  // dev2-r14 D2: source589 was published at decision1100, retiring frozen
+  // Mission geometry. The ordering guard later reported +1.06m at +6.95m.
+  EarlyShiftOutSideReplanRequest request;
+  request.enabled = true;
+  request.shiftout_phase = true;
+  request.locked_side = PassSide::Left;
+  request.selected_side_conflict = selected_pass_side_ordering_conflict(
+    true, 1, true, false, 6.95, 8.0, 1.06, 0.10);
+  ASSERT_TRUE(request.selected_side_conflict);
+  request.maximum_lateral_progress_m = 0.6;
+  request.maximum_traveled_distance_m = 5.0;
+  request.candidate_stable_sec = 0.25;
+  request.required_stable_sec = 0.25;
+  request.published_stateless_source_active = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::early_shiftout_side_replan_available(request));
+
+  // The published owner is unchanged both inside and outside the legacy
+  // window, with or without an alternate. This is no command certificate.
+  for (const double lateral_progress : {0.4, 0.8}) {
+    request.lateral_progress_m = lateral_progress;
+    for (const bool alternate : {false, true}) {
+      request.candidate_feasible = alternate;
+      request.candidate_side = alternate ? PassSide::Right : PassSide::None;
+      const auto result = resolve_early_shiftout_side_replan(request);
+      EXPECT_EQ(result.action, EarlyShiftOutSideReplanAction::Keep);
+      EXPECT_FALSE(result.inside_switch_window);
+    }
+  }
+
+  // Removing actual publication ownership restores the legacy conflict
+  // response. Hard wall/front-risk guards live independently in supervision.
+  request.published_stateless_source_active = false;
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::v2x_overtake_core::early_shiftout_side_replan_available(request));
+  EXPECT_EQ(
+    resolve_early_shiftout_side_replan(request).action,
+    EarlyShiftOutSideReplanAction::Abort);
+  request.frozen_mission_source_active = true;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::v2x_overtake_core::early_shiftout_side_replan_available(request));
+  EXPECT_EQ(
+    resolve_early_shiftout_side_replan(request).action,
+    EarlyShiftOutSideReplanAction::Keep);
+}
+
 TEST(V2XOvertakeCoreSideReplan, SwitchesOnlyAfterStableEarlyAlternate)
 {
   EarlyShiftOutSideReplanRequest request;

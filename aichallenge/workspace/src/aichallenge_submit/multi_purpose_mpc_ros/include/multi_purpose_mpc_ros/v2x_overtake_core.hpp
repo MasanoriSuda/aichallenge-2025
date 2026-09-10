@@ -6636,6 +6636,10 @@ struct EarlyShiftOutSideReplanRequest
   double maximum_traveled_distance_m{0.0};
   double candidate_stable_sec{0.0};
   double required_stable_sec{0.0};
+  // Actual canonical publication owns the encounter after frozen geometry is
+  // retired. Relative ordering cannot reopen the legacy uncommitted replan.
+  bool published_stateless_source_active{false};
+  bool frozen_mission_source_active{false};
 };
 
 struct EarlyShiftOutSideReplanResolution
@@ -6644,7 +6648,11 @@ struct EarlyShiftOutSideReplanResolution
   bool inside_switch_window{false};
 };
 
-/// Switch only in the shallow ShiftOut window after a stable alternate-side
+/// Geometry retirement does not reopen an encounter owned by publication.
+bool early_shiftout_side_replan_available(
+  const EarlyShiftOutSideReplanRequest & request) noexcept;
+
+/// Switch only in an uncommitted shallow ShiftOut window after a stable alternate-side
 /// decision. A stable selected-side conflict outside that window aborts rather
 /// than crossing the target with a direct side reversal.
 EarlyShiftOutSideReplanResolution resolve_early_shiftout_side_replan(

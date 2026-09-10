@@ -175,3 +175,13 @@ is preserved. Native r8 replay rejects accelerating command under braking prefix
 matching Stop passes materialization/join/packet and snapshot roundtrip at+0.909311m.
 See publication-prefix-design.md and publication-prefix-evidence.json. Fresh
 committed dev2-r9 next; no integrated or M4–M6 completion claimed yet.
+
+2026-09-10:99fccb87dev2-r9rejected at initial rest on both cars. Causal
+native comparison exposes QPx0equality copied into initial physical corridor;
+new prospective prefix moves1–2mm and is rejected before wallproof. Producer
+now uses sealed initial physical map support while keeping QPx0/futurebounds.
+Buildr24:26packagespass;testsr18:2402records/62groups/0errors/failures/skips.
+Nativebeforefails; originalTrack294sourcebuilders solve/prove for both cars.
+CurrentD1source840solves/proves, currentD2source819solverrejects at4000iterations,
+kept separately. Details/evidence in bootstrap-bound-design.md and JSON.
+Freshcommitted dev2-r10next; M4–M6and full integrated acceptance remain open.

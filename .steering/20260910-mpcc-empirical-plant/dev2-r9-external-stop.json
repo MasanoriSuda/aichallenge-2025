@@ -1,0 +1,5 @@
+{
+  "reason": "Both vehicles stay at initial rest after Ready; no normal command adopted; bootstrap continuation repeatedly rejected. Bounded failed startup, controller regression pending exact reproduction; not six-lap acceptance.",
+  "wall_sec": 1789033433.3388524,
+  "harness_pid": 1733491
+}

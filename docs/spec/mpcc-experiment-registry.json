@@ -811,6 +811,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/publication-prefix-evidence.json",
       "replay_ready": true,
       "reason": "Native candidate packet binding and snapshot roundtrip using sealed r8 original public provenance, exact legacy baseline and labelled projection sensitivity"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-bootstrap-physical-bound",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/bootstrap-bound-evidence.json",
+      "replay_ready": true,
+      "reason": "r9firstCruiseRequests include still-Track294; exact intent mismatch retained, named same-source-intent comparison exposes point-corridor defect; current and inspected sources separate"
     }
   ],
   "experiments": [
@@ -5674,6 +5680,64 @@
         "Production authority use of history-only held future input prefix"
       ],
       "revisit_condition": "New same-world binding failure or fresh integrated counterexample"
+    },
+    {
+      "experiment_id": "20260910-nine-state-bootstrap-physical-bound-integrated",
+      "baseline_commit": "99fccb87d3c2b5ccf9a9722690e25320dc927e0f",
+      "snapshot_ids": [
+        "20260910-nine-state-bootstrap-physical-bound"
+      ],
+      "hypothesis": "Prospective packet binding alone preserves bootstrap launch",
+      "changed_dimension": "Fresh99fccb87dev2-r9",
+      "result": "rejected",
+      "reason": "Both vehicles remain at initial rest afterReady, bootstrap continuation repeatedly initial-lateral-bound-rejected; no laps. Source x0 equality copied as physical corridor",
+      "production_impact": "Initial physical bound producer only; all future bounds/proofs and prospective packet binding maintained. Fresh integration pending.",
+      "deleted_code": [],
+      "revisit_condition": "Separate immutable initial equality from physical map support"
+    },
+    {
+      "experiment_id": "20260910-nine-state-bootstrap-physical-bound-comparison",
+      "baseline_commit": "99fccb87d3c2b5ccf9a9722690e25320dc927e0f",
+      "snapshot_ids": [
+        "20260910-nine-state-bootstrap-physical-bound"
+      ],
+      "hypothesis": "Physical-bound misclassification causes fresh-prefix bootstrap rejection",
+      "changed_dimension": "Same captured source intent/body/packet/history/peers; only first physical bound changes to sealed map support with resealed source",
+      "result": "accepted",
+      "reason": "Oldpoint bounds reject1–2mmshift; native fullproof/terminal/packet accept at+0.632794517/+1.072191784m. Exact captured Cruise/Track mismatch retained, no actualTrackadoption claimed",
+      "production_impact": "Initial physical bound producer only; all future bounds/proofs and prospective packet binding maintained. Fresh integration pending.",
+      "deleted_code": [],
+      "revisit_condition": "Changed initial state/physical support or integrationcounterexample"
+    },
+    {
+      "experiment_id": "20260910-nine-state-bootstrap-physical-bound-producer",
+      "baseline_commit": "99fccb87d3c2b5ccf9a9722690e25320dc927e0f",
+      "snapshot_ids": [
+        "20260910-nine-state-bootstrap-physical-bound"
+      ],
+      "hypothesis": "Artifact producer carries physical map bounds without changing QPx0",
+      "changed_dimension": "Native regression and current/inspected source SQP builder",
+      "result": "accepted",
+      "reason": "Regression fails beforefix; buildr24and2402testentriespass. Both inspected294builders and currentD1solve/prove with unchangedQPx0andmapinitialbounds",
+      "production_impact": "Initial physical bound producer only; all future bounds/proofs and prospective packet binding maintained. Fresh integration pending.",
+      "deleted_code": [
+        "Copying QPinitial equality into physicalcorridor when sealed mapgeometry exists"
+      ],
+      "revisit_condition": "Freshdev2-r10integrated counterexample"
+    },
+    {
+      "experiment_id": "20260910-nine-state-bootstrap-physical-bound-current_d2",
+      "baseline_commit": "99fccb87d3c2b5ccf9a9722690e25320dc927e0f",
+      "snapshot_ids": [
+        "20260910-nine-state-bootstrap-physical-bound"
+      ],
+      "hypothesis": "CurrentD2source819directSQP is feasible under its ordinary budget",
+      "changed_dimension": "Samecurrent snapshot with correctedartifactproducer",
+      "result": "inconclusive",
+      "reason": "Solver rejects at4000iterations beforephysicalproof inr3/r4. OriginalinspectedTrack294solves/proves; no physicalinfeasibility claim or budget adjustment",
+      "production_impact": "Initial physical bound producer only; all future bounds/proofs and prospective packet binding maintained. Fresh integration pending.",
+      "deleted_code": [],
+      "revisit_condition": "Different immutableworld or new causal solver evidence"
     }
   ]
 }

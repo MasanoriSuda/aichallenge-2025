@@ -302,6 +302,38 @@ TEST(MpccRateResolvedShadow, PhysicalWallBucketHardRowsAreAuditOnly)
   EXPECT_FALSE(audit.physical_wall_heading_pose_box_applied);
 }
 
+TEST(MpccRateResolvedShadow, InitialStateEqualityIsNotTheRetainedPhysicalCorridor)
+{
+  auto input = snapshot();
+  bind_open_physical_wall(input);
+  input.terminal_stop_course_geometry = {{0, 3}, {0}, {-.7, -.7}, {.8, .8}};
+  input.request.states.front().lower[model::kLateralIndex] = 0;
+  input.request.states.front().upper[model::kLateralIndex] = 0;
+  shadow::SolverContext context;
+  const auto result = context.evaluate(input);
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  ASSERT_TRUE(result.execution_artifact);
+  ASSERT_TRUE(result.latest_state_feedback_preparation);
+  EXPECT_DOUBLE_EQ(result.latest_state_feedback_preparation->final_problem.state_lower[model::kLateralIndex], 0);
+  EXPECT_DOUBLE_EQ(result.latest_state_feedback_preparation->final_problem.state_upper[model::kLateralIndex], 0);
+  const auto & artifact = *result.execution_artifact;
+  ASSERT_TRUE(artifact.semantic_initial_state);
+  EXPECT_DOUBLE_EQ(artifact.semantic_initial_state->lateral_m, 0);
+  EXPECT_DOUBLE_EQ(artifact.lateral_lower_m.front(), -.7);
+  EXPECT_DOUBLE_EQ(artifact.lateral_upper_m.front(), .8);
+  const auto cursor = execution::resolve_cursor(artifact, artifact.prediction_origin_sec);
+  const auto actuation = execution::extract_actuation(artifact, cursor);
+  ASSERT_TRUE(actuation.actuation);
+  physical::ContinuationInitialState current{
+    .002, 0, 0, 2, 0, actuation.actuation->steering_rad, .08, 0, 0};
+  const auto continuation = physical::build_continuation(artifact, cursor, current);
+  EXPECT_EQ(continuation.reason, physical::ContinuationRejectReason::None);
+  EXPECT_TRUE(continuation.exact_trajectory);
+  current.lateral_m = .81;
+  EXPECT_EQ(physical::build_continuation(artifact, cursor, current).reason,
+    physical::ContinuationRejectReason::InitialLateralBoundRejected);
+}
+
 TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
 {
   shadow::SolverContext context;

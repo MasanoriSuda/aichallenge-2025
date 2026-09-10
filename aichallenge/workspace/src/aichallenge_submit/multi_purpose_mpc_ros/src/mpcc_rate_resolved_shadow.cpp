@@ -415,6 +415,29 @@ ExecutionArtifactBuildResult build_execution_artifact(
       final_problem.state_upper[
         state_offset + model::kLateralIndex]);
   }
+  // QP state zero is an observation equality, not a zero-width road. The
+  // retained continuation starts from its freshly predicted body pose and
+  // must use the same immutable physical map support as the Stop proof.
+  // Keep every future corridor bound and the semantic source x0 unchanged.
+  if (snapshot.terminal_stop_course_geometry) {
+    const auto & initial_geometry = *snapshot.terminal_stop_course_geometry;
+    if (!mpcc_rate_resolved_physical_adapter::stop_course_geometry_valid(initial_geometry)) {
+      return {std::nullopt, artifact::RejectReason::InvalidLateralCorridor,
+        "initial-physical-map-support-invalid"};
+    }
+    const double initial_progress_m = snapshot.request.initial_state[model::kProgressIndex];
+    const double tolerance_m = std::max(1e-9, execution_artifact.physical_global_tolerance);
+    const auto lower = mpcc_rate_resolved_physical_adapter::sample_stop_lateral_target(
+      {initial_geometry.progress_m, initial_geometry.lateral_lower_m}, initial_progress_m, tolerance_m);
+    const auto upper = mpcc_rate_resolved_physical_adapter::sample_stop_lateral_target(
+      {initial_geometry.progress_m, initial_geometry.lateral_upper_m}, initial_progress_m, tolerance_m);
+    if (!lower || !upper) {
+      return {std::nullopt, artifact::RejectReason::InvalidLateralCorridor,
+        "initial-physical-map-support-unavailable"};
+    }
+    execution_artifact.lateral_lower_m.front() = *lower;
+    execution_artifact.lateral_upper_m.front() = *upper;
+  }
   // An accepted numerical equality residual is not a new physical origin.
   // Keep the raw primal in SolveOutcome/preparation, but replay these controls
   // from the immutable x0 which defined the problem. In particular, a tiny

@@ -4304,6 +4304,13 @@ Followでは正本の相手投影を保ち、候補による自車原点の差�
 対応付けを必須とする。nominalな入力遅延・モデル係数・安全余裕は変更しない。
 因果比較と統合検証の状態は[送信prefixの設計](../../.steering/20260910-mpcc-empirical-plant/publication-prefix-design.md)を参照。
 
+初回候補のQPにある初期状態の等式は、過去の観測値を固定する条件であり、道路の
+横方向の範囲ではない。immutableな物理地図形状がある場合、実行artifactの初期横境界は
+その形状を初期進捗で標本化して格納する。QPの初期等式・semantic初期状態・将来の
+全境界は保つ。これにより、今回の指令に対応する予測移動が数mmあるだけで過去の
+初期等式から外れる拒否を解消する。地図範囲外、壁・全車・停止端・packet不一致の
+拒否は維持する。詳細は[初期境界の監査](../../.steering/20260910-mpcc-empirical-plant/bootstrap-bound-design.md)を参照。
+
 Stopとして採用する現在状態の再証明が、元の解の完全停止suffixではなく、生成した
 terminal contingencyを根拠とする場合、その正確な入力列と軌道を新しいimmutable
 artifactへ格納する。新artifactを同じ観測・制御時刻で再証明し、完全停止suffixと

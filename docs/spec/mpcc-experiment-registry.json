@@ -889,6 +889,18 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-schedule-evidence.json",
       "replay_ready": true,
       "reason": "Nativefactor/delivery/architecture comparisons and independent application evidence; no production model selected"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-application-dev2-r3",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/application-dev2-r3-manifest.json",
+      "replay_ready": true,
+      "reason": "Independent predeclared receiver-profile run; unchanged controller, rejected D2 decision1773"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-receiver-input-enclosure",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen numerical input-enclosure comparisons, failed iterations and earlier original source worlds"
     }
   ],
   "experiments": [
@@ -6639,6 +6651,111 @@
       "production_impact": "None; nominalreceiver schedule/proof integration remainsopen",
       "deleted_code": [],
       "revisit_condition": "New declaredreceiver model with same-command fullproof, heldout timing evidence or earlier frozen candidate; no unchanged rejectedsolver retry"
+    },
+    {
+      "experiment_id": "20260911-nine-state-receiver-input-enclosure-profile-250ms",
+      "baseline_commit": "7b9a6093fb173c7daf4cd5be01e9568dbd4387ed",
+      "snapshot_ids": [
+        "20260910-nine-state-application-dev2-r3",
+        "20260911-nine-state-receiver-input-enclosure"
+      ],
+      "hypothesis": "Predeclared empirical applied-packet age covers the independent run complete intervals",
+      "changed_dimension": "Diagnostic numerical enclosure and independent receiver observation; production controller unchanged",
+      "result": "accepted",
+      "reason": "816 exact receive/selection matches; 814 complete intervals, max218.076958 ms; startup included, initial/final open intervals censored. No guarantee or runtime authority.",
+      "production_impact": "None; shared receiver model and immutable proof integration remain open",
+      "deleted_code": [],
+      "revisit_condition": "Shared arithmetic or a causally different same-control proof with original source/world; independent new profile evidence. No unchanged rejected runtime retry."
+    },
+    {
+      "experiment_id": "20260911-nine-state-receiver-input-enclosure-profile-200ms",
+      "baseline_commit": "7b9a6093fb173c7daf4cd5be01e9568dbd4387ed",
+      "snapshot_ids": [
+        "20260910-nine-state-application-dev2-r3",
+        "20260911-nine-state-receiver-input-enclosure"
+      ],
+      "hypothesis": "A 200ms applied-packet-age candidate covers observed startup and moving input",
+      "changed_dimension": "Diagnostic numerical enclosure and independent receiver observation; production controller unchanged",
+      "result": "rejected",
+      "reason": "Prior startup209.103501 ms and independent moving218.076958 ms exceed200 ms; neither excluded.",
+      "production_impact": "None; shared receiver model and immutable proof integration remain open",
+      "deleted_code": [],
+      "revisit_condition": "Shared arithmetic or a causally different same-control proof with original source/world; independent new profile evidence. No unchanged rejected runtime retry."
+    },
+    {
+      "experiment_id": "20260911-nine-state-receiver-input-enclosure-native-enclosure",
+      "baseline_commit": "7b9a6093fb173c7daf4cd5be01e9568dbd4387ed",
+      "snapshot_ids": [
+        "20260910-nine-state-application-dev2-r3",
+        "20260911-nine-state-receiver-input-enclosure"
+      ],
+      "hypothesis": "Numerical native midpoint enclosure contains tested scalar trajectories through full nominal body rest",
+      "changed_dimension": "Diagnostic numerical enclosure and independent receiver observation; production controller unchanged",
+      "result": "accepted",
+      "reason": "200018 adjacent floats,64000 corners,128000 duration values including401 subdivisions,3584 native point values,2017600 input values and956800 hybrid values pass; finite tests are not exhaustive physical proof.",
+      "production_impact": "None; shared receiver model and immutable proof integration remain open",
+      "deleted_code": [],
+      "revisit_condition": "Shared arithmetic or a causally different same-control proof with original source/world; independent new profile evidence. No unchanged rejected runtime retry."
+    },
+    {
+      "experiment_id": "20260911-nine-state-receiver-input-enclosure-single-box-low-speed",
+      "baseline_commit": "7b9a6093fb173c7daf4cd5be01e9568dbd4387ed",
+      "snapshot_ids": [
+        "20260910-nine-state-application-dev2-r3",
+        "20260911-nine-state-receiver-input-enclosure"
+      ],
+      "hypothesis": "Joining all rest/moving states is adequate for source decision895",
+      "changed_dimension": "Diagnostic numerical enclosure and independent receiver observation; production controller unchanged",
+      "result": "rejected",
+      "reason": "source-stop-r1 diverges numerically while three other earlier worlds pass. Preserve the failure; hybrid mode partition changes no model threshold.",
+      "production_impact": "None; shared receiver model and immutable proof integration remain open",
+      "deleted_code": [],
+      "revisit_condition": "Shared arithmetic or a causally different same-control proof with original source/world; independent new profile evidence. No unchanged rejected runtime retry."
+    },
+    {
+      "experiment_id": "20260911-nine-state-receiver-input-enclosure-hybrid-earlier-worlds",
+      "baseline_commit": "7b9a6093fb173c7daf4cd5be01e9568dbd4387ed",
+      "snapshot_ids": [
+        "20260910-nine-state-application-dev2-r3",
+        "20260911-nine-state-receiver-input-enclosure"
+      ],
+      "hypothesis": "A common held float32 steer and brake can stop all admitted acceleration responses in earlier original worlds",
+      "changed_dimension": "Diagnostic numerical enclosure and independent receiver observation; production controller unchanged",
+      "result": "accepted",
+      "reason": "source-stop-r2 decisions895/1101/1585/1620: acceleration[-3,1.37] until250 ms then-3, nominal steering history; all rest/wall/peer pass in9-14 ms standalone. No fabricated CertifiedPlan.",
+      "production_impact": "None; shared receiver model and immutable proof integration remain open",
+      "deleted_code": [],
+      "revisit_condition": "Shared arithmetic or a causally different same-control proof with original source/world; independent new profile evidence. No unchanged rejected runtime retry."
+    },
+    {
+      "experiment_id": "20260911-nine-state-receiver-input-enclosure-late-common-stop",
+      "baseline_commit": "7b9a6093fb173c7daf4cd5be01e9568dbd4387ed",
+      "snapshot_ids": [
+        "20260910-nine-state-application-dev2-r3",
+        "20260911-nine-state-receiver-input-enclosure"
+      ],
+      "hypothesis": "The same 250ms common Stop remains admissible at later captured failures",
+      "changed_dimension": "Diagnostic numerical enclosure and independent receiver observation; production controller unchanged",
+      "result": "rejected",
+      "reason": "949/950/955/956/994/995/1000/1001 peer reject;1771/1772/1773 wall reject, including precomputed common tracking alternatives. Keep43 scalar oracles separate from whole range.",
+      "production_impact": "None; shared receiver model and immutable proof integration remain open",
+      "deleted_code": [],
+      "revisit_condition": "Shared arithmetic or a causally different same-control proof with original source/world; independent new profile evidence. No unchanged rejected runtime retry."
+    },
+    {
+      "experiment_id": "20260911-nine-state-receiver-input-enclosure-integrated-controller",
+      "baseline_commit": "7b9a6093fb173c7daf4cd5be01e9568dbd4387ed",
+      "snapshot_ids": [
+        "20260910-nine-state-application-dev2-r3",
+        "20260911-nine-state-receiver-input-enclosure"
+      ],
+      "hypothesis": "Current controller retains physical authority and callback acceptance through Pass",
+      "changed_dimension": "Diagnostic numerical enclosure and independent receiver observation; production controller unchanged",
+      "result": "rejected",
+      "reason": "Independent application-r3 D2 decision1773 loses Stop1275 wall proof; later Recovery; D2 adjacent overruns2. Instrumented timing is diagnostic only.",
+      "production_impact": "None; shared receiver model and immutable proof integration remain open",
+      "deleted_code": [],
+      "revisit_condition": "Shared arithmetic or a causally different same-control proof with original source/world; independent new profile evidence. No unchanged rejected runtime retry."
     }
   ]
 }

@@ -1,7 +1,9 @@
 # Shared-model migration evidence (in progress)
 
-Baseline HEAD remains6b0f1880. All new build/tests below apply to the working
-nine-state migration, not to that baseline commit. No new-model simulator run yet.
+Current controller baseline is `cbcda112`; the latest receiver-range and independent
+application evidence is in [receiver-input-enclosure/results.md](receiver-input-enclosure/results.md).
+Full M1–M6 remains open. The chronological checkpoints below are historical; their
+build/test/run results must not be treated as acceptance of the latest implementation.
 
 - Native/public input comparison: `output/20260910-empirical-plant-public-inputs-r2/report.json`.
   Public ROS coverage gates every scoring horizon; dev2 restart lies outside that old bag.

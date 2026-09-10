@@ -4399,3 +4399,13 @@ dev2-r5では相対進捗中止を確認した一方、ShiftOut中の連続callb
 全体受入れは未完である。固定遅延や安全余裕を変更して合格扱いにしない。
 [受信・適用監査](../../.steering/20260910-mpcc-empirical-plant/receiver-schedule-design.md)に、
 同一worldの再現、実適用trace、条件付き停止比較と次の共有モデル・証明変更の条件を保存する。
+
+#### 入力範囲の試作と独立計測（2026-09-11）
+
+現行制御`cbcda112`の独立計測application-dev2-r3でも、Pass中のdecision1773で
+Stop1275の壁側の証明を失った。事前に固定した250msの経験的入力age候補は
+816回の選択照合と814完全区間で検証できた（最大218.076958ms）。この数値は保証上限ではない。
+静止・走行モードを分けた数値範囲の試作は、失敗前の4つの封印済みworldで共通Stopを
+停止まで照合できた。本番の共有カーネル・proof・artifact・publisherへの採用は未完。
+[最新の結果と採用条件](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/results.md)に
+失敗、計算量、未検証範囲を残す。過去の単車合格やこの診断を全体完了に数えない。

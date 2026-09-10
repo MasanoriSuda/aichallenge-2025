@@ -1,5 +1,26 @@
 # Current status and remaining completion work
 
+2026-09-11 JST。全M1–M6の自律実装・検証・必要分のローカルcommitを継続中。pushなし。
+**全体は未完。制御の基準は `cbcda112`、直近の調査基準は `7b9a6093`。**
+
+- 現行制御は buildr32の26package、testsr27の2410記録が合格。以下の診断では制御を変更していない。
+- 独立したapplication-dev2-r3はD2 decision1773/Stop1275で壁側の停止証明を失った。
+  Passまで進んだが走行不合格。D2に隣接callback超過2組があり、時間受入れも未完。
+- 実適用816回を受信sequence/float入力と照合。完全観測814区間の最大ageは218.076958msで、
+  事前に固定した250msの経験的候補内。保証上限、車体モデル誤差の保証、実行権限にはしない。
+- 区間予測のnative/輪郭/時間分割/静止・走行モードを検証し、失敗前の4場面で
+  同じ指令による全範囲の停止・壁・peer照合が成立。実装候補の計算量は約9–14msで、
+  制御周期への組み込みは未検証。試作を本番の認証経路へ移す作業が次。
+
+[入力範囲の最新結果](../20260910-mpcc-empirical-plant/receiver-input-enclosure/results.md)、
+[tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
+モデルと全proof/publisherの契約を揃えた後、M4の全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
+同一HEADで単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalと文書・commitを完了する。
+ユーザーが承認した経験的シミュレータ評価の範囲を維持し、未検証の保証は明記する。
+安全余裕・合否基準を緩めず、通常の再確認は求めない。
+
+## Superseded checkpoint and historical evidence
+
 2026-09-10JST. Continue the authorized autonomous M1–M6 task without routine
 confirmations. Full completion is not claimed. Baseline is `d0fdd338` (audit repair), with production control `b0478348` after
 `226f93e0`shared nine-state migration and map-support repair. The verified terminal

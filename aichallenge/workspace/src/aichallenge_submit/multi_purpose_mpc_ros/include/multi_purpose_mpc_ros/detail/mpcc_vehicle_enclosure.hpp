@@ -127,14 +127,16 @@ inline J operator/(const J &a, double b) {
 }
 inline J sin(const J &a) {
   J r(sine(a.v));
+  const I derivative = cosine(a.v);
   for (size_t i = 0; i < N; ++i)
-    r.d[i] = cosine(a.v) * a.d[i];
+    r.d[i] = derivative * a.d[i];
   return r;
 }
 inline J cos(const J &a) {
   J r(cosine(a.v));
+  const I derivative = -sine(a.v);
   for (size_t i = 0; i < N; ++i)
-    r.d[i] = -sine(a.v) * a.d[i];
+    r.d[i] = derivative * a.d[i];
   return r;
 }
 inline J clamp(J a, double lo, double hi) {
@@ -241,6 +243,20 @@ inline std::array<T, 8> map(std::array<T, 8> s, T a, const model::Parameters &p,
 }
 inline Box centered_step(const Box &b, I acceleration,
                          const model::Parameters &p, double dt, bool rest) {
+  if (rest) {
+    // The selected native rest branch preserves pose and desired angle,
+    // zeros body motion and updates only the tire. Its exact interval image
+    // needs no body Jacobian or centered subtraction/readdition. Reuse the
+    // same independently bounded tire formula; no rest threshold changes.
+    auto result = b;
+    result[3] = result[4] = result[5] = I(0);
+    result[7] = tire_bounds(b[6], b[7], p, dt);
+    for (const auto & value : result) {
+      if (!std::isfinite(value.lo) || !std::isfinite(value.hi) || value.lo > value.hi)
+        throw std::runtime_error("unbounded numerical enclosure");
+    }
+    return result;
+  }
   JS inputs;
   Box center;
   std::array<I, N> offsets{};

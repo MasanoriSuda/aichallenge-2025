@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
 #include "multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp"
@@ -390,4 +391,21 @@ TEST(MpccVehiclePrediction, PublicationBindingUsesBothActualRosFloatBoundaries)
   EXPECT_TRUE(vehicle::publication_packet_matches(prediction, 1, -3, physical, gain));
   prediction.proposed_packet.wire_steering_rad = static_cast<float>(physical * gain);
   EXPECT_FALSE(vehicle::publication_packet_matches(prediction, 1, -3, physical, gain));
+}
+
+TEST(MpccVehicleModel, RestEnclosurePreservesStaticPoseAcrossRepeatedInputWindows)
+{
+  namespace range = vehicle::numerical;
+  const auto p = vehicle_model();
+  auto body = range::point(vehicle::State{.2, -.3, .15, 0, 0, 0, .1, -.1});
+  body[0] = {-.2, .3}; body[1] = {-.4, .5}; body[2] = {-.1, .2};
+  body[6] = {-.1, .2};
+  const auto initial = body;
+  for (int i = 0; i < 1000; ++i) body = range::centered_step(body, {-3, 0}, p, .005, true);
+  for (const auto i : {0, 1, 2, 6}) {
+    EXPECT_EQ(body[i].lo, initial[i].lo);
+    EXPECT_EQ(body[i].hi, initial[i].hi);
+  }
+  EXPECT_TRUE(range::at_rest(body));
+  EXPECT_TRUE(std::isfinite(body[7].lo) && std::isfinite(body[7].hi));
 }

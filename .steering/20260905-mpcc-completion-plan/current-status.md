@@ -1,21 +1,23 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ、pushなし。
-**全体は未完。共有ライブラリ基準 `95180a1c` の次の統合候補をローカル検証済み。**
+2026-09-11 JST。全M1–M6の自律実行を継続。必要分のローカルcommitのみ。
+**全体は未完。c86c7163の統合dev2-r16は不合格。局所修正を検証済み。**
 
-- live requestは元観測/履歴・経験的250ms入力profile・共通指令列・全応答静止のimmutable認証を要求。
-- Stop materialization/horizon、async context、最終ROS float値まで結合。旧nominal-only実行を省略経路にしない。
-- 実ROSの2段float32変換を共通化。旧libraryの誤ったpacket判定を再現し、現実装で修正を確認。
-- buildr39:26package。testsr31:2425記録/62group、error/failure/skip0。
-- 保存済み3失敗worldを入力改変なしで再生。旧packet mismatchも保存。過去の失敗/不正なpredecessor対応は合格にしない。
-- 次は新しいdev2-r16で最初の失敗とcallback周期を確認。実Stop/rest/restartとM4–M6は未完了。
+- 元観測/履歴・250ms経験的profile・共通指令列・全応答停止の認証は全live経路で必須。
+- r16最初の走行中EmergencyはD2decision798。直前795で実公開Stop124が元速度の符号でjoin失敗。
+- 元の−.00230949m/sを保持し、追加認証と元の将来状態境界で判定するよう整合。
+  同じ795入力でStop/join/rest/他車余裕+1.072677mが成立。認証なし・境界外の逆向き観測は拒否。
+- 静止分岐のJacobianを省き、共有タイヤ式の直接区間像を使用。数値検査と保存4場面が通過。
+- buildr40:26package、testsr32:2427記録/62group、error/failure/skip0。
+- r16のcallbackp99 D1/D2=82.11/50.66ms、連続超過246/103組は不合格のまま。
+  次は新規dev2-r17で停止継続と25msを確認する。
 
-[統合設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-design.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-integration-evidence.json)、
+[監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-r16-audit.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/signed-rest-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-M4の全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
+M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
 dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
-安全余裕・合格条件は維持。モデル誤差・接触・輸送の保証は未検証。
+モデル誤差・接触・輸送の保証は未検証。安全余裕・合格基準は維持する。
 
 ## Superseded checkpoint and historical evidence
 

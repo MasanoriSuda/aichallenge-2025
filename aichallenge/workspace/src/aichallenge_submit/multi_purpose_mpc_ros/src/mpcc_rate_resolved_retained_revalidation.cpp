@@ -836,7 +836,13 @@ static Result evaluate_with_stop_profile(
   }
   if (request.decision_id == 0U || !std::isfinite(request.now_sec) ||
     !std::isfinite(request.current_speed_mps) ||
-    request.current_speed_mps < 0.0 ||
+    // Current COM u is a signed observation, earlier than the forward control
+    // origin. Only the complete causal applied proof may admit that input;
+    // it checks the original signed body and every swept state against the
+    // existing bounds. Unprofiled callers retain the old unsigned contract.
+    (request.current_speed_mps < 0.0 &&
+    !(request.publication_prefix_required && request.publication_prefix &&
+    request.applied_program_required && request.input_application_profile)) ||
     !std::isfinite(request.control_origin_speed_mps) ||
     request.control_origin_speed_mps < 0.0 ||
     !std::isfinite(request.current_time_steering_rad) ||

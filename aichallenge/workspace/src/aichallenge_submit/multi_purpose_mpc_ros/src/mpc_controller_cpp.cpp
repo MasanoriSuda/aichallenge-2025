@@ -30529,10 +30529,12 @@ struct MPC
       const auto bundle = stop_successor_bundle::build(
         stop_successor->request.value(), stop_successor->result,
         stop_sequence);
+      auto published_stop_join_reason = retained.reason;
       if (bundle.plan != nullptr) {
         const auto published_stop_join_started = SteadyClock::now();
         auto joined_stop = evaluate_current_world_stop_successor_plan(
           problem, now_sec, intent, bundle.plan);
+        published_stop_join_reason = joined_stop.reason;
         published_stop_join_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - published_stop_join_started).count();
         if (joined_stop.production_authority.has_value()) {
@@ -30557,7 +30559,7 @@ struct MPC
         bundle.observed_value, bundle.required_bound,
         bundle.certificate_tolerance,
         retained.production_authority.has_value() ? 1 : 0,
-        rate_resolved_retained::to_string(retained.reason),
+        rate_resolved_retained::to_string(published_stop_join_reason),
         retained.production_authority.has_value() ?
         "certified-stop" : "external-emergency");
     }

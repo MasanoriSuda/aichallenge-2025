@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
@@ -2445,3 +2446,70 @@ TEST(MpccRateResolvedRetainedRevalidation, AppliedStopChecksFollowGapAcrossTheWh
 }
 
 }  // namespace
+
+TEST(MpccRateResolvedRetainedRevalidation, SignedObservationNeedsTheCompleteAppliedForwardStopProof)
+{
+  const auto source = certified_plan();
+  const auto & model = source->execution_artifact->vehicle_model;
+  const double tolerance = source->execution_artifact->physical_global_tolerance;
+  ASSERT_GT(tolerance, 0);
+  const auto make_stop = [&](const double measured_u) {
+    auto initial = accepted_request(source);
+    initial.current_speed_mps = measured_u;
+    initial.control_origin_sec = initial.now_sec + .13;
+    auto request = bind_test_packet(initial, {initial.now_sec, -3,
+      multi_purpose_mpc_ros::mpcc_wire_command::steering(initial.previous_published_steering_rad,
+        model.steering_wire_gain)});
+    auto observation = request.publication_prefix->observation;
+    observation.commands.clear();
+    for (int i = 0; i <= 40; ++i) observation.commands.push_back(
+      {i * .025, -3, request.publication_prefix->proposed_packet.wire_steering_rad});
+    request.publication_prefix = vehicle::predict_prospective_publication(
+      observation, request.publication_prefix->proposed_packet, model);
+    const auto & prediction = *request.publication_prefix;
+    const auto & origin = prediction.control_origin;
+    request.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+    request.control_origin_physical_progress_m = origin.x_m;
+    request.current_speed_mps = prediction.current.forward_velocity_mps;
+    request.current_time_steering_rad = prediction.current.tire_steering_rad;
+    request.control_origin_speed_mps = origin.forward_velocity_mps;
+    request.current_steering_rad = origin.desired_steering_rad;
+    request.current_response_steering_rad = origin.tire_steering_rad;
+    request.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+    request.current_yaw_rate_radps = origin.yaw_rate_radps;
+    request.measured_to_control_path.clear();
+    request.measured_to_control_elapsed_sec.clear();
+    for (const auto & item : prediction.current_to_control) {
+      request.measured_to_control_path.push_back({item.state.x_m, item.state.y_m, item.state.yaw_rad});
+      request.measured_to_control_elapsed_sec.push_back(item.source_sec - request.now_sec);
+    }
+    request.applied_program_required = true;
+    request.input_application_profile = {"signed-observation-test", .25, .25, .02};
+    const auto stop = retained::evaluate_stop_successor(request);
+    if (!stop.accepted()) throw std::runtime_error(retained::to_string(stop.reason));
+    const auto built = stop_bundle::build(request, stop, 10001U);
+    if (!built.plan) throw std::runtime_error(stop_bundle::to_string(built.reason));
+    request.plan = built.plan;
+    request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+    return request;
+  };
+  auto request = make_stop(-tolerance / 2);
+  ASSERT_LT(request.current_speed_mps, 0);
+  ASSERT_DOUBLE_EQ(request.publication_prefix->observation.initial.state.forward_velocity_mps,
+    request.current_speed_mps);
+  ASSERT_DOUBLE_EQ(request.control_origin_speed_mps, 0);
+  const auto proved = retained::evaluate(request);
+  ASSERT_EQ(proved.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(proved.proof && proved.proof->applied_program);
+  ASSERT_TRUE(production::build(proved).authority);
+  auto missing = request;
+  missing.publication_prefix.reset();
+  EXPECT_FALSE(production::build(retained::evaluate(missing)).authority);
+  missing = request;
+  missing.applied_program_required = false;
+  missing.input_application_profile.reset();
+  EXPECT_EQ(retained::evaluate(missing).reason, retained::Reason::InvalidCurrentState);
+  const auto reverse = retained::evaluate(make_stop(-2 * tolerance));
+  EXPECT_FALSE(production::build(reverse).authority);
+  EXPECT_EQ(reverse.applied_program_reason, applied::Reason::StateBoundRejected);
+}

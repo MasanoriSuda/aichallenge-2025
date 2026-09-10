@@ -86,6 +86,16 @@ buildr39は26package、testsr31は2425記録/62groupで失敗0。新規走行・
 [共通指令の統合設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-design.md)
 と[統合変更の検証記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-integration-evidence.json)を参照。
 
+2026-09-11の初回統合dev2-r16はD2 decision798で走行中Emergencyとなった。
+直前795の公開Stop124では、元COM前後速度−0.00230949m/sと将来の非負速度制約を
+同じ検査にしていた。元値は保持し、完全な元観測/入力認証が必須の経路だけで
+観測の符号を許し、既存の全応答状態境界とcontrol-origin非負条件で判定する。
+認証欠落・元の状態境界を超える逆向き観測は拒否する。保存795のStop引き継ぎは
+同じ入力・壁・他車条件で成立した。静止分岐は同じタイヤ式から直接区間像を作り、
+不要な車体Jacobian計算を省く。全体buildr40=26、testsr32=2427記録/62groupで失敗0。
+r16の25ms超過と多車両受入れは未解決。根拠は
+[統合走行監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-r16-audit.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

@@ -919,6 +919,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/applied-integration-evidence.json",
       "replay_ready": true,
       "reason": "Required live certificate, frozen serializer counterexample and exact captured inputs; race acceptance open"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-signed-stop-r16",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/signed-rest-evidence.json",
+      "replay_ready": true,
+      "reason": "First integrated failure and exact published Stop124at795, numerical rest comparison"
     }
   ],
   "experiments": [
@@ -6980,6 +6986,60 @@
         "Duplicated diagnostic footprint enclosure"
       ],
       "revisit_condition": "Fresh integrated run or new captured causal evidence; never repair old snapshot history to pass"
+    },
+    {
+      "experiment_id": "20260911-nine-state-signed-stop-r16-dev2-r16",
+      "baseline_commit": "c86c7163cdaef9a26b9d4d944d6b570f45b4f64d",
+      "snapshot_ids": [
+        "20260911-nine-state-signed-stop-r16"
+      ],
+      "hypothesis": "Integrated input-program candidate meets race and25msacceptance",
+      "changed_dimension": "Signed observation versus future forward-state validation; exact rest enclosure and truthful Stop join diagnostics",
+      "result": "rejected",
+      "reason": "D2firstmoving Emergency798; actualStop124joinlost795. p99D1/D2=82.1076/50.6592ms, adjacentpairs246/103.",
+      "production_impact": "Bounded signed observation retained in required applied proof; original future constraints and normal authority unchanged",
+      "deleted_code": [
+        "Unconditional unsigned observed-u gate in fully profiled path",
+        "Redundant rest-branch body Jacobian",
+        "Ordinary retained reason masquerading as published Stop join result"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; retain failedrun and no margin/rate/solver relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-signed-stop-r16-signed-source-join",
+      "baseline_commit": "c86c7163cdaef9a26b9d4d944d6b570f45b4f64d",
+      "snapshot_ids": [
+        "20260911-nine-state-signed-stop-r16"
+      ],
+      "hypothesis": "An unchanged signed observation may join a forward Stop only through complete applied-state proof",
+      "changed_dimension": "Signed observation versus future forward-state validation; exact rest enclosure and truthful Stop join diagnostics",
+      "result": "accepted",
+      "reason": "Oldnegative observation gate contradicts alreadyacceptedStop; boundedprofiled path nowaccepts exact795/source124with unchanged bounds andsigneddata. Missingproof andout-of-boundreverse reject.",
+      "production_impact": "Bounded signed observation retained in required applied proof; original future constraints and normal authority unchanged",
+      "deleted_code": [
+        "Unconditional unsigned observed-u gate in fully profiled path",
+        "Redundant rest-branch body Jacobian",
+        "Ordinary retained reason masquerading as published Stop join result"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; retain failedrun and no margin/rate/solver relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-signed-stop-r16-analytic-rest",
+      "baseline_commit": "c86c7163cdaef9a26b9d4d944d6b570f45b4f64d",
+      "snapshot_ids": [
+        "20260911-nine-state-signed-stop-r16"
+      ],
+      "hypothesis": "The selected native rest map needs no body Jacobian",
+      "changed_dimension": "Signed observation versus future forward-state validation; exact rest enclosure and truthful Stop join diagnostics",
+      "result": "accepted",
+      "reason": "256000native checks;rest-only11.6xfaster; existing enclosure suite and4originalsourceworlds pass. Fullprogramspeedup modest;not25msacceptance.",
+      "production_impact": "Bounded signed observation retained in required applied proof; original future constraints and normal authority unchanged",
+      "deleted_code": [
+        "Unconditional unsigned observed-u gate in fully profiled path",
+        "Redundant rest-branch body Jacobian",
+        "Ordinary retained reason masquerading as published Stop join result"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; retain failedrun and no margin/rate/solver relaxation"
     }
   ]
 }

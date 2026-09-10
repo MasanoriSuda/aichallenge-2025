@@ -1,0 +1,1761 @@
+{
+  "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+  "integrated_acceptance": false,
+  "run": "output/20260910-nine-state-dev2-r17",
+  "observed_failure": {
+    "domain": 1,
+    "decision": 1020,
+    "proposed_source": 619,
+    "published_source": 544,
+    "now_sec": 15.099999662,
+    "first_rejected_sec": 15.339999662,
+    "rejected_u_lower_mps": -0.0074326155519167355,
+    "original_tolerance": 0.00741003100948554,
+    "reason": "StateBoundRejected after convexifying actual -3/+1.329596 packet values"
+  },
+  "local_validation": {
+    "build_r41": "26 packages/4m58s",
+    "tests_r33": "2430 records/62groups/zero errors-failures-skips",
+    "exact_source_certificate": {
+      "elapsed_ms": 6.636435,
+      "reason": "accepted",
+      "applied_reason": 0,
+      "program_reason": 0,
+      "prediction_reason": 0,
+      "rejected_sec": NaN,
+      "rejected_peer": "",
+      "production": "available",
+      "rest_sec": 15.429999662,
+      "program_commands": 1,
+      "samples": 67,
+      "peer_clearance_m": 0.6284900323985234,
+      "materialization": "available",
+      "join": "accepted",
+      "join_applied_reason": 0
+    },
+    "regression": "Original bound fails old library (-.00751549 minimum u); new library passes unchanged bound",
+    "model_tests": "22 pass, including original/zero/small positive/small negative/equal epoch/independent steering; warning cleanup rebuilt and22retested",
+    "continuous_enclosure": "2017600 continuous input values +956800 hybrid values; unchanged full-interval primitive",
+    "four_sources": "All4pass numerical/wall/peer checks;374616 native values;7.06–10.04ms prediction",
+    "signed_stop": "Original r16D2decision795/source124 upstream Stop/join still accepted, peer+1.0726770723374652m"
+  },
+  "architecture": "Same-world A/B-left/C-left/D-left and complete-rest nominal solves accepted; right arms rejected. No applied-certificate or runtime acceptance inferred.",
+  "failures_preserved": [
+    "r17stationary Emergency at1020 and later persistent certified rest without restart",
+    "r17D1/D2 p99=50.8731018/27.11461325ms;5815/41 adjacent overruns; external interruption before race deadline",
+    "before-r1sandbox Docker socket unavailable; approved escalation reran before-r2",
+    "before-r2old predictor fails bound",
+    "r41test dangling-else warning; braces fixed and22tests rerun"
+  ],
+  "open": [
+    "Fresh integrated stop/restart and25ms",
+    "M4–M6 campaigns/gates/submission",
+    "Empirical transport/contact/model guarantees"
+  ],
+  "files": [
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/compare_interval.cpp",
+      "sha256": "9da26fcc51e945077d0868437462f0c84df57001cabdfa9126ea9e551ea1b48b"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/footprint_enclosure.hpp",
+      "sha256": "70761459b847b4d4ce676a7d570915e1355068a61adeaf26d20f3ebda1091046"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/interval_model.hpp",
+      "sha256": "cde9c0096c84ff8ad109eb2ec284711164bc1c4921aa20eb578f87fbc03c11ca"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "011b61eded319bbbdd0845a8d1e0a1bfde54f96b71c016bd8055b8fc3ea1d7a6"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/manifest.json",
+      "sha256": "a0c2abfd15803665a05302ae6cd9dde1b33979c84c02dc61b31b4fc54483fa33"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/mpcc_vehicle_enclosure.hpp",
+      "sha256": "8a365af48b7b988d2eef930b185f85bed400ebac6ca411ab141ab0a167e434c3"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/native_vehicle_model.cpp",
+      "sha256": "69409c6d9085014068aced6ea47a81501173ab1874f6d67a992c250e715760b8"
+    },
+    {
+      "path": "output/20260910-nine-state-input-enclosure-r13/run.log",
+      "sha256": "a11e5acc9739d56d59a84076c6164aeee9d008d80d3b68312d31df16c048d3fb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_packet_value_hulls.cpp",
+      "sha256": "1a0fa5873d8a90791646e53a61605ba16c59851db6b5f547d8863cb55c04eedc"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/.steering/20260910-mpcc-empirical-plant/replay_certified_plan.cpp",
+      "sha256": "d08d653c684016c7ffb5d62d2d51e9e514001f052e1a8b87094428494424543b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/.steering/20260910-mpcc-empirical-plant/revalidation_input.hpp",
+      "sha256": "fb3552fafaaf79e18b6e4ad598b0ece70f480c3395256ced6835c44d0430c707"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros.so",
+      "sha256": "2f9e9f09888de16443d689a651d92a6184746407405f523def87e03d6d2b6d4c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_boost_start_dash.so",
+      "sha256": "16f5e37b07209aef64088993ad544261bd556702ee394ee54c2bcf1fa96e29d9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_control_mode_guard.so",
+      "sha256": "2f3790bca465a63e121105e4fc0bc96535b6edefb1dbff6ed896e4de030518f2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_bounded_single_job_executor.so",
+      "sha256": "ca1e7df3df184f761e5ad594cbe44764cb531d13d6b6eb987ee7871d3667b249"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan.so",
+      "sha256": "ce489bd98b8d0b855a5e6b842ff12ae378dece831253def49529643bcf28e0fb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan_adapter.so",
+      "sha256": "376476c63bdda01b91604b19452a16319320e3de2562ccd64927a6f66a976e0c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_revalidation.so",
+      "sha256": "754b45878217fe33a560124c1521b8e9ec448b269de408a21282143c9deb9202"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_world_revalidation.so",
+      "sha256": "608e8991a459d47eb00cb6f1491d1b3225c432d5b71da067998fb010bfdbb00e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_follow_canonical_async.so",
+      "sha256": "16b17f5148aaabf53dfc9616217914e0923f83ae3b79b819cc5105cff4bc7dac"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_latest_only_worker.so",
+      "sha256": "4ea3676fa3fb92a6b61aef2f4549b9c1401a2848a5102ebc2faa4254672cf388"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_stage_geometry.so",
+      "sha256": "0387d075bfe4dac3f0a44ec2ab9adbcb9b02adab62154230245a646d72e9a514"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "sha256": "db812e64db8a9cc000767a0c27e6018139f31508112c5d54b55d0e65adf88043"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_velocity_limit.so",
+      "sha256": "5edfd8b8848f3810edb7c7b11963b0c60f601538dbf059fc4a991ddc45d99395"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_association.so",
+      "sha256": "f605749b6b1d1dc2920d61540e946ebf45bdcc0a191504919294806d38efcebe"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_preview.so",
+      "sha256": "51acc1153014fba2c6f38cf304a6a8033e43707fec5f083ddaad345e2e03b00e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_comparison.a",
+      "sha256": "fd329cc3c696ac98ceb2c5206acf9547700a7b8c6def4c064ce3866c4ee8512f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_snapshot.a",
+      "sha256": "06fb90475a53f1b63352553771cb1bb68fb72e0407477840b9a17f4d831291a8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_certified_stop_successor_observation.a",
+      "sha256": "621b4f2e8d6d3224c3084980248625f1c04a0be1c78ea7cfde90cbd61e790c3d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_execution_contract.so",
+      "sha256": "100686e2eb897b01442195e8d17faa7ef3a354ab2ed61430e9761cd772af57fc"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_latest_state_feedback.a",
+      "sha256": "54a428855c52451b7cd412de820f8e190408f76446a621b2be12e1e0f6f7d992"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_on_trajectory_connector.a",
+      "sha256": "2860432af2629c54f69756a2771eb70fc2d3ee8bc8862c682135eb0ac5587f82"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_overtake_sibling_adoption.a",
+      "sha256": "49cb2198bf9d9751ba58afcd6f9e98ae23718e44f5f63e78994a33dc8d223028"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_progress.so",
+      "sha256": "d064d8d232f31cc7be383243b6df983fcef70c6b0c6a7d6796851d06c11451e6"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.a",
+      "sha256": "e7c029456c8dd126cf41daf1b60298f0fbeee39c63d45eb9ca6f8f5a49c49186"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.so",
+      "sha256": "c01addb1368825d92a3337e6f4946201b42bafcf72f9802c36eb0bc441cffb12"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_adapter.a",
+      "sha256": "87de34de6da68634540063a4c7f4f7e76dc069e49e684a24bde2af1eee76cb67"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_certified_plan.a",
+      "sha256": "6ede9c573e7fb85641c3728d3acc9d9bca0f49e2b076b84a6caadbdcd8f1a9d6"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_command_candidate.a",
+      "sha256": "70521ef2e8abe3ad384a7ea7083d409403c38e7f2e0a3726243c3e6ecc7f6aba"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_dynamic_proof.a",
+      "sha256": "99092fe7fd1502e32951cd62dea1a0af679444e8cd0b8a14336f76ece1f8d25b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_artifact.a",
+      "sha256": "820ee6b8478704b2518184c0be9f3818a4cb49307e112932582bd4cc8b978bea"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_source.a",
+      "sha256": "65a8d51933811ad552daa26319c6edc04f181f3b755675c1a7778aab6993a731"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_normal_branch_bank.a",
+      "sha256": "66c6eea82bd89cfa4e4cd10c0f571bd387420c706f87409b61ccaca5208b2aaf"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_overtake_branch_bank.a",
+      "sha256": "0262ea8ae93d91eb706b411bcbefef60020e4d6201a558f00c58bd834a93e547"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_adapter.a",
+      "sha256": "70070b6a7ce14fccf59990704a1ddee204714f025d0acae9e6213460256c0c7b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_wall.a",
+      "sha256": "f4aa95ce288b650e23f1569d5faf2775640a723285efb444ef7ff4a2306ea6d3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_problem.a",
+      "sha256": "79db324f8a13adf327e12c95d8678c4adaf14074e2cae5eaa581a1ea0cbe9914"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_production_adapter.a",
+      "sha256": "aaa6239899e07b4dc87ec49eba893d0a9a80b222e53ec50334a5660c0478ff53"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_retained_revalidation.a",
+      "sha256": "15c232f46b9b24226d8b023b1e1214504e53578735aac39b40e8b5b811cfe9e1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_shadow.a",
+      "sha256": "068a4b9df465db4465be5150ef1e2269c016c5a2d6a29858eb32e9d74d20058a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_control_lattice.a",
+      "sha256": "f360472032396b6e5617af632eaa2d3b633a844b548a77e457ada8dd3f98dc0c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_lattice_shadow.a",
+      "sha256": "f21db286f49f515ddb36c25f0b88280770ee115f981a1923f3e74861dc8a01c0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_successor_bundle.a",
+      "sha256": "3b86ec8c085a5d6963dfb693bc66d4422bc870ec6b1f50b6f07da5e8998b9861"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_stateless_maneuver.a",
+      "sha256": "6a3324e7dae8478245dd76445a407dd201d696b6beab742d2dddc3ca47c453ed"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_steering_state_contract.so",
+      "sha256": "03eaf0f72437c114269b7f9252fabff6ff8267da7657671c6bc1f133e151d886"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "65790f63e02d22f22f40aff6decfba9929c3de2c40be8bf6544e8ccaac39dbc4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_decision_trace.so",
+      "sha256": "5e439e7d0c7a06a22b1c9d50ba0b5078a2ba4383249179ad07cda96e462a71f6"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_execution_orchestrator.so",
+      "sha256": "8fdb9e8fcd846b3195dd59b3033cb6f77934593e5ccfc0c3a7f058ea52b53451"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_path_core.so",
+      "sha256": "520c4afe066b0d7e55a84c32b2a13961ca912771a00d97a960820a00e6aa28c5"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_persistent_osqp.so",
+      "sha256": "4a8c23ce5fecdf903b401b25537ccef660dad85cbd79f77b21746718f361a944"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_race_mpcc_foundation.so",
+      "sha256": "8e333d2a791fcd20e17ba14689afa75e15cb6658c85e1a0277cc331444626450"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_footprint.so",
+      "sha256": "d060bf3ad237a337f05b3c8e94bce75964fbaea1346a8dc0a31ca53727995ff4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_mpc.so",
+      "sha256": "f8bb0ec2af86c20e784c792c5cf9a23576f3edddd90c9c8f31c4847394a7da59"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_runtime_speed_profile.so",
+      "sha256": "f3bde7a7d3deb6df958555323c3c5c12deb22263963938c9e10fef328def4316"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_start_grid_grace.so",
+      "sha256": "4579a4d9b9a97c635206f5417ff369486c15e4d2dc6305b392fa9a298e3b88e1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_stuck_recovery_core.so",
+      "sha256": "1af4df45e4353d8d7680462cd5b964c695c00bc3403b1ffed041ee8d36303ba0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_v2x_overtake_core.so",
+      "sha256": "1a43451a6033eb064a91789f5964682d57c23f83967b8183dde3d8c5079fd260"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_boost_start_dash.hpp",
+      "sha256": "6377ee258ce094dd481807b3570045253e0de438684c0f72f5fa1f706cd746c8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_control_mode_guard.hpp",
+      "sha256": "5f4afa91011e2e66d06087604d90ada5946a434d099c497ec67adafa8393bf01"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "994779bfa1d00f20514b91beb9efaff5425ffd369514487605a1ca86b5e56a95"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp",
+      "sha256": "9528cced3509cef66a0d6516ba982cb43f951895e3500fd4a853d4b4cd66d647"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp",
+      "sha256": "98cd832c63229c9b21150ca36506fde4cf53224a0f844e39c6bf8821845859c7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/external_speed_loss_monitor.hpp",
+      "sha256": "82a5a738a12dfa667c6733baf1a8a460f945b02ed91439d703233dccff52164f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/latest_only_worker.hpp",
+      "sha256": "39f4f298180d8f68d94795961498b46546def7309ac1f2b3b85be33fd6097e35"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp",
+      "sha256": "3cddd30e326339caaa731541bb11f848594975a8cc3c89b3955f46d2fbfe1176"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_stage_geometry.hpp",
+      "sha256": "142723ce37e57380e0aff8a90edb78f5dace8f39768ab84cc7b827cef30a6744"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_velocity_limit.hpp",
+      "sha256": "546d086bbcf361e6306c0d7d8a37582b231d51b8c3f2493712cb3e98e5abbf54"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_association.hpp",
+      "sha256": "0fb2ac6660a90f6a1dfae3b851441eeeb317389601235f9ecfaa3c23c2daa007"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_preview.hpp",
+      "sha256": "8b800bf50f09944346fcb2658fffd6dd20f7e925a69273738823fb85aa90a259"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp",
+      "sha256": "aef3377a775cdf1e68f6b8faeb90028ddeffd89be34403daccfeb194fa6e3bcb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp",
+      "sha256": "f28ddd28e53bbbd21d70bd565bb199505f05a368b9beb8bfb052516eaf2f2bb7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp",
+      "sha256": "5eef64d2cce3ee7da13c1cf625f6550eb4e64ac77a99dae93f06c65178cd2bff"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "sha256": "04f31d3179cadd570ff042c953e99a6ddd470671165839840efc08a53eaacb89"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp",
+      "sha256": "491bdcffd46304bacc3b0b5c45a9868548aaa78c2f549526129349468e718231"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp",
+      "sha256": "83431e813c50c8df07e5dbf28d45f84f726d7bd74ce9492f3a55957f7b8da43f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp",
+      "sha256": "6b4ed1169b37d66d6bbc411c3ca604d7e9764ed2e4de2ee311a36c253b32fcc4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp",
+      "sha256": "93eb1a2c4332ebb40a53ecd5b91cf90f66a1821036d2f6ad20523dfa653eab73"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp",
+      "sha256": "6e744a67b5be270df16338ed6a497abe47da54d45f187aca2fd3d8ffe6d7c02f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_progress.hpp",
+      "sha256": "e21c57a0e3a4cd2d1b30ace01c0c84587b42d4a58a03b02881544d78418cbc8d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "sha256": "4191fa5f1c5382df303be3bf5491b28ed574d015fffb9a1fa1c3514c29d33341"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "sha256": "b7a425fc0efd4ffd8b60c12f19025aa3f3a546642557619bd4c548122796b4af"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp",
+      "sha256": "0f7d46d68cd6ee525e32cca1955b2e8b99342507b1bde0e249762f7a4a693ee2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp",
+      "sha256": "94bbdafc08578fbebf85af15b90583f1c7452cdf3ab842689281249d0d191b48"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp",
+      "sha256": "c1d150c48b877ceeb29392dde137754279d2c03d9bf3990e7b2fa430fa07b946"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp",
+      "sha256": "e32649cd1f157eac6266c2e80a4ab8a4731e864b92f2cd7b20c292045097dae2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp",
+      "sha256": "fb31dbf1370c6fa8d4e539d4da090ae677be08934425210ed3c6320b8acf11ea"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "sha256": "81eef27e7e53d57731971258f1477e46f4ce6354467352c26059859c9f2a2a57"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp",
+      "sha256": "3f158a9210e3b5de76ec4df6abb0b4c6eecc575a3d7553850e1c3c16279164bc"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp",
+      "sha256": "464fc3fbf29043c28eb1e27fa12593be6c8dcbd5b87961a312aaf4e178866b1e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp",
+      "sha256": "cb5dd1b7c5e898f20b0ad712edde7da8ae1a3aaa31125e7cebcb4b23d50b6daa"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp",
+      "sha256": "ad68f2f69c5363e9602eda375958fc825aaa4d1581bae6e220f9a8920c237d4e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp",
+      "sha256": "8f872a0c8a86f65db032918e191baef626fbcf6466ec9c27e53cc3c979195f8d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp",
+      "sha256": "2735504de4cf98be0a0fdf9bf08ee337ba0a9d898549e706b9660c8f63ae03ed"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp",
+      "sha256": "e650a5491e34e5c64820cd379ca26289a9fdacb09e65accb6d3e82fd644db64d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "dea223525b1753e88fd46182a24d30e6505d095da8a44cb4ee402074823ba9a9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp",
+      "sha256": "ec16338fe4cc96a8eaf0676362ab53a94c79ddeb05135b2a93749017f12cdad6"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp",
+      "sha256": "84eaaf7054fbe43addaa0d1833f2dc7face00fcb34aaef8c022da6c888c32b20"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp",
+      "sha256": "fda7709abdc9d50c80279e7e0b0f4dd4e9ef8a295959b0caaae3d3427e51b9eb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp",
+      "sha256": "c0364be0c57498691256882b8de9b3f0e9acd9ced3f2ccba590b4d8d1efc4725"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp",
+      "sha256": "3adc114489f24bf75e8fddeab46e8d4eb937a4f3b7bfd506d7b03f1ac6789e9f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp",
+      "sha256": "e786ef0ea30461c7ad1ca6d43b371c77484cc1c8f3fa7f2e64761b6a6dbfcb47"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp",
+      "sha256": "00e48a55c54aaebc70dc9c5352116f12556de4e5261d32a7ad9818e41b9b96ac"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stop_input_program.hpp",
+      "sha256": "4f229f7f22dad4a40d4901c1bf9e43075c93468434e1e1f4a0ba5150470ae520"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp",
+      "sha256": "d83d7d2185e11200ff1e1f656018994fb3424599011a0c3904c0c5aa66b0b536"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp",
+      "sha256": "8afc0766959fa3477a4a17ed37f2f32c65eaf2bf66ced4cbcdc081ad92d35735"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_wire_command.hpp",
+      "sha256": "c0734bed816636bd6db4bbc3cb56bff4df7c90868297949ecedba545ba315a86"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_decision_trace.hpp",
+      "sha256": "91d7fef94540c0b6ce89ec0139cfb76f8021085eb16563b01b88c076c356e52f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp",
+      "sha256": "21eae46391377403be955bddab2f38fc2b5857ca3287b6c271db539cb6e51a0c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/path_core.hpp",
+      "sha256": "648e041b4400b57d268967d4df2f2075516b3eda682de5e9ea39178bf9f80e56"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/persistent_osqp.hpp",
+      "sha256": "c6d015467d5aa82267bc1fdb6bad25efc9cc644fad057e89d49e6a34f4afaab3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp",
+      "sha256": "445983d9732dd2329633cd952dcb1dc682522911541fd2318a69aee2745cd8c0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/race_mpcc_foundation.hpp",
+      "sha256": "918837e27ff9b3a2b65924b4fb22ef958f879bfe7f67f47fc2bcb88a6a2c28a1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp",
+      "sha256": "41dd3feb125fbda04e1e340d7088180fc031ac2de8ede0fcedad4c724a82052b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_mpc.hpp",
+      "sha256": "f3b918005ea4979ca93dee7c869945556e05555fb51d5cd89d9680721c9f0f73"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/runtime_speed_profile.hpp",
+      "sha256": "247ac0bb446518c83181a8e21ecfb8b738e02fe90818b38c7151045390b31311"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/start_grid_grace.hpp",
+      "sha256": "d263d2e4644b0ebbcfbdda0df0bb6335b1e3beadd8143d29ef34e094985afd23"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp",
+      "sha256": "334696d66637e231e8721d553de390252958985a090026ebed4766a99e2dfa4e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/v2x_overtake_core.hpp",
+      "sha256": "d8b5d96d02c2759fb0204ee8fbbe73a430e680e39d99c3d63d5ae634ad086f4a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_applied_input_prediction.cpp",
+      "sha256": "056549db67f04697c4d04c48c2d82eb67089ea36f5dcf431a5b99cae0ec148da"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_compare.cpp",
+      "sha256": "d6bdc82964b018fbf8c1201bd49d66670a3437591114e119f3cdd91696f82ddd"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "b8b04216f3395ef7b7b95b0207b3d91ba8ddd78a2422a85168533a5daf83c32b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "156fb1451e570104c4db6a071b27ebf2a8ffe0659b16d6871ecee915b1e58d20"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_certified_stop_successor_observation.cpp",
+      "sha256": "6788f885a2a98efcc2acc960e798913f00e3639be390905cf90f72414c92bd06"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_execution_contract.cpp",
+      "sha256": "04e2bfe3868b70a7413427a4da9e10d896ceaff3da9214c4d5b33c81a3f93805"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_latest_state_feedback.cpp",
+      "sha256": "80a3763903df1a57286fb8920a757cdc1fb7fa77288be792eaa30d5a2a3ed012"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_maneuver_replay.cpp",
+      "sha256": "5c3fbe0193a06f32cf509a7ea94ce038aa91918e19634224219c612ea59b56b8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_on_trajectory_connector.cpp",
+      "sha256": "b58a8dc7a1a66db0c293028fd9ade33089313df4175f21314b3c601377e8d200"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_overtake_sibling_adoption.cpp",
+      "sha256": "a7a153f33cc97dc0436f9ed4eb2ac925b15e7c3e70b0e17f0a9752b3fc49ac7e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_prepared_suffix_replay.cpp",
+      "sha256": "c1b0698a5e321a480c28940e9fec7dbe87df7536532dab65e0d213469a1f9b80"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_progress.cpp",
+      "sha256": "c0a12fc5f8c2d7f59a0d22d6162adef6a7aff410b046f12281c5996d403554c7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_qp_replay.cpp",
+      "sha256": "221d714ce6bba36c629d2ada6378c2288fcc7e0fda5d4c96babefbac7fb7cf00"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "sha256": "c0e544311e4be6c0bde46b1170de7240c8ee7e8aef357793b9fdee99a6e4fa1b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "sha256": "819ed260d526674e054197ddd014d50652b03d059d001a71d4d6aae7185ce3b2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "4a1ab33c4c42bde29f70f9fee15f7ba151ee12ca2139c1c3436875563b709dea"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp",
+      "sha256": "985a0d1486eed1a216ad6a59ac7ddc2c6e5fdb59b4a1de91d3224f1bd233bf83"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_obstacle.cpp",
+      "sha256": "57d007dc8d778466a4b0927dd5cfdd1cfbc92ac8aee3f70adc923e304df00698"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "fb762cff5ef44a824652c6fb23859a5b193c22b8e169d48d16a688cb4316d291"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "sha256": "9fc64832fc88f09fb87b5d8698035beb1116a98e116bf4ba36a3fcd2783c5a75"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_source.cpp",
+      "sha256": "caf792a10e99ad20a0e7744d615a8d828bf0828bf82f2c02dbb830a3c2ffb353"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_normal_branch_bank.cpp",
+      "sha256": "a3acd9dbf24757b42e55783aaaff8dfea51bac4c480650fcdeca1658533058be"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "sha256": "f6c7ba9bd6cf7a022c92ad45c1cd2903857021117fa8f25470403485574e0412"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "sha256": "983407accd00e52c523cb32106d6054d59df519bc164a01ef7e9e50d79107286"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_wall.cpp",
+      "sha256": "10881540d46e51a8efa277026e421528ba1d93d9df20d3094b69c943d4bba8a9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_problem.cpp",
+      "sha256": "1a81899496f7a33d699c92cbd61e926bf7548520e0fcb442499c6218b3cbe3d3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_production_adapter.cpp",
+      "sha256": "e6d22be4e4e0366d31e650c8c3fc574914820770128c0fdf5f6c014eca057964"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "7a34859af93f4eeb3b8c907feef46c768f8e0be239ce238d53599733727ff9ea"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "sha256": "946f8c080197fed9aa53f1583f11162f2ef0749f42642ed7bfdfbdea9b6196fe"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a9b458c34a29a607d7a30217fb0e713c1fb77f90db12e66c17d7c91072e8f4d2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "sha256": "11e83eb28126834a8837289518f0023bd6dd72669f4b5622214639a8c82e1f92"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "00a31e1e4b63fc9fe6d669f10568be58e850c510d3b5acc7172ff0d96e764ceb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_wall_refinement.cpp",
+      "sha256": "cf521297f83fb6371548607b7437d090b7bb2aaca41243fba5354ff170167b58"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stateless_maneuver.cpp",
+      "sha256": "c7d940bfab89072cb120df5945dd99eb8c35cb5aee1f6cf9009c1624517ee3d8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_steering_state_contract.cpp",
+      "sha256": "b530641c709927a3864c513eaf1752fc7f5d21e84a6c371a3b7bd2819853a3f9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stop_input_program.cpp",
+      "sha256": "ce2a115cf4a461660494c7cf6e17d3b5a14d163f0ce8ed2144959c821cf8ecca"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/frozen-inputs/manifest.json",
+      "sha256": "dbc7479d500d19ffaec4eb2a661966f973c1f898365b8d85620f84db4f3cb801"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/manifest.json",
+      "sha256": "31f09d54195947e420526bf21735cb9c88bba71ec5a6fa430f1177ce1b0b30fc"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/packet-groups.yaml",
+      "sha256": "69badab5a3bf357313854576cf3836397e9314df26c1455fbafaea4e4bee8183"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r78/replay",
+      "sha256": "db83b49d5da824018a4b1381303f8f768eb1d0060e8ecddb6b40b37f497cf7c9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r79/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r79/manifest.json",
+      "sha256": "6b05f1d3b1dd086d3e07cbaad0c316209ee2be2082765fc23f232565e1afef18"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r79/packet-groups.yaml",
+      "sha256": "99ec61929759f80ef57ce322233eb93be5aa54316232a3907fe52e8238d98032"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r79/replay",
+      "sha256": "c2e897b5d62eda1c462a6e48049f5187bef5b8b9c7d96e26d31202d15c289ccb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r80/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r80/manifest.json",
+      "sha256": "8e8c81ae4a497c9833a6c074e86dd4f7c8efd56a5e5a507f1fb7c344209c5267"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r80/replay",
+      "sha256": "a029528db26bbe38825e3a3d4a668fb09ad4330564d3ec08c37322c5c2bd4c70"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r81/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r81/manifest.json",
+      "sha256": "a14865762fbfa4f4fd56e50fd19565c9742ad572429623ea4988219119b51b22"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r81/replay",
+      "sha256": "cc2124cd35677007561167434b948a1225882f0c6ffe728157b89c61d7176a56"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r82/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r82/manifest.json",
+      "sha256": "3d5d5075373686957271c4b6817615a52e832f8466fc3ed025a00a3ffe6234bb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r82/replay",
+      "sha256": "b849c6ddce9dfc000a7b37f1bcb7adf1f4459eea72dd6e37a6003b8824702893"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r83/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r83/manifest.json",
+      "sha256": "654d6a265bea6db81eb2e2c63385d43dd87c01cb1073528a941aa578091c55c7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r83/replay",
+      "sha256": "489cad43e8cca7b2b245b61efed92a9a586342609682acc23fb2c1840f830e32"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-architecture-r17/architecture.log",
+      "sha256": "ff6a21513a101efa627b60f70b941466a5f55a99d31fdec6b2b0ae76b03dd33f"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-architecture-r17/complete-rest.log",
+      "sha256": "666075c0f37bea2d50e93f26aa465b1128a9923a228841783ea448c25d66b004"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-architecture-r17/manifest.json",
+      "sha256": "52e87e114f221196ba3541b14c12c11df2090b7dc854ff034cd59d56f307113f"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-architecture-r17/mpcc_architecture_compare",
+      "sha256": "3658fa98746a244724fb406e32bcd9b0b0bbea8eefc7c8000ad253d82052b955"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/exact-pair.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/exact-pair.yaml",
+      "sha256": "81d51f740972e27567fec68dca06f149bc8baafdd3c2b5b4da00b9a506d02ea1"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/manifest.json",
+      "sha256": "80990785f70503f3a177c746318e8c63e582d2006e1fe1861e25b851fbb6f48f"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/metrics/d1-callback-samples.json",
+      "sha256": "6fe0f322ef0336037d51af82c359561e36c6481a9010054df4e03ac992d9dd4f"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/metrics/d1-command-clock-anomalies.json",
+      "sha256": "6ccb3447b9ae1300c31dd3686a5391b07a370eb4641788a31d0ea297a58116f4"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/metrics/d1-prediction-samples.json",
+      "sha256": "118791ea191da04a572c1f6d4f5303df60daf45795c3f381b1e6808943ffc3e1"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/metrics/d2-callback-samples.json",
+      "sha256": "a623b14f2155141aba48ea317397ccc6293e221d42c72fe2fdf20c3bc69e3614"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/metrics/d2-command-clock-anomalies.json",
+      "sha256": "119065a3b37bb51f333e6330a6aca129f578e7922590289f953910e5ba5975a2"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/metrics/d2-prediction-samples.json",
+      "sha256": "55e3f5375c2239d9710495f6f3024e07b41cc8dd58262dafd5100cf3594e5533"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/metrics/report.json",
+      "sha256": "a855da6318a4c11d76afecf398249f8a9540a8399be33a8840e862c16e68c251"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/metrics.log",
+      "sha256": "6ebc335b96fdfea91c7a554abdc10b024f39561a6fec77ebc271bdf75e80b5c2"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/mpcc_architecture_compare",
+      "sha256": "3658fa98746a244724fb406e32bcd9b0b0bbea8eefc7c8000ad253d82052b955"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r17/published-stop.yaml",
+      "sha256": "5961a289bdb09e796bd1159784878b6f4e8c9d55409440bac98b852524a352b0"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/footprint_enclosure.hpp",
+      "sha256": "70761459b847b4d4ce676a7d570915e1355068a61adeaf26d20f3ebda1091046"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/independent-1101.log",
+      "sha256": "083128471e77b4c4988058ac7c9a917f938819ca5f1ee0db401d9d1031abeefa"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/independent-1101.yaml",
+      "sha256": "083128471e77b4c4988058ac7c9a917f938819ca5f1ee0db401d9d1031abeefa"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/independent-1585.log",
+      "sha256": "c5b8b361a01d4ea1224b1f9b28a0b793d5e95830b735606521e2c7b987a32d6b"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/independent-1585.yaml",
+      "sha256": "c5b8b361a01d4ea1224b1f9b28a0b793d5e95830b735606521e2c7b987a32d6b"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/independent-1620.log",
+      "sha256": "486c1c348e307b0a2fbf6c420c7152387c9ec73a47ab8dab23df8e1020015bbc"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/independent-1620.yaml",
+      "sha256": "486c1c348e307b0a2fbf6c420c7152387c9ec73a47ab8dab23df8e1020015bbc"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/interval_model.hpp",
+      "sha256": "cde9c0096c84ff8ad109eb2ec284711164bc1c4921aa20eb578f87fbc03c11ca"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "011b61eded319bbbdd0845a8d1e0a1bfde54f96b71c016bd8055b8fc3ea1d7a6"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/manifest.json",
+      "sha256": "e26809eaf8f84fa55d8c7eb5e9d06ed76d8786a4e6d7fe96d57a939d3437bcc9"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/mpcc_applied_input_prediction.cpp",
+      "sha256": "a79e41f3471cfe243a8da82a5a0cf215d385df693e82cea3a6051993d290d9a3"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/mpcc_applied_input_prediction.hpp",
+      "sha256": "b20ac83cfb3e541e54975632cccebe998153f305a6ebd0bd4379585ef132445f"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/mpcc_vehicle_enclosure.hpp",
+      "sha256": "8a365af48b7b988d2eef930b185f85bed400ebac6ca411ab141ab0a167e434c3"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/replay",
+      "sha256": "489cad43e8cca7b2b245b61efed92a9a586342609682acc23fb2c1840f830e32"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/replay_applied_input_tube.cpp",
+      "sha256": "1f3b3f5182c464ef3430f370440b798608085d6b382465a6a0c6d009a4526687"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/unmodified-895.log",
+      "sha256": "daecbb703f50b9e29800c3bd041224976ef3361eac215c13a8914a2bc5b7bc9c"
+    },
+    {
+      "path": "output/20260911-nine-state-library-source-r5/unmodified-895.yaml",
+      "sha256": "daecbb703f50b9e29800c3bd041224976ef3361eac215c13a8914a2bc5b7bc9c"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-evidence/mpcc-nine-state-build-r41.log",
+      "sha256": "aaa2702f7b05bf7dd09c81fa9fb82ecd03a5efb0e68700409905685744119546"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-evidence/mpcc-nine-state-tests-r33.log",
+      "sha256": "8de4951e93fe9aec58e43f429f0a8666ebaf6e8a3f9767ff762572d3d4206b07"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-evidence/mpcc-packet-groups-after-r1.log",
+      "sha256": "247e8727f84703501147e6a26476db3cc3dd1e2b7a93cd26f1d382e6c230c312"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-evidence/mpcc-packet-groups-before-r1.log",
+      "sha256": "ddc30f6b2c4ae31ae3e797e285e302fbab9babf006df3fb7b4bd192e1caa0496"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-evidence/mpcc-packet-groups-before-r2.log",
+      "sha256": "f68c2ae47a65d584164f1443c8ae780ffef31a76c29022b190edd8bfaac669c5"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-evidence/mpcc_packet_native_suite.py",
+      "sha256": "22f56ded7afd436d6c10471d5dca152b0d393e09631e38e81fe52a40a144ebc8"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-evidence/mpcc_record_packet_groups.py",
+      "sha256": "a0cd47cadfd5b6e37ee6453502c8f638a26648e39901bbe2d7ef8519aa7a673d"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-evidence/mpcc_run_library_sources_r83.py",
+      "sha256": "0e954e7f5195cc8fcab73c250eb47cbe1c11cfdc86bd923aec7304be90edd8e8"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/commands.json",
+      "sha256": "e63b95f2dc54c5c4fd1b6814d4d2426b7a69b493a3f67997ffd9c13ea7775667"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/compile-r80.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/compile-r81.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/compile-r82.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/compile-r83.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/continuous-enclosure.log",
+      "sha256": "7447bea7c75ab419cdbf4fd293a0599c92d38696bf0c0b4ff8c1e830223f7499"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/files.json",
+      "sha256": "55e0deb323269b85a774012cafcc9439b93474b700fdd68748ae38a62260d52c"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/four-source-worlds.log",
+      "sha256": "da91714a9d56b2f0bad2cb66cea448b736b9eb863165719c45294f825637d1f7"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros.so",
+      "sha256": "2f9e9f09888de16443d689a651d92a6184746407405f523def87e03d6d2b6d4c"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_boost_start_dash.so",
+      "sha256": "16f5e37b07209aef64088993ad544261bd556702ee394ee54c2bcf1fa96e29d9"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_control_mode_guard.so",
+      "sha256": "2f3790bca465a63e121105e4fc0bc96535b6edefb1dbff6ed896e4de030518f2"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_bounded_single_job_executor.so",
+      "sha256": "ca1e7df3df184f761e5ad594cbe44764cb531d13d6b6eb987ee7871d3667b249"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan.so",
+      "sha256": "ce489bd98b8d0b855a5e6b842ff12ae378dece831253def49529643bcf28e0fb"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan_adapter.so",
+      "sha256": "376476c63bdda01b91604b19452a16319320e3de2562ccd64927a6f66a976e0c"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_revalidation.so",
+      "sha256": "754b45878217fe33a560124c1521b8e9ec448b269de408a21282143c9deb9202"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_world_revalidation.so",
+      "sha256": "608e8991a459d47eb00cb6f1491d1b3225c432d5b71da067998fb010bfdbb00e"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_follow_canonical_async.so",
+      "sha256": "16b17f5148aaabf53dfc9616217914e0923f83ae3b79b819cc5105cff4bc7dac"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_latest_only_worker.so",
+      "sha256": "4ea3676fa3fb92a6b61aef2f4549b9c1401a2848a5102ebc2faa4254672cf388"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_stage_geometry.so",
+      "sha256": "0387d075bfe4dac3f0a44ec2ab9adbcb9b02adab62154230245a646d72e9a514"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "sha256": "db812e64db8a9cc000767a0c27e6018139f31508112c5d54b55d0e65adf88043"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_velocity_limit.so",
+      "sha256": "5edfd8b8848f3810edb7c7b11963b0c60f601538dbf059fc4a991ddc45d99395"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_association.so",
+      "sha256": "f605749b6b1d1dc2920d61540e946ebf45bdcc0a191504919294806d38efcebe"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_preview.so",
+      "sha256": "51acc1153014fba2c6f38cf304a6a8033e43707fec5f083ddaad345e2e03b00e"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_comparison.a",
+      "sha256": "fd329cc3c696ac98ceb2c5206acf9547700a7b8c6def4c064ce3866c4ee8512f"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_snapshot.a",
+      "sha256": "06fb90475a53f1b63352553771cb1bb68fb72e0407477840b9a17f4d831291a8"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_certified_stop_successor_observation.a",
+      "sha256": "621b4f2e8d6d3224c3084980248625f1c04a0be1c78ea7cfde90cbd61e790c3d"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_execution_contract.so",
+      "sha256": "100686e2eb897b01442195e8d17faa7ef3a354ab2ed61430e9761cd772af57fc"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_latest_state_feedback.a",
+      "sha256": "54a428855c52451b7cd412de820f8e190408f76446a621b2be12e1e0f6f7d992"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_on_trajectory_connector.a",
+      "sha256": "2860432af2629c54f69756a2771eb70fc2d3ee8bc8862c682135eb0ac5587f82"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_overtake_sibling_adoption.a",
+      "sha256": "49cb2198bf9d9751ba58afcd6f9e98ae23718e44f5f63e78994a33dc8d223028"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_progress.so",
+      "sha256": "d064d8d232f31cc7be383243b6df983fcef70c6b0c6a7d6796851d06c11451e6"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.a",
+      "sha256": "e7c029456c8dd126cf41daf1b60298f0fbeee39c63d45eb9ca6f8f5a49c49186"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.so",
+      "sha256": "c01addb1368825d92a3337e6f4946201b42bafcf72f9802c36eb0bc441cffb12"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_adapter.a",
+      "sha256": "87de34de6da68634540063a4c7f4f7e76dc069e49e684a24bde2af1eee76cb67"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_certified_plan.a",
+      "sha256": "6ede9c573e7fb85641c3728d3acc9d9bca0f49e2b076b84a6caadbdcd8f1a9d6"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_command_candidate.a",
+      "sha256": "70521ef2e8abe3ad384a7ea7083d409403c38e7f2e0a3726243c3e6ecc7f6aba"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_dynamic_proof.a",
+      "sha256": "99092fe7fd1502e32951cd62dea1a0af679444e8cd0b8a14336f76ece1f8d25b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_artifact.a",
+      "sha256": "820ee6b8478704b2518184c0be9f3818a4cb49307e112932582bd4cc8b978bea"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_source.a",
+      "sha256": "65a8d51933811ad552daa26319c6edc04f181f3b755675c1a7778aab6993a731"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_normal_branch_bank.a",
+      "sha256": "66c6eea82bd89cfa4e4cd10c0f571bd387420c706f87409b61ccaca5208b2aaf"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_overtake_branch_bank.a",
+      "sha256": "0262ea8ae93d91eb706b411bcbefef60020e4d6201a558f00c58bd834a93e547"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_adapter.a",
+      "sha256": "70070b6a7ce14fccf59990704a1ddee204714f025d0acae9e6213460256c0c7b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_wall.a",
+      "sha256": "f4aa95ce288b650e23f1569d5faf2775640a723285efb444ef7ff4a2306ea6d3"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_problem.a",
+      "sha256": "79db324f8a13adf327e12c95d8678c4adaf14074e2cae5eaa581a1ea0cbe9914"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_production_adapter.a",
+      "sha256": "aaa6239899e07b4dc87ec49eba893d0a9a80b222e53ec50334a5660c0478ff53"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_retained_revalidation.a",
+      "sha256": "4db708e974cc4f861b75ddfa985f46c3773be647bd50bbb7a5f3de49df6e1050"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_shadow.a",
+      "sha256": "068a4b9df465db4465be5150ef1e2269c016c5a2d6a29858eb32e9d74d20058a"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_control_lattice.a",
+      "sha256": "f360472032396b6e5617af632eaa2d3b633a844b548a77e457ada8dd3f98dc0c"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_lattice_shadow.a",
+      "sha256": "f21db286f49f515ddb36c25f0b88280770ee115f981a1923f3e74861dc8a01c0"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_successor_bundle.a",
+      "sha256": "3b86ec8c085a5d6963dfb693bc66d4422bc870ec6b1f50b6f07da5e8998b9861"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_stateless_maneuver.a",
+      "sha256": "6a3324e7dae8478245dd76445a407dd201d696b6beab742d2dddc3ca47c453ed"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_steering_state_contract.so",
+      "sha256": "03eaf0f72437c114269b7f9252fabff6ff8267da7657671c6bc1f133e151d886"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "011b61eded319bbbdd0845a8d1e0a1bfde54f96b71c016bd8055b8fc3ea1d7a6"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_decision_trace.so",
+      "sha256": "5e439e7d0c7a06a22b1c9d50ba0b5078a2ba4383249179ad07cda96e462a71f6"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_execution_orchestrator.so",
+      "sha256": "8fdb9e8fcd846b3195dd59b3033cb6f77934593e5ccfc0c3a7f058ea52b53451"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_path_core.so",
+      "sha256": "520c4afe066b0d7e55a84c32b2a13961ca912771a00d97a960820a00e6aa28c5"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_persistent_osqp.so",
+      "sha256": "4a8c23ce5fecdf903b401b25537ccef660dad85cbd79f77b21746718f361a944"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_race_mpcc_foundation.so",
+      "sha256": "8e333d2a791fcd20e17ba14689afa75e15cb6658c85e1a0277cc331444626450"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_footprint.so",
+      "sha256": "d060bf3ad237a337f05b3c8e94bce75964fbaea1346a8dc0a31ca53727995ff4"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_mpc.so",
+      "sha256": "f8bb0ec2af86c20e784c792c5cf9a23576f3edddd90c9c8f31c4847394a7da59"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_runtime_speed_profile.so",
+      "sha256": "f3bde7a7d3deb6df958555323c3c5c12deb22263963938c9e10fef328def4316"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_start_grid_grace.so",
+      "sha256": "4579a4d9b9a97c635206f5417ff369486c15e4d2dc6305b392fa9a298e3b88e1"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_stuck_recovery_core.so",
+      "sha256": "1af4df45e4353d8d7680462cd5b964c695c00bc3403b1ffed041ee8d36303ba0"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_v2x_overtake_core.so",
+      "sha256": "1a43451a6033eb064a91789f5964682d57c23f83967b8183dde3d8c5079fd260"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_boost_start_dash.hpp",
+      "sha256": "6377ee258ce094dd481807b3570045253e0de438684c0f72f5fa1f706cd746c8"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_control_mode_guard.hpp",
+      "sha256": "5f4afa91011e2e66d06087604d90ada5946a434d099c497ec67adafa8393bf01"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "994779bfa1d00f20514b91beb9efaff5425ffd369514487605a1ca86b5e56a95"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp",
+      "sha256": "9528cced3509cef66a0d6516ba982cb43f951895e3500fd4a853d4b4cd66d647"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp",
+      "sha256": "8a365af48b7b988d2eef930b185f85bed400ebac6ca411ab141ab0a167e434c3"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/external_speed_loss_monitor.hpp",
+      "sha256": "82a5a738a12dfa667c6733baf1a8a460f945b02ed91439d703233dccff52164f"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/latest_only_worker.hpp",
+      "sha256": "39f4f298180d8f68d94795961498b46546def7309ac1f2b3b85be33fd6097e35"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp",
+      "sha256": "3cddd30e326339caaa731541bb11f848594975a8cc3c89b3955f46d2fbfe1176"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_stage_geometry.hpp",
+      "sha256": "142723ce37e57380e0aff8a90edb78f5dace8f39768ab84cc7b827cef30a6744"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_velocity_limit.hpp",
+      "sha256": "546d086bbcf361e6306c0d7d8a37582b231d51b8c3f2493712cb3e98e5abbf54"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_association.hpp",
+      "sha256": "0fb2ac6660a90f6a1dfae3b851441eeeb317389601235f9ecfaa3c23c2daa007"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_preview.hpp",
+      "sha256": "8b800bf50f09944346fcb2658fffd6dd20f7e925a69273738823fb85aa90a259"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp",
+      "sha256": "b20ac83cfb3e541e54975632cccebe998153f305a6ebd0bd4379585ef132445f"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp",
+      "sha256": "f28ddd28e53bbbd21d70bd565bb199505f05a368b9beb8bfb052516eaf2f2bb7"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp",
+      "sha256": "5eef64d2cce3ee7da13c1cf625f6550eb4e64ac77a99dae93f06c65178cd2bff"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "sha256": "04f31d3179cadd570ff042c953e99a6ddd470671165839840efc08a53eaacb89"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp",
+      "sha256": "491bdcffd46304bacc3b0b5c45a9868548aaa78c2f549526129349468e718231"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp",
+      "sha256": "83431e813c50c8df07e5dbf28d45f84f726d7bd74ce9492f3a55957f7b8da43f"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp",
+      "sha256": "6b4ed1169b37d66d6bbc411c3ca604d7e9764ed2e4de2ee311a36c253b32fcc4"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp",
+      "sha256": "93eb1a2c4332ebb40a53ecd5b91cf90f66a1821036d2f6ad20523dfa653eab73"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp",
+      "sha256": "6e744a67b5be270df16338ed6a497abe47da54d45f187aca2fd3d8ffe6d7c02f"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_progress.hpp",
+      "sha256": "e21c57a0e3a4cd2d1b30ace01c0c84587b42d4a58a03b02881544d78418cbc8d"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "sha256": "4191fa5f1c5382df303be3bf5491b28ed574d015fffb9a1fa1c3514c29d33341"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "sha256": "b7a425fc0efd4ffd8b60c12f19025aa3f3a546642557619bd4c548122796b4af"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp",
+      "sha256": "0f7d46d68cd6ee525e32cca1955b2e8b99342507b1bde0e249762f7a4a693ee2"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp",
+      "sha256": "94bbdafc08578fbebf85af15b90583f1c7452cdf3ab842689281249d0d191b48"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp",
+      "sha256": "c1d150c48b877ceeb29392dde137754279d2c03d9bf3990e7b2fa430fa07b946"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp",
+      "sha256": "e32649cd1f157eac6266c2e80a4ab8a4731e864b92f2cd7b20c292045097dae2"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp",
+      "sha256": "fb31dbf1370c6fa8d4e539d4da090ae677be08934425210ed3c6320b8acf11ea"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "sha256": "81eef27e7e53d57731971258f1477e46f4ce6354467352c26059859c9f2a2a57"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp",
+      "sha256": "3f158a9210e3b5de76ec4df6abb0b4c6eecc575a3d7553850e1c3c16279164bc"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp",
+      "sha256": "464fc3fbf29043c28eb1e27fa12593be6c8dcbd5b87961a312aaf4e178866b1e"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp",
+      "sha256": "cb5dd1b7c5e898f20b0ad712edde7da8ae1a3aaa31125e7cebcb4b23d50b6daa"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp",
+      "sha256": "ad68f2f69c5363e9602eda375958fc825aaa4d1581bae6e220f9a8920c237d4e"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp",
+      "sha256": "8f872a0c8a86f65db032918e191baef626fbcf6466ec9c27e53cc3c979195f8d"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp",
+      "sha256": "2735504de4cf98be0a0fdf9bf08ee337ba0a9d898549e706b9660c8f63ae03ed"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp",
+      "sha256": "e650a5491e34e5c64820cd379ca26289a9fdacb09e65accb6d3e82fd644db64d"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "dea223525b1753e88fd46182a24d30e6505d095da8a44cb4ee402074823ba9a9"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp",
+      "sha256": "ec16338fe4cc96a8eaf0676362ab53a94c79ddeb05135b2a93749017f12cdad6"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp",
+      "sha256": "84eaaf7054fbe43addaa0d1833f2dc7face00fcb34aaef8c022da6c888c32b20"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp",
+      "sha256": "fda7709abdc9d50c80279e7e0b0f4dd4e9ef8a295959b0caaae3d3427e51b9eb"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp",
+      "sha256": "c0364be0c57498691256882b8de9b3f0e9acd9ced3f2ccba590b4d8d1efc4725"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp",
+      "sha256": "3adc114489f24bf75e8fddeab46e8d4eb937a4f3b7bfd506d7b03f1ac6789e9f"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp",
+      "sha256": "e786ef0ea30461c7ad1ca6d43b371c77484cc1c8f3fa7f2e64761b6a6dbfcb47"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp",
+      "sha256": "00e48a55c54aaebc70dc9c5352116f12556de4e5261d32a7ad9818e41b9b96ac"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stop_input_program.hpp",
+      "sha256": "4f229f7f22dad4a40d4901c1bf9e43075c93468434e1e1f4a0ba5150470ae520"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp",
+      "sha256": "d83d7d2185e11200ff1e1f656018994fb3424599011a0c3904c0c5aa66b0b536"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp",
+      "sha256": "8afc0766959fa3477a4a17ed37f2f32c65eaf2bf66ced4cbcdc081ad92d35735"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_wire_command.hpp",
+      "sha256": "c0734bed816636bd6db4bbc3cb56bff4df7c90868297949ecedba545ba315a86"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_decision_trace.hpp",
+      "sha256": "91d7fef94540c0b6ce89ec0139cfb76f8021085eb16563b01b88c076c356e52f"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp",
+      "sha256": "21eae46391377403be955bddab2f38fc2b5857ca3287b6c271db539cb6e51a0c"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/path_core.hpp",
+      "sha256": "648e041b4400b57d268967d4df2f2075516b3eda682de5e9ea39178bf9f80e56"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/persistent_osqp.hpp",
+      "sha256": "c6d015467d5aa82267bc1fdb6bad25efc9cc644fad057e89d49e6a34f4afaab3"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp",
+      "sha256": "445983d9732dd2329633cd952dcb1dc682522911541fd2318a69aee2745cd8c0"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/race_mpcc_foundation.hpp",
+      "sha256": "918837e27ff9b3a2b65924b4fb22ef958f879bfe7f67f47fc2bcb88a6a2c28a1"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp",
+      "sha256": "41dd3feb125fbda04e1e340d7088180fc031ac2de8ede0fcedad4c724a82052b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_mpc.hpp",
+      "sha256": "f3b918005ea4979ca93dee7c869945556e05555fb51d5cd89d9680721c9f0f73"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/runtime_speed_profile.hpp",
+      "sha256": "247ac0bb446518c83181a8e21ecfb8b738e02fe90818b38c7151045390b31311"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/start_grid_grace.hpp",
+      "sha256": "d263d2e4644b0ebbcfbdda0df0bb6335b1e3beadd8143d29ef34e094985afd23"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp",
+      "sha256": "334696d66637e231e8721d553de390252958985a090026ebed4766a99e2dfa4e"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/v2x_overtake_core.hpp",
+      "sha256": "d8b5d96d02c2759fb0204ee8fbbe73a430e680e39d99c3d63d5ae634ad086f4a"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_applied_input_prediction.cpp",
+      "sha256": "a79e41f3471cfe243a8da82a5a0cf215d385df693e82cea3a6051993d290d9a3"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_compare.cpp",
+      "sha256": "d6bdc82964b018fbf8c1201bd49d66670a3437591114e119f3cdd91696f82ddd"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "b8b04216f3395ef7b7b95b0207b3d91ba8ddd78a2422a85168533a5daf83c32b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "156fb1451e570104c4db6a071b27ebf2a8ffe0659b16d6871ecee915b1e58d20"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_certified_stop_successor_observation.cpp",
+      "sha256": "6788f885a2a98efcc2acc960e798913f00e3639be390905cf90f72414c92bd06"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_execution_contract.cpp",
+      "sha256": "04e2bfe3868b70a7413427a4da9e10d896ceaff3da9214c4d5b33c81a3f93805"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_latest_state_feedback.cpp",
+      "sha256": "80a3763903df1a57286fb8920a757cdc1fb7fa77288be792eaa30d5a2a3ed012"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_maneuver_replay.cpp",
+      "sha256": "5c3fbe0193a06f32cf509a7ea94ce038aa91918e19634224219c612ea59b56b8"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_on_trajectory_connector.cpp",
+      "sha256": "b58a8dc7a1a66db0c293028fd9ade33089313df4175f21314b3c601377e8d200"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_overtake_sibling_adoption.cpp",
+      "sha256": "a7a153f33cc97dc0436f9ed4eb2ac925b15e7c3e70b0e17f0a9752b3fc49ac7e"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_prepared_suffix_replay.cpp",
+      "sha256": "c1b0698a5e321a480c28940e9fec7dbe87df7536532dab65e0d213469a1f9b80"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_progress.cpp",
+      "sha256": "c0a12fc5f8c2d7f59a0d22d6162adef6a7aff410b046f12281c5996d403554c7"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_qp_replay.cpp",
+      "sha256": "221d714ce6bba36c629d2ada6378c2288fcc7e0fda5d4c96babefbac7fb7cf00"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "sha256": "c0e544311e4be6c0bde46b1170de7240c8ee7e8aef357793b9fdee99a6e4fa1b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "sha256": "819ed260d526674e054197ddd014d50652b03d059d001a71d4d6aae7185ce3b2"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "4a1ab33c4c42bde29f70f9fee15f7ba151ee12ca2139c1c3436875563b709dea"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp",
+      "sha256": "985a0d1486eed1a216ad6a59ac7ddc2c6e5fdb59b4a1de91d3224f1bd233bf83"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_obstacle.cpp",
+      "sha256": "57d007dc8d778466a4b0927dd5cfdd1cfbc92ac8aee3f70adc923e304df00698"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "fb762cff5ef44a824652c6fb23859a5b193c22b8e169d48d16a688cb4316d291"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "sha256": "9fc64832fc88f09fb87b5d8698035beb1116a98e116bf4ba36a3fcd2783c5a75"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_source.cpp",
+      "sha256": "caf792a10e99ad20a0e7744d615a8d828bf0828bf82f2c02dbb830a3c2ffb353"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_normal_branch_bank.cpp",
+      "sha256": "a3acd9dbf24757b42e55783aaaff8dfea51bac4c480650fcdeca1658533058be"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "sha256": "f6c7ba9bd6cf7a022c92ad45c1cd2903857021117fa8f25470403485574e0412"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "sha256": "983407accd00e52c523cb32106d6054d59df519bc164a01ef7e9e50d79107286"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_wall.cpp",
+      "sha256": "10881540d46e51a8efa277026e421528ba1d93d9df20d3094b69c943d4bba8a9"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_problem.cpp",
+      "sha256": "1a81899496f7a33d699c92cbd61e926bf7548520e0fcb442499c6218b3cbe3d3"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_production_adapter.cpp",
+      "sha256": "e6d22be4e4e0366d31e650c8c3fc574914820770128c0fdf5f6c014eca057964"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "7a34859af93f4eeb3b8c907feef46c768f8e0be239ce238d53599733727ff9ea"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "sha256": "946f8c080197fed9aa53f1583f11162f2ef0749f42642ed7bfdfbdea9b6196fe"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a9b458c34a29a607d7a30217fb0e713c1fb77f90db12e66c17d7c91072e8f4d2"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "sha256": "11e83eb28126834a8837289518f0023bd6dd72669f4b5622214639a8c82e1f92"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "00a31e1e4b63fc9fe6d669f10568be58e850c510d3b5acc7172ff0d96e764ceb"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_wall_refinement.cpp",
+      "sha256": "cf521297f83fb6371548607b7437d090b7bb2aaca41243fba5354ff170167b58"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stateless_maneuver.cpp",
+      "sha256": "c7d940bfab89072cb120df5945dd99eb8c35cb5aee1f6cf9009c1624517ee3d8"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_steering_state_contract.cpp",
+      "sha256": "b530641c709927a3864c513eaf1752fc7f5d21e84a6c371a3b7bd2819853a3f9"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stop_input_program.cpp",
+      "sha256": "ce2a115cf4a461660494c7cf6e17d3b5a14d163f0ce8ed2144959c821cf8ecca"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/benchmark_rest_map.cpp",
+      "sha256": "d83efb6f7ba7ee8c29b1e68d60a43e1df8b07d32b0e64197e081478a7b2f55d9"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_final_packet.cpp",
+      "sha256": "e8a20bbc99861fb810d4ad088dba63974a55506126e49abbc9056b5bf26363d0"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_interval.cpp",
+      "sha256": "9da26fcc51e945077d0868437462f0c84df57001cabdfa9126ea9e551ea1b48b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_packet_coverage.cpp",
+      "sha256": "6de97e8a6d17260645e664867b76b2dd4c7adb59f4e355eddaee6591c77ec8c3"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_packet_history.cpp",
+      "sha256": "be0fdf2df509bb6ab9514e6c3cbb7f4b22b8c60b9a9ab86210ee5b13137ee587"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_packet_value_hulls.cpp",
+      "sha256": "0af09aab2bc81c8629190643acb0c3c6c521cadee37c0e334ed710da7ab4ba3a"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_shared_kernel.cpp",
+      "sha256": "975ed5c17373f46b93faba12b37bfeb92b2fd65f300598451c811c19384f61b7"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compare_tire_bounds.cpp",
+      "sha256": "c783ae4db57a6394e0abc03f1d2d3a9403d20211a280a1484a15f6eb444ee204"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/replay_applied_certificate.cpp",
+      "sha256": "a00bfa84e40427d8ab9e8c0ef5f92552cf568c99bee508eec3445948dcb2b636"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/replay_applied_input_tube.cpp",
+      "sha256": "1f3b3f5182c464ef3430f370440b798608085d6b382465a6a0c6d009a4526687"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/replay_common_stop.cpp",
+      "sha256": "bcf6c94ed584507b7260c401c30ee421cffda9b5dad74921eb90a5e2402382a6"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/replay_published_applied_stop.cpp",
+      "sha256": "d57f337d7262f9c0383c7258532d36e599ed2290f86695776283a6f34e045931"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/replay_certified_plan.cpp",
+      "sha256": "d08d653c684016c7ffb5d62d2d51e9e514001f052e1a8b87094428494424543b"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/steering/20260910-mpcc-empirical-plant/revalidation_input.hpp",
+      "sha256": "fb3552fafaaf79e18b6e4ad598b0ece70f480c3395256ced6835c44d0430c707"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/frozen-inputs/task-tmp/mpcc_packet_native_suite.py",
+      "sha256": "22f56ded7afd436d6c10471d5dca152b0d393e09631e38e81fe52a40a144ebc8"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/model-tests.log",
+      "sha256": "a84f9dc2ff938fc2d69d3912d514cbadc7bf37ad47c53306df5f9794b2685d96"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/model-warning-cleanup.log",
+      "sha256": "c268d3acfc876fc97ab49747e6b5df6a330fe18eff7eeca3a7513a9564093cad"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/r16-published-stop.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/r16-published-stop.yaml",
+      "sha256": "8f43ea7f9056e23bdfa0799a44e9473469a9cf4aadf0cda162c6f526f5a9845e"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/r17-certificate.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/r17-certificate.yaml",
+      "sha256": "161c61574864a5d61a2596d670bd6cc912cee3333defdf0fc798974309c6052a"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/r17-published-stop.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-packet-groups-native-r1/r17-published-stop.yaml",
+      "sha256": "4601cf1eec6239c39d091f133e38f0167e333f07771c23b065d9df4495198036"
+    }
+  ]
+}

@@ -95,13 +95,29 @@ int main(int argc, char ** argv)
     size_t scalar_checks = 0;
     for (const auto & sample : tube.source_to_rest) {
       if (sample.begin_sec >= observation.now_sec) check(sample.swept_body, sample.begin_sec, sample.end_sec);
+      std::vector<vehicle::ScalarRange> groups;
+      for (const auto & group : sample.inputs.acceleration_sign_groups)
+        if (group) groups.push_back(*group);
+      if(groups.empty()) throw std::runtime_error("missing acceleration domain");
+      // Check actual packet inclusion independently of the library's grouping.
+      for (const auto * packets : {&observation.commands, &program.commands}) {
+        for (const auto & packet : *packets) {
+          if (packet.published_sec < sample.begin_sec-profile.acceleration_age_sec ||
+              packet.published_sec > sample.end_sec) continue;
+          bool included=false;
+          for(const auto & group:groups) included=included ||
+            (packet.wire_acceleration_mps2>=group.lower && packet.wire_acceleration_mps2<=group.upper);
+          if(!included) throw std::runtime_error("causal acceleration packet omitted");
+        }
+      }
       for (size_t j = 0; j < oracles.size(); ++j) {
         auto & state = oracles[j];
-        const double fraction = j == 0 ? 0 : (j == 1 ? 1 : unit(random));
-        const double acceleration = sample.inputs.acceleration_mps2.lower +
-          (sample.inputs.acceleration_mps2.upper - sample.inputs.acceleration_mps2.lower) * fraction;
+        const double fraction = j < 12 ? double((j/groups.size())%2) : unit(random);
+        const auto & group = groups[j%groups.size()];
+        const double acceleration = group.lower + (group.upper-group.lower) * fraction;
+        const double steering_fraction = j < 12 ? double((j/(2*groups.size()))%2) : unit(random);
         const double steering = sample.inputs.wire_steering_rad.lower +
-          (sample.inputs.wire_steering_rad.upper - sample.inputs.wire_steering_rad.lower) * fraction;
+          (sample.inputs.wire_steering_rad.upper - sample.inputs.wire_steering_rad.lower) * steering_fraction;
         state.desired_steering_rad = steering / model.steering_wire_gain;
         const auto next = vehicle::advance(state, {acceleration, 0}, model, sample.duration_sec);
         if (!next) throw std::runtime_error("native oracle invalid");

@@ -34,7 +34,12 @@ bool history_valid(const std::vector<PublishedCommand> &history,
   return true;
 }
 
-std::optional<numerical::I>
+struct ChannelBounds {
+  numerical::I hull;
+  std::array<std::optional<numerical::I>, 3> sign_groups;
+};
+
+std::optional<ChannelBounds>
 channel_bounds(const std::vector<PublishedCommand> &history,
                const PublishedInputProgram &program, const double begin,
                const double end, const double age, const double delay,
@@ -45,6 +50,7 @@ channel_bounds(const std::vector<PublishedCommand> &history,
   const double first = numerical::down(numerical::down(begin - delay) - age);
   const double last = numerical::up(end - delay);
   std::optional<numerical::I> range;
+  std::array<std::optional<numerical::I>, 3> sign_groups;
   const double tail_start = program.commands.back().published_sec + delay;
   const bool tail_covers_begin = program.repeat_last_until_rest && tail_start <= begin;
   double covered_until = begin;
@@ -53,6 +59,11 @@ channel_bounds(const std::vector<PublishedCommand> &history,
     const numerical::I value(steering ? packet.wire_steering_rad
                                       : packet.wire_acceleration_mps2);
     range = range ? numerical::hull(*range, value) : value;
+    if (!steering) {
+      const std::size_t sign = value.lo < 0 ? 0 : value.lo > 0 ? 2 : 1;
+      auto & group = sign_groups[sign];
+      group = group ? numerical::hull(*group, value) : value;
+    }
   };
   for (const auto *packets : {&history, &program.commands}) {
     auto packet =
@@ -87,7 +98,8 @@ channel_bounds(const std::vector<PublishedCommand> &history,
   if (!tail_covers_begin &&
     (!coverage_started || (covered_until < end &&
     !(program.repeat_last_until_rest && tail_start <= covered_until)))) return std::nullopt;
-  return range;
+  if (!range) return std::nullopt;
+  return ChannelBounds{*range, sign_groups};
 }
 
 std::optional<AppliedInputBounds>
@@ -102,8 +114,13 @@ bounds(const std::vector<PublishedCommand> &history,
       profile.steering_mechanical_delay_sec, true);
   if (!acceleration || !steering)
     return std::nullopt;
-  return AppliedInputBounds{{acceleration->lo, acceleration->hi},
-                            {steering->lo, steering->hi}};
+  AppliedInputBounds result{{acceleration->hull.lo, acceleration->hull.hi},
+                            {steering->hull.lo, steering->hull.hi}, {}};
+  for (std::size_t i = 0; i < result.acceleration_sign_groups.size(); ++i) {
+    if (const auto & group = acceleration->sign_groups[i])
+      result.acceleration_sign_groups[i] = ScalarRange{group->lo, group->hi};
+  }
+  return result;
 }
 
 bool compatible(const InputApplicationProfile &profile,
@@ -313,8 +330,10 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
           bounds(observation.commands, program, profile, stamp, end);
       if (!inputs)
         return {Reason::HistoryUnavailable, {}};
-      const numerical::I acceleration(inputs->acceleration_mps2.lower,
-                                      inputs->acceleration_mps2.upper);
+      std::vector<numerical::I> accelerations;
+      accelerations.reserve(inputs->acceleration_sign_groups.size());
+      for (const auto & group : inputs->acceleration_sign_groups)
+        if (group) accelerations.emplace_back(group->lower, group->upper);
       const numerical::I desired =
           numerical::I(inputs->wire_steering_rad.lower,
                        inputs->wire_steering_rad.upper) /
@@ -324,8 +343,8 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
       if (stamp == observation.now_sec)
         tube.publication_body = body_ranges(numerical::joined(population));
       numerical::Box swept;
-      population = numerical::advance_partitioned(
-          std::move(population), acceleration, parameters, duration, &swept);
+      population = numerical::advance_partitioned_inputs(
+          std::move(population), accelerations, parameters, duration, &swept);
       const auto endpoint = numerical::joined(population);
       tube.maximum_body_partitions =
           std::max(tube.maximum_body_partitions, population.size());

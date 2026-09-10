@@ -53,8 +53,13 @@ struct ScalarRange {
 };
 
 struct AppliedInputBounds {
+  /// Overall bounding interval for diagnostics. Propagation uses the union
+  /// below, so absent near-zero values cannot enter the moving body branch.
   ScalarRange acceleration_mps2;
   ScalarRange wire_steering_rad;
+  /// Negative, exact zero, positive hulls of every admissible actual packet.
+  /// An absent sign has no member; channel selection remains independent.
+  std::array<std::optional<ScalarRange>, 3> acceleration_sign_groups;
 };
 
 /// Same order as State: x/y/yaw/u/vy/yaw-rate/desired/tire. Pose coordinates

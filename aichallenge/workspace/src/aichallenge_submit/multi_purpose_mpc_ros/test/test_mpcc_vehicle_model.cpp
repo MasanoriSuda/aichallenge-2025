@@ -1,11 +1,13 @@
 #include "multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
+#include "mpcc_resting_packet_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
 #include "multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp"
 
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <random>
 
 namespace vehicle = multi_purpose_mpc_ros::mpcc_vehicle_model;
 using multi_purpose_mpc_ros::test::vehicle_model;
@@ -408,4 +410,119 @@ TEST(MpccVehicleModel, RestEnclosurePreservesStaticPoseAcrossRepeatedInputWindow
   }
   EXPECT_TRUE(range::at_rest(body));
   EXPECT_TRUE(std::isfinite(body[7].lo) && std::isfinite(body[7].hi));
+}
+
+TEST(MpccAppliedInput, PublishedPacketsAtRestStayWithinOriginalForwardStateBound)
+{
+  const auto observation = multi_purpose_mpc_ros::test::resting_packet_observation();
+  const auto program = multi_purpose_mpc_ros::test::resting_packet_program();
+  const auto prediction = vehicle::predict_applied_inputs_to_rest(
+    observation, program, applied_profile(), vehicle_model());
+  ASSERT_TRUE(prediction.tube);
+  double minimum_u = INFINITY;
+  for (const auto & sample : prediction.tube->source_to_rest) {
+    if (sample.begin_sec >= observation.now_sec)
+      minimum_u = std::min(minimum_u, sample.swept_body[3].lower);
+  }
+  EXPECT_GE(minimum_u, -0.00741003100948554);
+  EXPECT_DOUBLE_EQ(prediction.tube->source_to_rest.back().endpoint_body[3].upper, 0);
+}
+
+TEST(MpccAppliedInput, PacketUnionPreservesZeroSmallValuesEqualEpochsAndDelayedTail)
+{
+  const vehicle::PublishedInputProgram program{.025, {{1.45, -3, .125}}, true};
+  const std::vector<vehicle::PublishedCommand> history{
+    {0, 1, 0}, {1.1, 1, 0}, {1.2, -3, -.125}, {1.2, 0, .125},
+    {1.2, .0001220703125, -.25}, {1.2, -.0001220703125, .25},
+    {1.3, 1.25, 0}, {1.4, -.25, .125}};
+  const auto profile = applied_profile();
+  for (int step = 0; step < 100; ++step) {
+    const double begin = 1.4 + step * .005, end = begin + .005;
+    const auto bounds = vehicle::applied_input_bounds(history, program, profile, begin, end);
+    ASSERT_TRUE(bounds);
+    const auto contains_acceleration = [&](double value) {
+      for (const auto & group : bounds->acceleration_sign_groups)
+        if (group && value >= group->lower && value <= group->upper) return true;
+      return false;
+    };
+    // Independently check packet/channel eligibility. Equal-time members must
+    // survive even though only the last is used by nominal history prediction.
+    for (const auto * packets : {&history, &program.commands}) {
+      for (const auto & packet : *packets) {
+        if (packet.published_sec >= begin - profile.acceleration_age_sec &&
+          packet.published_sec <= end) {
+          EXPECT_TRUE(contains_acceleration(packet.wire_acceleration_mps2));
+        }
+        if (packet.published_sec >= begin - profile.steering_mechanical_delay_sec -
+          profile.steering_receipt_age_sec &&
+          packet.published_sec <= end - profile.steering_mechanical_delay_sec) {
+          EXPECT_GE(packet.wire_steering_rad, bounds->wire_steering_rad.lower);
+          EXPECT_LE(packet.wire_steering_rad, bounds->wire_steering_rad.upper);
+        }
+      }
+    }
+    if (step == 0) {
+      EXPECT_TRUE(contains_acceleration(0));
+      ASSERT_TRUE(bounds->acceleration_sign_groups[0]);
+      ASSERT_TRUE(bounds->acceleration_sign_groups[2]);
+      EXPECT_DOUBLE_EQ(bounds->acceleration_sign_groups[0]->upper, -.0001220703125);
+      EXPECT_DOUBLE_EQ(bounds->acceleration_sign_groups[2]->lower, .0001220703125);
+    }
+    if (begin > 1.75) {
+      EXPECT_TRUE(contains_acceleration(-3));
+      EXPECT_FALSE(bounds->acceleration_sign_groups[1]);
+      EXPECT_FALSE(bounds->acceleration_sign_groups[2]);
+    }
+  }
+}
+
+TEST(MpccAppliedInput, PacketUnionEnclosesIndependentChannelResponsesAndAllSigns)
+{
+  const auto p = vehicle_model();
+  auto observation = multi_purpose_mpc_ros::test::resting_packet_observation();
+  const auto program = multi_purpose_mpc_ros::test::resting_packet_program();
+  // Also exercise real zero and near-zero packets. They must remain possible
+  // even when including them makes a subsequent physical certificate reject.
+  observation.commands.insert(observation.commands.end() - 1,
+    {{15.084999662, 0, -.125}, {15.084999662, .0001220703125, .125},
+      {15.084999662, -.0001220703125, 0}});
+  const auto prediction = vehicle::predict_applied_inputs_to_rest(
+    observation, program, applied_profile(), p);
+  ASSERT_TRUE(prediction.tube);
+  auto initial = observation.initial.state; initial.x_m = initial.y_m = initial.yaw_rad = 0;
+  std::vector<vehicle::State> states(128, initial);
+  std::mt19937_64 random(20260911); std::uniform_real_distribution<double> unit(0, 1);
+  bool zero_seen = false, small_positive_seen = false, small_negative_seen = false;
+  for (const auto & sample : prediction.tube->source_to_rest) {
+    std::vector<vehicle::ScalarRange> groups;
+    for (const auto & group : sample.inputs.acceleration_sign_groups)
+      if (group) groups.push_back(*group);
+    ASSERT_FALSE(groups.empty());
+    for (std::size_t arm = 0; arm < states.size(); ++arm) {
+      const auto & group = groups[arm % groups.size()];
+      const double af = arm < 12 ? double((arm / groups.size()) % 2) : unit(random);
+      const double sf = arm < 12 ? double((arm / (2 * groups.size())) % 2) : unit(random);
+      const double acceleration = group.lower + af * (group.upper - group.lower);
+      zero_seen = zero_seen || acceleration == 0;
+      small_positive_seen = small_positive_seen || acceleration == .0001220703125;
+      small_negative_seen = small_negative_seen || acceleration == -.0001220703125;
+      auto & state = states[arm];
+      state.desired_steering_rad = (sample.inputs.wire_steering_rad.lower + sf *
+        (sample.inputs.wire_steering_rad.upper - sample.inputs.wire_steering_rad.lower)) /
+        p.steering_wire_gain;
+      const auto next = vehicle::advance(state, {acceleration, 0}, p, sample.duration_sec);
+      ASSERT_TRUE(next); state = next->state;
+      const auto values = vehicle::numerical::values(state);
+      for (std::size_t i = 0; i < values.size(); ++i) {
+        ASSERT_GE(values[i], sample.endpoint_body[i].lower);
+        ASSERT_LE(values[i], sample.endpoint_body[i].upper);
+      }
+    }
+  }
+  EXPECT_TRUE(zero_seen); EXPECT_TRUE(small_positive_seen); EXPECT_TRUE(small_negative_seen);
+  for (const auto & state : states) {
+    EXPECT_DOUBLE_EQ(state.forward_velocity_mps, 0);
+    EXPECT_DOUBLE_EQ(state.lateral_velocity_mps, 0);
+    EXPECT_DOUBLE_EQ(state.yaw_rate_radps, 0);
+  }
 }

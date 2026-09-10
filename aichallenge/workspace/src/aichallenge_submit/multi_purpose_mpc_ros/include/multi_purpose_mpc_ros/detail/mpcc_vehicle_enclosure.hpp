@@ -10,6 +10,7 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 namespace multi_purpose_mpc_ros::mpcc_vehicle_model::numerical {
 namespace model = multi_purpose_mpc_ros::mpcc_vehicle_model;
@@ -334,11 +335,12 @@ inline bool at_rest(const Box &s) {
 inline Box step(const Box &b, I a, const model::Parameters &p, double dt) {
   return joined(step_parts(b, a, p, dt));
 }
-inline std::vector<Box> advance_partitioned(std::vector<Box> states, I a,
+inline std::vector<Box> advance_partitioned_inputs(std::vector<Box> states,
+                                            const std::vector<I> & inputs,
                                             const model::Parameters &p,
                                             double duration, Box *swept) {
   const auto count = model::integration_steps(duration, p.maximum_step_sec);
-  if (count == 0)
+  if (count == 0 || inputs.empty())
     throw std::runtime_error("invalid partitioned duration");
   if (swept)
     *swept = joined(states);
@@ -356,20 +358,23 @@ inline std::vector<Box> advance_partitioned(std::vector<Box> states, I a,
     std::array<std::optional<Box>, 5> bins;
     const std::array<double, 5> boundaries{-INFINITY, -p.sleep_speed_mps, 0,
                                            p.sleep_speed_mps, INFINITY};
-    for (const auto &state : states)
-      for (const auto &next : step_parts(state, a, p, duration / count)) {
-        if (at_rest(next)) {
-          merge(bins[0], next);
-          continue;
+    // Each input arm is evaluated before merging body modes. Convexifying
+    // across absent acceleration signs here invents new hybrid responses.
+    for (const auto & a : inputs)
+      for (const auto &state : states)
+        for (const auto &next : step_parts(state, a, p, duration / count)) {
+          if (at_rest(next)) {
+            merge(bins[0], next);
+            continue;
+          }
+          for (size_t j = 0; j < 4; ++j) {
+            Box clipped = next;
+            clipped[3] = {std::max(next[3].lo, boundaries[j]),
+                          std::min(next[3].hi, boundaries[j + 1])};
+            if (clipped[3].lo <= clipped[3].hi)
+              merge(bins[j + 1], clipped);
+          }
         }
-        for (size_t j = 0; j < 4; ++j) {
-          Box clipped = next;
-          clipped[3] = {std::max(next[3].lo, boundaries[j]),
-                        std::min(next[3].hi, boundaries[j + 1])};
-          if (clipped[3].lo <= clipped[3].hi)
-            merge(bins[j + 1], clipped);
-        }
-      }
     states.clear();
     for (const auto &bin : bins)
       if (bin)
@@ -381,6 +386,12 @@ inline std::vector<Box> advance_partitioned(std::vector<Box> states, I a,
     }
   }
   return states;
+}
+inline std::vector<Box> advance_partitioned(std::vector<Box> states, I a,
+                                            const model::Parameters &p,
+                                            double duration, Box *swept) {
+  // Preserve the full continuous-interval primitive and its callers.
+  return advance_partitioned_inputs(std::move(states), {a}, p, duration, swept);
 }
 inline Box advance(Box state, I acceleration, const model::Parameters &p,
                    double duration, Box *swept = nullptr) {

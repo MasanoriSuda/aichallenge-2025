@@ -14,6 +14,7 @@
 - [x] Implement lossless packet history and shared input-program numerical library; buildr37/testsr30/source replay.
 - [x] Bind receiver uncertainty/common program/full-rest horizon into live certificate/Stop/async/final packet; buildr39/testsr31.
 - [x] Diagnose r16signed-source Stop join and validate bounded fix/native replay; analytic rest enclosure; buildr40/testsr32.
+- [x] Diagnose r17convex acceleration packet loss; union propagation, exact certificate/join replay, buildr41/testsr33.
 - [ ] Validate integrated applied-program behavior and25ms timing in fresh runs.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.
 - [ ] Fresh single/dev2 acceptance and causal repair of any first failure.

@@ -1,19 +1,19 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6の自律実行を継続。必要分のローカルcommitのみ。
-**全体は未完。c86c7163の統合dev2-r16は不合格。局所修正を検証済み。**
+**全体は未完。7b7fef37のdev2-r17は再発進・25msとも未達。原因を一つ修正・検証済み。**
 
-- 元観測/履歴・250ms経験的profile・共通指令列・全応答停止の認証は全live経路で必須。
-- r16最初の走行中EmergencyはD2decision798。直前795で実公開Stop124が元速度の符号でjoin失敗。
-- 元の−.00230949m/sを保持し、追加認証と元の将来状態境界で判定するよう整合。
-  同じ795入力でStop/join/rest/他車余裕+1.072677mが成立。認証なし・境界外の逆向き観測は拒否。
-- 静止分岐のJacobianを省き、共有タイヤ式の直接区間像を使用。数値検査と保存4場面が通過。
-- buildr40:26package、testsr32:2427記録/62group、error/failure/skip0。
-- r16のcallbackp99 D1/D2=82.11/50.66ms、連続超過246/103組は不合格のまま。
-  次は新規dev2-r17で停止継続と25msを確認する。
+- r17は長い認証済み停止と、一部の静止Emergencyを観測。完走せず外部中断した。
+- D1decision1020/source619は、未送信のゼロ近傍加速度を含む数値近似で状態境界を拒否。
+- 実送信値の正負・ゼロ別の区間を伝播し、元の全指令、時刻、独立操舵、既存境界を維持。
+- 同じ1020入力で認証・停止生成・join成立。完全停止15.429999662、他車余裕+0.628490m。
+- buildr41:26package。testsr33:2430記録/62group、error/failure/skip0。
+  連続入力の既存検査と4保存場面も通過。診断driverも新ABIへ再ビルド済み。
+- r17のcallbackp99 D1/D2=50.8731/27.1146ms、連続超過5815/41組は不合格。
+  次は新規dev2-r18で再発進と25msを確認する。
 
-[監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-r16-audit.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/signed-rest-evidence.json)、
+[設計と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/packet-groups-design.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/packet-groups-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
 dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。

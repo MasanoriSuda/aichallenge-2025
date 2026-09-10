@@ -925,6 +925,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/signed-rest-evidence.json",
       "replay_ready": true,
       "reason": "First integrated failure and exact published Stop124at795, numerical rest comparison"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-packet-groups-r17",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/packet-groups-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact D1decision1020/source619 and same-world A/B/C/D, original r17run and timing"
     }
   ],
   "experiments": [
@@ -7040,6 +7046,182 @@
         "Ordinary retained reason masquerading as published Stop join result"
       ],
       "revisit_condition": "Fresh committed dev2with current build; retain failedrun and no margin/rate/solver relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-integrated-r17",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Signed observation fix establishes restart and25ms",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "rejected",
+      "reason": "Moving failure r16not repeated; stationary Emergency1020, later persistent certified Stop. No restart/finish; timing fails; external stop not race timeout.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-packet-sign-union",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Propagate only the union of causal acceleration packet sign hulls",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "accepted",
+      "reason": "Old numerical u bound rejects exact1020; current required certificate, production adapter, Stop materialization andjoin accepted; same profile/model/world/bounds.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-continuous-domain",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Keep the full convex interval primitive while preserving all actual packet/channel values in the union",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "accepted",
+      "reason": "Original continuous/hybrid suite,22modeltests,2430package records and4originalworlds pass; no omitted zero or smallpositive packet.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-persistent-a",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Same sealed world nominal architecture feasibility",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "accepted",
+      "reason": "Nominal solver/physical/bundle accepted. Does not establish applied-program certificate, publication or25ms acceptance.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-stateless-left-b",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Same sealed world nominal architecture feasibility",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "accepted",
+      "reason": "Nominal solver/physical/bundle accepted. Does not establish applied-program certificate, publication or25ms acceptance.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-rough-left-c",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Same sealed world nominal architecture feasibility",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "accepted",
+      "reason": "Nominal solver/physical/bundle accepted. Does not establish applied-program certificate, publication or25ms acceptance.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-offline-left-d",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Same sealed world nominal architecture feasibility",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "accepted",
+      "reason": "Nominal solver/physical/bundle accepted. Does not establish applied-program certificate, publication or25ms acceptance.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-current-world-complete-rest-y",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Same sealed world nominal architecture feasibility",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "accepted",
+      "reason": "Nominal solver/physical/bundle accepted. Does not establish applied-program certificate, publication or25ms acceptance.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-stateless-right-b",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Same sealed world opposite-side nominal feasibility",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "rejected",
+      "reason": "Existing bounded optimizer rejected; no physical infeasibility certificate. Revisit only with a new documented formulation/candidate hypothesis.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-rough-right-c",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Same sealed world opposite-side nominal feasibility",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "rejected",
+      "reason": "Existing bounded optimizer rejected; no physical infeasibility certificate. Revisit only with a new documented formulation/candidate hypothesis.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-packet-groups-r17-offline-right-d",
+      "baseline_commit": "7b7fef374a1ebebbab98026075034084e724f9f9",
+      "snapshot_ids": [
+        "20260911-nine-state-packet-groups-r17"
+      ],
+      "hypothesis": "Same sealed world opposite-side nominal feasibility",
+      "changed_dimension": "Numerical input representation or separately labelled same-world nominal architecture arm",
+      "result": "rejected",
+      "reason": "Existing bounded optimizer rejected; no physical infeasibility certificate. Revisit only with a new documented formulation/candidate hypothesis.",
+      "production_impact": "Only causal acceleration union propagation; same single authority and all existing state/wall/peer/Follow checks",
+      "deleted_code": [
+        "Whole acceleration hull as the applied-tube propagation domain"
+      ],
+      "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
     }
   ]
 }

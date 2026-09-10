@@ -96,6 +96,16 @@ buildr39は26package、testsr31は2425記録/62groupで失敗0。新規走行・
 r16の25ms超過と多車両受入れは未解決。根拠は
 [統合走行監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/integration-r16-audit.md)を参照。
 
+2026-09-11のdev2-r17は停止認証を長く維持したが、再発進せず、25ms周期も未達だった。
+D1 decision1020の停止認証は、実送信加速度−3/+1.329596の間を一つの区間にしたことで、
+未送信のゼロ近傍値を含み、速度下界を過大に広げて拒否されていた。入力集合を
+負・ゼロ・正ごとの区間の和として伝播し、同時刻の全指令、独立した操舵、遅延と
+反復停止指令を保持する。全体min/maxは外側境界の表示用として残す。
+元の1020入力は同じモデル・250ms経験的profile・状態/壁/他車条件で認証・停止生成・
+引き継ぎが成立した。buildr41=26、testsr33=2430記録/62groupで失敗0。
+実再発進・25ms・残るM4–M6は未完了。
+[入力集合の修正と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/packet-groups-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

@@ -370,7 +370,13 @@ bool scheduled_publication_bracket_admitted(const PublishedInputProgram &program
 
 static bool program_epoch_valid(const ObservationProvenance &observation,
                                const PublishedInputProgram &program,
-                               const bool scheduled) {
+                               const bool scheduled, const bool pending = false) {
+  if (pending) {
+    if (program.commands.empty() || !valid(program,program.commands.front().published_sec) ||
+        !history_valid(observation.commands,program.commands.front().published_sec)) return false;
+    const auto deadline=publication_epoch(program,0,true);
+    return deadline && observation.now_sec<=*deadline;
+  }
   if (!scheduled) return valid(program, observation.now_sec);
   return !program.commands.empty() &&
     observation.now_sec <= program.commands.front().published_sec &&
@@ -381,9 +387,9 @@ static std::uint64_t input_context_fingerprint(const ObservationProvenance &obse
                                   const PublishedInputProgram &program,
                                   const InputApplicationProfile &profile,
                                   const Parameters &parameters,
-                                  const bool scheduled) noexcept {
+                                  const bool scheduled, const bool pending = false) noexcept {
   if (!valid(parameters) || !valid(observation) || !valid(profile) ||
-      !program_epoch_valid(observation, program, scheduled) || !compatible(profile, program) ||
+      !program_epoch_valid(observation, program, scheduled, pending) || !compatible(profile, program) ||
       !history_valid(observation.commands, observation.now_sec))
     return 0;
   Hash hash;
@@ -419,6 +425,7 @@ static std::uint64_t input_context_fingerprint(const ObservationProvenance &obse
     hash.integer(program.nanosecond_clock->maximum_delay_ns);
   }
   if (scheduled) hash.string("scheduled-input-observation-v1");
+  if (pending) hash.string("pending-suffix-current-observation-v1");
   return hash.value == 0 ? 1 : hash.value;
 }
 
@@ -493,7 +500,7 @@ predict_inputs_to_rest(const ObservationProvenance &observation,
                                const Parameters &parameters,
                                const AppliedInputValidator &validator,
                                const AppliedFootprintValidation *footprint,
-                               const bool scheduled) noexcept {
+                               const bool scheduled, const bool pending = false) noexcept {
   using Reason = AppliedInputRejectReason;
   if (!valid(parameters) || !parameters.nominal_settled_contact)
     return {Reason::InvalidModel, {}};
@@ -503,7 +510,7 @@ predict_inputs_to_rest(const ObservationProvenance &observation,
   }
   if (!valid(profile))
     return {Reason::InvalidProfile, {}};
-  if (!program_epoch_valid(observation, program, scheduled) || !program.repeat_last_until_rest) {
+  if (!program_epoch_valid(observation, program, scheduled, pending) || !program.repeat_last_until_rest) {
     return {Reason::InvalidProgram, {}};
   }
   if (!compatible(profile, program))
@@ -511,7 +518,7 @@ predict_inputs_to_rest(const ObservationProvenance &observation,
   try {
     AppliedInputTube tube;
     tube.context_fingerprint = input_context_fingerprint(
-        observation, program, profile, parameters, scheduled);
+        observation, program, profile, parameters, scheduled, pending);
     if (tube.context_fingerprint == 0)
       return {Reason::InvalidObservation, {}};
     tube.observation = observation;
@@ -673,6 +680,16 @@ ScheduledInputPrediction predict_scheduled_inputs_to_rest(
     std::move(tube.profile), tube.coordinate_origin, tube.publication_body,
     std::move(tube.publication_footprint), std::move(tube.source_to_rest),
     tube.rest_sec, tube.maximum_body_partitions}};
+}
+
+PendingInputPrediction predict_pending_inputs_to_rest(
+    const ObservationProvenance &observation, const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters,
+    const AppliedInputValidator &validator,
+    const AppliedFootprintValidation *footprint) noexcept {
+  auto result=predict_inputs_to_rest(observation,program,profile,parameters,validator,footprint,true,true);
+  if (!result.tube) return {result.reason,{}};
+  return {result.reason,PendingInputTube{std::move(*result.tube)}};
 }
 
 } // namespace multi_purpose_mpc_ros::mpcc_vehicle_model

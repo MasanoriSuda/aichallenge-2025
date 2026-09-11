@@ -773,10 +773,12 @@ PrefixReason check_actual_publication_prefix(
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
-CurrentWorldCheck recheck_remaining_world(
-    const applied::ScheduledCertificate &certificate, const retained::Request &fresh) {
-  CurrentWorldCheck result;
-  if (!certificate.nominal()) return result;
+namespace {
+bool prepare_current_world(
+    const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
+    CurrentWorldCheck &result, double &follow_reference,
+    std::optional<recovery_footprint::FootprintExtents> &footprint) {
+  if (!certificate.nominal()) return false;
   const auto &original = certificate.nominal()->observed();
   const auto &tube = certificate.tube();
   if (fresh.plan != original.plan || !fresh.plan || !fresh.plan->physical_snapshot ||
@@ -795,19 +797,19 @@ CurrentWorldCheck recheck_remaining_world(
       !std::isfinite(fresh.control_origin_physical_progress_m) ||
       !fresh.current_wall_grid || !fresh.current_wall_grid->valid() ||
       !fresh.obstacles.current || !mpcc_rate_resolved_dynamic_proof::observation_valid(fresh.obstacles) ||
-      fresh.obstacles.observed_sec > fresh.now_sec || tube.source_to_rest.empty()) return result;
+      fresh.obstacles.observed_sec > fresh.now_sec || tube.source_to_rest.empty()) return false;
   using Footprint = recovery_footprint::FootprintExtents;
   for (auto field : {&Footprint::front_extent_m, &Footprint::rear_extent_m, &Footprint::left_extent_m,
       &Footprint::right_extent_m, &Footprint::margin_m})
-    if (fresh.current_footprint.*field != original.current_footprint.*field) return result;
+    if (fresh.current_footprint.*field != original.current_footprint.*field) return false;
   using Policy = race_mpcc_foundation::StopPathTrackingPolicy;
   for (auto field : {&Policy::wheelbase_m, &Policy::maximum_abs_steering_rad, &Policy::maximum_abs_steering_rate_radps,
       &Policy::maximum_lateral_acceleration_mps2, &Policy::steering_command_gain, &Policy::lateral_gain, &Policy::heading_gain})
-    if (fresh.stop_lateral_policy.*field != original.stop_lateral_policy.*field) return result;
-  double follow_reference = 0;
+    if (fresh.stop_lateral_policy.*field != original.stop_lateral_policy.*field) return false;
+  follow_reference = 0;
   const bool follow_required = fresh.current_intent == retained::contract::ControlIntent::Follow;
   if (fresh.follow_target.has_value() != follow_required || original.follow_target.has_value() != follow_required)
-    return result;
+    return false;
   if (follow_required) {
     result.reason = CurrentWorldReason::InvalidFollowObservation;
     const auto &target = *fresh.follow_target;
@@ -818,16 +820,16 @@ CurrentWorldCheck recheck_remaining_world(
         target.observed_sec != fresh.obstacles.observed_sec || target.observed_sec > fresh.now_sec ||
         target.hard_gap_m != original.follow_target->hard_gap_m ||
         !std::any_of(fresh.obstacles.obstacles.begin(), fresh.obstacles.obstacles.end(),
-          [&](const auto &peer) { return peer.id == target.target_id; })) return result;
+          [&](const auto &peer) { return peer.id == target.target_id; })) return false;
     if (target.current_target_gap_m + 1e-9 < target.hard_gap_m) {
       result.reason = CurrentWorldReason::PhysicalRejected;
       result.physical_reason = applied::Reason::FollowGapRejected;
-      result.rejected_sec = fresh.now_sec; return result;
+      result.rejected_sec = fresh.now_sec; return false;
     }
     // This current-world API anchors the forecast at physical control-origin
     // progress. An offset-form forecast must not silently move the peer away.
     if (target.elapsed_time_sec.front() != 0.0 ||
-        target.target_progress_from_current_origin_m.front() != target.current_target_gap_m) return result;
+        target.target_progress_from_current_origin_m.front() != target.current_target_gap_m) return false;
     // Associate the fresh canonical physical coordinate with the immutable
     // source window. Every potentially nearest branch must agree; a crossing
     // cannot supply a convenient alternate lap/branch for the target forecast.
@@ -837,20 +839,30 @@ CurrentWorldCheck recheck_remaining_world(
     origin.yaw_rad = fresh.control_pose.yaw_rad;
     const auto projected = applied::course_progress(point, origin, fresh.plan->physical_snapshot->course_frame_knots);
     result.reason = CurrentWorldReason::FollowOriginUnavailable;
-    if (!projected || !std::isfinite(projected->lo) || !std::isfinite(projected->hi)) return result;
+    if (!projected || !std::isfinite(projected->lo) || !std::isfinite(projected->hi)) return false;
     follow_reference = fresh.control_origin_physical_progress_m;
     if (fresh.circular) {
-      if (!std::isfinite(fresh.path_length_m) || fresh.path_length_m <= 0) return result;
+      if (!std::isfinite(fresh.path_length_m) || fresh.path_length_m <= 0) return false;
       const double laps = std::round(((projected->lo / 2 + projected->hi / 2) - follow_reference) / fresh.path_length_m);
       follow_reference += laps * fresh.path_length_m;
     }
     if (!std::isfinite(follow_reference) ||
         std::abs(follow_reference - projected->lo) > fresh.progress_continuity_tolerance_m ||
-        std::abs(follow_reference - projected->hi) > fresh.progress_continuity_tolerance_m) return result;
+        std::abs(follow_reference - projected->hi) > fresh.progress_continuity_tolerance_m) return false;
   }
-  const auto footprint = mpcc_rate_resolved_physical_wall::resolve_clearance_footprint(
+  footprint = mpcc_rate_resolved_physical_wall::resolve_clearance_footprint(
     fresh.current_footprint, fresh.plan->physical_snapshot->hard_wall_clearance_m);
-  if (!footprint) return result;
+  if (!footprint) return false;
+  return true;
+}
+} // namespace
+CurrentWorldCheck recheck_remaining_world(
+    const applied::ScheduledCertificate &certificate, const retained::Request &fresh) {
+  CurrentWorldCheck result;
+  double follow_reference{};
+  std::optional<recovery_footprint::FootprintExtents> footprint;
+  if (!prepare_current_world(certificate, fresh, result, follow_reference, footprint)) return result;
+  const auto &tube = certificate.tube();
   applied::Result diagnostic;
   applied::WorldCheckStatistics statistics;
   const auto &ceiling = certificate.nominal()->proof().terminal_stop_forward_velocity_ceiling_mps;
@@ -912,12 +924,88 @@ ContextReason check_current_context(
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
-CurrentCheck check_current_evidence(
+namespace {
+// New samples may define a new physical population. Older stamps, or changed
+// values under an unchanged stamp, cannot supply independent current evidence.
+bool component_epochs_are_current(const vehicle::ObservationProvenance &old,
+                                  const vehicle::ObservationProvenance &fresh) {
+  const auto same_or_new = [](double old_time, double new_time,
+                             std::initializer_list<std::pair<double, double>> values) {
+    if (new_time < old_time) return false;
+    if (new_time > old_time) return true;
+    return std::all_of(values.begin(), values.end(), [](const auto &v) { return v.first == v.second; });
+  };
+  const auto &a = old.initial.state;
+  const auto &b = fresh.initial.state;
+  return same_or_new(old.initial.source_sec, fresh.initial.source_sec,
+      {{a.x_m,b.x_m},{a.y_m,b.y_m},{a.yaw_rad,b.yaw_rad}}) &&
+    same_or_new(old.velocity_source_sec, fresh.velocity_source_sec,
+      {{a.forward_velocity_mps,b.forward_velocity_mps},{a.lateral_velocity_mps,b.lateral_velocity_mps}}) &&
+    same_or_new(old.yaw_rate_source_sec, fresh.yaw_rate_source_sec, {{a.yaw_rate_radps,b.yaw_rate_radps}}) &&
+    same_or_new(old.tire_source_sec, fresh.tire_source_sec, {{a.tire_steering_rad,b.tire_steering_rad}});
+}
+
+std::optional<vehicle::PendingInputTube> prove_current_remaining_program(
+    const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
+    std::size_t index, CurrentWorldCheck &result) {
+  double follow_reference{};
+  std::optional<recovery_footprint::FootprintExtents> footprint;
+  if (!prepare_current_world(certificate, fresh, result, follow_reference, footprint)) return std::nullopt;
+  auto remaining = certificate.suffix().program;
+  const auto epoch = vehicle::publication_epoch(remaining, index);
+  if (!epoch || remaining.commands.empty()) return std::nullopt;
+  if (index < remaining.commands.size()) {
+    remaining.commands.erase(remaining.commands.begin(), remaining.commands.begin() + index);
+  } else {
+    if (!remaining.repeat_last_until_rest) return std::nullopt;
+    remaining.commands = {remaining.commands.back()};
+    remaining.commands.front().published_sec = *epoch;
+  }
+  if (remaining.nanosecond_clock) {
+    const auto ns = vehicle::publication_nanoseconds(*epoch);
+    if (!ns) return std::nullopt;
+    remaining.nanosecond_clock->first_ns = *ns;
+  }
+  const auto &observation = fresh.publication_prefix->observation;
+  const auto &ceiling = certificate.nominal()->proof().terminal_stop_forward_velocity_ceiling_mps;
+  applied::Result diagnostic;
+  applied::WorldCheckStatistics statistics;
+  applied::AppliedWorldCheck checker{fresh, observation, *footprint, ceiling,
+    follow_reference, statistics, diagnostic};
+  vehicle::AppliedFootprintValidation validation;
+  const auto vertices = vehicle::numerical::footprint_vertex_offsets(*footprint);
+  for (std::size_t i = 0; i < vertices.size(); ++i)
+    validation.local_offsets[i] = {vertices[i].lo, vertices[i].hi};
+  validation.validate = [&](const vehicle::BodyRanges &body,
+      const vehicle::FootprintRanges &corners, double begin, double end) {
+    try { diagnostic.reason = checker.check(body, corners, begin, end); }
+    catch (const std::exception &) { diagnostic.reason = applied::Reason::InvalidWorld; }
+    return diagnostic.reason == applied::Reason::Accepted;
+  };
+  auto prediction = vehicle::predict_pending_inputs_to_rest(observation, remaining,
+    certificate.tube().profile, fresh.plan->execution_artifact->vehicle_model, {}, &validation);
+  if (!prediction.tube || !statistics.checked_samples) {
+    result.reason = CurrentWorldReason::PhysicalRejected;
+    result.physical_reason = prediction.reason == vehicle::AppliedInputRejectReason::ValidationRejected ?
+      diagnostic.reason : applied::Reason::InputPredictionRejected;
+    result.rejected_sec = diagnostic.rejected_sec;
+    result.rejected_peer_id = diagnostic.rejected_peer_id;
+    return std::nullopt;
+  }
+  result.reason = CurrentWorldReason::Current;
+  result.physical_reason = applied::Reason::Accepted;
+  result.minimum_peer_clearance_m = statistics.minimum_peer_clearance_m;
+  result.minimum_follow_gap_m = statistics.minimum_follow_gap_m;
+  result.checked_samples = statistics.checked_samples;
+  return std::move(prediction.tube);
+}
+CurrentCheck check_dispatch_evidence(
     const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
     const retained::contract::MpccProblemContext &fresh_problem, const ContextSnapshot &fresh_generation,
     const vehicle::PublishedInputLedger &ledger, const vehicle::PublishedInputLedger::Snapshot &original_cursor,
     const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
-    const std::size_t already_published_suffix_packets) {
+    const std::size_t already_published_suffix_packets,
+    std::optional<vehicle::PendingInputTube> *independent) {
   CurrentCheck result;
   if (!fresh.publication_prefix || fresh_problem.decision_id != fresh.decision_id ||
       fresh_problem.intent != fresh.current_intent ||
@@ -929,7 +1017,13 @@ CurrentCheck check_current_evidence(
         fresh_problem.dynamic_obstacle_generation != fresh.obstacles.generation)) return result;
   const auto &observation = fresh.publication_prefix->observation;
   result.measurement = check_measurement_consistency(certificate, observation);
-  if (result.measurement.reason != MeasurementReason::Compatible) {
+  const auto measurement = result.measurement.reason;
+  const bool new_population = measurement != MeasurementReason::Compatible;
+  const bool physical_mismatch = measurement == MeasurementReason::PoseMismatch ||
+    measurement == MeasurementReason::VelocityMismatch || measurement == MeasurementReason::YawRateMismatch ||
+    measurement == MeasurementReason::TireMismatch;
+  if (new_population && (!independent || !physical_mismatch ||
+      !component_epochs_are_current(certificate.tube().observation, observation))) {
     result.reason = CurrentReason::MeasurementRejected; return result;
   }
   result.prefix = check_actual_publication_prefix(certificate, ledger, original_cursor,
@@ -938,7 +1032,12 @@ CurrentCheck check_current_evidence(
   const auto use = already_published_suffix_packets ? ContextUse::PublishedRemainder : ContextUse::NewSource;
   result.context = check_current_context(certificate, fresh_generation, fresh_problem, use);
   if (result.context != ContextReason::Compatible) { result.reason = CurrentReason::ContextRejected; return result; }
-  result.world = recheck_remaining_world(certificate, fresh);
+  if (new_population) {
+    *independent = prove_current_remaining_program(certificate, fresh,
+      already_published_suffix_packets, result.world);
+  } else {
+    result.world = recheck_remaining_world(certificate, fresh);
+  }
   if (result.world.reason != CurrentWorldReason::Current) { result.reason = CurrentReason::WorldRejected; return result; }
   // Revocation can be observed while a worker is checking physical evidence.
   // The final main-thread dispatcher must check the generation again at send.
@@ -946,6 +1045,17 @@ CurrentCheck check_current_evidence(
   result.reason = result.context == ContextReason::Compatible ? CurrentReason::Compatible : CurrentReason::ContextRejected;
   return result;
 }
+} // namespace
+CurrentCheck check_current_evidence(
+    const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
+    const retained::contract::MpccProblemContext &fresh_problem, const ContextSnapshot &fresh_generation,
+    const vehicle::PublishedInputLedger &ledger, const vehicle::PublishedInputLedger::Snapshot &original_cursor,
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
+    const std::size_t already_published_suffix_packets) {
+  return check_dispatch_evidence(certificate, fresh, fresh_problem, fresh_generation,
+    ledger, original_cursor, prior_sources, already_published_suffix_packets, nullptr);
+}
+
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
 
 
@@ -1002,8 +1112,9 @@ DispatchResult prepare_dispatch(
   if (packet.published_sec > certificate->tube().rest_sec || fresh.now_sec > certificate->tube().rest_sec) {
     result.reason = DispatchReason::RestExpired; return result;
   }
-  result.current = check_current_evidence(*certificate, fresh, fresh_problem, current_generation,
-    ledger, original_cursor, prior_sources, index);
+  std::optional<vehicle::PendingInputTube> independent;
+  result.current = check_dispatch_evidence(*certificate, fresh, fresh_problem, current_generation,
+    ledger, original_cursor, prior_sources, index, &independent);
   if (result.current.reason != CurrentReason::Compatible) {
     result.reason = DispatchReason::CurrentEvidenceRejected; return result;
   }
@@ -1016,6 +1127,14 @@ DispatchResult prepare_dispatch(
     result.reason = DispatchReason::InvalidPredecessor; return result;
   }
   auto candidate = std::shared_ptr<DispatchCandidate>(new DispatchCandidate);
+  if (independent) {
+    auto physical = std::shared_ptr<CurrentPhysicalProof>(new CurrentPhysicalProof);
+    physical->observed_ = fresh;
+    physical->tube_ = std::move(*independent);
+    physical->original_input_fingerprint_ = certificate->tube().context_fingerprint;
+    physical->first_suffix_index_ = index;
+    candidate->current_physical_proof_ = std::move(physical);
+  }
   candidate->certificate_ = std::move(certificate);
   candidate->ledger_cursor_ = *cursor;
   candidate->current_generation_ = current_generation;
@@ -1040,6 +1159,10 @@ bool DispatchCandidate::clock_and_slew_match(double before_clock_sec, double aft
   if (!certificate_ || !certificate_->nominal() || !std::isfinite(before_clock_sec) ||
       !std::isfinite(after_clock_sec) || before_clock_sec < observed_sec_ ||
       before_clock_sec < previous_publication_sec_ || after_clock_sec > certificate_->tube().rest_sec ||
+      (current_physical_proof_ && (after_clock_sec > current_physical_proof_->tube().numerical.rest_sec ||
+        current_physical_proof_->original_input_fingerprint() != certificate_->tube().context_fingerprint ||
+        current_physical_proof_->first_suffix_index() != packet_index_ ||
+        current_physical_proof_->observed().decision_id != dispatch_decision_id_)) ||
       !vehicle::scheduled_publication_bracket_admitted(certificate_->suffix().program, packet_index_,
         certificate_->nominal()->observed().now_sec, before_clock_sec, after_clock_sec)) return false;
   const auto &execution = *certificate_->nominal()->observed().plan->execution_artifact;

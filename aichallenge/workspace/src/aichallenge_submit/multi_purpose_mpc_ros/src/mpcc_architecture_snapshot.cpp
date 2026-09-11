@@ -2856,9 +2856,17 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
       root["schema"]="mpcc-scheduled-dispatch-observation/v1";
       auto node=root["scheduled"];
       node["boundary"]=capture.boundary; node["detail"]=capture.detail;
+      if (capture.raw_observation) node["raw_current_observation"]=mpcc_vehicle_model::encode_observation_provenance(*capture.raw_observation);
       node["source_request"]=revalidation_evidence_node(&capture.original.observed,true,"scheduled-",
         scheduled_inspected,scheduled_observed,scheduled_certified);
       node["prior_program"]=mpcc_vehicle_model::encode_input_program(capture.original.prior_program);
+      if (capture.current_physical_proof) {
+        const auto &physical=*capture.current_physical_proof;
+        node["independent_physical_input_fingerprint"]=physical.tube().numerical.context_fingerprint;
+        node["independent_physical_rest_sec"]=physical.tube().numerical.rest_sec;
+        node["independent_physical_first_suffix_index"]=physical.first_suffix_index();
+        node["independent_physical_program"]=mpcc_vehicle_model::encode_input_program(physical.tube().numerical.program);
+      }
       node["prior_index"]=capture.original.prior_index;
       node["preceding_packet_count"]=capture.original.preceding_packet_count;
       node["planned_control_origin_sec"]=capture.original.planned_control_origin_sec;

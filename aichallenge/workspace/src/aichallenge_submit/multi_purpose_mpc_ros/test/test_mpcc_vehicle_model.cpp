@@ -1552,3 +1552,143 @@ TEST(MpccScheduledNominal, FutureHistoryAndMalformedScheduleCannotBecomeAnObserv
   EXPECT_FALSE(vehicle::predict_scheduled_publication(off_grid, program, 0, 1.605, p));
   EXPECT_FALSE(vehicle::predict_prospective_publication(observed, program.commands.front(), p));
 }
+
+TEST(MpccPendingInput, ActualUnissuedSuffixSchedulesRemainEnclosedInsideTheOriginalWindow)
+{
+  const auto observation = applied_observation();
+  const auto profile = applied_profile();
+  const auto model = vehicle_model();
+  for (const std::int64_t lead_ns : {-15000000LL, 0LL, 75000000LL}) {
+    for (const bool integer_clock : {false, true}) {
+      const double first = static_cast<double>(1450000000LL + lead_ns) / 1e9;
+      SCOPED_TRACE(::testing::Message() << "lead=" << lead_ns << "/integer=" << integer_clock);
+      vehicle::PublishedInputProgram program{.025,
+        {{first, 1, .125}, {first + .025, -3, -.125}, {first + 2*.025, -3, 0}}, true, .025};
+      if (integer_clock) {
+        program.nanosecond_clock = vehicle::publication_nanosecond_clock(first, .025, .025);
+        ASSERT_TRUE(program.nanosecond_clock);
+        for (std::size_t i = 0; i < program.commands.size(); ++i)
+          program.commands[i].published_sec = *vehicle::publication_epoch(program, i);
+      }
+      auto footprint = corner_validation();
+      const auto pending=vehicle::predict_pending_inputs_to_rest(observation,program,profile,model,{},&footprint);
+      ASSERT_TRUE(pending.tube);
+      const auto &samples=pending.tube->numerical.source_to_rest;
+      const double rest_sec=pending.tube->numerical.rest_sec;
+      EXPECT_EQ(pending.tube->numerical.observation.now_sec,observation.now_sec);
+      EXPECT_EQ(pending.tube->numerical.program.commands.front().published_sec,first);
+      EXPECT_EQ(pending.tube->numerical.observation.commands.size(),observation.commands.size());
+      if (lead_ns<0) {
+        EXPECT_FALSE(vehicle::predict_scheduled_inputs_to_rest(observation,program,profile,model).tube);
+      }
+      EXPECT_GT(rest_sec, program.commands.front().published_sec +
+        program.maximum_publication_delay_sec + profile.acceleration_age_sec);
+      namespace num = vehicle::numerical;
+      for (std::size_t arm = 0; arm < 18; ++arm) {
+        auto packets = observation.commands;
+        for (std::size_t i = 0; i < 160; ++i) {
+          auto packet = program.commands[std::min(i, program.commands.size() - 1)];
+          const double phase = arm < 6 ? double(arm % 3) / 2 : double((i + arm) % 3) / 2;
+          const double nominal = *vehicle::publication_epoch(program, i);
+          packet.published_sec = integer_clock ?
+            static_cast<double>(program.nanosecond_clock->first_ns +
+              static_cast<std::int64_t>(i) * program.nanosecond_clock->interval_ns +
+              static_cast<std::int64_t>(phase * program.nanosecond_clock->maximum_delay_ns)) / 1e9 :
+            nominal + phase * program.maximum_publication_delay_sec;
+          if (i==0) packet.published_sec=std::max(packet.published_sec,observation.now_sec);
+          // Adjacent closed windows can overlap by one representable timestamp.
+          // Select a nondecreasing actual epoch inside the same certified window;
+          // keep both values at equal epochs and keep the exact boundary checks.
+          packet.published_sec = std::max(packet.published_sec, packets.back().published_sec);
+          ASSERT_GE(packet.published_sec, nominal);
+          ASSERT_LE(packet.published_sec, *vehicle::publication_epoch(program, i, true));
+          packets.push_back(packet);
+        }
+        ASSERT_TRUE(std::is_sorted(packets.begin(), packets.end(), [](const auto &a, const auto &b) {
+          return a.published_sec < b.published_sec;
+        }));
+        auto state = observation.initial.state;
+        state.x_m = state.y_m = state.yaw_rad = 0;
+        for (const auto & sample : samples) {
+          const auto select = [&](const bool steering) -> std::optional<double> {
+            const double clock = sample.begin_sec - (steering ? profile.steering_mechanical_delay_sec : 0);
+            const double age = steering ? profile.steering_receipt_age_sec : profile.acceleration_age_sec;
+            std::optional<double> value;
+            for (const auto & packet : packets) {
+              if (packet.published_sec < clock - age || packet.published_sec > clock) continue;
+              value = steering ? packet.wire_steering_rad : packet.wire_acceleration_mps2;
+              if ((arm / 3 + static_cast<std::size_t>(steering)) % 2 == 0) break;
+            }
+            return value;
+          };
+          const auto acceleration = select(false), steering = select(true);
+          ASSERT_TRUE(acceleration); ASSERT_TRUE(steering);
+          state.desired_steering_rad = *steering / model.steering_wire_gain;
+          const auto advanced = vehicle::advance(state, {*acceleration, 0}, model, sample.duration_sec);
+          ASSERT_TRUE(advanced); state = advanced->state;
+          const auto values = num::values(state);
+          for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_GE(values[i], sample.endpoint_body[i].lower) << arm << '/' << i;
+            EXPECT_LE(values[i], sample.endpoint_body[i].upper) << arm << '/' << i;
+          }
+          ASSERT_TRUE(sample.endpoint_footprint);
+          const double origin_yaw = observation.initial.state.yaw_rad;
+          const double world_x = std::cos(origin_yaw) * state.x_m - std::sin(origin_yaw) * state.y_m;
+          const double world_y = std::sin(origin_yaw) * state.x_m + std::cos(origin_yaw) * state.y_m;
+          const double yaw = origin_yaw + state.yaw_rad;
+          for (std::size_t i = 0; i < 8; i += 2) {
+            const double x = footprint.local_offsets[i].lower;
+            const double y = footprint.local_offsets[i + 1].lower;
+            const double px = world_x + std::cos(yaw) * x - std::sin(yaw) * y;
+            const double py = world_y + std::sin(yaw) * x + std::cos(yaw) * y;
+            EXPECT_GE(px, (*sample.endpoint_footprint)[i].lower);
+            EXPECT_LE(px, (*sample.endpoint_footprint)[i].upper);
+            EXPECT_GE(py, (*sample.endpoint_footprint)[i + 1].lower);
+            EXPECT_LE(py, (*sample.endpoint_footprint)[i + 1].upper);
+          }
+        }
+        EXPECT_EQ(state.forward_velocity_mps, 0);
+        EXPECT_EQ(state.lateral_velocity_mps, 0);
+        EXPECT_EQ(state.yaw_rate_radps, 0);
+      }
+    }
+  }
+}
+
+
+
+TEST(MpccPendingInput, LateOrInterveningActualCommandsRejectAndIdentityIsSeparate)
+{
+  const auto observation=applied_observation();
+  const auto profile=applied_profile();const auto model=vehicle_model();
+  auto program=stop_program(1.435);program.maximum_publication_delay_sec=.025;
+  program.nanosecond_clock=vehicle::publication_nanosecond_clock(1.435,.025,.025);
+  for(std::size_t i=0;i<program.commands.size();++i)program.commands[i].published_sec=*vehicle::publication_epoch(program,i);
+  const auto valid=vehicle::predict_pending_inputs_to_rest(observation,program,profile,model);
+  ASSERT_TRUE(valid.tube);
+  auto at_deadline=observation;at_deadline.now_sec=1.46;
+  EXPECT_TRUE(vehicle::predict_pending_inputs_to_rest(at_deadline,program,profile,model).tube);
+  auto late=at_deadline;late.now_sec=1.460000001;
+  EXPECT_EQ(vehicle::predict_pending_inputs_to_rest(late,program,profile,model).reason,vehicle::AppliedInputRejectReason::InvalidProgram);
+  auto intervening=observation;intervening.commands.push_back({1.44,-3,0});
+  EXPECT_EQ(vehicle::predict_pending_inputs_to_rest(intervening,program,profile,model).reason,vehicle::AppliedInputRejectReason::InvalidProgram);
+  auto future=observation;future.commands.push_back({1.451,-3,0});
+  EXPECT_EQ(vehicle::predict_pending_inputs_to_rest(future,program,profile,model).reason,vehicle::AppliedInputRejectReason::InvalidObservation);
+  auto missing=observation;missing.commands.erase(missing.commands.begin(),missing.commands.end()-1);
+  EXPECT_FALSE(vehicle::predict_pending_inputs_to_rest(missing,program,profile,model).tube);
+  EXPECT_FALSE(vehicle::predict_pending_inputs_to_rest(observation,program,profile,model,
+    [](const auto &,double,double){return false;}).tube);
+  auto same=stop_program(observation.now_sec);same.maximum_publication_delay_sec=.025;
+  const auto current=vehicle::predict_pending_inputs_to_rest(observation,same,profile,model);
+  const auto original=vehicle::predict_applied_inputs_to_rest(observation,same,profile,model);
+  const auto scheduled=vehicle::predict_scheduled_inputs_to_rest(observation,same,profile,model);
+  ASSERT_TRUE(current.tube);ASSERT_TRUE(original.tube);ASSERT_TRUE(scheduled.tube);
+  EXPECT_NE(current.tube->numerical.context_fingerprint,original.tube->context_fingerprint);
+  EXPECT_NE(current.tube->numerical.context_fingerprint,scheduled.tube->context_fingerprint);
+  EXPECT_EQ(current.tube->numerical.rest_sec,original.tube->rest_sec);
+  EXPECT_EQ(current.tube->numerical.source_to_rest.size(),original.tube->source_to_rest.size());
+  for(std::size_t i=0;i<original.tube->source_to_rest.size();++i)for(std::size_t j=0;j<8;++j) {
+    EXPECT_EQ(current.tube->numerical.source_to_rest[i].swept_body[j].lower,original.tube->source_to_rest[i].swept_body[j].lower);
+    EXPECT_EQ(current.tube->numerical.source_to_rest[i].swept_body[j].upper,original.tube->source_to_rest[i].swept_body[j].upper);
+  }
+}

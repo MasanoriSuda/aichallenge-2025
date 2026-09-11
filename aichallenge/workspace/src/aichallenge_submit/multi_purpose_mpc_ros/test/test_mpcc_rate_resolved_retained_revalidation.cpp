@@ -4153,7 +4153,8 @@ struct ScheduledDispatchFixture {
   retained::Request fresh;
   contract::MpccProblemContext context;
 
-  explicit ScheduledDispatchFixture(double last_prior_after = 1.075, bool initial_clock_floor = false) {
+  explicit ScheduledDispatchFixture(double last_prior_after = 1.075, bool initial_clock_floor = false,
+    contract::ControlIntent intent = contract::ControlIntent::Track) : request(scheduled_request(intent)) {
     if (initial_clock_floor) {
       request.preceding_packet_count = 0;
       request.prior_program.commands = {{1.055,-3,
@@ -4244,6 +4245,9 @@ struct ScheduledDispatchFixture {
     fresh.publication_prefix = std::move(prediction);
     context = certificate->suffix().source.source_context;
     context.decision_id = fresh.decision_id; context.observation_generation++;
+    if (contract::canonical_normal_intent_requires_target_observation(context.intent))
+      context.target_obstacle_generation = fresh.obstacles.generation;
+    if (context.dynamic_obstacle_constraint_active) context.dynamic_obstacle_generation = fresh.obstacles.generation;
     context = contract::seal_problem_context(context);
   }
   scheduled::DispatchResult prepare(std::size_t sent = 0) {
@@ -4526,4 +4530,119 @@ TEST(MpccScheduledDispatch, UsesImmutablePlanningClockWhileCurrentCheckOccursIns
     1.125000001,packet.wire_acceleration_mps2,packet.wire_steering_rad));
   ASSERT_TRUE(fixture.ledger.record(dispatch.packet(),1.115,1.12,2,dispatch.source()));
   EXPECT_TRUE(dispatch.matches_after_publication(fixture.ledger,fixture.owner.capture()));
+}
+
+
+TEST(MpccScheduledDispatch, IndependentCurrentPopulationKeepsOriginalProgrammeAndActualWindow)
+{
+  for (double now : {1.1, 1.115}) {
+    SCOPED_TRACE(now);
+    ScheduledDispatchFixture f;
+    f.fresh = scheduled_fresh_world(*f.certificate, now);
+    f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+    f.bind_next(0);
+    const auto old_hash = f.certificate->tube().context_fingerprint;
+    EXPECT_EQ(scheduled::check_measurement_consistency(*f.certificate,
+      f.fresh.publication_prefix->observation).reason, scheduled::MeasurementReason::PoseMismatch);
+    const auto result = f.prepare();
+    ASSERT_TRUE(result.candidate) << static_cast<int>(result.reason) << '/' << static_cast<int>(result.current.world.physical_reason);
+    const auto &candidate = *result.candidate;
+    ASSERT_TRUE(candidate.current_physical_proof());
+    const auto &proof = *candidate.current_physical_proof();
+    EXPECT_EQ(proof.original_input_fingerprint(), old_hash);
+    EXPECT_NE(candidate.physical_input_fingerprint(), old_hash);
+    EXPECT_EQ(candidate.source().input_context_fingerprint, old_hash);
+    EXPECT_EQ(proof.observed().decision_id, f.fresh.decision_id);
+    EXPECT_EQ(proof.tube().numerical.observation.now_sec, now);
+    EXPECT_EQ(proof.first_suffix_index(), 0U);
+    EXPECT_EQ(proof.tube().numerical.program.commands.size(), f.certificate->suffix().program.commands.size());
+    for (std::size_t i = 0; i < proof.tube().numerical.program.commands.size(); ++i) {
+      const auto &a = proof.tube().numerical.program.commands[i];
+      const auto &b = f.certificate->suffix().program.commands[i];
+      EXPECT_EQ(a.published_sec, b.published_sec);
+      EXPECT_EQ(a.wire_acceleration_mps2, b.wire_acceleration_mps2);
+      EXPECT_EQ(a.wire_steering_rad, b.wire_steering_rad);
+    }
+    const auto &packet = candidate.packet();
+    EXPECT_TRUE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
+      now, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+    EXPECT_FALSE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
+      1.125000001, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+    ASSERT_TRUE(f.ledger.record(packet, now, now, 2, candidate.source()));
+    EXPECT_TRUE(candidate.matches_after_publication(f.ledger, f.owner.capture()));
+    f.owner.invalidate();
+    EXPECT_FALSE(candidate.matches_after_publication(f.ledger, f.owner.capture()));
+  }
+}
+
+TEST(MpccScheduledDispatch, IndependentProofStillRejectsWorldContextEpochAndHistoryFailures)
+{
+  for (int variant = 0; variant < 7; ++variant) {
+    SCOPED_TRACE(variant);
+    ScheduledDispatchFixture f;
+    f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+    if (variant == 4) {
+      f.fresh.now_sec = 1.125000001;
+      f.fresh.publication_prefix->observation.now_sec = f.fresh.now_sec;
+      f.fresh.control_origin_sec = f.fresh.now_sec + .04;
+      f.fresh.publication_prefix->observation.control_origin_sec = f.fresh.control_origin_sec;
+    }
+    f.bind_next(0);
+    if (variant == 2) f.fresh.publication_prefix->observation.initial.source_sec =
+      f.certificate->tube().observation.initial.source_sec;
+    if (variant == 3) f.fresh.publication_prefix->observation.velocity_source_sec =
+      f.certificate->tube().observation.velocity_source_sec - .001;
+    if (variant == 0) f.fresh.obstacles.obstacles.push_back({"current-contact",
+      {f.fresh.control_pose.x_m, f.fresh.control_pose.y_m, 0, 0, .2}});
+    if (variant == 1) { f.context.cost_schema_id += "-changed"; f.context = contract::seal_problem_context(f.context); }
+    if (variant == 5) f.owner.invalidate();
+    if (variant == 6) {
+      auto extra = f.ledger.history().back(); extra.published_sec = f.fresh.now_sec;
+      ASSERT_TRUE(f.ledger.record(extra, f.fresh.now_sec, f.fresh.now_sec, 2));
+    }
+    EXPECT_FALSE(f.prepare().candidate);
+  }
+}
+
+TEST(MpccScheduledDispatch, IndependentRemainingSuffixRequiresAuthenticatedActualFirstPacket)
+{
+  ScheduledDispatchFixture f;
+  const auto first = f.prepare(); ASSERT_TRUE(first.candidate);
+  ASSERT_TRUE(f.ledger.record(first.candidate->packet(), 1.1, 1.1, 2, first.candidate->source()));
+  f.fresh = scheduled_fresh_world(*f.certificate, 1.125, true);
+  f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+  f.bind_next(1);
+  const auto next = f.prepare(1);
+  ASSERT_TRUE(next.candidate) << static_cast<int>(next.reason) << '/' << static_cast<int>(next.current.world.physical_reason);
+  ASSERT_TRUE(next.candidate->current_physical_proof());
+  const auto &physical = *next.candidate->current_physical_proof();
+  EXPECT_EQ(physical.first_suffix_index(), 1U);
+  EXPECT_EQ(physical.tube().numerical.program.commands.front().published_sec, 1.125);
+  EXPECT_EQ(physical.tube().numerical.observation.commands.size(), f.ledger.history().size());
+  EXPECT_EQ(next.candidate->source().input_context_fingerprint, f.certificate->tube().context_fingerprint);
+  EXPECT_FALSE(f.prepare(0).candidate);
+  EXPECT_FALSE(f.prepare(2).candidate);
+}
+
+
+TEST(MpccScheduledDispatch, IndependentFollowProofKeepsFreshPhysicalGapAndRejectsUnsafePeer)
+{
+  ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Follow);
+  f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+  f.bind_next(0);
+  ASSERT_TRUE(f.fresh.follow_target);
+  f.fresh.follow_target->current_target_gap_m -= .001;
+  for (auto &progress : f.fresh.follow_target->target_progress_from_current_origin_m) progress -= .001;
+  const auto valid = f.prepare();
+  ASSERT_TRUE(valid.candidate) << static_cast<int>(valid.reason) << '/' << static_cast<int>(valid.current.world.reason)
+    << '/' << static_cast<int>(valid.current.world.physical_reason);
+  ASSERT_TRUE(valid.candidate->current_physical_proof());
+  EXPECT_GE(valid.current.world.minimum_follow_gap_m, f.fresh.follow_target->hard_gap_m);
+  const double unsafe_gap = f.fresh.follow_target->hard_gap_m - .01;
+  const double shift = unsafe_gap - f.fresh.follow_target->current_target_gap_m;
+  f.fresh.follow_target->current_target_gap_m = unsafe_gap;
+  for (auto &progress : f.fresh.follow_target->target_progress_from_current_origin_m) progress += shift;
+  const auto invalid = f.prepare();
+  EXPECT_FALSE(invalid.candidate);
+  EXPECT_EQ(invalid.current.world.physical_reason, applied::Reason::FollowGapRejected);
 }

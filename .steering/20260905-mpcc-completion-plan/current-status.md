@@ -1,31 +1,24 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。承認済みM1–M6を追加確認なしで自律実行中。必要分のローカルcommitのみ。
-**全体未完。C5接続は実装済みだが、現在観測の整合とM4–M6は未達。**
+**全体未完。現在観測からの独立完全証明を唯一のdispatcherへ接続し、次はdev2-r46。**
 
-単一の予定worker/dispatcherへ切り替え、旧同期normal/Stop/GateA/previous-intentの
-通常出力呼出しを退役。実post-send観測、fresh Follow、生成元の失効世代、実送信後の
-source/job/current decision照合を接続した。Buildr84全26package、testsr72全2522記録/
-64groupで失敗0。R281全132native合格。
+旧C5接続は28a8a660。Dev2-r45はD1/D2で起動中20/25回だけ送信し、Ready以降0で失敗。
+元の一点静止予測に新しい位置観測が入らないことを保存再生し、任意の許容値ではなく
+元の指令列を現在観測から停止まで独立に再証明する方式を比較・実装した。
+旧strict membershipは同じPoseMismatchを返す。新しい物理母集団は別hashを持ち、
+原programme/jobと実送信prefix、全壁・他車・Follow/停止証明、元の公開窓を維持する。
 
-Dev2-r45は失敗。起動中にD1/D2で20/25回の予定指令を送信したが、Ready以降のnormalは0。
-元の静止予測範囲に新しい位置観測が入らず、停止が続く。原入力と現在入力を保存し、
-R283で同じinput fingerprintの元証明Acceptedと新観測PoseMismatchを再現した。
-位置差はD1約21µm、D2約29µm。これは観測・モデル誤差を未表現のまま一点予測へ
-厳密一致を求める契約の未解決事項で、任意の許容値追加や古い観測の使用では閉じない。
+R293の保存2件は約6.9msで新しいdispatcher判定が通過し、期限外は拒否。
+R294全138native、buildr86全26package、testsr74全2530記録/64group合格。
+開始前とactive-sessionの保存枠を分離し、入力生成失敗も生観測とproducerを保存する。
+新たな動的受入れは未検証。r193/r194のcacheや観測の遡及書換えは採用していない。
 
-別の生成側欠陥として、進捗投影の加算順序1ULP差と予定ns→秒の非正規表現を確認。
-R284/R286でそれぞれ次の必要条件へ到達することを確認し、共通関数へ修正。
-元のstartup入力の物理拒否は保持。追加時刻回帰を含むR287全134native、
-final buildr85全26package/testsr73全2524記録/64group合格。r45は最後の修正前のrun。
+残るのは現在構成の実走行とfirst-failure因果修正、mission/geometry/sibling/Store、
+実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、
+dev3/dev4六周、gate1–3、同一tar/image/eval。完了条件を維持して継続する。
 
-次は観測/モデル誤差と独立した現在の全残存programme証明方式を保存入力で比較し、
-選んだ方式自身に同じ全rest・壁・他車・車体条件を課す。r193/r194の棄却済みcacheを
-復活させない。mission/geometry/sibling採用、実Stop/rest/restart、全intent、Recovery/
-Rejoin/Boost/async、同一HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/
-evalは未完。現在の完了条件を維持して継続する。
-
-[接続設計・保存入力](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-node-integration-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/current-observation-contract-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

@@ -208,6 +208,17 @@ struct ScheduledInputPrediction {
   std::optional<ScheduledInputTube> tube;
 };
 
+/// Independent population from a current observation for an unissued suffix.
+/// Its first original nominal epoch may have passed; its deadline may not.
+/// This is neither the old scheduled tube nor an ordinary execution certificate.
+struct PendingInputTube {
+  AppliedInputTube numerical;
+};
+struct PendingInputPrediction {
+  AppliedInputRejectReason reason{AppliedInputRejectReason::InvalidModel};
+  std::optional<PendingInputTube> tube;
+};
+
 bool valid(const InputApplicationProfile &profile) noexcept;
 bool valid(const PublishedInputProgram &program,
            double publication_sec) noexcept;
@@ -289,6 +300,19 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
 /// Same kernel, integration grid, profile and complete-rest requirements.
 /// Runtime adoption still needs an authenticated actual prefix and fresh world.
 ScheduledInputPrediction predict_scheduled_inputs_to_rest(
+  const ObservationProvenance &observation, const PublishedInputProgram &program,
+  const InputApplicationProfile &profile, const Parameters &parameters,
+  const AppliedInputValidator &validator = {},
+  const AppliedFootprintValidation *footprint = nullptr) noexcept;
+
+/// Recompute every current-to-rest range from the current original observation
+/// and actual history, preserving all original suffix epochs and values. The
+/// caller must authenticate which suffix packets remain unissued. The kernel
+/// conservatively retains the entire nominal publication windows, including
+/// early responses which are now known not to have occurred; it never puts an
+/// unissued packet into actual history. Extra responses can only cause rejection.
+/// Actual send guards still require both endpoints inside the original window.
+PendingInputPrediction predict_pending_inputs_to_rest(
   const ObservationProvenance &observation, const PublishedInputProgram &program,
   const InputApplicationProfile &profile, const Parameters &parameters,
   const AppliedInputValidator &validator = {},

@@ -6,6 +6,28 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
 
 struct DispatchResult;
 
+/// Independently proved physical population for the exact unsent original
+/// programme. It never replaces the original job/programme identity in the
+/// actual ledger. Only prepare_dispatch can mint it after current evidence.
+class CurrentPhysicalProof {
+public:
+  const retained::Request &observed() const noexcept { return observed_; }
+  const vehicle::PendingInputTube &tube() const noexcept { return tube_; }
+  std::uint64_t original_input_fingerprint() const noexcept { return original_input_fingerprint_; }
+  std::size_t first_suffix_index() const noexcept { return first_suffix_index_; }
+private:
+  CurrentPhysicalProof() = default;
+  friend DispatchResult prepare_dispatch(
+    std::shared_ptr<const applied::ScheduledCertificate>, const retained::Request &,
+    const retained::contract::MpccProblemContext &, const ContextSnapshot &,
+    const vehicle::PublishedInputLedger &, const vehicle::PublishedInputLedger::Snapshot &,
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t);
+  retained::Request observed_;
+  vehicle::PendingInputTube tube_;
+  std::uint64_t original_input_fingerprint_{};
+  std::size_t first_suffix_index_{};
+};
+
 /// Immutable candidate from one current observation and authenticated ledger
 /// prefix. It permits no send until matches_before_publication() succeeds at
 /// the actual publisher boundary. Only the single control thread may inspect
@@ -19,6 +41,10 @@ public:
   const vehicle::PublishedProgramSource &source() const noexcept { return source_; }
   const std::shared_ptr<const applied::ScheduledCertificate> &certificate() const noexcept { return certificate_; }
 
+  const std::shared_ptr<const CurrentPhysicalProof> &current_physical_proof() const noexcept { return current_physical_proof_; }
+  std::uint64_t physical_input_fingerprint() const noexcept {
+    return current_physical_proof_ ? current_physical_proof_->tube().numerical.context_fingerprint : certificate_->tube().context_fingerprint;
+  }
   retained::contract::CanonicalNormalCommand canonical_command() const;
   std::shared_ptr<const retained::contract::PublishedScheduledIdentity> publication_identity(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation) const;
 
@@ -44,6 +70,7 @@ private:
     const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t);
   bool clock_and_slew_match(double before_clock_sec, double after_clock_sec) const noexcept;
   std::shared_ptr<const applied::ScheduledCertificate> certificate_;
+  std::shared_ptr<const CurrentPhysicalProof> current_physical_proof_;
   std::optional<vehicle::PublishedInputLedger::Snapshot> ledger_cursor_;
   ContextSnapshot current_generation_;
   vehicle::PublishedCommand packet_;

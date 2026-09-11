@@ -4621,3 +4621,16 @@ Ready以降は新しい観測が元の静止予測範囲外となり停止し、
 未検証。停止中のcallback最大21.44/24.27msと超過0は、移動中の40Hz受入れの代わりには
 ならない。観測・モデル誤差の扱い、mission/sibling採用、全M4–M6と提出evalが残る。
 [接続・反例・検証範囲](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-node-integration-design.md)。
+
+
+2026-09-11 current observation proof（baseline28a8a660）:
+旧一点予測への新しい観測の一致判定は維持し、pose/velocity/yaw-rate/tireの範囲外だけは、
+正しい現観測と実送信履歴から元の未送信指令列を停止まで独立に再証明する。送信時刻・
+値・窓と物理条件は維持。`CurrentPhysicalProof`は別の母集団とhashを持ち、元の
+programme/job identityは実台帳で保持する。clock/観測時刻の逆行、失効世代、context、
+壁・他車・Follow hard gap、原期限とfull-restは引き続き採用条件。棄却済みcacheを
+現在証明として使わない。開始前/activeの観測枠を分け、入力生成失敗も生観測と保存する。
+R293保存2件で約6.9ms、R294全138native、buildr86全26package、testsr74全2530記録/
+64group合格。新しい実走行受入れは未検証、M4–M6は未完。
+[設計と制約](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-observation-contract-design.md)、
+[検証証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-observation-contract-evidence.json)。

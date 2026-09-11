@@ -11,6 +11,8 @@ struct ScheduledFailureCapture {
   std::optional<mpcc_vehicle_model::PublishedInputLedger::Snapshot> original_cursor;
   std::optional<std::vector<mpcc_vehicle_model::PublicationTransaction>> transactions;
   std::size_t suffix_index{};
+  std::optional<mpcc_vehicle_model::ObservationProvenance> raw_observation;
+  std::shared_ptr<const mpcc_rate_resolved_scheduled::CurrentPhysicalProof> current_physical_proof;
   std::string boundary;
   std::string detail;
 };

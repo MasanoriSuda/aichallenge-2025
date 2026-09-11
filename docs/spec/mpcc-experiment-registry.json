@@ -1093,6 +1093,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-node-integration-evidence.json",
       "replay_ready": true,
       "reason": "Actual scheduled node integration, first live rejection snapshots, representation repairs; integrated acceptance failed."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-current-observation-proof",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-observation-contract-evidence.json",
+      "replay_ready": true,
+      "reason": "Distinct current full physical proof of unchanged original unissued programme; live acceptance pending."
     }
   ],
   "experiments": [
@@ -13212,6 +13218,102 @@
         "Unused live Stop-lattice enqueue"
       ],
       "revisit_condition": "A reproduced producer or observation/model contract change with its own full physical proof; no identical stopped-run retry or tolerance/cache bypass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-current-observation-proof-public-observation-r1",
+      "baseline_commit": "28a8a660c50c8b2d4a0f45a318ac28fedd758f80",
+      "snapshot_ids": [
+        "20260911-nine-state-current-observation-proof"
+      ],
+      "hypothesis": "Reported covariance supplies a deterministic sensor enclosure",
+      "changed_dimension": "Distinct complete current physical population for the exact original unissued programme; same profile/bounds/budgets/clock",
+      "result": "inconclusive",
+      "reason": "Ready-window public messages include nonzero stopped drift and unknown/zero/no covariance fields. No bounded error profile inferred.",
+      "production_impact": "Only the existing scheduled dispatcher may mint and bind independent full current evidence; no alternate normal publisher or fallback.",
+      "deleted_code": [
+        "Unconditional old-point membership as the only physical-population representation in prepare_dispatch; the strict API remains"
+      ],
+      "revisit_condition": "New causal input or a changed independently proved population; no repeated rejected cache, time shifting, tolerance or bound relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-current-observation-proof-r288",
+      "baseline_commit": "28a8a660c50c8b2d4a0f45a318ac28fedd758f80",
+      "snapshot_ids": [
+        "20260911-nine-state-current-observation-proof"
+      ],
+      "hypothesis": "A new complete physical proof can validate the exact original programme from actual current observations",
+      "changed_dimension": "Distinct complete current physical population for the exact original unissued programme; same profile/bounds/budgets/clock",
+      "result": "accepted",
+      "reason": "Both saved r45membership failures accept in about6.8ms with distinct hashes and unchanged original future programmes. Diagnostic only.",
+      "production_impact": "Only the existing scheduled dispatcher may mint and bind independent full current evidence; no alternate normal publisher or fallback.",
+      "deleted_code": [
+        "Unconditional old-point membership as the only physical-population representation in prepare_dispatch; the strict API remains"
+      ],
+      "revisit_condition": "New causal input or a changed independently proved population; no repeated rejected cache, time shifting, tolerance or bound relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-current-observation-proof-r289",
+      "baseline_commit": "28a8a660c50c8b2d4a0f45a318ac28fedd758f80",
+      "snapshot_ids": [
+        "20260911-nine-state-current-observation-proof"
+      ],
+      "hypothesis": "Pending suffix inside the original publication window preserves numerical enclosure",
+      "changed_dimension": "Distinct complete current physical population for the exact original unissued programme; same profile/bounds/budgets/clock",
+      "result": "accepted",
+      "reason": "50tests pass;108 native schedules cover continuous/integer clocks and negative/zero/positive first lead through full rest.",
+      "production_impact": "Only the existing scheduled dispatcher may mint and bind independent full current evidence; no alternate normal publisher or fallback.",
+      "deleted_code": [
+        "Unconditional old-point membership as the only physical-population representation in prepare_dispatch; the strict API remains"
+      ],
+      "revisit_condition": "New causal input or a changed independently proved population; no repeated rejected cache, time shifting, tolerance or bound relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-current-observation-proof-r290-r291",
+      "baseline_commit": "28a8a660c50c8b2d4a0f45a318ac28fedd758f80",
+      "snapshot_ids": [
+        "20260911-nine-state-current-observation-proof"
+      ],
+      "hypothesis": "New dispatch test and observation recorder build correctly",
+      "changed_dimension": "Distinct complete current physical population for the exact original unissued programme; same profile/bounds/budgets/clock",
+      "result": "inconclusive",
+      "reason": "R290136/137pass with one invalid test setup; r291diagnostic compile failed on observer member access. Corrected without accepting either failed check.",
+      "production_impact": "Only the existing scheduled dispatcher may mint and bind independent full current evidence; no alternate normal publisher or fallback.",
+      "deleted_code": [
+        "Unconditional old-point membership as the only physical-population representation in prepare_dispatch; the strict API remains"
+      ],
+      "revisit_condition": "New causal input or a changed independently proved population; no repeated rejected cache, time shifting, tolerance or bound relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-current-observation-proof-r292-r293-r294",
+      "baseline_commit": "28a8a660c50c8b2d4a0f45a318ac28fedd758f80",
+      "snapshot_ids": [
+        "20260911-nine-state-current-observation-proof"
+      ],
+      "hypothesis": "The sole dispatcher can admit a distinct current fullproof while keeping all source/prefix/clock/Follow rejection gates",
+      "changed_dimension": "Distinct complete current physical population for the exact original unissued programme; same profile/bounds/budgets/clock",
+      "result": "accepted",
+      "reason": "R292137pass; r293saved cases reach production dispatcher in6.872/6.867ms, original appointment valid and outside deadline rejected; r294138native pass.",
+      "production_impact": "Only the existing scheduled dispatcher may mint and bind independent full current evidence; no alternate normal publisher or fallback.",
+      "deleted_code": [
+        "Unconditional old-point membership as the only physical-population representation in prepare_dispatch; the strict API remains"
+      ],
+      "revisit_condition": "New causal input or a changed independently proved population; no repeated rejected cache, time shifting, tolerance or bound relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-current-observation-proof-r86-r74",
+      "baseline_commit": "28a8a660c50c8b2d4a0f45a318ac28fedd758f80",
+      "snapshot_ids": [
+        "20260911-nine-state-current-observation-proof"
+      ],
+      "hypothesis": "Integrated current proof builds and preserves package contracts",
+      "changed_dimension": "Distinct complete current physical population for the exact original unissued programme; same profile/bounds/budgets/clock",
+      "result": "accepted",
+      "reason": "Buildr86passes26packages; testsr74passes2530records/64groups, zeroerrors-failures-skips. Dynamic acceptance not yet established.",
+      "production_impact": "Only the existing scheduled dispatcher may mint and bind independent full current evidence; no alternate normal publisher or fallback.",
+      "deleted_code": [
+        "Unconditional old-point membership as the only physical-population representation in prepare_dispatch; the strict API remains"
+      ],
+      "revisit_condition": "New causal input or a changed independently proved population; no repeated rejected cache, time shifting, tolerance or bound relaxation."
     }
   ]
 }

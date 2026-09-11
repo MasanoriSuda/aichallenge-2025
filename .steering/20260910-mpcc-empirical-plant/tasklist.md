@@ -174,6 +174,17 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R284進捗加算順序、R286予定nsの非正規秒表現を再現し生成側を共通化。
 - [x] R285全133native合格。R286後も元startupの物理拒否は維持。
 - [x] R287全134native/buildr85全26package/testsr73全2524記録/64group合格、証拠/registry保存。
-- [ ] 検証済みC5接続・拒否証拠をローカルcommit。
+- [x] 検証済みC5接続・拒否証拠を28a8a660へローカルcommit。
 - [ ] 観測/モデル誤差と独立した現在証明方式を比較し、同じ物理条件で修復。
 - [ ] Mission/geometry/siblingと台帳/Store/current観測欠落を監査し、全M4–M6/提出eval。
+
+
+2026-09-11 current independent physical proof (baseline28a8a660):
+- [x] Commit prior C5 integration as28a8a660 (buildr85/testsr73); dev2-r45 remains failed.
+- [x] Compare strict point membership, independent full current proof and bounded observation model.
+- [x] Separate PendingInputTube/current physical identity and exact original remaining programme; connect sole dispatcher.
+- [x] Separate startup/active observation slots and preserve unavailable producer inputs.
+- [x] R293 captured replay and R294 native138; buildr86全26package/testsr74全2530記録/64group合格。
+- [ ] Fresh committed dev2-r46 acceptance.
+- [ ] Source review/evidence seal/registry/specification and necessary local commit.
+- [ ] Remaining M4–M6: full Stop/rest/restart, all intents/Recovery/Rejoin/async, repeated races, gates, same submission/eval.

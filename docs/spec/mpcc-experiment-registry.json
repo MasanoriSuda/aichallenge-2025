@@ -1147,6 +1147,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rollout-demand-evidence.json",
       "replay_ready": true,
       "reason": "R53 Recovery work demand separated from required current detector evidence; actual core transition regression."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-starting-domain",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-evidence.json",
+      "replay_ready": true,
+      "reason": "Standard r54 retained full-proof timing failure; exact current prefix and separately propagated starting-domain comparisons."
     }
   ],
   "experiments": [
@@ -13826,6 +13832,76 @@
         "Unconditional full-rollout request in the proven Normal case"
       ],
       "revisit_condition": "New live evidence or different causal consumer; no old clearance reuse or parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-dev2-r54",
+      "baseline_commit": "dbbe5fe62b7c9106f224b8ba1797f92046b2bfa9",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain"
+      ],
+      "hypothesis": "Recovery work-demand repair closes integrated timing",
+      "changed_dimension": "Diagnostic implementation linking or separately propagated starting state/time candidate; unchanged original authority and physical parameters",
+      "result": "rejected",
+      "reason": "Normal work removal observed but D1post1157 crosses original deadline before teardown; no laps.",
+      "production_impact": "None after dbbe5fe6; current full proof and original final guards remain.",
+      "deleted_code": [],
+      "revisit_condition": "New typed implementation, negative test or live evidence. No old point-proof reuse, arbitrary sensor tolerance, unchanged linkage/micro-optimization repeat or timing relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-r316",
+      "baseline_commit": "dbbe5fe62b7c9106f224b8ba1797f92046b2bfa9",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain"
+      ],
+      "hypothesis": "Production library linkage explains live vs isolated proof CPU cost",
+      "changed_dimension": "Diagnostic implementation linking or separately propagated starting state/time candidate; unchanged original authority and physical parameters",
+      "result": "rejected",
+      "reason": "Same input/body/corner/rest bits and6.8–6.9ms medians under both linking modes. R54actual before/after failure reproduced.",
+      "production_impact": "None after dbbe5fe6; current full proof and original final guards remain.",
+      "deleted_code": [],
+      "revisit_condition": "New typed implementation, negative test or live evidence. No old point-proof reuse, arbitrary sensor tolerance, unchanged linkage/micro-optimization repeat or timing relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-r317",
+      "baseline_commit": "dbbe5fe62b7c9106f224b8ba1797f92046b2bfa9",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain"
+      ],
+      "hypothesis": "A separately propagated oracle starting box and full original time window can certify the captured worlds",
+      "changed_dimension": "Diagnostic implementation linking or separately propagated starting state/time candidate; unchanged original authority and physical parameters",
+      "result": "accepted",
+      "reason": "All3short prefixes exactly match current full predictor, full future/rest passes; oracle seed is not worker-available evidence.",
+      "production_impact": "None after dbbe5fe6; current full proof and original final guards remain.",
+      "deleted_code": [],
+      "revisit_condition": "New typed implementation, negative test or live evidence. No old point-proof reuse, arbitrary sensor tolerance, unchanged linkage/micro-optimization repeat or timing relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-r318",
+      "baseline_commit": "dbbe5fe62b7c9106f224b8ba1797f92046b2bfa9",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain"
+      ],
+      "hypothesis": "The narrow source-window hull and two-step world-frame membership admit all3fresh states",
+      "changed_dimension": "Diagnostic implementation linking or separately propagated starting state/time candidate; unchanged original authority and physical parameters",
+      "result": "rejected",
+      "reason": "R53Y/R54X outside proposed set; future set proof succeeds, but membership rejects and cannot execute.",
+      "production_impact": "None after dbbe5fe6; current full proof and original final guards remain.",
+      "deleted_code": [],
+      "revisit_condition": "New typed implementation, negative test or live evidence. No old point-proof reuse, arbitrary sensor tolerance, unchanged linkage/micro-optimization repeat or timing relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-r319",
+      "baseline_commit": "dbbe5fe62b7c9106f224b8ba1797f92046b2bfa9",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain"
+      ],
+      "hypothesis": "Direct frame composition plus causal source-observation-to-deadline proposal admits exact current prefixes under an independent full theorem",
+      "changed_dimension": "Diagnostic implementation linking or separately propagated starting state/time candidate; unchanged original authority and physical parameters",
+      "result": "accepted",
+      "reason": "All3whole-prefix membership/full-window/rest/current-world checks pass in diagnostic. Source proposal/numerical inputs are causal; fresh world checks, production immutable boundaries and worker scheduling remain separate obligations.",
+      "production_impact": "None after dbbe5fe6; current full proof and original final guards remain.",
+      "deleted_code": [],
+      "revisit_condition": "New typed implementation, negative test or live evidence. No old point-proof reuse, arbitrary sensor tolerance, unchanged linkage/micro-optimization repeat or timing relaxation."
     }
   ]
 }

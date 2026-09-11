@@ -1,22 +1,26 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分のローカルcommitのみ。
-**全体未完。Recoveryの不要な通常時経路計算を除去し、標準dev2-r54へ進む。**
+**全体未完。標準r54は期限不合格。独立した開始範囲の診断比較を実装段階へ進める。**
 
-認証済みNormalで引継ぎ等がない場合のみ、現在壁/接触/車体証拠を保って経路計算を省く。
-Normalはその周期にSuspectStuckまで。候補確定/ギア操作は不可、実Recoveryの次周期は
-新しい全経路/他車証拠を使う。R314旧policyで新規需要testが失敗、R315実core147件合格。
-Build r92全26package、tests r80全2547記録/65group、source105合格。標準r54未実行。
+本番dbbe5fe6はRecoveryの不要経路計算を除去。Build r92全26package、tests r80全2547/65、
+source105合格。R54で通常の省略周期Recovery平均D1/D2=0.067/0.071msを確認。
+D1decision1157では現在全証明16.208mswall/11.252msCPU後、送信処理中に元期限超過。
+最初のpost違反はteardown前。後続D1post1584、D2pre1466はteardown中として別記。無周回。
 
-R53診断では元clockの同一frame内集中更新とRecovery5.066msを観測。今回の修正は
-この不要計算を除くが、R51の独立した現在全物理証明18.33msの問題は解決していない。
-元の25ms公開窓・250ms受信profile・130mscontrol origin・100ms操舵遅延と全証明を維持。
+R316本番ライブラリ/直接コンパイル比較は全範囲bit/約6.8–6.9msが一致し、結合原因を反証。
+R317–319で独立した開始状態/時刻集合から全応答を新規計算する方式を比較。元sourceの
+観測から元期限までの範囲を候補にし、直接座標変換と現在prefix全体の厳密包含を課すと、
+保存3例の全25ms開始窓・全停止・現在worldが成立。現在側の単独prefix+worldは0.56–0.79ms。
+型/API/hash・負例・worker availability・実走は未検証。CurrentPhysicalProofは本番で維持。
 
-残り: r54で実需要/期限確認、現在全証明コスト/スケジューリング、全intent/Mission/sibling/
-Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/eval。個別修正や停止runを全体完了としない。
+次: 別型StartingDomainTube/現在short-prefix、厳密な状態/時刻/入力/全world検証を実装し、
+単一通常dispatcherへ接続してfresh標準走行。元窓/受信profile/モデル/安全条件は維持。
+その後、全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
+同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval。
+個別診断や停止runを全体完了にしない。
 
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rollout-demand-design.md)、
+[開始範囲の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

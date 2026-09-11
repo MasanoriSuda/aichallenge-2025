@@ -4707,3 +4707,14 @@ R314/R315の実core比較で停止検出と状態/操作遷移を維持し、新
 Build r92全26package、tests r80全2547記録/65groupが合格。R51の現在証明コストは
 別の未解決事項であり、r54標準2台走行と全体受入れは未検証。
 [Recovery計算需要の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rollout-demand-design.md)。
+
+標準dev2-r54（dbbe5fe6）で通常時Recoveryの計算省略を確認したが、D1decision1157の
+送信後に元の期限を約5ms超え、不合格。現在全物理証明16.208mswall/11.252msCPUに
+対してRecoveryは0.073ms。R316で元入力・全証明・送信前合格/送信後不合格を再現した。
+本番ライブラリ結合と直接コンパイルの約6.8–6.9ms単独実行・全範囲のbitは一致する。
+R317–319は独立した開始状態/時刻範囲からの全停止計算を診断比較した。元観測から
+元期限までの範囲を候補集合として新たに全計算し、現在prefix全体の厳密包含と
+現在world検査を課す候補は保存3例で成立。これはセンサ誤差許容の拡大ではない。
+型・fingerprint・非同期接続と負例検証は未実装で、本番は従来の独立CurrentPhysicalProof
+を維持する。単独診断の現在側0.56–0.79msは実走期限の合格ではない。
+[独立した開始範囲の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-design.md)。

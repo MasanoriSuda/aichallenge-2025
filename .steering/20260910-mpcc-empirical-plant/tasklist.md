@@ -248,3 +248,13 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R314 old-policy specification fails; r315 entire core 147 tests, source 105, build r92 all 26 packages, tests r80 all 2547 records/65 groups pass.
 - [ ] Standard uninstrumented dev2-r54 live work-demand/timing validation.
 - [ ] Independent current proof cost/scheduling and all remaining M4-M6.
+
+
+2026-09-12 standard Recovery validation and independent starting-domain comparison (baseline dbbe5fe6):
+- [x] Standard dev2-r54 confirms deferred Normal Recovery work; fails original D1post1157before teardown, no laps. All logs/bags/protected restoration saved.
+- [x] R316 actual production-library vs direct-source timings/complete bits match; linkage hypothesis rejected. Original R54before-pass/after-fail reproduced.
+- [x] R317 oracle-domain feasibility; R318 narrow causal-set membership failures preserved.
+- [x] R319 stable frame and source-observation-to-deadline proposal: all3exact prefixes inside, independently recomputed full25ms-window/rest/current-world pass. Current-side isolated prefix+world cost0.56-0.79ms.
+- [ ] Implement and test separate starting-domain/short-prefix immutable types, strict membership, hash/prefix/context/clock/current-world negatives.
+- [ ] Connect worker numerical proof/current-world dispatcher within one normal authority; preserve all original guards and validate fresh runtime.
+- [ ] All remaining M4-M6 including Mission/sibling/Store, Stop/rest/restart, Recovery/Rejoin/Boost/async, repeated races/gates and same submission/eval.

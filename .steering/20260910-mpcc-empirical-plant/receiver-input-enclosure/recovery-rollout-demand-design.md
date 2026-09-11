@@ -83,3 +83,13 @@ Build r92: 26 packages pass. Package tests r80: 2547 records in 65 groups,
 zero errors/failures/skips. Standard uninstrumented dev2-r54 remains pending.
 [Sealed evidence](recovery-rollout-demand-evidence.json).
 Rollback is e1ce2571 plus reversal of this slice only, preserving unrelated changes.
+
+Standard dev2-r54 on committed dbbe5fe6 confirms deferred work: D1fully-deferred
+567cycles weighted Recovery0.067268ms, D2324cycles0.070790ms; total deferred
+916/439. This includes startup and Ready and is not a paired speedup benchmark.
+R54fails D1post1157before shutdown; current proof16.208mswall/11.252msCPU,
+Recovery0.073ms. Original before16.374999633 passes deadline16.374999644;
+after16.379999633 fails. R316 exact physical proof and before/after failure match.
+Full logs add D1post1584during teardown and D2pre1466just after shutdown began;
+preserve them separately. No laps or integrated acceptance.
+[Next independent-domain comparison](starting-domain-design.md).

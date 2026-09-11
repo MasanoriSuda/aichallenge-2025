@@ -274,6 +274,47 @@ bool valid(const PublishedInputProgram &program,
          program.commands.back().wire_acceleration_mps2 <= 0;
 }
 
+std::optional<PublishedInputProgram> prepend_publication_prefix(
+    const PublishedInputProgram &prior, const std::size_t prior_index,
+    const std::size_t count, const PublishedInputProgram &successor) noexcept {
+  if (prior.commands.empty() || successor.commands.empty() ||
+      !valid(prior, prior.commands.front().published_sec) ||
+      !valid(successor, successor.commands.front().published_sec) ||
+      prior.publication_interval_sec != successor.publication_interval_sec ||
+      prior.maximum_publication_delay_sec != successor.maximum_publication_delay_sec ||
+      prior.nanosecond_clock.has_value() != successor.nanosecond_clock.has_value() ||
+      prior_index > 10000 || count > 10000 - prior_index ||
+      count > 10000 - successor.commands.size() ||
+      (!prior.repeat_last_until_rest &&
+       (prior_index > prior.commands.size() || count > prior.commands.size() - prior_index)))
+    return std::nullopt;
+  const auto handoff = publication_epoch(prior, prior_index + count);
+  if (!handoff || successor.commands.front().published_sec != *handoff) return std::nullopt;
+  if (!count) return successor;
+  const auto first = publication_epoch(prior, prior_index);
+  if (!first) return std::nullopt;
+  PublishedInputProgram result{prior.publication_interval_sec, {},
+    successor.repeat_last_until_rest, prior.maximum_publication_delay_sec};
+  if (prior.nanosecond_clock) {
+    result.nanosecond_clock = publication_nanosecond_clock(*first,
+      prior.publication_interval_sec, prior.maximum_publication_delay_sec);
+    if (!result.nanosecond_clock) return std::nullopt;
+  }
+  result.commands.reserve(count + successor.commands.size());
+  for (std::size_t i = 0; i < count; ++i) {
+    const auto epoch = publication_epoch(prior, prior_index + i);
+    if (!epoch) return std::nullopt;
+    auto packet = prior.commands[std::min(prior_index + i, prior.commands.size() - 1)];
+    packet.published_sec = *epoch;
+    result.commands.push_back(packet);
+  }
+  result.commands.insert(result.commands.end(), successor.commands.begin(), successor.commands.end());
+  // Continuous-double clocks need not associate under a shifted origin. In
+  // that case there is no exactly representable common word: reject it rather
+  // than retime a previously declared publication or add a tolerance.
+  return valid(result, *first) ? std::optional{std::move(result)} : std::nullopt;
+}
+
 bool first_publication_time_admitted(const PublishedInputProgram &program,
                                      const double actual) noexcept {
   if (program.commands.empty() || !nonnegative(actual) ||

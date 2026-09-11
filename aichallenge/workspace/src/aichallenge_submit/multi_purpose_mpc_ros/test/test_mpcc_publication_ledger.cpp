@@ -232,3 +232,92 @@ TEST(MpccPublicationLedger, EarlyLateResetAndNonGridPublicationAreRejected) {
   EXPECT_TRUE(v::scheduled_publication_bracket_admitted(scheduled, 2, 1, 1.075, 1.1));
   EXPECT_FALSE(v::scheduled_publication_bracket_admitted(scheduled, 2, 1, 1.075, 1.100000001));
 }
+
+TEST(MpccPublicationLedger, CompositePrefixKeepsEveryOldPacketClockAndSourceIndex) {
+  const auto prior = program();
+  auto successor = prior;
+  successor.nanosecond_clock->first_ns = 1125000000;
+  successor.commands[0] = {1.125, 1, -.125};
+  successor.commands[1] = {1.15, -3, -.125};
+  const auto joined = v::prepend_publication_prefix(prior, 1, 3, successor);
+  ASSERT_TRUE(joined); ASSERT_EQ(joined->commands.size(), 5U);
+  EXPECT_EQ(joined->nanosecond_clock->first_ns, 1050000000);
+  EXPECT_EQ(joined->publication_interval_sec, prior.publication_interval_sec);
+  EXPECT_EQ(joined->maximum_publication_delay_sec, prior.maximum_publication_delay_sec);
+  EXPECT_TRUE(joined->repeat_last_until_rest);
+  v::PublishedInputLedger ledger(8);
+  ASSERT_TRUE(ledger.record({1, 0, 0}, 1, 1, .5));
+  const auto cursor = ledger.snapshot(); ASSERT_TRUE(cursor);
+  std::vector<std::optional<v::PublishedProgramSource>> sources;
+  for (std::size_t i = 0; i < joined->commands.size(); ++i) {
+    const auto &packet = joined->commands[i];
+    const auto &original = i < 3 ? prior.commands.back() : successor.commands[i - 3];
+    EXPECT_EQ(std::memcmp(&packet.wire_acceleration_mps2, &original.wire_acceleration_mps2, sizeof(double)), 0);
+    EXPECT_EQ(std::memcmp(&packet.wire_steering_rad, &original.wire_steering_rad, sizeof(double)), 0);
+    EXPECT_EQ(packet.published_sec, i < 3 ? *v::publication_epoch(prior, i + 1) : original.published_sec);
+    sources.push_back(i < 3 ? source(i + 1) : v::PublishedProgramSource{12, 22, 32, 42, i - 3});
+    const double latest = *v::publication_epoch(*joined, i, true);
+    ASSERT_TRUE(ledger.record(packet, packet.published_sec, latest, .5, sources.back()));
+    EXPECT_TRUE(ledger.matches_prefix(*cursor, *joined, sources));
+  }
+  // Identical wire packets from a different authority cannot conceal a change
+  // in which certificate owned the committed waiting prefix.
+  sources[1] = v::PublishedProgramSource{12, 22, 32, 42, 0};
+  EXPECT_FALSE(ledger.matches_prefix(*cursor, *joined, sources));
+}
+
+TEST(MpccPublicationLedger, CompositionRejectsClockChangesGapsAndUndeclaredTail) {
+  const auto prior = program();
+  auto successor = prior;
+  successor.nanosecond_clock->first_ns = 1075000000;
+  successor.commands[0].published_sec = 1.075;
+  successor.commands[1].published_sec = 1.1;
+  ASSERT_TRUE(v::prepend_publication_prefix(prior, 1, 1, successor));
+  for (std::size_t arm = 0; arm < 6; ++arm) {
+    auto changed = successor;
+    if (arm == 0) {
+      ++changed.nanosecond_clock->first_ns;
+      for (std::size_t i = 0; i < changed.commands.size(); ++i)
+        changed.commands[i].published_sec = *v::publication_epoch(changed, i);
+    }
+    if (arm == 1) changed.nanosecond_clock.reset();
+    if (arm == 2) {
+      changed.maximum_publication_delay_sec = .02;
+      changed.nanosecond_clock->maximum_delay_ns = 20000000;
+    }
+    if (arm == 3) {
+      changed.publication_interval_sec = .02;
+      changed.maximum_publication_delay_sec = .02;
+      changed.nanosecond_clock->interval_ns = 20000000;
+      changed.nanosecond_clock->maximum_delay_ns = 20000000;
+      changed.commands[1].published_sec = 1.095;
+    }
+    if (arm == 4) changed.commands[1].wire_acceleration_mps2 = NAN;
+    if (arm == 5) changed.commands.clear();
+    EXPECT_FALSE(v::prepend_publication_prefix(prior, 1, 1, changed)) << arm;
+  }
+  auto finite = prior; finite.repeat_last_until_rest = false;
+  EXPECT_FALSE(v::prepend_publication_prefix(finite, 1, 2, successor));
+  EXPECT_FALSE(v::prepend_publication_prefix(finite, 3, 0, successor));
+  EXPECT_FALSE(v::prepend_publication_prefix(prior, std::numeric_limits<std::size_t>::max(), 1, successor));
+  EXPECT_FALSE(v::prepend_publication_prefix(prior, 1, std::numeric_limits<std::size_t>::max(), successor));
+  EXPECT_FALSE(v::prepend_publication_prefix(prior, 1, 9999, successor));
+  // A zero-length prefix still owns the handoff phase; it cannot move a word.
+  const auto zero = v::prepend_publication_prefix(finite, 2, 0, successor);
+  ASSERT_TRUE(zero); same_history(zero->commands, successor.commands);
+  EXPECT_FALSE(v::prepend_publication_prefix(finite, 1, 0, successor));
+}
+
+TEST(MpccPublicationLedger, ContinuousCompositionKeepsExactEpochsAndSignedWireBits) {
+  const v::PublishedInputProgram prior{.125, {{1, 1, .125}, {1.125, -3, -0.0}}, true, .125};
+  const v::PublishedInputProgram successor{.125, {{1.5, 1, .25}, {1.625, -3, .25}}, true, .125};
+  const auto joined = v::prepend_publication_prefix(prior, 1, 3, successor);
+  ASSERT_TRUE(joined); EXPECT_FALSE(joined->nanosecond_clock);
+  EXPECT_EQ(joined->commands.front().published_sec, 1.125);
+  EXPECT_EQ(joined->commands[2].published_sec, 1.375);
+  EXPECT_TRUE(std::signbit(joined->commands[2].wire_steering_rad));
+  auto shifted = successor;
+  shifted.commands[0].published_sec = std::nextafter(1.5, INFINITY);
+  shifted.commands[1].published_sec = shifted.commands[0].published_sec + .125;
+  EXPECT_FALSE(v::prepend_publication_prefix(prior, 1, 3, shifted));
+}

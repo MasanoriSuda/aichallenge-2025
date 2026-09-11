@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_scheduled.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
@@ -692,8 +693,54 @@ std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
     mpcc_wire_command::steering(selected->second.steering_rad, execution.vehicle_model.steering_wire_gain)};
 }
 
-static bool publication_prefix_consistent(const Request & request)
+struct ScheduledNominalContext {
+  const mpcc_vehicle_model::ScheduledPublicationPrediction &forecast;
+  std::function<bool(const Proof &)> certify;
+};
+
+static const mpcc_vehicle_model::PublishedCommand *publication_packet(
+  const Request &request, const ScheduledNominalContext *scheduled)
 {
+  if (scheduled) return &scheduled->forecast.nominal_prefix.commands.back();
+  return request.publication_prefix ? &request.publication_prefix->proposed_packet : nullptr;
+}
+
+static const mpcc_vehicle_model::State *publication_state(
+  const Request &request, const ScheduledNominalContext *scheduled)
+{
+  if (scheduled) return &scheduled->forecast.publication_state;
+  return request.publication_prefix ? &request.publication_prefix->current : nullptr;
+}
+
+static bool publication_prefix_consistent(const Request & request,
+  const ScheduledNominalContext *scheduled = nullptr)
+{
+  if (scheduled) {
+    const auto &bound = scheduled->forecast;
+    const auto &origin = bound.control_origin;
+    if (!request.plan || !request.plan->execution_artifact ||
+        request.publication_prefix || !request.publication_prefix_required ||
+        !request.applied_program_required || !request.input_application_profile ||
+        !mpcc_vehicle_model::valid(bound.observation) ||
+        bound.vehicle_model_fingerprint != mpcc_vehicle_model::fingerprint(request.plan->execution_artifact->vehicle_model) ||
+        bound.publication_sec != request.now_sec || bound.control_origin_sec != request.control_origin_sec ||
+        std::max(bound.observation.acceleration_delay_sec, bound.observation.steering_delay_sec) >
+          request.control_origin_sec - request.now_sec + kIdentityTolerance ||
+        origin.x_m != request.control_pose.x_m || origin.y_m != request.control_pose.y_m ||
+        origin.yaw_rad != request.control_pose.yaw_rad || origin.forward_velocity_mps != request.control_origin_speed_mps ||
+        origin.lateral_velocity_mps != request.current_lateral_velocity_mps ||
+        origin.yaw_rate_radps != request.current_yaw_rate_radps ||
+        origin.tire_steering_rad != request.current_response_steering_rad ||
+        bound.publication_state.forward_velocity_mps != request.current_speed_mps ||
+        bound.publication_to_control.size() != request.measured_to_control_path.size() ||
+        bound.publication_to_control.size() != request.measured_to_control_elapsed_sec.size()) return false;
+    for (std::size_t i = 0; i < bound.publication_to_control.size(); ++i) {
+      const auto &item = bound.publication_to_control[i]; const auto &pose = request.measured_to_control_path[i];
+      if (item.state.x_m != pose.x_m || item.state.y_m != pose.y_m || item.state.yaw_rad != pose.yaw_rad ||
+          item.source_sec - request.now_sec != request.measured_to_control_elapsed_sec[i]) return false;
+    }
+    return true;
+  }
   if (!request.publication_prefix) return !request.publication_prefix_required;
   if (!request.plan || !request.plan->execution_artifact) return false;
   const auto & bound = *request.publication_prefix;
@@ -749,11 +796,13 @@ std::optional<double> source_horizon_velocity_ceiling(const Request & request) n
 // Proposal ordering only: a peer approaching the stationary current footprint
 // can make immediate braking a poor first hypothesis. One native braking step
 // estimates the stop duration; every actual programme still needs full proof.
-static bool rear_peer_prefers_source_horizon(const Request & request)
+static bool rear_peer_prefers_source_horizon(const Request & request,
+  const ScheduledNominalContext *scheduled = nullptr)
 {
-  if (!request.publication_prefix || !request.input_application_profile ||
+  const auto *current = publication_state(request, scheduled);
+  if (!current || !request.input_application_profile ||
     !request.plan || !request.plan->execution_artifact) return false;
-  const auto & state = request.publication_prefix->current;
+  const auto & state = *current;
   const auto & model = request.plan->execution_artifact->vehicle_model;
   const auto next = mpcc_vehicle_model::advance(state,
     {request.minimum_acceleration_mps2, 0.0}, model, model.maximum_step_sec);
@@ -782,7 +831,8 @@ static Result evaluate_with_stop_profile(
   const mpcc_rate_resolved_physical_adapter::StopLateralTargetProfile * const stop_profile,
   const bool constant_program = false,
   const bool source_horizon_program = false,
-  const mpcc_rate_resolved_applied_program::Certificate * materialized_from = nullptr)
+  const mpcc_rate_resolved_applied_program::Certificate * materialized_from = nullptr,
+  const ScheduledNominalContext *scheduled = nullptr)
 {
   const auto evaluation_started = SteadyClock::now();
   Result result;
@@ -899,7 +949,7 @@ static Result evaluate_with_stop_profile(
     // it checks the original signed body and every swept state against the
     // existing bounds. Unprofiled callers retain the old unsigned contract.
     (request.current_speed_mps < 0.0 &&
-    !(request.publication_prefix_required && request.publication_prefix &&
+    !(request.publication_prefix_required && (request.publication_prefix || scheduled) &&
     request.applied_program_required && request.input_application_profile)) ||
     !std::isfinite(request.control_origin_speed_mps) ||
     request.control_origin_speed_mps < 0.0 ||
@@ -1094,13 +1144,19 @@ static Result evaluate_with_stop_profile(
   const double maximum_steering_step_rad = result.maximum_steering_step_rad;
   const double reachable_steering_lower_rad = result.reachable_steering_lower_rad;
   const double reachable_steering_upper_rad = result.reachable_steering_upper_rad;
-  if (!publication_prefix_consistent(request)) {
+  if (!publication_prefix_consistent(request, scheduled)) {
     result.reason = Reason::PublicationPrefixUnavailable;
     return result;
   }
-  if (request.publication_prefix && !mpcc_vehicle_model::publication_packet_matches(
-      *request.publication_prefix, request.now_sec, selected_actuation.acceleration_mps2,
-      selected_actuation.steering_rad, execution.vehicle_model.steering_wire_gain))
+  const auto *first_packet = publication_packet(request, scheduled);
+  const bool packet_matches = !first_packet || (scheduled ?
+    (first_packet->published_sec == request.now_sec &&
+     first_packet->wire_acceleration_mps2 == static_cast<float>(selected_actuation.acceleration_mps2) &&
+     first_packet->wire_steering_rad == mpcc_wire_command::steering(
+       selected_actuation.steering_rad, execution.vehicle_model.steering_wire_gain)) :
+    mpcc_vehicle_model::publication_packet_matches(*request.publication_prefix, request.now_sec,
+      selected_actuation.acceleration_mps2, selected_actuation.steering_rad, execution.vehicle_model.steering_wire_gain));
+  if (!packet_matches)
   {
     result.reason = Reason::PublicationPacketMismatch;
     return result;
@@ -1217,11 +1273,32 @@ static Result evaluate_with_stop_profile(
   const double publisher_interval_sec = execution.publication_interval_sec;
   std::size_t publisher_interval_last_path_index{};
 
+  // Scheduled poses start at a future publication, while obstacle positions
+  // retain their original observed epoch. Shift queries, never the observation.
+  const auto obstacle_time = [&](const double elapsed) {
+    return scheduled ? (request.now_sec - request.obstacles.observed_sec) + elapsed : elapsed;
+  };
+  const auto observe_control_prefix = [&](dynamic_proof::Result &dynamic) {
+    if (!scheduled) {
+      dynamic_proof::observe_timed_path(source.footprint, request.measured_to_control_path,
+        request.measured_to_control_elapsed_sec, source.swept_step_m, request.obstacles, dynamic);
+      return;
+    }
+    const auto &path = request.measured_to_control_path;
+    const auto &elapsed = request.measured_to_control_elapsed_sec;
+    if (path.size() == 1) {
+      dynamic_proof::observe_pose(source.footprint, path.front(), obstacle_time(elapsed.front()),
+        request.obstacles, dynamic);
+    }
+    for (std::size_t i = 1; i < path.size(); ++i) {
+      dynamic_proof::observe_segment(source.footprint, path[i - 1], path[i],
+        obstacle_time(elapsed[i - 1]), obstacle_time(elapsed[i]), source.swept_step_m,
+        request.obstacles, dynamic);
+      if (!dynamic.valid || !dynamic.clear) break;
+    }
+  };
   dynamic_proof::Result dynamic;
-  dynamic_proof::observe_timed_path(
-    source.footprint, request.measured_to_control_path,
-    request.measured_to_control_elapsed_sec, source.swept_step_m,
-    request.obstacles, dynamic);
+  observe_control_prefix(dynamic);
   // Keep an independent proof for exactly the serialized command interval.
   // Solver-stage duration is planning discretization and must not extend the
   // minimum authority proof horizon.
@@ -1279,13 +1356,13 @@ static Result evaluate_with_stop_profile(
     {
       dynamic_proof::observe_segment(
         source.footprint, previous_dynamic_pose, endpoint_pose.value(),
-        dynamic_time_sec, endpoint_time_sec,
+        obstacle_time(dynamic_time_sec), obstacle_time(endpoint_time_sec),
         source.swept_step_m, request.obstacles,
         publisher_interval_dynamic);
     }
     dynamic_proof::observe_segment(
       source.footprint, previous_dynamic_pose, endpoint_pose.value(),
-      dynamic_time_sec, endpoint_time_sec,
+      obstacle_time(dynamic_time_sec), obstacle_time(endpoint_time_sec),
       source.swept_step_m, request.obstacles, dynamic);
     dynamic_time_sec = endpoint_time_sec;
     previous_dynamic_pose = endpoint_pose.value();
@@ -1467,8 +1544,8 @@ static Result evaluate_with_stop_profile(
       request.current_response_steering_rad, request.current_lateral_velocity_mps,
       request.current_yaw_rate_radps};
     const auto terminal_stop = [&]() {
-      if (constant_program && request.publication_prefix) {
-        const auto first = request.publication_prefix->proposed_packet;
+      if (constant_program && first_packet) {
+        const auto first = *first_packet;
         std::size_t prefix_intervals = 1U;
         if (source_horizon_program) {
           result.terminal_stop_forward_velocity_ceiling_mps = source_horizon_velocity_ceiling(request);
@@ -1539,10 +1616,7 @@ static Result evaluate_with_stop_profile(
     terminal_stop_path.push_back(request.control_pose);
     auto previous_stop_pose = request.control_pose;
     double previous_stop_time_sec = prediction_delay_sec;
-    dynamic_proof::observe_timed_path(
-      source.footprint, request.measured_to_control_path,
-      request.measured_to_control_elapsed_sec, source.swept_step_m,
-      request.obstacles, terminal_stop_dynamic);
+    observe_control_prefix(terminal_stop_dynamic);
     for (std::size_t sample_index = 0U;
       sample_index < terminal_stop_trajectory.elapsed_time_sec.size();
       ++sample_index)
@@ -1576,7 +1650,7 @@ static Result evaluate_with_stop_profile(
       }
       dynamic_proof::observe_segment(
         source.footprint, previous_stop_pose, endpoint_pose.value(),
-        previous_stop_time_sec, endpoint_time_sec, source.swept_step_m,
+        obstacle_time(previous_stop_time_sec), obstacle_time(endpoint_time_sec), source.swept_step_m,
         request.obstacles, terminal_stop_dynamic);
       terminal_stop_path.push_back(endpoint_pose.value());
       previous_stop_pose = endpoint_pose.value();
@@ -1743,7 +1817,15 @@ static Result evaluate_with_stop_profile(
     std::move(proved_stage_end_velocity_mps);
   proof.continuation_stage_end_steering_rad =
     std::move(proved_stage_end_steering_rad);
-  if (request.applied_program_required || request.input_application_profile) {
+  if (scheduled) {
+    const auto started = SteadyClock::now();
+    const bool certified = scheduled->certify(proof);
+    result.runtime.applied_program_ms = elapsed_ms(started, SteadyClock::now());
+    if (!certified) {
+      result.terminal_stop_certified = false;
+      return complete_continuation_proof(Reason::AppliedProgramUnavailable);
+    }
+  } else if (request.applied_program_required || request.input_application_profile) {
     if (!request.input_application_profile) {
       result.terminal_stop_certified = false;
       return complete_continuation_proof(Reason::AppliedProgramUnavailable);
@@ -1770,12 +1852,13 @@ static Result evaluate_with_stop_profile(
 
 static Result evaluate_stop_candidates(
   const Request & request,
-  const mpcc_rate_resolved_applied_program::Certificate * materialized_from)
+  const mpcc_rate_resolved_applied_program::Certificate * materialized_from,
+  const ScheduledNominalContext *scheduled = nullptr)
 {
   if (request.plan == nullptr || request.plan->execution_artifact == nullptr ||
     request.plan->physical_snapshot == nullptr)
   {
-    return evaluate_with_stop_profile(request, nullptr, false, false, materialized_from);
+    return evaluate_with_stop_profile(request, nullptr, false, false, materialized_from, scheduled);
   }
   // Terminal feasibility need not steer back to a reference before rest.
   // Keep the chosen first normal packet and prove one common steering word
@@ -1795,15 +1878,15 @@ static Result evaluate_stop_candidates(
   };
   std::optional<Result> common;
   if (!request.plan->execution_artifact->terminal_body_rest_required &&
-    request.applied_program_required && request.publication_prefix &&
+    request.applied_program_required && (request.publication_prefix || scheduled) &&
     request.input_application_profile)
   {
     const bool horizon_available = source_horizon_velocity_ceiling(request).has_value();
-    const bool horizon_first = horizon_available && rear_peer_prefers_source_horizon(request);
-    common = evaluate_with_stop_profile(request, nullptr, true, horizon_first, materialized_from);
+    const bool horizon_first = horizon_available && rear_peer_prefers_source_horizon(request, scheduled);
+    common = evaluate_with_stop_profile(request, nullptr, true, horizon_first, materialized_from, scheduled);
     if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
     if (horizon_available) {
-      auto alternative = evaluate_with_stop_profile(request, nullptr, true, !horizon_first, materialized_from);
+      auto alternative = evaluate_with_stop_profile(request, nullptr, true, !horizon_first, materialized_from, scheduled);
       accumulate(alternative, *common);
       common = std::move(alternative);
       if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
@@ -1819,9 +1902,9 @@ static Result evaluate_stop_candidates(
     *request.plan->execution_artifact,
     request.plan->physical_snapshot->terminal_stop_course_geometry);
   if (!profile.has_value()) {
-    return finish(evaluate_with_stop_profile(request, nullptr, false, false, materialized_from));
+    return finish(evaluate_with_stop_profile(request, nullptr, false, false, materialized_from, scheduled));
   }
-  auto normal_path = evaluate_with_stop_profile(request, &profile.value(), false, false, materialized_from);
+  auto normal_path = evaluate_with_stop_profile(request, &profile.value(), false, false, materialized_from, scheduled);
   // The outer feedback label is not the proof result. Distinct references
   // remain candidates only when a Stop was constructed from a reference.
   if (!normal_path.terminal_stop_attempted || normal_path.terminal_stop_certified ||
@@ -1829,7 +1912,7 @@ static Result evaluate_stop_candidates(
   {
     return finish(std::move(normal_path));
   }
-  auto track = evaluate_with_stop_profile(request, nullptr, false, false, materialized_from);
+  auto track = evaluate_with_stop_profile(request, nullptr, false, false, materialized_from, scheduled);
   accumulate(track, normal_path);
   return finish(std::move(track));
 }
@@ -2142,3 +2225,166 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+Result evaluate(const Request &request) {
+  Result result;
+  const auto &observed = request.observed;
+  if (!observed.plan || !observed.plan->execution_artifact ||
+      !observed.publication_prefix || !observed.input_application_profile ||
+      !observed.publication_prefix_required || !observed.applied_program_required ||
+      request.prior_program.commands.empty() || request.prior_index > 10000 ||
+      request.preceding_packet_count > 10000 - request.prior_index)
+    return result;
+  if (!retained::publication_prefix_consistent(observed)) return result;
+  // Forecasting a later gap cannot erase an already observed Follow violation.
+  // Keep the same original observation validity and hard-gap test as evaluate().
+  if (observed.current_intent == retained::contract::ControlIntent::Follow) {
+    if (!observed.follow_target || !observed.follow_target->current) {
+      result.reason = retained::Reason::FollowTargetObservationUnavailable; return result;
+    }
+    if (!retained::follow_target_observation_valid(*observed.follow_target) ||
+        observed.follow_target->observed_sec > observed.now_sec + retained::kIdentityTolerance) {
+      result.reason = retained::Reason::FollowTargetObservationInvalid; return result;
+    }
+    if (observed.follow_target->current_target_gap_m + retained::kIdentityTolerance <
+        observed.follow_target->hard_gap_m) {
+      result.reason = retained::Reason::FollowInitialHardGapViolation; return result;
+    }
+  }
+  const auto &observation = observed.publication_prefix->observation;
+  const auto &execution = *observed.plan->execution_artifact;
+  if (!vehicle::valid(observation) || observation.now_sec != observed.now_sec ||
+      observation.control_origin_sec != observed.control_origin_sec ||
+      !vehicle::valid(request.prior_program, request.prior_program.commands.front().published_sec) ||
+      request.prior_program.publication_interval_sec != execution.publication_interval_sec ||
+      request.prior_program.maximum_publication_delay_sec != execution.publication_interval_sec)
+    return result;
+  const auto &frame = request.progress_frame;
+  const auto project = [&](const recovery_footprint::Pose2D &pose) -> std::optional<double> {
+    for (double value : {frame.pose.x_m, frame.pose.y_m, frame.pose.yaw_rad, frame.progress_m,
+        pose.x_m, pose.y_m, pose.yaw_rad})
+      if (!std::isfinite(value)) return std::nullopt;
+    const double lag = std::cos(frame.pose.yaw_rad) * (pose.x_m - frame.pose.x_m) +
+      std::sin(frame.pose.yaw_rad) * (pose.y_m - frame.pose.y_m);
+    const double value = frame.progress_m + lag;
+    return std::isfinite(value) ? std::optional{value} : std::nullopt;
+  };
+  const auto original_progress = project(observed.control_pose);
+  if (!original_progress || *original_progress != observed.control_origin_physical_progress_m) {
+    result.reason = retained::Reason::CourseFrameUnavailable; return result;
+  }
+  const auto first = vehicle::publication_epoch(request.prior_program,
+    request.prior_index + request.preceding_packet_count);
+  if (!first || *first < observed.now_sec) return result;
+  vehicle::PublishedCommand predecessor = observation.commands.back();
+  if (request.preceding_packet_count) {
+    const auto index = request.prior_index + request.preceding_packet_count - 1;
+    if (index >= request.prior_program.commands.size() && !request.prior_program.repeat_last_until_rest)
+      return result;
+    predecessor = request.prior_program.commands[std::min(index, request.prior_program.commands.size() - 1)];
+    const auto epoch = vehicle::publication_epoch(request.prior_program, index);
+    if (!epoch) return result;
+    predecessor.published_sec = *epoch;
+  }
+  auto placeholder = predecessor;
+  placeholder.published_sec = *first;
+  vehicle::PublishedInputProgram suffix{execution.publication_interval_sec, {placeholder}, false,
+    request.prior_program.maximum_publication_delay_sec};
+  if (request.prior_program.nanosecond_clock) {
+    suffix.nanosecond_clock = vehicle::publication_nanosecond_clock(*first,
+      suffix.publication_interval_sec, suffix.maximum_publication_delay_sec);
+    if (!suffix.nanosecond_clock) return result;
+  }
+  auto draft = vehicle::prepend_publication_prefix(request.prior_program,
+    request.prior_index, request.preceding_packet_count, suffix);
+  if (!draft) return result;
+  const auto count = request.preceding_packet_count;
+  auto forecast = vehicle::predict_scheduled_publication(observation, *draft, count,
+    request.planned_control_origin_sec, execution.vehicle_model);
+  if (!forecast) return result;
+  retained::Request view = observed;
+  // This is a private nominal view, not a later received observation. Keep
+  // ordinary requirements enabled and their certificates absent, so no old
+  // adapter can execute it outside the explicit scheduled evaluation below.
+  view.publication_prefix.reset();
+  view.previous_published_steering_rad = predecessor.wire_steering_rad / execution.vehicle_model.steering_wire_gain;
+  view.previous_published_command_age_sec = *first - predecessor.published_sec;
+  const auto bind = [&]() {
+    view.now_sec = forecast->publication_sec;
+    view.control_origin_sec = forecast->control_origin_sec;
+    const auto &state = forecast->control_origin;
+    view.control_pose = {state.x_m, state.y_m, state.yaw_rad};
+    const auto progress = project(view.control_pose);
+    if (!progress) return false;
+    view.control_origin_physical_progress_m = *progress;
+    view.current_speed_mps = forecast->publication_state.forward_velocity_mps;
+    view.control_origin_speed_mps = state.forward_velocity_mps;
+    view.current_time_steering_rad = forecast->publication_state.tire_steering_rad;
+    view.current_steering_rad = state.desired_steering_rad;
+    view.current_response_steering_rad = state.tire_steering_rad;
+    view.current_lateral_velocity_mps = state.lateral_velocity_mps;
+    view.current_yaw_rate_radps = state.yaw_rate_radps;
+    view.measured_to_control_path.clear(); view.measured_to_control_elapsed_sec.clear();
+    for (const auto &sample : forecast->publication_to_control) {
+      view.measured_to_control_path.push_back({sample.state.x_m, sample.state.y_m, sample.state.yaw_rad});
+      view.measured_to_control_elapsed_sec.push_back(sample.source_sec - view.now_sec);
+    }
+    if (observed.follow_target) {
+      const auto &original = *observed.follow_target;
+      auto follow = original;
+      follow.elapsed_time_sec = {0}; follow.target_progress_from_current_origin_m.clear();
+      const double lead = view.now_sec - observed.now_sec;
+      for (double time : original.elapsed_time_sec)
+        if (time > lead) follow.elapsed_time_sec.push_back(time - lead);
+      // The existing Follow observation already defines a constant-speed tail.
+      if (follow.elapsed_time_sec.size() == 1) follow.elapsed_time_sec.push_back(execution.publication_interval_sec);
+      for (double elapsed : follow.elapsed_time_sec) {
+        const auto target = retained::follow_target_progress_at(original, lead + elapsed);
+        if (!target) return false;
+        follow.target_progress_from_current_origin_m.push_back(
+          *target + observed.control_origin_physical_progress_m - view.control_origin_physical_progress_m);
+      }
+      const auto at_publication = project({forecast->publication_state.x_m,
+        forecast->publication_state.y_m, forecast->publication_state.yaw_rad});
+      if (!at_publication) return false;
+      follow.current_target_gap_m = follow.target_progress_from_current_origin_m.front() +
+        view.control_origin_physical_progress_m - *at_publication;
+      // Keep observed_sec/generation/target unchanged. Only the forecast's
+      // query origin changes inside this private nominal view.
+      view.follow_target = std::move(follow);
+    }
+    return true;
+  };
+  if (!bind()) return result;
+  const auto packet = retained::prospective_artifact_packet(view);
+  if (!packet || packet->published_sec != *first) return result;
+  draft->commands.back() = *packet;
+  forecast = vehicle::predict_scheduled_publication(observation, *draft, count,
+    request.planned_control_origin_sec, execution.vehicle_model);
+  if (!forecast || !bind()) return result;
+  retained::ScheduledNominalContext context{*forecast, [&](const retained::Proof &proof) {
+    auto nominal = std::shared_ptr<NominalProof>(new NominalProof);
+    nominal->observed_ = observed;
+    nominal->nominal_view_ = view;
+    nominal->proof_ = proof;
+    nominal->forecast_ = *forecast;
+    nominal->original_follow_reference_progress_m_ = observed.control_origin_physical_progress_m +
+      (observed.circular ? static_cast<double>(proof.lap_offset) * observed.path_length_m : 0.0);
+    result.applied = applied::certify_scheduled_terminal_stop(std::move(nominal));
+    return result.applied.certificate != nullptr;
+  }};
+  result.diagnostic = retained::evaluate_stop_candidates(view, nullptr, &context);
+  result.reason = result.diagnostic.reason;
+  result.diagnostic.applied_program_reason = result.applied.reason;
+  result.diagnostic.applied_program_prepare_reason = result.applied.program_reason;
+  result.diagnostic.applied_input_prediction_reason = result.applied.prediction_reason;
+  result.diagnostic.applied_program_rejected_sec = result.applied.rejected_sec;
+  result.diagnostic.applied_program_rejected_peer_id = result.applied.rejected_peer_id;
+  result.diagnostic.proof.reset();
+  if (result.reason != retained::Reason::Accepted) result.applied.certificate.reset();
+  if (result.reason == retained::Reason::Accepted && !result.applied.certificate)
+    result.reason = retained::Reason::AppliedProgramUnavailable;
+  return result;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

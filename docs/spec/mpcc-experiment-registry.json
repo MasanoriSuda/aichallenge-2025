@@ -1057,6 +1057,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-nominal-evidence.json",
       "replay_ready": true,
       "reason": "Fixed-ledger runtime observations/failure, separate future nominal forecast, integer mechanical substep correction and old-bit parity. No integrated acceptance."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-certificate",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-certificate-evidence.json",
+      "replay_ready": true,
+      "reason": "Explicit original Stop prefix and opaque scheduled full certificate; unpromoted factory counterexamples and repair, preserved legacy classifications. No current-context/dispatch or integrated acceptance."
     }
   ],
   "experiments": [
@@ -12477,6 +12483,214 @@
         "Replaced duplicated provenance-owning integration body with private schedule engine and unchanged old wrapper. Synchronous normal authority must retire when scheduled dispatch is promoted."
       ],
       "revisit_condition": "Connect nominal/full-rest/prefix/fresh world/measurement/single dispatch before any authority claim. R42 restart allowed as startup infrastructure diagnosis; repeated timing failure cannot be accepted. M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r240-composition",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Compose exact inherited programme epochs and wire values",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "accepted",
+      "reason": "60tests including source/index ledger composition, clock/window/phase/undeclared-tail rejection.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r241-r242-world",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Share ordinary world validation without behavioral change",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "accepted",
+      "reason": "96existing retained/Stop/Follow tests passed before/after factory compilation.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r243-r244-fixture",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Scheduled fixture uses integer-nanosecond epochs",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "rejected",
+      "reason": "Fixture multiplication by1e-9 produced noncanonical doubles; strict forecast rejected. Corrected fixture division by1e9 only; no production tolerance change.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r245-native",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Full scheduled proof includes waiting contact and protects ordinary adapters",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "accepted",
+      "reason": "100tests passed, including Track/Follow, original provenance and full waiting contact detection.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r246-r247-follow-time",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Future nominal view preserves original Follow and obstacle-time invariants",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "rejected",
+      "reason": "Future gap erased an observed hard-gap violation; unshifted peer queries recorded-0.055m for a departed peer. Reproduced before promotion.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r248-factory",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Original Follow gate and absolute peer queries repair both new-factory defects",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "accepted",
+      "reason": "103tests/508ms, including original Follow violation, moving peer, waiting-only contact, exact frame and circular progress, invalid input/history/clock and old adapter rejection.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r249-query",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Use steering application delay as nominal control-origin delay",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "rejected",
+      "reason": "100ms is not captured130ms state_prediction_delay_sec.12future arms accepted but4zero-lead moving arms rejected. No source/config promotion from this diagnostic.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r250-replay",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Scheduled factory certifies original inputs with explicit old Stop prefix",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "accepted",
+      "reason": "Saved130ms config/original arithmetic verified.6inputs x0/1/3packets=18accepted full proofs,9.19–14.31ms; each source has one exact diagnostic frame hypothesis. No actual prefix or dispatch authority.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r251-r253-legacy",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Shared world extraction preserves old classifications",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "accepted",
+      "reason": "All21legacy acceptance/rejection reason classifications unchanged; r18gap remains prediction_reason5.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r72-r60",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Build and regress opaque scheduled full certificates",
+      "changed_dimension": "Exact old-prefix composition, typed scheduled nominal view and original-population full world proof",
+      "result": "accepted",
+      "reason": "26packages/4m59s;2493records/64groups,0errors/failures/skips. Existing setuptools deprecations only.",
+      "production_impact": "Shared world arithmetic preserves old behavior. Scheduled type is not connected to any normal publisher. Physical model/profile/window/rates/margins/solver budgets remain unchanged.",
+      "deleted_code": [
+        "Extracted the ordinary applied world lambda into one common checker. No ordinary authority removed yet; it must retire with C5promotion."
+      ],
+      "revisit_condition": "Complete C4current sensor/world/context and actual ledger prefix, then C5single dispatch and retirement of old synchronous normal authority. Require same finalHEAD M4-M6 before overall completion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r254-fixture",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Stationary-progress fixture preserves artifact dynamics",
+      "changed_dimension": "Scheduled context propagation in the missing normal-path Stop reference branch",
+      "result": "rejected",
+      "reason": "Changing only predicted progress violated the affine virtual-progress row; the invalid fixture was not used as evidence of the missing-context branch.",
+      "production_impact": "Scheduled factory remains disconnected from normal publication; no runtime deadline acceptance.",
+      "deleted_code": [
+        "No alternate authority introduced; old synchronous authority retirement remains coupled to C5promotion."
+      ],
+      "revisit_condition": "C4current context and ledger, C5single dispatch, finalHEAD M4-M6 required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r255-context",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Every Stop candidate branch retains the scheduled context",
+      "changed_dimension": "Scheduled context propagation in the missing normal-path Stop reference branch",
+      "result": "accepted",
+      "reason": "Consistent virtual-progress controls0/4mps produce no strict normal-path reference. Pre-fix loses scheduled context and returns prefix-unavailable; corrected branch reaches required original waiting-peer rejection.104native tests/513ms pass.",
+      "production_impact": "Scheduled factory remains disconnected from normal publication; no runtime deadline acceptance.",
+      "deleted_code": [
+        "No alternate authority introduced; old synchronous authority retirement remains coupled to C5promotion."
+      ],
+      "revisit_condition": "C4current context and ledger, C5single dispatch, finalHEAD M4-M6 required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-certificate-r74-r62",
+      "baseline_commit": "6cf3b2022a001b8182b12540fbf4da4612313ffc",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-certificate"
+      ],
+      "hypothesis": "Final source and dedicated missing-reference regression build and pass",
+      "changed_dimension": "Scheduled context propagation in the missing normal-path Stop reference branch",
+      "result": "accepted",
+      "reason": "26packages and2494records/64groups,0errors/failures/skips. Ordinary evaluation call arguments unchanged by the final scheduled-only forwarding correction.",
+      "production_impact": "Scheduled factory remains disconnected from normal publication; no runtime deadline acceptance.",
+      "deleted_code": [
+        "No alternate authority introduced; old synchronous authority retirement remains coupled to C5promotion."
+      ],
+      "revisit_condition": "C4current context and ledger, C5single dispatch, finalHEAD M4-M6 required."
     }
   ]
 }

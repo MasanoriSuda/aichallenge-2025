@@ -4614,3 +4614,12 @@ reset・履歴脱落を不透明なsnapshotで照合する。意図したsource�
 将来の整数wordはapplication境界と積分区間長も整数nsで求める。旧履歴APIとzero-lead
 の演算は維持する。予定点予測は既存normal Certificateの代替ではない。
 [設計と数値検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-nominal-design.md)。
+
+
+予定指令列の全停止証明は`ScheduledCertificate`として別型で保持する。旧programmeの
+明示prefixを時刻・wire値を変えず連結し、元の観測から待機中と新programmeのrestまで
+壁・他車・Follow・車体境界を検査する。予定nominalの他車予測は元の観測時刻から照会し、
+元のFollow車間違反も先に検査する。診断結果から既存の即時実行proofを取り出せない。
+この型の生成だけでは公開を許可しない。現在sensor/world/context・実送信prefix・
+非同期単一dispatchの接続と旧同期authorityの退役は未完。
+[設計・反例・保存入力の証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-certificate-design.md)。

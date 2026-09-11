@@ -10,6 +10,10 @@ struct Request;
 struct Proof;
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
 
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+class NominalProof;
+}
+
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_applied_program {
 namespace retained = mpcc_rate_resolved_retained_revalidation;
 namespace vehicle = mpcc_vehicle_model;
@@ -94,5 +98,47 @@ Result certify_terminal_stop(const retained::Request &request,
                              const retained::Proof &nominal,
                              const vehicle::InputApplicationProfile &profile,
                              const Certificate *materialized_from);
+
+class ScheduledCertificate;
+struct ScheduledResult {
+  Reason reason{Reason::InvalidNominalProof};
+  program::Reason program_reason{program::Reason::InvalidIdentity};
+  vehicle::AppliedInputRejectReason prediction_reason{vehicle::AppliedInputRejectReason::None};
+  std::shared_ptr<const ScheduledCertificate> certificate;
+  double rejected_sec{std::numeric_limits<double>::quiet_NaN()};
+  std::string rejected_peer_id;
+};
+
+/// A future nominal suffix and its complete original-observation input proof.
+/// This type has no conversion to the ordinary first-publication certificate.
+/// The committed prefix's actual execution and fresh dispatch context are
+/// separate obligations; constructing this object alone grants no publication.
+class ScheduledCertificate {
+public:
+  const std::shared_ptr<const mpcc_rate_resolved_scheduled::NominalProof> &nominal() const noexcept {
+    return nominal_;
+  }
+  const program::Prepared &suffix() const noexcept { return suffix_; }
+  const vehicle::ScheduledInputTube &tube() const noexcept { return tube_; }
+  std::size_t first_suffix_index() const noexcept { return first_suffix_index_; }
+  double minimum_peer_clearance_m() const noexcept { return minimum_peer_clearance_m_; }
+  double minimum_follow_gap_m() const noexcept { return minimum_follow_gap_m_; }
+  std::size_t checked_samples() const noexcept { return checked_samples_; }
+
+private:
+  ScheduledCertificate() = default;
+  friend ScheduledResult certify_scheduled_terminal_stop(
+    std::shared_ptr<const mpcc_rate_resolved_scheduled::NominalProof>);
+  std::shared_ptr<const mpcc_rate_resolved_scheduled::NominalProof> nominal_;
+  program::Prepared suffix_;
+  vehicle::ScheduledInputTube tube_;
+  std::size_t first_suffix_index_{};
+  double minimum_peer_clearance_m_{std::numeric_limits<double>::infinity()};
+  double minimum_follow_gap_m_{std::numeric_limits<double>::infinity()};
+  std::size_t checked_samples_{};
+};
+
+ScheduledResult certify_scheduled_terminal_stop(
+  std::shared_ptr<const mpcc_rate_resolved_scheduled::NominalProof> nominal);
 
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_applied_program

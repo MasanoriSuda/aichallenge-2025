@@ -98,3 +98,17 @@
 - [x] Buildr71/testsr59合格。新しいnormal authorityは未接続。
 - [ ] 予定nominal証明/全rest検査・prefix連結/current sensor-world/async単一dispatchを接続。
 - [ ] 旧同期authorityを接続時に退役し、同一finalHEADの全M4–M6受入れを完遂。
+
+
+2026-09-11 scheduled full certificate（baseline6cf3b202）:
+- [x] 旧programmeの正確なprefix連結、別型の予定nominal/full-rest証明を実装。
+- [x] R246/r247の元Follow車間消失・nominal他車時刻の反例を固定し修正。
+- [x] R248全103test、r250固定130msの6入力x3prefix=18証明が合格。
+- [x] Buildr72全26package、testsr60は2493記録/64group、失敗0。
+- [x] R251–253既存21判定を維持。r18実履歴gapを引き続き拒否。
+- [ ] C4現在sensor/world/contextと実送信prefixを照合する。
+- [ ] C5非同期単一dispatchへ接続し、同時に旧同期normal authorityを退役。
+- [ ] 同一finalHEADで全M4–M6の受入れ、同一提出tar/image/evalを完遂。
+
+- [x] 最終レビューのscheduled引数漏れをR255で修正前後比較し、専用回帰を追加。
+  最終buildr74は26package、testsr62は2494記録/64groupで失敗0。

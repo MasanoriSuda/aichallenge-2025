@@ -3,18 +3,20 @@
 2026-09-11 JST。承認済みM1–M6を自律実行中。必要分のローカルcommitのみ。
 **全体未完。同期証明の実公開期限とM4–M6は未解決。**
 
-固定56464c65のr42は起動時の観測停滞でinconclusive。r43では両車で実送信台帳を
-確認したが、D2decision683が公開期限を約5ms超過し不合格。両run停止・成果物復元済み。
-予定prefixと元の観測を分離する名目点予測を追加。将来の整数時刻区間で余分な機械
-積分stepを作らない。旧800入力の出力bit一致、独立比較57test合格。
-Buildr71は26packages/5m02s、testsr59は2483記録/64group、エラー/失敗/skip0。
-新しいnormal authorityへは未接続。次は予定nominal/full-rest証明・prefix連結・現在
-sensor/world照合・非同期単一dispatcherを接続し、旧同期authorityを同時に退役する。
+旧programmeの明示prefixを含む予定nominal/full-rest証明を別型で実装。
+R246/r247で元Follow車間の消失と他車の予測時刻不備を再現し、接続前に修正した。
+R248は103test合格。r250は保存130ms設定の6入力x3prefix=18証明合格。
+最終レビューの予定context伝播漏れはR255で修正前後を比較し、全104native test合格。
+最終Buildr74は26packages、testsr62は2494記録/64group、エラー/失敗/skip0。
+R251–253は既存21判定を維持。現在のnormal authorityは同期のままで、新規実走行の
+期限合格は未確認。次はC4sensor/world/context/実送信prefixを照合し、C5非同期単一
+dispatcherへ接続する。同じsliceで旧同期authorityを退役する。
 
-[予定点予測の設計と証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-nominal-design.md)、
+[予定全停止証明](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-certificate-design.md)、
+[次の接続設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-dispatch-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+dev3/dev4六周、gate1–3、同一tar/image/evalは未完。r43実公開期限失敗は未解決。
 
 ## Superseded checkpoint and historical evidence
 

@@ -5,6 +5,7 @@
 #include "multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp"
 #include "multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_scheduled.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp"
@@ -2285,7 +2286,8 @@ namespace vehicle = multi_purpose_mpc_ros::mpcc_vehicle_model;
 
 retained::Request applied_request(const contract::ControlIntent intent = contract::ControlIntent::Track)
 {
-  auto original = intent == contract::ControlIntent::Follow ? accepted_follow_request() : accepted_request(certified_plan());
+  auto original = intent == contract::ControlIntent::Follow ? accepted_follow_request() : accepted_request(certified_plan(free_grid(), intent));
+  original.current_intent = intent;
   original.control_origin_sec = 1.09;
   const auto packet = retained::prospective_artifact_packet(original);
   if (!packet) throw std::runtime_error("no fixture packet");
@@ -3352,4 +3354,217 @@ TEST(MpccAppliedProgram, FinalPublicationObservationReportsMissingOrMismatchedEv
   EXPECT_FALSE(document["boundary"]["final_packet_matches"].as<bool>());
   EXPECT_EQ(capture::record_publication_failure(observation).status, capture::RecordStatus::Duplicate);
   std::filesystem::remove_all(directory);
+}
+
+
+namespace scheduled = multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled;
+
+scheduled::Request scheduled_request(const contract::ControlIntent intent = contract::ControlIntent::Track)
+{
+  auto observed = applied_request(intent);
+  observed.applied_program_required = true;
+  observed.input_application_profile = vehicle::InputApplicationProfile{"test-receiver", .25, .25, .02};
+  auto observation = observed.publication_prefix->observation;
+  for (std::size_t i = 0; i < observation.commands.size(); ++i)
+    observation.commands[i].published_sec = static_cast<double>(i * 25000000LL) / 1e9;
+  observed.publication_prefix = vehicle::predict_prospective_publication(observation,
+    observed.publication_prefix->proposed_packet, observed.plan->execution_artifact->vehicle_model);
+  if (!observed.publication_prefix) throw std::runtime_error("invalid scheduled fixture history");
+  const auto &forecast = *observed.publication_prefix;
+  const auto &origin = forecast.control_origin;
+  observed.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+  observed.control_origin_physical_progress_m = origin.x_m;
+  observed.current_speed_mps = forecast.current.forward_velocity_mps;
+  observed.control_origin_speed_mps = origin.forward_velocity_mps;
+  observed.current_steering_rad = origin.desired_steering_rad;
+  observed.current_response_steering_rad = origin.tire_steering_rad;
+  observed.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+  observed.current_yaw_rate_radps = origin.yaw_rate_radps;
+  observed.measured_to_control_path.clear(); observed.measured_to_control_elapsed_sec.clear();
+  for (const auto &sample : forecast.current_to_control) {
+    observed.measured_to_control_path.push_back({sample.state.x_m, sample.state.y_m, sample.state.yaw_rad});
+    observed.measured_to_control_elapsed_sec.push_back(sample.source_sec - observed.now_sec);
+  }
+  const double steering = observation.commands.back().wire_steering_rad;
+  vehicle::PublishedInputProgram prior{.025, {{1.05, -3, steering}, {1.075, -3, steering}}, true, .025};
+  prior.nanosecond_clock = vehicle::publication_nanosecond_clock(1.05, .025, .025);
+  return {observed, prior, 0, 2, 1.14, {{0, 0, 0}, 0}};
+}
+
+TEST(MpccScheduledProgram, FullProofPreservesWaitingStopAndCannotUseOrdinaryAuthority)
+{
+  for (const auto intent : {contract::ControlIntent::Track, contract::ControlIntent::Cruise, contract::ControlIntent::Follow}) {
+    SCOPED_TRACE(static_cast<int>(intent));
+    const auto request = scheduled_request(intent);
+    const auto result = scheduled::evaluate(request);
+    ASSERT_TRUE(result.applied.certificate) << retained::to_string(result.reason) << '/' <<
+      static_cast<int>(result.applied.reason) << '/' << static_cast<int>(result.applied.program_reason) << '/' <<
+      static_cast<int>(result.applied.prediction_reason);
+    EXPECT_EQ(result.reason, retained::Reason::Accepted);
+    EXPECT_FALSE(result.diagnostic.proof);
+    const auto &certificate = *result.applied.certificate;
+    const auto &nominal = *certificate.nominal();
+    EXPECT_EQ(certificate.first_suffix_index(), 2U);
+    EXPECT_DOUBLE_EQ(nominal.forecast().observation.now_sec, request.observed.now_sec);
+    EXPECT_DOUBLE_EQ(nominal.forecast().publication_sec, 1.1);
+    EXPECT_DOUBLE_EQ(nominal.forecast().control_origin_sec, 1.14);
+    EXPECT_EQ(nominal.forecast().observation.commands.size(), request.observed.publication_prefix->observation.commands.size());
+    EXPECT_GT(certificate.tube().rest_sec, nominal.forecast().control_origin_sec);
+    EXPECT_GT(certificate.checked_samples(), 2U);
+    ASSERT_GE(certificate.tube().program.commands.size(), 3U);
+    for (std::size_t i = 0; i < 2; ++i) {
+      EXPECT_DOUBLE_EQ(certificate.tube().program.commands[i].published_sec, request.prior_program.commands[i].published_sec);
+      EXPECT_DOUBLE_EQ(certificate.tube().program.commands[i].wire_acceleration_mps2, -3);
+      EXPECT_DOUBLE_EQ(certificate.tube().program.commands[i].wire_steering_rad, request.prior_program.commands[i].wire_steering_rad);
+    }
+    EXPECT_TRUE(nominal.proof().publication_prefix_required);
+    EXPECT_TRUE(nominal.proof().applied_program_required);
+    EXPECT_FALSE(nominal.proof().publication_prefix);
+    EXPECT_FALSE(nominal.proof().applied_program);
+    auto escaped = result.diagnostic;
+    escaped.proof = nominal.proof();
+    EXPECT_FALSE(production::build(escaped).authority);
+    EXPECT_FALSE(retained::evaluate(nominal.nominal_view()).proof);
+    if (intent == contract::ControlIntent::Follow) {
+      ASSERT_TRUE(nominal.nominal_view().follow_target);
+      const auto &old = *request.observed.follow_target;
+      const auto &future = *nominal.nominal_view().follow_target;
+      EXPECT_DOUBLE_EQ(future.observed_sec, old.observed_sec);
+      EXPECT_EQ(future.observation_generation, old.observation_generation);
+      for (double elapsed : {0.0, .03, .15, .5}) {
+        const auto original = retained::follow_target_progress_at(old, .05 + elapsed);
+        const auto shifted = retained::follow_target_progress_at(future, elapsed);
+        ASSERT_TRUE(original); ASSERT_TRUE(shifted);
+        EXPECT_NEAR(*original + request.observed.control_origin_physical_progress_m,
+          *shifted + nominal.nominal_view().control_origin_physical_progress_m, 1e-12);
+      }
+      EXPECT_GE(certificate.minimum_follow_gap_m(), old.hard_gap_m);
+    }
+  }
+}
+
+TEST(MpccScheduledProgram, RejectsUnboundFrameClockHistoryAndMissingRequiredInputs)
+{
+  const auto original = scheduled_request();
+  auto bad = original; bad.progress_frame.progress_m = .001;
+  EXPECT_EQ(scheduled::evaluate(bad).reason, retained::Reason::CourseFrameUnavailable);
+  bad = original; bad.prior_program.nanosecond_clock.reset();
+  bad.prior_program.commands[1].published_sec += 1e-9;
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  bad = original; bad.prior_program.repeat_last_until_rest = false; bad.preceding_packet_count = 3;
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  bad = original; bad.observed.publication_prefix->observation.commands.resize(1);
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  bad = original; bad.observed.publication_prefix->observation.commands.back().published_sec = 1.06;
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  bad = original; bad.observed.input_application_profile.reset();
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  bad = original; bad.observed.applied_program_required = false;
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  bad = original; bad.planned_control_origin_sec = 1.09;
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+}
+
+TEST(MpccScheduledProgram, RejectsPeerContactAndUnsafeFollowGap)
+{
+  auto request = scheduled_request();
+  const auto &body = request.observed.publication_prefix->observation.initial.state;
+  request.observed.obstacles.obstacles.push_back({"waiting-contact", {body.x_m, body.y_m, 0, 0, .2}});
+  EXPECT_FALSE(scheduled::evaluate(request).applied.certificate);
+  request = scheduled_request(contract::ControlIntent::Follow);
+  request.observed.follow_target->hard_gap_m = 6;
+  EXPECT_FALSE(scheduled::evaluate(request).applied.certificate);
+}
+
+
+TEST(MpccScheduledProgram, ChecksWaitingContactEvenWhenPeerLeavesBeforeTheNewPacket)
+{
+  auto request = scheduled_request();
+  const auto &body = request.observed.publication_prefix->observation.initial.state;
+  request.observed.obstacles.obstacles.push_back({"waiting-only", {body.x_m, body.y_m, 0, 30, .02}});
+  const auto result = scheduled::evaluate(request);
+  EXPECT_FALSE(result.applied.certificate);
+  // Nominal future path is clear. The complete applied proof must independently
+  // reject contact at the original observation, before the new first packet.
+  EXPECT_EQ(result.reason, retained::Reason::AppliedProgramUnavailable);
+  EXPECT_EQ(result.applied.reason, applied::Reason::PeerRejected);
+  EXPECT_EQ(result.applied.rejected_peer_id, "waiting-only");
+  EXPECT_LE(result.applied.rejected_sec, request.observed.now_sec);
+}
+
+
+TEST(MpccScheduledProgram, MovingPeerPredictionIncludesTheWaitingInterval)
+{
+  auto request = scheduled_request();
+  request.preceding_packet_count = 3;
+  request.planned_control_origin_sec = 1.165;
+  const auto empty_world = scheduled::evaluate(request);
+  ASSERT_TRUE(empty_world.applied.certificate) << retained::to_string(empty_world.reason);
+  const auto &future = empty_world.applied.certificate->nominal()->forecast().publication_state;
+  // The peer has already left this location when the future packet begins.
+  // Its original position is ahead of the ego; the waiting interval is clear.
+  request.observed.obstacles.obstacles.push_back({"already-departed", {future.x_m, future.y_m, 0, 30, .005}});
+  const auto result = scheduled::evaluate(request);
+  EXPECT_TRUE(result.applied.certificate) << retained::to_string(result.reason) << '/' <<
+    static_cast<int>(result.applied.reason) << '/' << result.applied.rejected_peer_id << '/' << result.applied.rejected_sec;
+  EXPECT_GT(result.diagnostic.minimum_dynamic_clearance_m, 0);
+}
+
+TEST(MpccScheduledProgram, FutureGapCannotEraseOriginalObservedHardGapViolation)
+{
+  auto request = scheduled_request(contract::ControlIntent::Follow);
+  request.observed.follow_target->current_target_gap_m = 2;
+  const auto result = scheduled::evaluate(request);
+  EXPECT_FALSE(result.applied.certificate);
+  EXPECT_EQ(result.reason, retained::Reason::FollowInitialHardGapViolation);
+}
+
+
+TEST(MpccScheduledProgram, PreservesOriginalFrameAndFollowObservationIdentity)
+{
+  auto request = scheduled_request(contract::ControlIntent::Follow);
+  auto bad = request; bad.observed.control_pose.y_m += .001;
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  bad = request; bad.observed.follow_target->observed_sec = 1.08;
+  EXPECT_EQ(scheduled::evaluate(bad).reason, retained::Reason::FollowTargetObservationInvalid);
+  bad = request; bad.observed.follow_target->target_id = "different-target";
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  bad = request; bad.observed.follow_target->observation_generation++;
+  EXPECT_FALSE(scheduled::evaluate(bad).applied.certificate);
+  const auto original = scheduled::evaluate(request);
+  ASSERT_TRUE(original.applied.certificate);
+  request.progress_frame.progress_m = 100;
+  request.observed.control_origin_physical_progress_m += 100;
+  const auto lifted = scheduled::evaluate(request);
+  ASSERT_TRUE(lifted.applied.certificate) << retained::to_string(lifted.reason);
+  EXPECT_NEAR(lifted.applied.certificate->minimum_follow_gap_m(),
+    original.applied.certificate->minimum_follow_gap_m(), 1e-12);
+  EXPECT_NEAR(lifted.applied.certificate->nominal()->original_follow_reference_progress_m(),
+    original.applied.certificate->nominal()->original_follow_reference_progress_m(), 1e-12);
+}
+
+TEST(MpccScheduledProgram, MissingSolvedStopReferencePreservesScheduledWorldContext)
+{
+  auto request = scheduled_request();
+  auto execution = std::make_shared<artifact::ExecutionArtifact>(*request.observed.plan->execution_artifact);
+  // A stationary virtual-progress interval does not define a strictly
+  // increasing normal-path lateral reference; the native Stop remains a
+  // candidate and must still carry the scheduled full-world obligation.
+  execution->predicted_states[1].progress_m = execution->predicted_states.front().progress_m;
+  execution->control_stages[0].virtual_progress_speed_mps = 0;
+  execution->control_stages[1].virtual_progress_speed_mps = 4;
+  ASSERT_EQ(artifact::validate(*execution), artifact::RejectReason::None);
+  namespace adapter = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
+  EXPECT_FALSE(adapter::build_normal_path_stop_profile(*execution));
+  const auto snapshot = source_snapshot(execution->identity);
+  const auto built = certified::build(execution, snapshot, accepted_result(snapshot));
+  ASSERT_TRUE(built.plan);
+  request.observed.plan = built.plan;
+  const auto &body = request.observed.publication_prefix->observation.initial.state;
+  request.observed.obstacles.obstacles.push_back({"waiting-only", {body.x_m, body.y_m, 0, 30, .02}});
+  const auto result = scheduled::evaluate(request);
+  EXPECT_FALSE(result.applied.certificate);
+  EXPECT_EQ(result.reason, retained::Reason::AppliedProgramUnavailable);
+  EXPECT_EQ(result.applied.reason, applied::Reason::PeerRejected);
+  EXPECT_EQ(result.applied.rejected_peer_id, "waiting-only");
 }

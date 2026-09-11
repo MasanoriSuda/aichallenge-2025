@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_scheduled.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -196,6 +197,103 @@ bool same_world(const retained::Request &a, const retained::Request &b) {
   }
   return true;
 }
+struct WorldCheckStatistics {
+  double minimum_peer_clearance_m{std::numeric_limits<double>::infinity()};
+  double minimum_follow_gap_m{std::numeric_limits<double>::infinity()};
+  std::size_t checked_samples{};
+};
+
+struct AppliedWorldCheck {
+  const retained::Request &request;
+  const vehicle::ObservationProvenance &observation;
+  const recovery::FootprintExtents &wall_footprint;
+  const std::optional<double> &expected_ceiling;
+  double follow_reference_progress_m;
+  WorldCheckStatistics &statistics;
+  Result &result;
+  recovery::Pose2D to_world(const recovery::Pose2D &local) const {
+    const auto &origin = observation.initial.state;
+    return recovery::Pose2D{origin.x_m + std::cos(origin.yaw_rad) * local.x_m -
+                                std::sin(origin.yaw_rad) * local.y_m,
+                            origin.y_m + std::sin(origin.yaw_rad) * local.x_m +
+                                std::cos(origin.yaw_rad) * local.y_m,
+                            origin.yaw_rad + local.yaw_rad};
+  }
+  Reason check(const vehicle::BodyRanges &ranges,
+                         const vehicle::FootprintRanges &corners,
+                         const double begin, const double end) {
+    const auto &execution = *request.plan->execution_artifact;
+    const auto &physical_source = *request.plan->physical_snapshot;
+    result.rejected_sec = begin;
+    const auto state = box(ranges);
+    const double tolerance =
+        std::max(1e-9, execution.physical_global_tolerance);
+    for (const auto &x : state) {
+      if (!std::isfinite(x.lo) || !std::isfinite(x.hi) || x.lo > x.hi)
+        return Reason::StateBoundRejected;
+    }
+    if (state[3].lo < -tolerance ||
+        (expected_ceiling && state[3].hi > *expected_ceiling) ||
+        std::max(std::abs(state[6].lo), std::abs(state[6].hi)) >
+            execution.maximum_abs_steering_rad + tolerance ||
+        std::max(std::abs(state[7].lo), std::abs(state[7].hi)) >
+            execution.vehicle_model.maximum_wire_steering_rad *
+                    execution.vehicle_model.tire_grip +
+                tolerance)
+      return Reason::StateBoundRejected;
+    const auto wall = numeric::footprint(state, wall_footprint);
+    const auto cells = recovery::sample_footprint(
+        *request.current_wall_grid, wall.extents, to_world(wall.pose));
+    if (!cells.valid || cells.out_of_map) return Reason::WallRejected;
+    for (const auto cell : cells.contact_cells)
+      if (!numeric::separating_oriented_cell_clearance(state, wall_footprint, box(corners), *request.current_wall_grid,
+            cell, {observation.initial.state.x_m, observation.initial.state.y_m, observation.initial.state.yaw_rad}))
+        return Reason::WallRejected;
+    const auto ego = numeric::footprint(state, request.current_footprint);
+    for (const auto &obstacle : request.obstacles.obstacles) {
+      auto circle = obstacle.circle;
+      const double t0 = begin - request.obstacles.observed_sec,
+                   t1 = end - request.obstacles.observed_sec;
+      circle.radius_m = numeric::up(
+          circle.radius_m + numeric::up(circle.maximum_speed(t0, t1) *
+                                        numeric::up((end - begin) / 2)));
+      auto clearance = recovery::circle_obstacle_clearance_at_time(
+          ego.extents, to_world(ego.pose), circle, (t0 + t1) / 2);
+      if (clearance && *clearance < 0) {
+        const auto center = circle.predicted_center((t0 + t1) / 2);
+        const auto &origin = observation.initial.state;
+        const auto separated = numeric::separating_circle_clearance(
+            state, request.current_footprint,
+            {origin.x_m, origin.y_m, origin.yaw_rad}, ego,
+            center[0], center[1], circle.radius_m);
+        if (separated)
+          clearance = *separated;
+      }
+      if (!clearance || *clearance < 0) {
+        result.rejected_peer_id = obstacle.id;
+        return Reason::PeerRejected;
+      }
+      statistics.minimum_peer_clearance_m =
+          std::min(statistics.minimum_peer_clearance_m, *clearance);
+    }
+    if (request.follow_target) {
+      const auto ego_progress = course_progress(
+          state, observation.initial.state, physical_source.course_frame_knots);
+      const auto target = retained::follow_target_progress_at(
+          *request.follow_target, begin - request.now_sec);
+      if (!ego_progress || !target)
+        return Reason::FollowProjectionUnavailable;
+      const I gap = I(follow_reference_progress_m) +
+                    I(*target) - I(ego_progress->hi);
+      statistics.minimum_follow_gap_m =
+          std::min(statistics.minimum_follow_gap_m, gap.lo);
+      if (gap.lo + 1e-9 < request.follow_target->hard_gap_m)
+        return Reason::FollowGapRejected;
+    }
+    ++statistics.checked_samples;
+    return Reason::Accepted;
+  }
+};
 } // namespace
 
 bool Certificate::matches(const retained::Request &request) const noexcept {
@@ -339,86 +437,9 @@ Result certify_terminal_stop(const retained::Request &request,
     observation, prepared.prepared->program, profile, execution.vehicle_model);
   if (certificate->tube_.context_fingerprint != 0 && !certificate->matches(nominal))
     return result;
-  const auto to_world = [&](const recovery::Pose2D &local) {
-    const auto &origin = observation.initial.state;
-    return recovery::Pose2D{origin.x_m + std::cos(origin.yaw_rad) * local.x_m -
-                                std::sin(origin.yaw_rad) * local.y_m,
-                            origin.y_m + std::sin(origin.yaw_rad) * local.x_m +
-                                std::cos(origin.yaw_rad) * local.y_m,
-                            origin.yaw_rad + local.yaw_rad};
-  };
-  const auto check = [&](const vehicle::BodyRanges &ranges,
-                         const vehicle::FootprintRanges &corners,
-                         const double begin, const double end) {
-    result.rejected_sec = begin;
-    const auto state = box(ranges);
-    const double tolerance =
-        std::max(1e-9, execution.physical_global_tolerance);
-    for (const auto &x : state) {
-      if (!std::isfinite(x.lo) || !std::isfinite(x.hi) || x.lo > x.hi)
-        return Reason::StateBoundRejected;
-    }
-    if (state[3].lo < -tolerance ||
-        (expected_ceiling && state[3].hi > *expected_ceiling) ||
-        std::max(std::abs(state[6].lo), std::abs(state[6].hi)) >
-            execution.maximum_abs_steering_rad + tolerance ||
-        std::max(std::abs(state[7].lo), std::abs(state[7].hi)) >
-            execution.vehicle_model.maximum_wire_steering_rad *
-                    execution.vehicle_model.tire_grip +
-                tolerance)
-      return Reason::StateBoundRejected;
-    const auto wall = numeric::footprint(state, *wall_footprint);
-    const auto cells = recovery::sample_footprint(
-        *request.current_wall_grid, wall.extents, to_world(wall.pose));
-    if (!cells.valid || cells.out_of_map) return Reason::WallRejected;
-    for (const auto cell : cells.contact_cells)
-      if (!numeric::separating_oriented_cell_clearance(state, *wall_footprint, box(corners), *request.current_wall_grid,
-            cell, {observation.initial.state.x_m, observation.initial.state.y_m, observation.initial.state.yaw_rad}))
-        return Reason::WallRejected;
-    const auto ego = numeric::footprint(state, request.current_footprint);
-    for (const auto &obstacle : request.obstacles.obstacles) {
-      auto circle = obstacle.circle;
-      const double t0 = begin - request.obstacles.observed_sec,
-                   t1 = end - request.obstacles.observed_sec;
-      circle.radius_m = numeric::up(
-          circle.radius_m + numeric::up(circle.maximum_speed(t0, t1) *
-                                        numeric::up((end - begin) / 2)));
-      auto clearance = recovery::circle_obstacle_clearance_at_time(
-          ego.extents, to_world(ego.pose), circle, (t0 + t1) / 2);
-      if (clearance && *clearance < 0) {
-        const auto center = circle.predicted_center((t0 + t1) / 2);
-        const auto &origin = observation.initial.state;
-        const auto separated = numeric::separating_circle_clearance(
-            state, request.current_footprint,
-            {origin.x_m, origin.y_m, origin.yaw_rad}, ego,
-            center[0], center[1], circle.radius_m);
-        if (separated)
-          clearance = *separated;
-      }
-      if (!clearance || *clearance < 0) {
-        result.rejected_peer_id = obstacle.id;
-        return Reason::PeerRejected;
-      }
-      certificate->minimum_peer_clearance_m_ =
-          std::min(certificate->minimum_peer_clearance_m_, *clearance);
-    }
-    if (request.follow_target) {
-      const auto ego_progress = course_progress(
-          state, observation.initial.state, physical_source.course_frame_knots);
-      const auto target = retained::follow_target_progress_at(
-          *request.follow_target, begin - request.now_sec);
-      if (!ego_progress || !target)
-        return Reason::FollowProjectionUnavailable;
-      const I gap = I(nominal.lifted_control_origin_physical_progress_m) +
-                    I(*target) - I(ego_progress->hi);
-      certificate->minimum_follow_gap_m_ =
-          std::min(certificate->minimum_follow_gap_m_, gap.lo);
-      if (gap.lo + 1e-9 < request.follow_target->hard_gap_m)
-        return Reason::FollowGapRejected;
-    }
-    ++certificate->checked_samples_;
-    return Reason::Accepted;
-  };
+  WorldCheckStatistics statistics;
+  AppliedWorldCheck world_check{request, observation, *wall_footprint,
+    expected_ceiling, nominal.lifted_control_origin_physical_progress_m, statistics, result};
   vehicle::AppliedFootprintValidation footprint_validation;
   const auto vertices = numeric::footprint_vertex_offsets(*wall_footprint);
   for (size_t i = 0; i < vertices.size(); ++i)
@@ -426,7 +447,7 @@ Result certify_terminal_stop(const retained::Request &request,
   footprint_validation.validate = [&](const vehicle::BodyRanges &ranges,
       const vehicle::FootprintRanges &corners, double begin, double end) {
     try {
-      result.reason = check(ranges, corners, begin, end);
+      result.reason = world_check.check(ranges, corners, begin, end);
     } catch (const std::exception &) {
       result.reason = Reason::InvalidWorld;
     }
@@ -483,12 +504,139 @@ Result certify_terminal_stop(const retained::Request &request,
       result.reason = Reason::InputPredictionRejected;
     return result;
   }
+  certificate->minimum_peer_clearance_m_ = statistics.minimum_peer_clearance_m;
+  certificate->minimum_follow_gap_m_ = statistics.minimum_follow_gap_m;
+  certificate->checked_samples_ = statistics.checked_samples;
   certificate->tube_ = std::move(*prediction.tube);
   if (!certificate->matches(nominal)) {
     result.reason = Reason::InvalidNominalProof;
     return result;
   }
   result.rejected_sec = std::numeric_limits<double>::quiet_NaN();
+  result.certificate = std::move(certificate);
+  return result;
+}
+
+ScheduledResult certify_scheduled_terminal_stop(
+    std::shared_ptr<const mpcc_rate_resolved_scheduled::NominalProof> nominal) {
+  ScheduledResult result;
+  if (!nominal) return result;
+  const auto &request = nominal->observed();
+  const auto &view = nominal->nominal_view();
+  const auto &proof = nominal->proof();
+  const auto &forecast = nominal->forecast();
+  if (!request.plan || !request.plan->execution_artifact || !request.plan->physical_snapshot ||
+      mpcc_rate_resolved_certified_plan::validate(*request.plan) !=
+        mpcc_rate_resolved_certified_plan::RejectReason::None ||
+      view.plan != request.plan || proof.plan != request.plan ||
+      view.decision_id != request.decision_id || proof.decision_id != request.decision_id ||
+      proof.observation_origin_sec != forecast.publication_sec ||
+      proof.control_origin_sec != forecast.control_origin_sec ||
+      view.now_sec != forecast.publication_sec || view.control_origin_sec != forecast.control_origin_sec ||
+      proof.obstacle_generation != request.obstacles.generation ||
+      proof.observed_sec != request.obstacles.observed_sec ||
+      !proof.terminal_stop_certified || proof.terminal_stop_actuation_samples.empty() ||
+      !proof.publication_prefix_required || proof.publication_prefix ||
+      !proof.applied_program_required || proof.applied_program ||
+      !request.publication_prefix || !request.input_application_profile ||
+      forecast.observation.now_sec != request.now_sec ||
+      forecast.publication_sec < request.now_sec ||
+      forecast.nominal_prefix.commands.empty() || forecast.nominal_prefix.repeat_last_until_rest ||
+      forecast.nominal_prefix.commands.back().published_sec != forecast.publication_sec)
+    return result;
+  const auto &execution = *request.plan->execution_artifact;
+  const auto &physical_source = *request.plan->physical_snapshot;
+  const auto &profile = *request.input_application_profile;
+  const auto &first_packet = forecast.nominal_prefix.commands.back();
+  if (forecast.vehicle_model_fingerprint != vehicle::fingerprint(execution.vehicle_model) ||
+      first_packet.wire_acceleration_mps2 != static_cast<float>(proof.actuation.acceleration_mps2) ||
+      first_packet.wire_steering_rad != mpcc_wire_command::steering(
+        proof.actuation.steering_rad, execution.vehicle_model.steering_wire_gain) ||
+      forecast.nominal_prefix.publication_interval_sec != execution.publication_interval_sec ||
+      forecast.nominal_prefix.maximum_publication_delay_sec != execution.publication_interval_sec)
+    return result;
+  const auto ceiling = proof.terminal_stop_source_horizon_program ?
+    retained::source_horizon_velocity_ceiling(view) :
+    (execution.applied_stop_program ? execution.applied_stop_program->forward_velocity_ceiling_mps : std::nullopt);
+  if ((proof.terminal_stop_source_horizon_program &&
+      (!proof.terminal_stop_constant_steering_program || proof.terminal_stop_uses_solved_suffix || !ceiling)) ||
+      proof.terminal_stop_forward_velocity_ceiling_mps != ceiling) return result;
+  if (ceiling) {
+    if (!std::isfinite(*ceiling) || *ceiling <= 0 || view.control_origin_speed_mps > *ceiling) return result;
+    for (double velocity : proof.terminal_stop_trajectory.velocity_mps)
+      if (!std::isfinite(velocity) || velocity > *ceiling) return result;
+  }
+  program::Request input{execution.identity, request.decision_id, forecast.control_origin_sec,
+    execution.publication_interval_sec, first_packet, execution.vehicle_model.steering_wire_gain,
+    request.minimum_acceleration_mps2, request.maximum_acceleration_mps2,
+    execution.maximum_abs_steering_rad, execution.maximum_abs_steering_rate_radps,
+    execution.physical_global_tolerance, proof.terminal_stop_actuation_samples};
+  input.maximum_publication_delay_sec = forecast.nominal_prefix.maximum_publication_delay_sec;
+  if (forecast.nominal_prefix.nanosecond_clock) {
+    input.nanosecond_clock = vehicle::publication_nanosecond_clock(first_packet.published_sec,
+      input.publication_interval_sec, input.maximum_publication_delay_sec);
+    if (!input.nanosecond_clock) return result;
+  }
+  const auto prepared = program::prepare(input);
+  result.program_reason = prepared.reason;
+  if (!prepared.prepared) { result.reason = Reason::ProgramUnavailable; return result; }
+  const auto prefix_count = forecast.nominal_prefix.commands.size() - 1;
+  const auto composite = vehicle::prepend_publication_prefix(forecast.nominal_prefix,
+    0, prefix_count, prepared.prepared->program);
+  if (!composite) { result.reason = Reason::ProgramUnavailable; return result; }
+  const auto context = vehicle::scheduled_input_context_fingerprint(
+    forecast.observation, *composite, profile, execution.vehicle_model);
+  if (!context || context != vehicle::scheduled_input_context_fingerprint(
+      request.publication_prefix->observation, *composite, profile, execution.vehicle_model))
+    return result;
+  if (!request.obstacles.current ||
+      !mpcc_rate_resolved_dynamic_proof::observation_valid(request.obstacles) ||
+      request.obstacles.observed_sec > request.now_sec ||
+      !request.current_wall_grid || !request.current_wall_grid->valid() ||
+      !request.current_footprint.valid() ||
+      !std::isfinite(nominal->original_follow_reference_progress_m())) {
+    result.reason = Reason::InvalidWorld; return result;
+  }
+  const auto wall_footprint = physical::resolve_clearance_footprint(
+    request.current_footprint, physical_source.hard_wall_clearance_m);
+  if (!wall_footprint) { result.reason = Reason::InvalidWorld; return result; }
+  Result diagnostic;
+  WorldCheckStatistics statistics;
+  AppliedWorldCheck checker{request, forecast.observation, *wall_footprint, ceiling,
+    nominal->original_follow_reference_progress_m(), statistics, diagnostic};
+  vehicle::AppliedFootprintValidation footprint;
+  const auto vertices = numeric::footprint_vertex_offsets(*wall_footprint);
+  for (std::size_t i = 0; i < vertices.size(); ++i)
+    footprint.local_offsets[i] = {vertices[i].lo, vertices[i].hi};
+  footprint.validate = [&](const vehicle::BodyRanges &ranges,
+      const vehicle::FootprintRanges &corners, double begin, double end) {
+    try { diagnostic.reason = checker.check(ranges, corners, begin, end); }
+    catch (const std::exception &) { diagnostic.reason = Reason::InvalidWorld; }
+    return diagnostic.reason == Reason::Accepted;
+  };
+  auto prediction = vehicle::predict_scheduled_inputs_to_rest(forecast.observation,
+    *composite, profile, execution.vehicle_model, {}, &footprint);
+  result.prediction_reason = prediction.reason;
+  result.rejected_sec = diagnostic.rejected_sec;
+  result.rejected_peer_id = diagnostic.rejected_peer_id;
+  if (!prediction.tube) {
+    result.reason = prediction.reason == vehicle::AppliedInputRejectReason::ValidationRejected ?
+      diagnostic.reason : Reason::InputPredictionRejected;
+    return result;
+  }
+  if (prediction.tube->context_fingerprint != context ||
+      prediction.tube->rest_sec <= forecast.publication_sec) return result;
+  auto certificate = std::shared_ptr<ScheduledCertificate>(new ScheduledCertificate);
+  certificate->nominal_ = std::move(nominal);
+  certificate->suffix_ = *prepared.prepared;
+  certificate->tube_ = std::move(*prediction.tube);
+  certificate->first_suffix_index_ = prefix_count;
+  certificate->minimum_peer_clearance_m_ = statistics.minimum_peer_clearance_m;
+  certificate->minimum_follow_gap_m_ = statistics.minimum_follow_gap_m;
+  certificate->checked_samples_ = statistics.checked_samples;
+  result.reason = Reason::Accepted;
+  result.rejected_sec = std::numeric_limits<double>::quiet_NaN();
+  result.rejected_peer_id.clear();
   result.certificate = std::move(certificate);
   return result;
 }

@@ -56,6 +56,14 @@ std::optional<PublicationNanosecondClock> publication_nanosecond_clock(
 std::optional<double> publication_epoch(const PublishedInputProgram &program,
   std::size_t index, bool latest = false) noexcept;
 
+/// Keep exactly count already-declared future packets starting at prior_index,
+/// then append a successor on the same inherited clock. No epoch, window or
+/// wire value is changed. A repeated prior tail must be explicitly enabled.
+/// Composition grants no authority to either prefix or successor.
+std::optional<PublishedInputProgram> prepend_publication_prefix(
+  const PublishedInputProgram &prior, std::size_t prior_index, std::size_t count,
+  const PublishedInputProgram &successor) noexcept;
+
 /// Nominal forecast under an explicit future prefix. Original observations and
 /// actual publications remain unchanged. Only packets through selected_index
 /// are used: the selected packet is held to its latency-compensated control

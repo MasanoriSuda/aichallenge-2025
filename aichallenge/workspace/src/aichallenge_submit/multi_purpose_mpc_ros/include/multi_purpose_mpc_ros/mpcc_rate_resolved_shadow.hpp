@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_SHADOW_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
+#include "multi_purpose_mpc_ros/mpcc_scheduled_context.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp"
@@ -143,6 +144,10 @@ struct Snapshot
   double wall_boundary_guard_m{0.001};
   std::optional<ReplayWorld> replay_world;
   double publication_interval_sec{};
+  /// Live lifecycle captured with the solver input. Copies/refinements and the
+  /// CertifiedPlan's solver_source_snapshot preserve it; serialized historical
+  /// inputs deliberately have no current-session authority.
+  mpcc_rate_resolved_scheduled::ContextSnapshot normal_context_generation{};
 };
 
 /// Immutable output of the asynchronous preparation phase.  It is numerical

@@ -601,11 +601,14 @@ TEST(
 {
   shadow::SolverContext preparation_context;
   shadow::LatestStateFeedbackSolverContext feedback_context;
+  multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled::ContextOwner context_owner;
   auto old_origin = snapshot();
+  old_origin.normal_context_generation = context_owner.capture();
   old_origin.request = narrow_progress_request();
   const auto prepared = preparation_context.evaluate(old_origin);
   ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
   ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  EXPECT_TRUE(prepared.latest_state_feedback_preparation->snapshot.normal_context_generation.same_generation(context_owner.capture()));
 
   const execution::PredictedState latest_state{
     0.0, 0.0, 0.0, 2.0, 0.40, 0.10, 0.08};
@@ -628,6 +631,7 @@ TEST(
   ASSERT_EQ(suffix.reason, shadow::TimeAlignedSuffixReason::Accepted)
     << suffix.detail;
   ASSERT_TRUE(suffix.snapshot.has_value());
+  EXPECT_TRUE(suffix.snapshot->normal_context_generation.same_generation(context_owner.capture()));
   EXPECT_EQ(suffix.consumed_stage_count, 2U);
   EXPECT_NEAR(suffix.first_remaining_stage_duration_sec, 0.10, 1e-12);
   EXPECT_EQ(suffix.snapshot->request.horizon_steps, 1);

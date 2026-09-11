@@ -157,7 +157,11 @@ mpcc_rate_resolved_shadow::Snapshot make_return_source()
 
 TEST(MpccStatelessManeuver, BuildsBothSidesWithoutMissionGeometry)
 {
-  const auto source = make_source();
+  mpcc_rate_resolved_scheduled::ContextOwner context_owner;
+  auto source = make_source();
+  const auto without_lifecycle = mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  source.normal_context_generation = context_owner.capture();
+  EXPECT_EQ(mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), without_lifecycle);
   const auto source_fingerprint =
     mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
   const auto left = build(source, source_fingerprint, 1);
@@ -171,6 +175,11 @@ TEST(MpccStatelessManeuver, BuildsBothSidesWithoutMissionGeometry)
   EXPECT_GT(left.seed->lateral_reference_m[1], 0.0);
   EXPECT_LT(right.seed->lateral_reference_m[1], 0.0);
   EXPECT_NE(left.seed->candidate_fingerprint, right.seed->candidate_fingerprint);
+  EXPECT_TRUE(left.seed->solver_snapshot.normal_context_generation.same_generation(context_owner.capture()));
+  EXPECT_TRUE(right.seed->solver_snapshot.normal_context_generation.same_generation(context_owner.capture()));
+  context_owner.invalidate();
+  EXPECT_FALSE(left.seed->solver_snapshot.normal_context_generation.valid());
+  EXPECT_FALSE(right.seed->solver_snapshot.normal_context_generation.valid());
 }
 
 TEST(MpccStatelessManeuver, ReturnBehindTargetPreservesRejoinReference)

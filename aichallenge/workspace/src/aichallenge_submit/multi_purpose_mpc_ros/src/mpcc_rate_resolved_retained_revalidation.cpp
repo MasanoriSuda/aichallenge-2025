@@ -2380,7 +2380,8 @@ Result evaluate(const Request &request) {
   retained::ScheduledNominalContext context{*forecast, [&](const retained::Proof &proof) {
     auto nominal = std::shared_ptr<NominalProof>(new NominalProof);
     nominal->observed_ = observed;
-    nominal->source_context_ = request.source_context;
+    nominal->source_context_ = observed.plan->solver_source_snapshot ?
+      observed.plan->solver_source_snapshot->normal_context_generation : ContextSnapshot{};
     nominal->nominal_view_ = view;
     nominal->proof_ = proof;
     nominal->forecast_ = *forecast;

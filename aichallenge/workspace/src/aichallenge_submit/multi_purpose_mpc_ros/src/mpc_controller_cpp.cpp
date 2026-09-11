@@ -161,6 +161,7 @@ namespace overtake_sibling_adoption =
   ::multi_purpose_mpc_ros::mpcc_overtake_sibling_adoption;
 namespace latest_state_feedback =
   ::multi_purpose_mpc_ros::mpcc_latest_state_feedback;
+namespace scheduled_control = multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled;
 namespace rate_resolved_shadow =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
 namespace rate_resolved_physical =
@@ -640,6 +641,23 @@ struct BorderCellsData
 
 struct ReferencePath
 {
+  // A tactical copy owns its values, but never the live MPC invalidator.
+  ReferencePath(const ReferencePath & other)
+  : map(other.map), org_wp_x(other.org_wp_x), org_wp_y(other.org_wp_y),
+    resolution(other.resolution), smoothing_distance(other.smoothing_distance),
+    circular(other.circular), waypoints(other.waypoints), n_waypoints(other.n_waypoints),
+    length(other.length), segment_lengths(other.segment_lengths),
+    nominal_v_ref(other.nominal_v_ref), path_constraints_upper(other.path_constraints_upper),
+    path_constraints_lower(other.path_constraints_lower), border_cells(other.border_cells)
+  {}
+
+  ReferencePath & operator=(const ReferencePath &) = delete;
+
+  void bind_context_invalidator(std::function<void()> invalidator)
+  {
+    context_invalidator_ = std::move(invalidator);
+  }
+
   ReferencePath(
     Map * map_ptr, const std::vector<double> & wp_x, const std::vector<double> & wp_y,
     const double resolution_in, const int smoothing_distance_in, const double max_width,
@@ -746,6 +764,7 @@ struct ReferencePath
 
   void compute_length()
   {
+    invalidate_context_before_mutation();
     segment_lengths.clear();
     segment_lengths.push_back(0.0);
     length = 0.0;
@@ -801,6 +820,7 @@ struct ReferencePath
 
   void compute_width(const double max_width)
   {
+    invalidate_context_before_mutation();
     for (auto & wp : waypoints) {
       const double left_angle = wrap_to_pi(wp.psi + kPi / 2.0);
       const double right_angle = wrap_to_pi(wp.psi - kPi / 2.0);
@@ -826,6 +846,11 @@ struct ReferencePath
   void reset_dynamic_constraints()
   {
     for (auto & wp : waypoints) {
+      if (wp.dynamic_upper_cell != wp.static_upper_cell ||
+          wp.dynamic_lower_cell != wp.static_lower_cell || wp.ub_sm != wp.ub || wp.lb_sm != wp.lb)
+      {
+        invalidate_context_before_mutation();
+      }
       wp.dynamic_upper_cell = wp.static_upper_cell;
       wp.dynamic_lower_cell = wp.static_lower_cell;
       wp.ub_sm = wp.ub;
@@ -837,9 +862,12 @@ struct ReferencePath
   {
     const std::size_t count = std::min(v_ref.size(), waypoints.size());
     for (std::size_t i = 0; i < count; ++i) {
-      waypoints[i].v_ref =
-        nominal_v_ref.size() == waypoints.size() ?
+      const double next = nominal_v_ref.size() == waypoints.size() ?
         std::min(nominal_v_ref[i], v_ref[i]) : v_ref[i];
+      if (waypoints[i].v_ref != next) {
+        invalidate_context_before_mutation();
+        waypoints[i].v_ref = next;
+      }
     }
   }
 
@@ -876,10 +904,11 @@ struct ReferencePath
     if (!result.has_value() || result->velocity_mps.size() != waypoints.size()) {
       return false;
     }
-    nominal_v_ref = result->velocity_mps;
-    for (std::size_t i = 0; i < waypoints.size(); ++i) {
-      waypoints[i].v_ref = nominal_v_ref[i];
+    if (nominal_v_ref != result->velocity_mps) {
+      invalidate_context_before_mutation();
+      nominal_v_ref = result->velocity_mps;
     }
+    set_v_ref(nominal_v_ref);
     return true;
   }
 
@@ -893,23 +922,15 @@ struct ReferencePath
     return waypoints.at(wp_id);
   }
 
-  Waypoint & get_waypoint_mutable(int wp_id)
-  {
-    if (wp_id >= n_waypoints && circular) {
-      wp_id = wp_id % n_waypoints;
-    } else if (wp_id >= n_waypoints && !circular) {
-      wp_id = n_waypoints - 1;
-    }
-    return waypoints.at(wp_id);
-  }
-
   void update_simple_path_constraints(const int N, const double safety_margin)
   {
-    path_constraints_upper.assign(n_waypoints - 1, std::vector<double>(N, 0.0));
-    path_constraints_lower.assign(n_waypoints - 1, std::vector<double>(N, 0.0));
-    border_cells.dynamic_upper_bounds.assign(
+    std::vector<std::vector<double>> next_upper(n_waypoints - 1, std::vector<double>(N, 0.0));
+    std::vector<std::vector<double>> next_lower(n_waypoints - 1, std::vector<double>(N, 0.0));
+    BorderCellsData next_cells;
+    next_cells.current_wp_id = border_cells.current_wp_id;
+    next_cells.dynamic_upper_bounds.assign(
       n_waypoints - 1, std::vector<std::pair<double, double>>(N, {0.0, 0.0}));
-    border_cells.dynamic_lower_bounds.assign(
+    next_cells.dynamic_lower_bounds.assign(
       n_waypoints - 1, std::vector<std::pair<double, double>>(N, {0.0, 0.0}));
 
     for (int wp_id = 0; wp_id < n_waypoints - 1; ++wp_id) {
@@ -927,11 +948,20 @@ struct ReferencePath
           wp.x + ub_sm * std::cos(angle_ub), wp.y + ub_sm * std::sin(angle_ub)};
         const std::pair<double, double> lb_sm_ls{
           wp.x - lb_sm * std::cos(angle_lb), wp.y - lb_sm * std::sin(angle_lb)};
-        path_constraints_upper[wp_id][n] = ub_sm;
-        path_constraints_lower[wp_id][n] = lb_sm;
-        border_cells.dynamic_upper_bounds[wp_id][n] = ub_sm_ls;
-        border_cells.dynamic_lower_bounds[wp_id][n] = lb_sm_ls;
+        next_upper[wp_id][n] = ub_sm;
+        next_lower[wp_id][n] = lb_sm;
+        next_cells.dynamic_upper_bounds[wp_id][n] = ub_sm_ls;
+        next_cells.dynamic_lower_bounds[wp_id][n] = lb_sm_ls;
       }
+    }
+    if (next_upper != path_constraints_upper || next_lower != path_constraints_lower ||
+        next_cells.dynamic_upper_bounds != border_cells.dynamic_upper_bounds ||
+        next_cells.dynamic_lower_bounds != border_cells.dynamic_lower_bounds)
+    {
+      invalidate_context_before_mutation();
+      path_constraints_upper = std::move(next_upper);
+      path_constraints_lower = std::move(next_lower);
+      border_cells = std::move(next_cells);
     }
   }
 
@@ -948,14 +978,19 @@ struct ReferencePath
       return false;
     }
 
-    path_constraints_upper.assign(rows, std::vector<double>(cols, 0.0));
-    path_constraints_lower.assign(rows, std::vector<double>(cols, 0.0));
+    std::vector<std::vector<double>> next_upper(rows, std::vector<double>(cols, 0.0));
+    std::vector<std::vector<double>> next_lower(rows, std::vector<double>(cols, 0.0));
     for (int row = 0; row < rows; ++row) {
       for (int col = 0; col < cols; ++col) {
         const std::size_t index = static_cast<std::size_t>(row * cols + col);
-        path_constraints_upper[row][col] = static_cast<double>(upper_bounds[index]);
-        path_constraints_lower[row][col] = static_cast<double>(lower_bounds[index]);
+        next_upper[row][col] = static_cast<double>(upper_bounds[index]);
+        next_lower[row][col] = static_cast<double>(lower_bounds[index]);
       }
+    }
+    if (next_upper != path_constraints_upper || next_lower != path_constraints_lower) {
+      invalidate_context_before_mutation();
+      path_constraints_upper = std::move(next_upper);
+      path_constraints_lower = std::move(next_lower);
     }
     return true;
   }
@@ -973,20 +1008,28 @@ struct ReferencePath
       return false;
     }
 
-    border_cells.dynamic_upper_bounds.assign(
+    BorderCellsData next_cells;
+    next_cells.current_wp_id = border_cells.current_wp_id;
+    next_cells.dynamic_upper_bounds.assign(
       rows, std::vector<std::pair<double, double>>(cols, {0.0, 0.0}));
-    border_cells.dynamic_lower_bounds.assign(
+    next_cells.dynamic_lower_bounds.assign(
       rows, std::vector<std::pair<double, double>>(cols, {0.0, 0.0}));
     for (int row = 0; row < rows; ++row) {
       for (int col = 0; col < cols; ++col) {
         const std::size_t index = static_cast<std::size_t>((row * cols + col) * 2);
-        border_cells.dynamic_upper_bounds[row][col] = {
+        next_cells.dynamic_upper_bounds[row][col] = {
           static_cast<double>(dynamic_upper_bounds[index]),
           static_cast<double>(dynamic_upper_bounds[index + 1])};
-        border_cells.dynamic_lower_bounds[row][col] = {
+        next_cells.dynamic_lower_bounds[row][col] = {
           static_cast<double>(dynamic_lower_bounds[index]),
           static_cast<double>(dynamic_lower_bounds[index + 1])};
       }
+    }
+    if (next_cells.dynamic_upper_bounds != border_cells.dynamic_upper_bounds ||
+        next_cells.dynamic_lower_bounds != border_cells.dynamic_lower_bounds)
+    {
+      invalidate_context_before_mutation();
+      border_cells = std::move(next_cells);
     }
     return true;
   }
@@ -1005,6 +1048,13 @@ struct ReferencePath
   std::vector<std::vector<double>> path_constraints_upper;
   std::vector<std::vector<double>> path_constraints_lower;
   BorderCellsData border_cells;
+
+private:
+  void invalidate_context_before_mutation() const
+  {
+    if (context_invalidator_) context_invalidator_();
+  }
+  std::function<void()> context_invalidator_;
 };
 
 struct TemporalState
@@ -6213,6 +6263,7 @@ struct RateResolvedTrackCruiseSubmissionDraft
   int horizon_steps{};
   int execution_prefix_steps{};
   mpcc_contract::MpccProblemContext source_context;
+  scheduled_control::ContextSnapshot source_generation{};
 };
 
 struct RateResolvedSerializedPredecessor
@@ -6296,6 +6347,7 @@ struct BoundRateResolvedTrackCruiseSubmission
   int horizon_steps{};
   int execution_prefix_steps{};
   mpcc_contract::MpccProblemContext source_context;
+  scheduled_control::ContextSnapshot source_generation{};
   double command_control_origin_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
   double physical_control_origin_response_steering_rad{
@@ -8514,6 +8566,7 @@ struct MPC
     snapshot->dynamic_obstacle_lateral_escape_solver_backoff_ =
       dynamic_obstacle_lateral_escape_solver_backoff_;
     snapshot->overtake_contact_wall_guard_safe_ = overtake_contact_wall_guard_safe_;
+    snapshot->captured_normal_context_generation_ = current_normal_context_generation();
     snapshot->mpcc_lite_async_worker_context_ = true;
     return snapshot;
   }
@@ -8554,8 +8607,20 @@ struct MPC
       std::optional<OwnedTacticalSnapshot>{std::move(snapshot)} : std::nullopt;
   }
 
+  scheduled_control::ContextSnapshot current_normal_context_generation() const
+  {
+    return mpcc_lite_async_worker_context_ ? captured_normal_context_generation_ : normal_context_owner_.capture();
+  }
+
+  void invalidate_scheduled_context() noexcept
+  {
+    // Worker tactical mutations must not revoke their live parent's input.
+    if (!mpcc_lite_async_worker_context_) normal_context_owner_.invalidate();
+  }
+
   void invalidate_mpcc_lite_async_results()
   {
+    invalidate_scheduled_context();
     ++mpcc_lite_async_context_epoch_;
     mpcc_lite_async_last_accepted_result_.reset();
     const auto invalidate_mailbox = [this](auto & mailbox) {
@@ -8588,6 +8653,7 @@ struct MPC
 
   void set_gap_planner(V2XGapPlanner * planner)
   {
+    if (gap_planner != planner) invalidate_scheduled_context();
     gap_planner = planner;
   }
 
@@ -8595,6 +8661,7 @@ struct MPC
     const recovery_footprint::OccupancyGrid * grid,
     const recovery_footprint::FootprintExtents & footprint)
   {
+    invalidate_scheduled_context();
     overtake_static_wall_grid_snapshot_owner_.reset();
     overtake_static_wall_grid_fingerprint_ = 0U;
     if (grid != nullptr) {
@@ -8689,11 +8756,13 @@ struct MPC
 
   void update_v_max(const double v_max)
   {
+    if (cfg.v_max != v_max) invalidate_scheduled_context();
     cfg.v_max = v_max;
   }
 
   void update_ay_max(const double ay_max)
   {
+    if (cfg.ay_max != ay_max) invalidate_scheduled_context();
     cfg.ay_max = ay_max;
   }
 
@@ -8702,6 +8771,7 @@ struct MPC
     if (!mpc_waypoint_preview::is_valid_offset(wp_id_offset)) {
       throw std::invalid_argument("MPC waypoint preview offset must be within [0, 2]");
     }
+    if (cfg.wp_id_offset != wp_id_offset) invalidate_scheduled_context();
     cfg.wp_id_offset = wp_id_offset;
   }
 
@@ -8710,6 +8780,7 @@ struct MPC
     if (!mpc_waypoint_preview::is_valid_offset(wp_id_low_offset)) {
       throw std::invalid_argument("MPC low-speed waypoint preview offset must be within [0, 2]");
     }
+    if (cfg.wp_id_low_offset != wp_id_low_offset) invalidate_scheduled_context();
     cfg.wp_id_low_offset = wp_id_low_offset;
   }
 
@@ -9072,6 +9143,7 @@ struct MPC
       return;
     }
 
+    invalidate_scheduled_context();
     v2x_race_session_active_ = active;
     v2x_behavior_state = V2XBehaviorState::Cruise;
     v2x_behavior_state_initialized = false;
@@ -25093,6 +25165,7 @@ struct MPC
       return std::nullopt;
     }
     RateResolvedTrackCruiseSubmissionDraft draft;
+    draft.source_generation = current_normal_context_generation();
     draft.request =
       extended_problem->rate_resolved_track_cruise_shadow_request.value();
     draft.request.current_steering_rad =
@@ -25185,6 +25258,7 @@ struct MPC
     bound.horizon_steps = draft.horizon_steps;
     bound.execution_prefix_steps = draft.execution_prefix_steps;
     bound.source_context = draft.source_context;
+    bound.source_generation = draft.source_generation;
     bound.command_control_origin_steering_rad =
       predecessor.physical_steering_rad;
     bound.physical_control_origin_response_steering_rad =
@@ -25237,6 +25311,7 @@ struct MPC
     rate_resolved_shadow::Snapshot snapshot;
     snapshot.identity.sequence = sequence;
     snapshot.identity.source_context = bound_submission.source_context;
+    snapshot.normal_context_generation = bound_submission.source_generation;
     snapshot.identity.snapshot_sec = now_sec;
     snapshot.control_prediction_origin_sec =
       bound_submission.control_prediction_origin_sec;
@@ -31229,6 +31304,8 @@ struct MPC
   bool mpcc_lite_shadow_last_logged_agreement_{false};
   bool mpcc_lite_shadow_last_logged_hold_{false};
   bool mpcc_lite_async_worker_context_{false};
+  mutable scheduled_control::ContextOwner normal_context_owner_;
+  scheduled_control::ContextSnapshot captured_normal_context_generation_{};
   std::shared_ptr<MpccLiteAsyncMailbox> mpcc_lite_async_mailbox_;
   std::unique_ptr<LatestOnlyWorker> mpcc_lite_async_worker_;
   std::uint64_t mpcc_lite_async_next_sequence_{1U};
@@ -32547,6 +32624,7 @@ private:
       return;
     }
     const bool newly_invalidated = !current_overtake_mission_invalidated();
+    if (newly_invalidated) invalidate_scheduled_context();
     overtake_line_state_.invalidated_mission_generation =
       overtake_line_state_.mission_generation;
     overtake_line_state_.mission_invalidation_reason = reason;
@@ -54223,6 +54301,7 @@ private:
       mpc_cfg_.waypoint_association);
     mpc_ = std::make_unique<MPC>(
       car_.get(), mpc_cfg_, use_obstacle_avoidance_, cfg_.reference_path.use_path_constraints_topic);
+    reference_path_->bind_context_invalidator([this]() { mpc_->invalidate_scheduled_context(); });
     if (recovery_grid_ && recovery_footprint_.valid()) {
       mpc_->set_overtake_static_wall_geometry(recovery_grid_.get(), recovery_footprint_);
     }
@@ -54343,29 +54422,39 @@ private:
               return result;
             }
           } else if (name == "Q0") {
+            if (mpc_->cfg.Q[0] != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.Q[0] = param.as_double();
           } else if (name == "Q1") {
+            if (mpc_->cfg.Q[1] != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.Q[1] = param.as_double();
           } else if (name == "Q2") {
+            if (mpc_->cfg.Q[2] != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.Q[2] = param.as_double();
           } else if (name == "R0") {
+            if (mpc_->cfg.R[0] != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.R[0] = param.as_double();
           } else if (name == "R1") {
+            if (mpc_->cfg.R[1] != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.R[1] = param.as_double();
           } else if (name == "QN0") {
+            if (mpc_->cfg.QN[0] != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.QN[0] = param.as_double();
           } else if (name == "QN1") {
+            if (mpc_->cfg.QN[1] != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.QN[1] = param.as_double();
           } else if (name == "QN2") {
+            if (mpc_->cfg.QN[2] != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.QN[2] = param.as_double();
           } else if (name == "ay_max") {
             mpc_cfg_.ay_max = param.as_double();
             mpc_->update_ay_max(param.as_double());
           } else if (name == "accel_low_pass_gain") {
             mpc_cfg_.accel_low_pass_gain = param.as_double();
+            if (mpc_->cfg.accel_low_pass_gain != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.accel_low_pass_gain = param.as_double();
           } else if (name == "steer_low_pass_gain") {
             mpc_cfg_.steer_low_pass_gain = param.as_double();
+            if (mpc_->cfg.steer_low_pass_gain != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_->cfg.steer_low_pass_gain = param.as_double();
           } else if (name == "wp_id_offset") {
             mpc_cfg_.wp_id_offset = param.as_int();
@@ -54374,6 +54463,7 @@ private:
             mpc_cfg_.wp_id_low_offset = param.as_int();
             mpc_->update_wp_id_low_offset(param.as_int());
           } else if (name == "wp_id_low_speed") {
+            if (mpc_->cfg.wp_id_low_speed_kmh != param.as_double()) mpc_->invalidate_scheduled_context();
             mpc_cfg_.wp_id_low_speed_kmh = std::max(0.0, param.as_double());
             mpc_cfg_.wp_id_low_speed = kmh_to_m_per_sec(mpc_cfg_.wp_id_low_speed_kmh);
             mpc_->cfg.wp_id_low_speed_kmh = mpc_cfg_.wp_id_low_speed_kmh;
@@ -54475,6 +54565,7 @@ private:
     control_mode_request_sub_ = create_subscription<Bool>(
       "control/control_mode_request_topic", 1, [this](const Bool::SharedPtr msg) {
         if (msg->data && !enable_control_) {
+          if (mpc_) mpc_->invalidate_scheduled_context();
           enable_control_ = true;
         }
       });
@@ -54485,6 +54576,7 @@ private:
     stop_request_sub_ = create_subscription<Empty>(
       "/control/mpc/stop_request", 1, [this](const Empty::SharedPtr) {
         if (enable_control_) {
+          if (mpc_) mpc_->invalidate_scheduled_context();
           RCLCPP_WARN(get_logger(), "Stop request received");
           enable_control_ = false;
         }
@@ -54495,6 +54587,7 @@ private:
         [this](const GearReport::SharedPtr msg) {
           const auto next_gear = recovery_gear_from_report(msg->report);
           if (!reported_gear_.has_value() || reported_gear_.value() != next_gear) {
+            if (mpc_) mpc_->invalidate_scheduled_context();
             RCLCPP_INFO(
               get_logger(), "Stuck recovery gear report: raw=%u, gear=%s",
               static_cast<unsigned int>(msg->report), stuck_recovery::to_string(next_gear));
@@ -54948,6 +55041,7 @@ private:
     if (!published_input_ledger_.record({stamp.seconds(), acceleration, wire_steering},
         before_clock.seconds(), publication_clock.seconds(), retain_sec, std::move(source)))
     {
+      if (mpc_) mpc_->invalidate_scheduled_context();
       published_input_ledger_.reset();
       last_published_steering_control_time_.reset();
       return;
@@ -55253,6 +55347,7 @@ private:
   void reset_stuck_recovery_session(
     const char * reason, const V2XTrackingResetPolicy v2x_tracking_reset)
   {
+    if (mpc_) mpc_->invalidate_scheduled_context();
     if (stuck_recovery_core_) {
       stuck_recovery_core_->reset_session();
     }
@@ -58524,6 +58619,7 @@ private:
       return false;
     }
 
+    if (mpc_) mpc_->invalidate_scheduled_context();
     recovery_boost_suppressed_for_session_ = true;
     if (output.action.type == stuck_recovery::RecoveryActionType::LowSpeedRejoin) {
       if (recovery_rejoin_hold_cycle_) {
@@ -58800,6 +58896,7 @@ private:
         record_control_callback_duration(steady_now, callback_timing);
       });
     if (control_decision_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
+      if (mpc_) mpc_->invalidate_scheduled_context();
       control_decision_sequence_ = 0U;
     }
     active_control_decision_id_ = ++control_decision_sequence_;
@@ -58815,6 +58912,7 @@ private:
         observation_time.seconds(), mpc_cfg_.odom_timeout_sec);
       previous_control_ros_clock_sec_ = ros_control_time.seconds();
       if (epoch.clock_regressed) {
+        if (mpc_) mpc_->invalidate_scheduled_context();
         odom_.reset();
         last_odom_receipt_steady_.reset();
         last_odom_source_stamp_.reset();
@@ -58993,6 +59091,11 @@ private:
         if (!new_reference_path || new_reference_path->n_waypoints < 3) {
           throw std::runtime_error("trajectory did not produce a usable reference path");
         }
+        // Revoke before replacement, including a failed update which restores
+        // the old path. Restoring values cannot revive work from before it.
+        mpc_->invalidate_scheduled_context();
+        new_reference_path->bind_context_invalidator(
+          [this]() { mpc_->invalidate_scheduled_context(); });
         auto previous_reference_path = std::move(reference_path_);
         reference_path_ = std::move(new_reference_path);
         try {
@@ -59347,6 +59450,7 @@ private:
   {
     // End pending snapshot continuity even when ROS has already shut down and
     // no final packet can be published. This is not a normal-program successor.
+    if (mpc_) mpc_->invalidate_scheduled_context();
     published_input_ledger_.reset();
     if (!rclcpp::ok() || !command_pub_) {
       return;

@@ -1,5 +1,10 @@
 # Pending C4 and C5 after scheduled full certificate
 
+Updated source binding: [actual producer checkpoint](source-context-producer-design.md).
+The caller-supplied Request.source_context described below is historical and has
+been removed; the current factory reads the actual solver Snapshot. C5 dispatch
+remains pending.
+
 C3 compiled/native/replay; C4measurement, ledger and current-world necessary gates
 implemented in [current evidence](scheduled-current-evidence-design.md). Full atomic
 adoption context and C5remain pending. Existing synchronous authority remains.

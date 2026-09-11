@@ -13,16 +13,18 @@ Dev2-r44はD1判断892で送信前約10ms超過、905で送信後約5ms超過し
 その後のepoch不一致はteardown開始後で、最初の原因ではない。コンテナ停止・ユーザー
 成果物復元済み。公開履歴と原観測を固定し、追加の確認待ちなしで接続実装を続ける。
 
-追加のC4境界APIは、元solver inputの失効可能generationと現在の意味的条件を照合し、
-同一Requestの全証拠を一つの必要条件チェックへ集約。R268全119native、buildr76全
-26package、testsr65全2509記録/64groupで失敗0。現nodeへgeneration伝搬・失効hook・
-新規dispatcherはまだ接続していない。歴史的なC3単独replayバイナリは新layoutで再buildが必要。
-[採用境界の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-adoption-boundary-design.md)。
+C4 APIに加え、実solver入力へgenerationを保持し、予定証明はその入力からだけ取得する
+接続を実装。参照速度・外部境界・設定・clock/control/Recovery/session/shutdown等で失効。
+同一値更新やworker内の変更は親の世代を失効させない。R270で旧11失敗→R271全30合格。
+最終buildr79全26package/testsr68全2510記録/64groupでエラー・失敗・skip0。
+[入力元と取消しの証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-context-producer-design.md)。
+Snapshotとscheduled RequestのABIが変わったため、過去の単独replayは再compileが必要。
 
-可変ROS parameter、参照軌道、外部境界を含むC4採用contextとC5非同期単一dispatchは
-未完。旧同期authorityの退役は同じ接続sliceで行う。r43/r44実公開期限失敗は未解決。
+C5はまだ未接続。Mission geometryと予定intent commit、実送信後の新しい観測・world・
+Follow原点を結合し、単一worker/dispatcherへ移す。旧同期normal/Stop/GateA/previous-intent
+joinは同じpromotion sliceで退役する。新しいauthorityや走行合格はまだ主張しない。
 実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+dev3/dev4六周、gate1–3、同一tar/image/evalは未完。確認待ちなしで継続する。
 
 [現在証拠の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-current-evidence-design.md)、
 [接続義務](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-dispatch-design.md)、

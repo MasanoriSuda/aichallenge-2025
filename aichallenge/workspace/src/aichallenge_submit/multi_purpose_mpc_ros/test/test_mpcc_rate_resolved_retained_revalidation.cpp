@@ -3971,12 +3971,26 @@ TEST(MpccScheduledCurrentWorld, BindsFreshFollowForecastAndCircularPhysicalOrigi
   EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidContext);
 }
 
+// These hand-built numerical fixtures stand in for the solver source. The real
+// solver/stateless-copy tests separately check input-generation propagation.
+void attach_synthetic_source_generation(scheduled::Request & request,
+  const scheduled::ContextSnapshot & generation)
+{
+  attach_velocity_source(request.observed, 4.0);
+  auto plan = std::make_shared<certified::CertifiedPlan>(*request.observed.plan);
+  auto source = std::make_shared<multi_purpose_mpc_ros::mpcc_rate_resolved_shadow::Snapshot>(
+    *plan->solver_source_snapshot);
+  source->normal_context_generation = generation;
+  plan->solver_source_snapshot = std::move(source);
+  request.observed.plan = std::move(plan);
+}
+
 TEST(MpccScheduledContext, RevokedSourceCannotReviveWithOldCopiesOrRestoredValues)
 {
   scheduled::ContextOwner owner;
   auto request = scheduled_request();
-  request.source_context = owner.capture();
-  const auto captured = request.source_context;
+  attach_synthetic_source_generation(request, owner.capture());
+  const auto captured = request.observed.plan->solver_source_snapshot->normal_context_generation;
   const auto result = scheduled::evaluate(request); ASSERT_TRUE(result.applied.certificate);
   const auto &certificate = *result.applied.certificate;
   auto current = certificate.suffix().source.source_context;
@@ -4007,7 +4021,7 @@ TEST(MpccScheduledContext, RequiresBoundGenerationAndCompleteCurrentSemanticIden
   EXPECT_EQ(scheduled::check_current_context(*diagnostic.applied.certificate, owner.capture(),
     diagnostic.applied.certificate->suffix().source.source_context, scheduled::ContextUse::NewSource),
     scheduled::ContextReason::MissingGeneration);
-  auto request = scheduled_request(contract::ControlIntent::Follow); request.source_context = owner.capture();
+  auto request = scheduled_request(contract::ControlIntent::Follow); attach_synthetic_source_generation(request, owner.capture());
   const auto result = scheduled::evaluate(request); ASSERT_TRUE(result.applied.certificate);
   const auto &certificate = *result.applied.certificate;
   const auto original = certificate.suffix().source.source_context;
@@ -4044,7 +4058,7 @@ TEST(MpccScheduledContext, RequiresBoundGenerationAndCompleteCurrentSemanticIden
 TEST(MpccScheduledContext, NewSourceGeometryAndPublishedWindowHaveDistinctObligations)
 {
   scheduled::ContextOwner owner;
-  auto request = scheduled_request(); request.source_context = owner.capture();
+  auto request = scheduled_request(); attach_synthetic_source_generation(request, owner.capture());
   const auto result = scheduled::evaluate(request); ASSERT_TRUE(result.applied.certificate);
   const auto &certificate = *result.applied.certificate;
   auto fresh = certificate.suffix().source.source_context; fresh.stage_geometry_id++;
@@ -4062,7 +4076,7 @@ TEST(MpccScheduledContext, NewSourceGeometryAndPublishedWindowHaveDistinctObliga
 TEST(MpccScheduledCurrentEvidence, BindsOneFrameAndRequiresEveryIndependentGate)
 {
   scheduled::ContextOwner owner;
-  auto request = scheduled_request(); request.source_context = owner.capture();
+  auto request = scheduled_request(); attach_synthetic_source_generation(request, owner.capture());
   const auto result = scheduled::evaluate(request); ASSERT_TRUE(result.applied.certificate);
   const auto &certificate = *result.applied.certificate;
   vehicle::PublishedInputLedger ledger(256);
@@ -4105,4 +4119,23 @@ TEST(MpccScheduledCurrentEvidence, BindsOneFrameAndRequiresEveryIndependentGate)
   EXPECT_EQ(check(fresh, changed_context, 1).reason, scheduled::CurrentReason::Compatible);
   owner.invalidate();
   EXPECT_EQ(check(fresh, changed_context, 1).reason, scheduled::CurrentReason::ContextRejected);
+}
+
+TEST(MpccScheduledContext, LateProofCannotBorrowCurrentGenerationForAnOldSolverSource)
+{
+  scheduled::ContextOwner owner;
+  auto request = scheduled_request();
+  attach_synthetic_source_generation(request, owner.capture());
+  const auto original = request.observed.plan->solver_source_snapshot;
+  ASSERT_TRUE(original->normal_context_generation.valid());
+  owner.invalidate();
+  const auto current = owner.capture();
+  const auto result = scheduled::evaluate(request);
+  ASSERT_TRUE(result.applied.certificate);
+  EXPECT_FALSE(result.applied.certificate->nominal()->source_context().valid());
+  EXPECT_FALSE(result.applied.certificate->nominal()->source_context().same_generation(current));
+  EXPECT_NE(scheduled::check_current_context(*result.applied.certificate, current,
+    result.applied.certificate->suffix().source.source_context, scheduled::ContextUse::NewSource),
+    scheduled::ContextReason::Compatible);
+  EXPECT_EQ(request.observed.plan->solver_source_snapshot, original);
 }

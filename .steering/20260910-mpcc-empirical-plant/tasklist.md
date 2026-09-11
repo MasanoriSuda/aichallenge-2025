@@ -132,3 +132,22 @@ Scheduled adoption API (baseline48b6623b):
 - [x] R268全119native、buildr76全26package、testsr65全2509記録/64groupで失敗0。
 - [ ] 実solver input→candidate/Store→scheduled jobへgenerationを伝搬。
 - [ ] 全live変更元の失効・post-publication観測生成・C5単一dispatchと旧authority退役。
+
+
+C5 source generation (baselined94aa556; working):
+- [x] 実draft→bound input→solver Snapshotへgenerationを伝搬。
+- [x] tactical cloneは親generationを借用し、clone内変更では親を失効させない。
+- [x] 既存resetと変更されたruntime policy・sessionの失効hookを追加。
+- [ ] 新Snapshot layoutの全build/test。過去バイナリとのABI混在は禁止。
+- [ ] 外部境界/参照content・全変更元の失効と実post-publication観測。
+- [ ] C5単一dispatcher接続/旧同期authority退役、全M4–M6。
+
+
+Source-context producer checkpoint (baselined94aa556):
+- [x] Solver draft→bound→Snapshot→CertifiedPlan→scheduled proofへ同じgenerationを伝搬。
+- [x] Requestの後付けgeneration引数を削除。失効後に完了したproofも採用不可。
+- [x] 参照速度/境界/セルの変更前失効、同一値維持、workerコピー分離。
+- [x] Clock/ledger/control/gear/Recovery/session/shutdownの失効接続。
+- [x] R270の11失敗→R271全30合格。Buildr79全26package/testsr68全2510記録/64group合格。
+- [ ] Mission geometry/予定intent commit、post-publication観測、単一dispatchと旧authority退役。
+- [ ] FinalHEADのM4–M6・提出eval。r44公開期限失敗は未解決。

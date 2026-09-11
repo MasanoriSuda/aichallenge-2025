@@ -1075,6 +1075,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-adoption-boundary-evidence.json",
       "replay_ready": true,
       "reason": "Revocable source context and composed necessary current evidence; live producer/C5integration pending."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-source-context-producer",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-context-producer-evidence.json",
+      "replay_ready": true,
+      "reason": "Actual solver source propagation and producer revocation; C5normal dispatch remains pending."
     }
   ],
   "experiments": [
@@ -12943,6 +12949,74 @@
         "No existing normal authority replaced yet; replacement is mandatory at C5promotion."
       ],
       "revisit_condition": "New failing invariant/changed inputs or C5integration; then finalHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-context-producer-r269",
+      "baseline_commit": "d94aa5567af3165aa1e839569d387a006ad70118",
+      "snapshot_ids": [
+        "20260911-nine-state-source-context-producer"
+      ],
+      "hypothesis": "Extracted old node reference methods can be compiled for a controlled mutation comparison",
+      "changed_dimension": "Actual solver Snapshot source binding and policy/reference/lifecycle invalidation",
+      "result": "inconclusive",
+      "reason": "Diagnostic compile failed on absent scheduled_control namespace alias; corrected in r270. No control conclusion.",
+      "production_impact": "Source metadata/cancellation producers only; scheduled single dispatcher and simultaneous old authority retirement remain pending.",
+      "deleted_code": [
+        "Caller-supplied scheduled Request.source_context",
+        "Unused ReferencePath.get_waypoint_mutable accessor"
+      ],
+      "revisit_condition": "A new failing source invariant or C5integration; then finalHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-context-producer-r270",
+      "baseline_commit": "d94aa5567af3165aa1e839569d387a006ad70118",
+      "snapshot_ids": [
+        "20260911-nine-state-source-context-producer"
+      ],
+      "hypothesis": "Old reference mutations revoke work captured under earlier input values",
+      "changed_dimension": "Actual solver Snapshot source binding and policy/reference/lifecycle invalidation",
+      "result": "rejected",
+      "reason": "29checks with11failures; setters change values without source invalidation.",
+      "production_impact": "Source metadata/cancellation producers only; scheduled single dispatcher and simultaneous old authority retirement remain pending.",
+      "deleted_code": [
+        "Caller-supplied scheduled Request.source_context",
+        "Unused ReferencePath.get_waypoint_mutable accessor"
+      ],
+      "revisit_condition": "A new failing source invariant or C5integration; then finalHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-context-producer-r271",
+      "baseline_commit": "d94aa5567af3165aa1e839569d387a006ad70118",
+      "snapshot_ids": [
+        "20260911-nine-state-source-context-producer"
+      ],
+      "hypothesis": "Changed reference producers revoke before mutation while identical values and worker copies preserve parent",
+      "changed_dimension": "Actual solver Snapshot source binding and policy/reference/lifecycle invalidation",
+      "result": "accepted",
+      "reason": "30/30native checks pass using actual extracted ReferencePath/Map methods; no ROS/runtime claim.",
+      "production_impact": "Source metadata/cancellation producers only; scheduled single dispatcher and simultaneous old authority retirement remain pending.",
+      "deleted_code": [
+        "Caller-supplied scheduled Request.source_context",
+        "Unused ReferencePath.get_waypoint_mutable accessor"
+      ],
+      "revisit_condition": "A new failing source invariant or C5integration; then finalHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-context-producer-r79-r68",
+      "baseline_commit": "d94aa5567af3165aa1e839569d387a006ad70118",
+      "snapshot_ids": [
+        "20260911-nine-state-source-context-producer"
+      ],
+      "hypothesis": "Actual solver source generation and lifecycle coverage compile and pass package tests",
+      "changed_dimension": "Actual solver Snapshot source binding and policy/reference/lifecycle invalidation",
+      "result": "accepted",
+      "reason": "26packages/2510records/64groups,0errors/failures/skips; includes late proof after source revocation.",
+      "production_impact": "Source metadata/cancellation producers only; scheduled single dispatcher and simultaneous old authority retirement remain pending.",
+      "deleted_code": [
+        "Caller-supplied scheduled Request.source_context",
+        "Unused ReferencePath.get_waypoint_mutable accessor"
+      ],
+      "revisit_condition": "A new failing source invariant or C5integration; then finalHEAD M4-M6acceptance."
     }
   ]
 }

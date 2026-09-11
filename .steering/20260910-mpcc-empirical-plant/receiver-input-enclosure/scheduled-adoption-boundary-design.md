@@ -1,5 +1,10 @@
 # Scheduled adoption evidence boundary
 
+Updated source binding: [actual producer checkpoint](source-context-producer-design.md).
+The caller-supplied Request.source_context described below is historical and has
+been removed; the current factory reads the actual solver Snapshot. C5 dispatch
+remains pending.
+
 Baseline48b6623b. This slice supplies necessary context and atomic evidence APIs;
 normal dispatch is still the old synchronous path. No current-evidence result
 or diagnostic scheduled certificate grants permission to publish.

@@ -4639,3 +4639,11 @@ mission・target・side・horizon・schemaを照合する。単一Requestの原�
 source windowとして扱う。これも必要条件であり、nodeの全変更元の失効、solverからの
 generation伝搬、単一dispatcherでの実時計・操舵・最終packet照合は未接続。
 [採用境界の設計とテスト](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-adoption-boundary-design.md)。
+
+
+予定証明のcontextは実solver Snapshotに保持し、factoryがその生成元から直接取得する。
+呼び出し側が現在世代を後付けするRequest引数は削除した。参照速度・境界・セル・設定・
+管理/時計/Recovery/終了の変更元で失効し、同一値更新とworkerコピーを区別する。
+現状は生成元の接続までで、予定dispatchへのauthority切替は未完。実送信後の観測生成、
+mission geometry/予定intent採用、単一worker/dispatcherと旧同期authorityの同時退役が残る。
+[生成元・取消しの設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-context-producer-design.md)。

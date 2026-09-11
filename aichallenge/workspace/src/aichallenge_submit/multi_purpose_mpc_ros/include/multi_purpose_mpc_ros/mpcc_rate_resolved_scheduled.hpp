@@ -2,49 +2,12 @@
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_publication_ledger.hpp"
-#include <atomic>
+#include "multi_purpose_mpc_ros/mpcc_scheduled_context.hpp"
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
 namespace retained = mpcc_rate_resolved_retained_revalidation;
 namespace vehicle = mpcc_vehicle_model;
 namespace applied = mpcc_rate_resolved_applied_program;
-
-class ContextOwner;
-
-/// Captured with solver input, before work starts. A live owner invalidates its
-/// generation BEFORE policy/reference/session mutations, including partial
-/// failures. Shared ownership prevents pointer reuse from reviving old work.
-class ContextSnapshot {
-public:
-  bool valid() const noexcept { return generation_ && generation_->active.load(); }
-  bool same_generation(const ContextSnapshot &other) const noexcept {
-    return valid() && other.valid() && generation_ == other.generation_;
-  }
-private:
-  friend class ContextOwner;
-  struct Generation { mutable std::atomic<bool> active{true}; };
-  std::shared_ptr<const Generation> generation_;
-};
-
-/// One control-thread owner; workers receive only snapshots. Invalidation never
-/// allocates. A later capture creates a new generation even if values reverted.
-class ContextOwner {
-public:
-  ContextOwner() = default;
-  ~ContextOwner() { invalidate(); }
-  ContextOwner(const ContextOwner &) = delete;
-  ContextOwner &operator=(const ContextOwner &) = delete;
-  ContextSnapshot capture() {
-    if (!current_.valid()) current_.generation_ = std::make_shared<const ContextSnapshot::Generation>();
-    return current_;
-  }
-  void invalidate() noexcept {
-    if (current_.generation_) current_.generation_->active.store(false);
-    current_.generation_.reset();
-  }
-private:
-  ContextSnapshot current_;
-};
 
 /// Exact frame used by the captured live progress projection. It must reproduce
 /// the original request's progress; a guessed nearest frame is not sufficient.
@@ -60,10 +23,6 @@ struct Request {
   std::size_t preceding_packet_count{};
   double planned_control_origin_sec{};
   ProgressFrame progress_frame;
-  /// Must originate from this plan's SOLVER input capture, not be assigned to
-  /// an old plan using the present generation after solving. Empty is allowed
-  /// for numerical diagnostics; such a certificate cannot pass current context.
-  ContextSnapshot source_context{};
 };
 
 struct Result;
@@ -102,6 +61,9 @@ struct Result {
 /// Build the new packet under the declared old prefix, reselect/bind its nominal
 /// continuation, and prove the complete composite programme from original now
 /// to rest. Actual prefix, fresh world/sensors and final dispatch remain gates.
+/// Context comes only from observed.plan->solver_source_snapshot, captured by
+/// the solver-input producer. No caller argument may stamp today's generation
+/// onto an old plan. Source-less diagnostic proofs fail the current-context gate.
 Result evaluate(const Request &request);
 
 /// Necessary consistency of fresh public component samples with the ORIGINAL

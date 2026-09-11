@@ -4978,3 +4978,35 @@ TEST(MpccScheduledDomainDispatch, RepeatedTailAuthenticatesEveryActualSendAndKee
     EXPECT_TRUE(candidate.matches_after_publication(f.ledger,f.owner.capture()));
   }
 }
+
+TEST(MpccScheduledDispatch, PartialTerminalWindowCannotBorrowAnInstantBeforeProvedRest)
+{
+  ScheduledDispatchFixture f(1.075,false,contract::ControlIntent::Track,true);
+  const auto &program=f.certificate->suffix().program;
+  const double rest=f.certificate->tube().rest_sec;
+  std::size_t index=0;
+  while (index<10000 && *vehicle::publication_epoch(program,index,true)<=rest) ++index;
+  ASSERT_LT(index,10000U);
+  const double epoch=*vehicle::publication_epoch(program,index);
+  ASSERT_LE(epoch,rest);
+  ASSERT_GT(*vehicle::publication_epoch(program,index,true),rest);
+  for (std::size_t i=0;i<index;++i) {
+    auto packet=program.commands[std::min(i,program.commands.size()-1)];
+    packet.published_sec=*vehicle::publication_epoch(program,i);
+    const auto source=scheduled::scheduled_program_source(*f.certificate,i); ASSERT_TRUE(source);
+    ASSERT_TRUE(f.ledger.record(packet,packet.published_sec,packet.published_sec,2,source));
+  }
+  f.fresh.now_sec=epoch; f.fresh.control_origin_sec=epoch+.04;
+  auto &observation=f.fresh.publication_prefix->observation;
+  observation.now_sec=epoch; observation.control_origin_sec=epoch+.04;
+  f.fresh.previous_published_steering_rad=f.ledger.latest_transaction()->nominal.wire_steering_rad/
+    f.fresh.plan->execution_artifact->vehicle_model.steering_wire_gain;
+  observation.initial.state.desired_steering_rad=f.fresh.previous_published_steering_rad;
+  f.fresh.obstacles.observed_sec=epoch;
+  f.bind_next(index);
+  const auto before=f.ledger.snapshot(); ASSERT_TRUE(before);
+  const auto result=f.prepare(index);
+  EXPECT_FALSE(result.candidate);
+  EXPECT_EQ(result.reason,scheduled::DispatchReason::RestExpired);
+  const auto after=f.ledger.since(*before); ASSERT_TRUE(after); EXPECT_TRUE(after->empty());
+}

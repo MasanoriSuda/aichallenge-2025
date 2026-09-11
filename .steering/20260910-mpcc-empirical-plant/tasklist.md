@@ -301,3 +301,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Fixed phase counters observe unknown MPC/off-CPU interval, never used for control.
 - [ ] Standarddev2-r57: real worker availability, current coverage, original deadlines, callbackphases, laps/hz.
 - [ ] LateFollow domain, source/independent proof duplication, unknownoff-CPU and all M4-M6 remain open.
+
+
+2026-09-12 full publication-window proof coverage (baseline5366b176):
+- [x] Standardr57failed. FirstD1pre1118 domainproof1.24msCPU/4.72mswall with14involuntary switches; D2pre1086 outsideD,6.90msCPU/17.63mswall with25switches. Competitor/scheduler cause unknown.
+- [x] StoptriggerD1post1541/index14 is inside25mswindow but crosses originalrest26.864999408. R342exactsource/currenthashes andallthreeguard outcomes reproduced.
+- [x] R343red native regression: partial terminalwindow incorrectly yields candidate. Producer now requires whole indexedwindow inside original and selected current proof horizons; restvalues/actualguards unchanged.
+- [x] R344149native; buildr97all26; testsr85all2565/66 inclsource105; R3456prior and R3463current exact-library replays pass intended outcomes.
+- [ ] Standarddev2-r58: normal availability, currentprefixcoverage, preemption/burstyclocks, fullstop/restart and movingrace.
+- [ ] Worker duplicate future work, lateFollow and all remaining M4-M6. No new scheduling policy promoted.

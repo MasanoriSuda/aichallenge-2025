@@ -4776,3 +4776,14 @@ R337比較、native、buildr96、testsr84、R340六再生を確認。制御判�
 wall/threadCPU/context-switch区間計測を加え、残るoff-CPU原因を次の標準r57で調べる。
 [設計と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-domain-design.md)。
 統合走行とM4-M6は未完。
+
+標準r57で、停止指令列の最後の送信窓が元の証明の停止時刻をまたぐ問題を確認した。
+D1指令1541は元25ms窓内だったが、送信後に元停止時刻を越えており、既存after guardが
+正しく拒否した。採用時に窓全体の証明範囲を確認する条件が欠けていたため、
+DispatchCandidate生成前に元のindexed deadlineが元証明と選択した現在証明の両方の
+停止時刻以内であることを要求する。不完全な最後の窓はRestExpiredとし、停止時刻や
+窓を延ばさない。以前に実送信した制動履歴とactualpre/post・slew等の照合を維持する。
+R343修正前の失敗、R344native149、buildr97、testsr85全2565、R345/R346再生で確認。
+r57の先行するD1/D2送信前遅延は別件で、proof区間の非自発的切替と範囲外を観測した。
+原因の主体・対策、通常指令の継続可用性と統合受入れは未確定。
+[送信窓と証明期間](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/terminal-window-design.md)。

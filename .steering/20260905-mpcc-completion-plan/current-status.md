@@ -1,20 +1,20 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。残packetの独立開始集合を拡張し、次は標準dev2-r57。**
+**全体未完。標準r57で判明した最後の送信窓と証明期間の不一致を修正。次は標準r58。**
 
-基点f8a380f6。R56D1pre530/D2post1268のindex4はactualprefix厳密再生済み。
-R337方式比較で元指令列の停止時刻までの全開始集合が六場面のprefix/worldを包含。
-Followは全直積によるgap回帰が不成立だったため従来方式を保持。各packetの25ms窓、
-250ms受信モデル、actualprefix、現在世界、元sourceと停止時刻を緩めていない。
-Buildr96all26、testsr84all2564records、R340六場面の実library再生合格。
-短いprefixは従来完全再計算と一致。元source/実送信pre-post判定も保持。
+基点5366b176。r57は周回なし。D1pre1118はdomain証明1.24msCPU/4.72mswallで14回の
+非自発的切替、D2pre1086は範囲外による完全再計算6.90msCPU/17.63mswallで25回を観測。
+停止契機D1post1541は元25ms窓内だが、送信中に元の証明の停止時刻を越えた別の問題。
+R342厳密再生とR343失敗testで固定し、窓全体が全選択証明の期間に収まる場合だけ
+指令候補を生成する条件を追加。停止時刻・25ms窓・250ms受信モデル・actualguardを維持。
+Buildr97全26、testsr85全2565/66（source105含む）、native149、実library再生9件で検証。
 
-worker二重future計算、lateFollow、広いD/timeの曲線・高速coverage、off-CPU原因は未解決。
-最小phase計測を加え、次の標準dev2-r57で現在範囲・worker可用性・期限と周回を確認する。
+次は標準dev2-r58。先行する遅延の競合主体・対策、範囲coverage、worker二重future計算、
+lateFollow、通常指令継続可用性は未解決。CPU配置等の新しい本番方針は採用していない。
 全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
 単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-domain-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/terminal-window-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

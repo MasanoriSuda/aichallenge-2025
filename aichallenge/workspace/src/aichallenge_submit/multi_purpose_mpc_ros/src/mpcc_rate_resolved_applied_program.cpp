@@ -1298,9 +1298,10 @@ DispatchResult prepare_dispatch(
   const auto &program = suffix.program;
   const auto index = already_published_suffix_packets;
   const auto epoch = vehicle::publication_epoch(program, index);
+  const auto deadline = vehicle::publication_epoch(program, index, true);
   const auto source = scheduled_program_source(*certificate, index);
   result.reason = DispatchReason::InvalidPacket;
-  if (!epoch || !source || program.commands.empty() ||
+  if (!epoch || !deadline || !source || program.commands.empty() ||
       suffix.physical_steering_rad.size() != program.commands.size() ||
       (index >= program.commands.size() && !program.repeat_last_until_rest) ||
       !fresh.publication_prefix) return result;
@@ -1316,7 +1317,10 @@ DispatchResult prepare_dispatch(
       !same_dispatch_wire(proposed.wire_acceleration_mps2, packet.wire_acceleration_mps2) ||
       proposed.published_sec != fresh.now_sec || !std::isfinite(fresh.control_origin_speed_mps) ||
       fresh.control_origin_speed_mps < 0) return result;
-  if (packet.published_sec > certificate->tube().rest_sec || fresh.now_sec > certificate->tube().rest_sec) {
+  // The complete declared send interval must have physical evidence. A
+  // repeated terminal packet can start before rest but have a deadline after
+  // it; an instantaneous before check cannot authorize that partial interval.
+  if (*deadline > certificate->tube().rest_sec || fresh.now_sec > certificate->tube().rest_sec) {
     result.reason = DispatchReason::RestExpired; return result;
   }
   std::optional<vehicle::PendingInputTube> independent;
@@ -1325,6 +1329,10 @@ DispatchResult prepare_dispatch(
     ledger, original_cursor, prior_sources, index, &independent, domain, &domain_prefix, &result.domain_use);
   if (result.current.reason != CurrentReason::Compatible) {
     result.reason = DispatchReason::CurrentEvidenceRejected; return result;
+  }
+  if ((independent && *deadline > independent->numerical.rest_sec) ||
+      (domain_prefix && *deadline > domain->tube().rest_sec)) {
+    result.reason = DispatchReason::RestExpired; return result;
   }
   const auto cursor = ledger.snapshot();
   const auto *previous = ledger.latest_transaction();

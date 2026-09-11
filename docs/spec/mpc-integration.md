@@ -4681,3 +4681,11 @@ Wall25ms未満の公開失敗にも既存の区間別ログを出し、現在要
 MPC/Recovery前後のROS時刻を記録する。権限・予定・全物理条件・送信順は維持する。
 Buildr91全26package/testsr79全2545記録/65group合格、r51で実測する。
 [区間観測の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-phase-observation-design.md)。
+
+R51（12c29078）は不合格。最初の移動中D1decision856では、現在全物理証明が
+18.33mswall/11.33msCPUを消費し、原ROS公開期限を超えた。要求生成・問題初期化・
+Recoveryはこの判断の主因ではない。後続D2decision1074には終了開始前の送信後超過もある。
+R306–309の保存入力比較は全て未採用。力微分の追加ベクトル化に有意な追加効果はなく、
+極小値の外向き丸めは遅く、同一map内の三角関数共有も効果が小さい。現在の権限・
+物理条件・時計・窓を維持し、clock生成と制御起動の対応を次に調べる。全M4–M6は未完。
+[原因計測と未採用比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-proof-cost-design.md)。

@@ -1,20 +1,21 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分のローカルcommitのみ。
-**全体未完。R50の遅い送信失敗を再現し、r51でcallback区間の時間を測る。**
+**全体未完。R51の現在証明コストを特定し、4組の保存入力比較を完了。全て未採用。**
 
-8d85234bのROS alarmで公開開始前の拒否は0。一方、R50はD1/D2で10/7件の期限超過。
-D1moving874は0.17m/s、wall19.308064msでROS時刻が25ms進み、原期限を約5ms超えた。
-R305で元のinput fingerprint・現在全物理証明・遅い送信の拒否を再現。
-新しい観測は25mswall未満の公開失敗にも区間詳細を残し、現在要求/証明のwall/CPUと
-MPC/Recovery前後のROS時刻を分ける。権限・物理条件・元窓・周期・送信順は維持する。
-Buildr91全26package/testsr79全2545記録/65group、source105合格。次はdev2-r51。
+D1moving856は0.37m/s、現在証明18.33mswall/11.33msCPUで原25msROS期限を超過。
+要求・問題初期化・Recoveryは主因ではない。R306再現6.75ms、R307packed force5.83ms、
+R308外向き極小区間8.09ms、R309同一mapのtrig共有6.51ms。小改善だけで受入れを
+見込まず本番数値実装を維持。R51全ログにはD2post1074の送信後超過もある。
+次はclock生成と制御起動の対応を調べる。時計の更新抑止・新しいgraceは行わない。
+本番コードは12c29078、buildr91全26package/testsr79全2545記録/65group、source105の
+既存証拠を保持。今回の診断のみの比較に新しい本番build合格は付けない。
 
-残り: 時間を消費するproducerの修復、全intent/Mission/sibling/Store、実Stop/rest/restart、
+残り: 公開期限の因果修復、全intent/Mission/sibling/Store、実Stop/rest/restart、
 Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、
 同一tar/image/eval。個別の修正や停止した試行を全体完了として扱わない。
 
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-phase-observation-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/current-proof-cost-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

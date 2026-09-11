@@ -224,3 +224,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Current-proof wall/CPU and callback phase/ROS observation added; no authority or timing parameter changes.
 - [x] R305exact current proof/late rejection, buildr91/testsr79(2545/65), source105passed.
 - [ ] Committed r51first failure attribution and causal repair; all remainingM4-M6.
+
+
+2026-09-12 current proof cost (baseline12c29078):
+- [x] R51first movingD1856: current proof18.33mswall/11.33msCPU; request/initialization/Recovery are not dominant. LaterD2Recovery is separate.
+- [x] R306exact proof/profile, R307packed force, R308outward tiny intervals, R309same-map trig/zero comparisons. All unpromoted; no physical/window/rate changes.
+- [x] Completed logs contain D2post1074before shutdown; R51is failed, no laps.
+- [ ] Trace original clock producer/appointment relation and repair causal structure; all M4-M6remain open.

@@ -1129,6 +1129,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-phase-observation-evidence.json",
       "replay_ready": true,
       "reason": "R50current independent proof passes but original before-send deadline fails; close same-decision phase timing gap."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-current-proof-cost",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-proof-cost-evidence.json",
+      "replay_ready": true,
+      "reason": "R51first moving late publication causally dominated by complete independent current physical proof; exact frozen input comparisons."
     }
   ],
   "experiments": [
@@ -13636,6 +13642,76 @@
       "production_impact": "Existing single scheduled normal authority, original ROS alarm, physical checks and final guards unchanged.",
       "deleted_code": [],
       "revisit_condition": "New measured exact first failure or causally justified producer change; no repeat unchanged race, grace or timing-parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-proof-cost-dev2-r51",
+      "baseline_commit": "12c290783485bd4a2260dcd585b4fd6fe567ff4b",
+      "snapshot_ids": [
+        "20260912-nine-state-current-proof-cost"
+      ],
+      "hypothesis": "Phase-observed current proof meets original publication window",
+      "changed_dimension": "Diagnostic numerical implementation only on exact R51 source/current inputs; same original programme and all physical constraints",
+      "result": "rejected",
+      "reason": "D1moving856proof18.33wall/11.33CPU misses deadline; D2post1074also violates before shutdown. No integrated acceptance.",
+      "production_impact": "None. Existing scheduled single authority, native FP environment, physical bounds, profiles, original publication window and rate retained.",
+      "deleted_code": [],
+      "revisit_condition": "A distinct implementation or measured structural cause; no unchanged micro-optimization, point-proof reuse, affinity, timeout or grace repeat."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-proof-cost-r306",
+      "baseline_commit": "12c290783485bd4a2260dcd585b4fd6fe567ff4b",
+      "snapshot_ids": [
+        "20260912-nine-state-current-proof-cost"
+      ],
+      "hypothesis": "The exact full current proof and saved late rejection reproduce",
+      "changed_dimension": "Diagnostic numerical implementation only on exact R51 source/current inputs; same original programme and all physical constraints",
+      "result": "accepted",
+      "reason": "D1/D2medians6.75/6.73ms in isolation; original hashes and late rejection preserved. Profiled samples are not production latency.",
+      "production_impact": "None. Existing scheduled single authority, native FP environment, physical bounds, profiles, original publication window and rate retained.",
+      "deleted_code": [],
+      "revisit_condition": "A distinct implementation or measured structural cause; no unchanged micro-optimization, point-proof reuse, affinity, timeout or grace repeat."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-proof-cost-r307",
+      "baseline_commit": "12c290783485bd4a2260dcd585b4fd6fe567ff4b",
+      "snapshot_ids": [
+        "20260912-nine-state-current-proof-cost"
+      ],
+      "hypothesis": "Packing the analytic force matrix adds useful acceleration",
+      "changed_dimension": "Diagnostic numerical implementation only on exact R51 source/current inputs; same original programme and all physical constraints",
+      "result": "rejected",
+      "reason": "Generic SIMD5.90/5.88ms; packed5.83/5.89ms. Full tube bits match; negligible incremental benefit, no promotion.",
+      "production_impact": "None. Existing scheduled single authority, native FP environment, physical bounds, profiles, original publication window and rate retained.",
+      "deleted_code": [],
+      "revisit_condition": "A distinct implementation or measured structural cause; no unchanged micro-optimization, point-proof reuse, affinity, timeout or grace repeat."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-proof-cost-r308",
+      "baseline_commit": "12c290783485bd4a2260dcd585b4fd6fe567ff4b",
+      "snapshot_ids": [
+        "20260912-nine-state-current-proof-cost"
+      ],
+      "hypothesis": "Outward enclosure of subnormal endpoints reduces current proof cost",
+      "changed_dimension": "Diagnostic numerical implementation only on exact R51 source/current inputs; same original programme and all physical constraints",
+      "result": "rejected",
+      "reason": "8.09/8.11ms is slower; captured tube bits match. No FP environment change, no production promotion.",
+      "production_impact": "None. Existing scheduled single authority, native FP environment, physical bounds, profiles, original publication window and rate retained.",
+      "deleted_code": [],
+      "revisit_condition": "A distinct implementation or measured structural cause; no unchanged micro-optimization, point-proof reuse, affinity, timeout or grace repeat."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-proof-cost-r309",
+      "baseline_commit": "12c290783485bd4a2260dcd585b4fd6fe567ff4b",
+      "snapshot_ids": [
+        "20260912-nine-state-current-proof-cost"
+      ],
+      "hypothesis": "Same-map trig sharing and exact zero identities close current proof cost",
+      "changed_dimension": "Diagnostic numerical implementation only on exact R51 source/current inputs; same original programme and all physical constraints",
+      "result": "rejected",
+      "reason": "Trig6.51/6.50ms bitwise equal. Zero identities5.82/5.74ms change tube bits; still limited gain, unpromoted.",
+      "production_impact": "None. Existing scheduled single authority, native FP environment, physical bounds, profiles, original publication window and rate retained.",
+      "deleted_code": [],
+      "revisit_condition": "A distinct implementation or measured structural cause; no unchanged micro-optimization, point-proof reuse, affinity, timeout or grace repeat."
     }
   ]
 }

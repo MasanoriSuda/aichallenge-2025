@@ -183,6 +183,17 @@ buildr53=26、testsr43=2449記録/62groupで失敗0。実公開元263の同じ�
 別途生成した旋回停止は引き続き壁拒否。実走25msとM4–M6の完了は主張しない。
 [元入力の監査と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r26-wall-direction-audit.md)を参照。
 
+2026-09-11のdev2-r27では、完全認証可能な長いStopの処理で実送信間隔が315msに開き、
+元の250ms履歴条件を超えた。同じ判断内でStopをimmutable artifactへ格納する際は、
+元の不変certificateを明示的に渡せる。新artifactの由来、同じ判断・観測・入力列・profile・
+モデル・world・車体寸法が一致する場合だけ数値範囲を引き継ぐ。新しい公称証明と全区間の
+状態・壁・他車・Follow検査、最終指令一致は維持し、不一致は従来の全計算へ進む。
+過去のcertificateを保持するcacheや親の連鎖は作らない。ノードと同じ再予測を通す元入力で、
+再検証は約101msから15msへ短縮し全範囲がbit一致した。初回の約101ms処理、実送信時刻との
+整合、live25msと統合受入れは未完。
+[遅延監査と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r27-stop-timing-audit.md)を参照。
+
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

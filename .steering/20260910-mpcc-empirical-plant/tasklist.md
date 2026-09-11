@@ -24,7 +24,9 @@
 - [x] Diagnose r24wall population; add shared rigid-corner displacement enclosure under original gates; buildr52/testsr42/native r127/r128.
 - [x] Reconstruct r25actual published263 and diagnose moving-speed dependence; bounded two-interval numerical representation, buildr53/testsr43/native137-139.
 - [x] Diagnose r26unused wall rectangle corners; whole-population directional support, buildr54/testsr44/native146-148.
-- [ ] Validate fresh moving failures and actual publication timing after directional wall separation.
+- [x] Capture r27slow842/source121, reproduce fullproof and315msactualhistory gap at843; current audit ongoing.
+- [x] Remove exactly authenticated synchronous materialization recomputation; bitwise native equality, buildr56/testsr46 (2453), native157/159–161.
+- [ ] Repair remaining initial long-program proof cost and actual publication timing after r27.
 - [ ] Validate integrated applied-program behavior and25ms timing in fresh runs.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.
 - [ ] Fresh single/dev2 acceptance and causal repair of any first failure.

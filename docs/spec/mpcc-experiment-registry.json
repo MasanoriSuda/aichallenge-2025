@@ -985,6 +985,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/oriented-wall-evidence.json",
       "replay_ready": true,
       "reason": "OriginalD1928world and laterD2996, exact inspected131 distinct from previous actual143; whole-population wall directions"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-stop-timing-r27",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/same-world-stop-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact842/source121 slow Stop; actual839/source120 and materialized128 remain distinct.843 reconstruction proves original315ms history gap."
     }
   ],
   "experiments": [
@@ -10564,6 +10570,406 @@
         "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
       ],
       "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-integrated-r27",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Directional wall repair closes live MPCC acceptance",
+      "changed_dimension": "Fresh same-build dev2",
+      "result": "rejected",
+      "reason": "Earlier842callback317.497992ms creates315ms publication gap;843 rejects history. Monitor detects moving848/.11mps. Neither live25ms nor race accepted.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-persistent-a-1",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility persistent-a",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=5498432262816747023 solver=solved solve_ms=143.071 terminal_progress=2.82899 terminal_velocity=1.42978 lateral_reserve=0.837603 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-stateless-left-b-2",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility stateless-left-b",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "rejected",
+      "reason": "arm=stateless-left-b stage=solver-rejected candidate=4518072748422814250 solver=solve-rejected solve_ms=117.249 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000210466, dua_res=0.0164683, failed_iterate_row=382, value=-0.714576, bounds=[-0.714215,0.714215], violation=0.000360785, tolerance=0.00171458, normalized=0.210422, row_semantic=input-box/stage=1/element=1, first_vtheta=coupled/inconclusive/declared:[0,9.46365]/implied:[0,9.46365]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000842-3eb36b3a171d5a2a-cruise-side-positive-initial-solve-rejected/snapshot.yaml; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-stateless-right-b-3",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility stateless-right-b",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "rejected",
+      "reason": "arm=stateless-right-b stage=solver-rejected candidate=7645120552921220446 solver=solve-rejected solve_ms=185.758 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.796395, dua_res=669.5, failed_iterate_row=578, value=0.196211, bounds=[-inf,-2.94778], violation=3.14399, tolerance=0.00394778, normalized=796.395, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000000842-6a18eca325e8455e-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-rough-left-c-4",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility rough-left-c",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "accepted",
+      "reason": "arm=rough-left-c stage=accepted candidate=4314070836035991436 solver=solved solve_ms=106.451 terminal_progress=3.07711 terminal_velocity=1.2486 lateral_reserve=0.837607 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=20 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=20 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=0/attempts=20/accepted; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-rough-right-c-5",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility rough-right-c",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "rejected",
+      "reason": "arm=rough-right-c stage=solver-rejected candidate=9938776705378107006 solver=solve-rejected solve_ms=136.258 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=1.01886, dua_res=380.366, failed_iterate_row=578, value=1.12168, bounds=[-inf,-5.45229], violation=6.57397, tolerance=0.00645229, normalized=1018.86, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-offline-left-d-6",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility offline-left-d",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "accepted",
+      "reason": "arm=offline-left-d stage=accepted candidate=4314070836035991436 solver=solved solve_ms=153.18 terminal_progress=4.00952 terminal_velocity=1.61796 lateral_reserve=0.837575 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=20 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=20 sqp_depth=3 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=3/attempts=20/accepted, progress_wall=accepted/applied=1/solved=1/mismatch=15.903m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1705/cache_hits=12/cache_misses=88/cache_scanned=7468/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, physical_dynamic_sqp_audit=applied/solved=1/limit=3/count=3/detail=bounded dynamics/obstacle/wall SQP solved; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-offline-right-d-7",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility offline-right-d",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "rejected",
+      "reason": "arm=offline-right-d stage=solver-rejected candidate=9938776705378107006 solver=solve-rejected solve_ms=135.097 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=1.01886, dua_res=380.366, failed_iterate_row=578, value=1.12168, bounds=[-inf,-5.45229], violation=6.57397, tolerance=0.00645229, normalized=1018.86, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-production-left-g-8",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility production-left-g",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "rejected",
+      "reason": "arm=production-left-g stage=solver-rejected candidate=4518072748422814250 solver=solve-rejected solve_ms=44.5846 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000210466, dua_res=0.0164683, failed_iterate_row=382, value=-0.714576, bounds=[-0.714215,0.714215], violation=0.000360785, tolerance=0.00171458, normalized=0.210422, row_semantic=input-box/stage=1/element=1, first_vtheta=coupled/inconclusive/declared:[0,9.46365]/implied:[0,9.46365]/limit_state:[-1,-1]; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-architecture-production-right-g-9",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility production-right-g",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "rejected",
+      "reason": "arm=production-right-g stage=solver-rejected candidate=7645120552921220446 solver=solve-rejected solve_ms=113.621 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.796395, dua_res=669.5, failed_iterate_row=578, value=0.196211, bounds=[-inf,-2.94778], violation=3.14399, tolerance=0.00394778, normalized=796.395, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility current-world-complete-rest-y",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=1174078758090082727 solver=solve-rejected solve_ms=105.88 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.106377, dua_res=0.0043369, failed_iterate_row=397, value=-0.896569, bounds=[-0.714215,0.714215], violation=0.182354, tolerance=0.00189657, normalized=96.1493, row_semantic=input-box/stage=6/element=1, first_vtheta=coupled/inconclusive/declared:[0,9.46365]/implied:[0,9.46365]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000842-104b2a68f24a89a7-cruise-side-neutral-initial-solve-rejected/snapshot.yaml; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-complete-rest-current-world-complete-rest-y-2",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Same-world nominal feasibility current-world-complete-rest-y",
+      "changed_dimension": "Original world/hard constraints, candidate/solver architecture",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=12818936964800197240 solver=solved solve_ms=27.3494 terminal_progress=5.69155 terminal_velocity=0 lateral_reserve=0.837621 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.91043,1.31352]/mean=0.361477/bounds=0 steer_rate=[-0.690362,0.582349]/mean=-0.0717654/bounds=0/sign_changes=6 sequence=[0.25:0.707335:-0.526784;0.25:1.31352:-0.376707;0.25:1.28968:-0.587555;0.25:1.10499:-0.690362;0.25:1.07157:-0.263289;0.25:1.12222:0.168026;0.25:1.16808:0.582349;0.25:1.16753:0.479463;0.25:1.05987:0.173942;0.25:0.935269:-0.513653;0.25:0.893473:-0.549179;0.25:0.901153:0.348487;0.25:0.864091:0.577487;0.25:0.886096:-0.0231743;0.25:0.820787:-0.459923;0.25:0.698957:-0.196457;0.25:-0.621767:0.294832;0.25:-2.46286:0.361169;0.25:-2.78001:-0.0717122;0.25:-2.91043:-0.162266] detail=accepted; Applied authority and physical infeasibility not established.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r149-exact-timing",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Original long Stop is certifiable but recomputed synchronously",
+      "changed_dimension": "Unmodified source/observation/profile; component timing only",
+      "result": "accepted",
+      "reason": "191commands/1071samples/fullproof100.815207ms/applied95.012935ms/materialization10.972927ms/join100.240558ms; rest12.959999829.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r150-exact-reconstruction",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Rebuilt128 exactly matches captured128",
+      "changed_dimension": "Authenticated original842 materialization; compare captured843 whole evidence",
+      "result": "inconclusive",
+      "reason": "Exit3: all fields except physical_proof.completed_sec match. Generic adapter separately rejects InvalidElapsedTime stage939; loader limitation distinct from actual history refusal.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r151-reconstruction-history",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Original actual315ms history gap explains843 refusal",
+      "changed_dimension": "Original captured world/observation/actual plan, no gap/profile edit",
+      "result": "accepted",
+      "reason": "All artifact/physical fields match except explicitly recorded newly recomputed proof completion clock. Original intent mismatch retained; original-source evaluation and programme suffix reject HistoryUnavailable5.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r152-profile",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Interval derivative arithmetic dominates original complete proof",
+      "changed_dimension": "Sampling profiler only",
+      "result": "accepted",
+      "reason": "Diagnostic -pg samples: Jacobian product55.72% self/14280762calls; derivative and centered_step7.96% each. Instrumented times not acceptance.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r153-sparse-build",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Sparse derivative representation can be compared independently",
+      "changed_dimension": "Isolated diagnostic compilation attempt",
+      "result": "inconclusive",
+      "reason": "Build failure: diagnostic override reached unrelated footprint translation unit; no numerical result.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r154-sparse",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Structural derivative sparsity suffices for25ms",
+      "changed_dimension": "Only derivative representation, original variables/physics/input programme",
+      "result": "inconclusive",
+      "reason": "Baseline125.530562ms versus sparse103.681711/sparse-point103.322104ms. Full proof accepts; 54028scalar bounds differ by at most4.440892098500626e-14.25ms fails; independent inclusion and private activity metadata still required. Not promoted.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r155-natural",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Natural intervals alone suffice for the long Stop",
+      "changed_dimension": "Natural shared-kernel image without mean-value Jacobian",
+      "result": "rejected",
+      "reason": "State bound rejection at7.799999829;6.719383ms. No certificate and no production adoption.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r156-reuse-diagnostic",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Exact same-world tube need not be numerically propagated twice",
+      "changed_dimension": "Borrow immutable prior tube synchronously; all current physical checks",
+      "result": "accepted",
+      "reason": "Join15.200193ms versus original101.182856;1071checks/rest/programme/source/proof all preserved. Isolated prototype only; global diagnostic pointer not promoted.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r158-baseline",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Unchanged interval expressions reproduce the isolated baseline",
+      "changed_dimension": "Isolated baseline/inlining/O3, no fast-math or ISA change",
+      "result": "accepted",
+      "reason": "{\"name\": \"baseline\", \"command\": [\"/output/20260910-nine-state-revalidation-tool-r158/baseline/replay\", \"/output/20260910-nine-state-dev2-r27/d1/mpcc_architecture_snapshots/000000000842-4c4e5b02d6bd4e0f-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml\", \"/output/20260910-nine-state-revalidation-tool-r158/baseline/r27d1.yaml\"], \"return_code\": 0, \"authority\": false, \"result\": {\"elapsed_ms\": 123.91009, \"reason\": \"accepted\", \"source_horizon_program\": false, \"terminal_attempts\": 0, \"applied_reason\": 0, \"program_reason\": 0, \"prediction_reason\": 0, \"rejected_sec\": null, \"rejected_peer\": \"\", \"production\": \"available\", \"rest_sec\": 12.959999829000001, \"program_commands\": 191, \"samples\": 1071, \"peer_clearance_m\": 0.15048196662123914, \"applied_ms\": 118.095887, \"maximum_body_partitions\": 5, \"prediction_body_only\": {\"elapsed_ms\": 84.83859, \"reason\": 0, \"rest_sec\": 12.959999829000001}, \"prediction_with_corners\": {\"elapsed_ms\": 108.08909, \"reason\": 0, \"rest_sec\": 12.959999829000001}, \"materialization_ms\": 10.972652, \"materialization\": \"available\", \"join_ms\": 123.400791, \"join_applied_ms\": 117.549248, \"join\": \"accepted\", \"join_applied_reason\": 0}, \"bitwise_equal_to_baseline\": true}; All complete ranges bit-identical. Production already O3; no compiler change promoted.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r158-inline-product",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Compiler schedule alone closes original long-proof timing",
+      "changed_dimension": "Isolated baseline/inlining/O3, no fast-math or ISA change",
+      "result": "rejected",
+      "reason": "{\"name\": \"inline-product\", \"command\": [\"/output/20260910-nine-state-revalidation-tool-r158/inline-product/replay\", \"/output/20260910-nine-state-dev2-r27/d1/mpcc_architecture_snapshots/000000000842-4c4e5b02d6bd4e0f-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml\", \"/output/20260910-nine-state-revalidation-tool-r158/inline-product/r27d1.yaml\"], \"return_code\": 0, \"authority\": false, \"result\": {\"elapsed_ms\": 127.558659, \"reason\": \"accepted\", \"source_horizon_program\": false, \"terminal_attempts\": 0, \"applied_reason\": 0, \"program_reason\": 0, \"prediction_reason\": 0, \"rejected_sec\": null, \"rejected_peer\": \"\", \"production\": \"available\", \"rest_sec\": 12.959999829000001, \"program_commands\": 191, \"samples\": 1071, \"peer_clearance_m\": 0.15048196662123914, \"applied_ms\": 121.44776, \"maximum_body_partitions\": 5, \"prediction_body_only\": {\"elapsed_ms\": 89.963242, \"reason\": 0, \"rest_sec\": 12.959999829000001}, \"prediction_with_corners\": {\"elapsed_ms\": 111.598101, \"reason\": 0, \"rest_sec\": 12.959999829000001}, \"materialization_ms\": 10.965268, \"materialization\": \"available\", \"join_ms\": 128.200827, \"join_applied_ms\": 121.967787, \"join\": \"accepted\", \"join_applied_reason\": 0}, \"bitwise_equal_to_baseline\": true}; All complete ranges bit-identical. Production already O3; no compiler change promoted.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r158-inline-operators",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Compiler schedule alone closes original long-proof timing",
+      "changed_dimension": "Isolated baseline/inlining/O3, no fast-math or ISA change",
+      "result": "rejected",
+      "reason": "{\"name\": \"inline-operators\", \"command\": [\"/output/20260910-nine-state-revalidation-tool-r158/inline-operators/replay\", \"/output/20260910-nine-state-dev2-r27/d1/mpcc_architecture_snapshots/000000000842-4c4e5b02d6bd4e0f-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml\", \"/output/20260910-nine-state-revalidation-tool-r158/inline-operators/r27d1.yaml\"], \"return_code\": 0, \"authority\": false, \"result\": {\"elapsed_ms\": 135.28146, \"reason\": \"accepted\", \"source_horizon_program\": false, \"terminal_attempts\": 0, \"applied_reason\": 0, \"program_reason\": 0, \"prediction_reason\": 0, \"rejected_sec\": null, \"rejected_peer\": \"\", \"production\": \"available\", \"rest_sec\": 12.959999829000001, \"program_commands\": 191, \"samples\": 1071, \"peer_clearance_m\": 0.15048196662123914, \"applied_ms\": 129.476617, \"maximum_body_partitions\": 5, \"prediction_body_only\": {\"elapsed_ms\": 96.070651, \"reason\": 0, \"rest_sec\": 12.959999829000001}, \"prediction_with_corners\": {\"elapsed_ms\": 119.059071, \"reason\": 0, \"rest_sec\": 12.959999829000001}, \"materialization_ms\": 10.95669, \"materialization\": \"available\", \"join_ms\": 134.312819, \"join_applied_ms\": 128.463984, \"join\": \"accepted\", \"join_applied_reason\": 0}, \"bitwise_equal_to_baseline\": true}; All complete ranges bit-identical. Production already O3; no compiler change promoted.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-r158-o3",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Compiler schedule alone closes original long-proof timing",
+      "changed_dimension": "Isolated baseline/inlining/O3, no fast-math or ISA change",
+      "result": "rejected",
+      "reason": "{\"name\": \"o3\", \"command\": [\"/output/20260910-nine-state-revalidation-tool-r158/o3/replay\", \"/output/20260910-nine-state-dev2-r27/d1/mpcc_architecture_snapshots/000000000842-4c4e5b02d6bd4e0f-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml\", \"/output/20260910-nine-state-revalidation-tool-r158/o3/r27d1.yaml\"], \"return_code\": 0, \"authority\": false, \"result\": {\"elapsed_ms\": 100.883914, \"reason\": \"accepted\", \"source_horizon_program\": false, \"terminal_attempts\": 0, \"applied_reason\": 0, \"program_reason\": 0, \"prediction_reason\": 0, \"rejected_sec\": null, \"rejected_peer\": \"\", \"production\": \"available\", \"rest_sec\": 12.959999829000001, \"program_commands\": 191, \"samples\": 1071, \"peer_clearance_m\": 0.15048196662123914, \"applied_ms\": 95.075845, \"maximum_body_partitions\": 5, \"prediction_body_only\": {\"elapsed_ms\": 68.113628, \"reason\": 0, \"rest_sec\": 12.959999829000001}, \"prediction_with_corners\": {\"elapsed_ms\": 85.216249, \"reason\": 0, \"rest_sec\": 12.959999829000001}, \"materialization_ms\": 10.938363, \"materialization\": \"available\", \"join_ms\": 100.495924, \"join_applied_ms\": 94.643402, \"join\": \"accepted\", \"join_applied_reason\": 0}, \"bitwise_equal_to_baseline\": true}; All complete ranges bit-identical. Production already O3; no compiler change promoted.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-timing-r27-production-local",
+      "baseline_commit": "4a4b41484d3c7b769a200ee4f511d0a9604612d1",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-timing-r27"
+      ],
+      "hypothesis": "Explicit bounded synchronous materialization reuse preserves original authority",
+      "changed_dimension": "Explicit immutable certificate parameter, original full nominal/physical checks; no cache",
+      "result": "accepted",
+      "reason": "Buildr56/testsr46=2453; r157 node-equivalent prefix then complete bitwise fresh/reused tube equality for r27/r26/r23. r27join15.123690ms/fresh101.293818ms. Native159-161 positives/real history and physical negatives preserved. Initial firstproof still101.230731ms; not live25ms or integrated acceptance.",
+      "production_impact": "Only explicit synchronous same-world Stop join may reuse numerical work; original full nominal/physical proof, input population, model, bounds, margins, budgets and final packet/identity guards remain. Live acceptance open.",
+      "deleted_code": [
+        "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
+      ],
+      "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
     }
   ]
 }

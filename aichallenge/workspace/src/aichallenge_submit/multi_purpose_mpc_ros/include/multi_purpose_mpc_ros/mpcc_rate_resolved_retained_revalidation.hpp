@@ -505,6 +505,14 @@ struct Result
 /// certified suffix.  This function deliberately cannot produce a command.
 Result evaluate(const Request & request);
 
+/// Synchronous materialized Stop join. All nominal checks run; only an exact
+/// same-decision numerical tube may be borrowed from the supplied certificate.
+/// Neither Request nor the returned proof retains that certificate.
+Result evaluate_materialized_stop(
+  const Request & request,
+  const mpcc_rate_resolved_applied_program::Certificate & materialized_from);
+
+
 /// Minimum finite positive forward-speed bound in the remaining exact solver
 /// source. Missing/mismatched provenance cannot enable a source-horizon Stop.
 std::optional<double> source_horizon_velocity_ceiling(const Request & request) noexcept;

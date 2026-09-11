@@ -251,6 +251,13 @@ bool Certificate::matches(const retained::Proof &proof) const noexcept {
 Result certify_terminal_stop(const retained::Request &request,
                              const retained::Proof &nominal,
                              const vehicle::InputApplicationProfile &profile) {
+  return certify_terminal_stop(request, nominal, profile, nullptr);
+}
+
+Result certify_terminal_stop(const retained::Request &request,
+                             const retained::Proof &nominal,
+                             const vehicle::InputApplicationProfile &profile,
+                             const Certificate *materialized_from) {
   Result result;
   if (!request.plan || !request.plan->execution_artifact ||
       !request.plan->physical_snapshot ||
@@ -419,9 +426,51 @@ Result certify_terminal_stop(const retained::Request &request,
     }
     return result.reason == Reason::Accepted;
   };
-  auto prediction = vehicle::predict_applied_inputs_to_rest(
-    observation, prepared.prepared->program, profile, execution.vehicle_model,
-    {}, &footprint_validation);
+  auto prediction = [&]() -> vehicle::AppliedInputPrediction {
+    const auto *previous = materialized_from;
+    const auto *provenance = execution.applied_stop_program.get();
+    if (previous && provenance && execution.terminal_body_rest_required &&
+        previous->request_ && previous->request_->plan &&
+        previous->request_->plan->physical_snapshot &&
+        provenance->nominal_solution_id == previous->prepared_.source.sequence &&
+        provenance->nominal_problem_fingerprint ==
+            previous->prepared_.source.source_context.fingerprint &&
+        provenance->proved_rest_sec == previous->tube_.rest_sec &&
+        provenance->forward_velocity_ceiling_mps == expected_ceiling &&
+        previous->tube_.context_fingerprint != 0 &&
+        previous->tube_.context_fingerprint == certificate->tube_.context_fingerprint &&
+        vehicle::applied_input_context_fingerprint(provenance->observation,
+            provenance->program, provenance->profile, execution.vehicle_model) ==
+            certificate->tube_.context_fingerprint &&
+        previous->request_->plan->physical_snapshot->hard_wall_clearance_m ==
+            physical_source.hard_wall_clearance_m &&
+        previous->tube_.publication_footprint &&
+        !previous->tube_.source_to_rest.empty()) {
+      // Only plan ownership changes. The new nominal proof has already checked
+      // its own cursor, trajectory and first packet. Corner geometry includes
+      // both the current footprint and the source's full wall clearance.
+      auto original_request = request;
+      original_request.plan = previous->request_->plan;
+      bool complete = previous->matches(original_request);
+      for (const auto &sample : previous->tube_.source_to_rest)
+        complete = complete && sample.swept_footprint && sample.endpoint_footprint;
+      if (complete) {
+        if (!footprint_validation.validate(previous->tube_.publication_body,
+                *previous->tube_.publication_footprint, request.now_sec, request.now_sec))
+          return {vehicle::AppliedInputRejectReason::ValidationRejected, {}};
+        for (const auto &sample : previous->tube_.source_to_rest)
+          if (sample.begin_sec >= request.now_sec &&
+              !footprint_validation.validate(sample.swept_body,
+                  *sample.swept_footprint, sample.begin_sec, sample.end_sec))
+            return {vehicle::AppliedInputRejectReason::ValidationRejected, {}};
+        certificate->reused_numerical_tube_ = true;
+        return {vehicle::AppliedInputRejectReason::None, previous->tube_};
+      }
+    }
+    return vehicle::predict_applied_inputs_to_rest(
+        observation, prepared.prepared->program, profile, execution.vehicle_model,
+        {}, &footprint_validation);
+  }();
   result.prediction_reason = prediction.reason;
   if (!prediction.tube) {
     if (prediction.reason != vehicle::AppliedInputRejectReason::ValidationRejected)

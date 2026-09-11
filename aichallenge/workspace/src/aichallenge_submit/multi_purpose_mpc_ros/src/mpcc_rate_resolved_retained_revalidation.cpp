@@ -781,7 +781,8 @@ static Result evaluate_with_stop_profile(
   const Request & request,
   const mpcc_rate_resolved_physical_adapter::StopLateralTargetProfile * const stop_profile,
   const bool constant_program = false,
-  const bool source_horizon_program = false)
+  const bool source_horizon_program = false,
+  const mpcc_rate_resolved_applied_program::Certificate * materialized_from = nullptr)
 {
   const auto evaluation_started = SteadyClock::now();
   Result result;
@@ -1749,7 +1750,7 @@ static Result evaluate_with_stop_profile(
     }
     const auto started = SteadyClock::now();
     const auto applied = mpcc_rate_resolved_applied_program::certify_terminal_stop(
-      request, proof, *request.input_application_profile);
+      request, proof, *request.input_application_profile, materialized_from);
     result.runtime.applied_program_ms = elapsed_ms(started, SteadyClock::now());
     result.applied_program_reason = applied.reason;
     result.applied_program_prepare_reason = applied.program_reason;
@@ -1767,12 +1768,14 @@ static Result evaluate_with_stop_profile(
   return result;
 }
 
-Result evaluate(const Request & request)
+static Result evaluate_stop_candidates(
+  const Request & request,
+  const mpcc_rate_resolved_applied_program::Certificate * materialized_from)
 {
   if (request.plan == nullptr || request.plan->execution_artifact == nullptr ||
     request.plan->physical_snapshot == nullptr)
   {
-    return evaluate_with_stop_profile(request, nullptr);
+    return evaluate_with_stop_profile(request, nullptr, false, false, materialized_from);
   }
   // Terminal feasibility need not steer back to a reference before rest.
   // Keep the chosen first normal packet and prove one common steering word
@@ -1797,10 +1800,10 @@ Result evaluate(const Request & request)
   {
     const bool horizon_available = source_horizon_velocity_ceiling(request).has_value();
     const bool horizon_first = horizon_available && rear_peer_prefers_source_horizon(request);
-    common = evaluate_with_stop_profile(request, nullptr, true, horizon_first);
+    common = evaluate_with_stop_profile(request, nullptr, true, horizon_first, materialized_from);
     if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
     if (horizon_available) {
-      auto alternative = evaluate_with_stop_profile(request, nullptr, true, !horizon_first);
+      auto alternative = evaluate_with_stop_profile(request, nullptr, true, !horizon_first, materialized_from);
       accumulate(alternative, *common);
       common = std::move(alternative);
       if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
@@ -1816,9 +1819,9 @@ Result evaluate(const Request & request)
     *request.plan->execution_artifact,
     request.plan->physical_snapshot->terminal_stop_course_geometry);
   if (!profile.has_value()) {
-    return finish(evaluate_with_stop_profile(request, nullptr));
+    return finish(evaluate_with_stop_profile(request, nullptr, false, false, materialized_from));
   }
-  auto normal_path = evaluate_with_stop_profile(request, &profile.value());
+  auto normal_path = evaluate_with_stop_profile(request, &profile.value(), false, false, materialized_from);
   // The outer feedback label is not the proof result. Distinct references
   // remain candidates only when a Stop was constructed from a reference.
   if (!normal_path.terminal_stop_attempted || normal_path.terminal_stop_certified ||
@@ -1826,9 +1829,21 @@ Result evaluate(const Request & request)
   {
     return finish(std::move(normal_path));
   }
-  auto track = evaluate_with_stop_profile(request, nullptr);
+  auto track = evaluate_with_stop_profile(request, nullptr, false, false, materialized_from);
   accumulate(track, normal_path);
   return finish(std::move(track));
+}
+
+Result evaluate(const Request & request)
+{
+  return evaluate_stop_candidates(request, nullptr);
+}
+
+Result evaluate_materialized_stop(
+  const Request & request,
+  const mpcc_rate_resolved_applied_program::Certificate & materialized_from)
+{
+  return evaluate_stop_candidates(request, &materialized_from);
 }
 
 NormalPathStopObservation observe_normal_path_stop(const Request & request)

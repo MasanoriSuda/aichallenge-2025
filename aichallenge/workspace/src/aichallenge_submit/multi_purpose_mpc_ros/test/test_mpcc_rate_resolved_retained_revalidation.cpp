@@ -2695,6 +2695,92 @@ TEST(MpccRateResolvedRetainedRevalidation, MaterializedAppliedStopPreservesProgr
 }
 
 
+TEST(MpccRateResolvedRetainedRevalidation, SameDecisionStopJoinReusesIdenticalRangesWithoutRetainingItsParent)
+{
+  auto request = applied_request(); request.applied_program_required = true;
+  request.input_application_profile = vehicle::InputApplicationProfile{"test-receiver", .25, .25, .02};
+  const auto original = retained::evaluate(request);
+  ASSERT_TRUE(original.proof && original.proof->applied_program);
+  const auto & parent = original.proof->applied_program;
+  EXPECT_FALSE(parent->reused_numerical_tube());
+  const auto materialized = stop_bundle::build_certified_terminal(request, original, 1001U);
+  ASSERT_TRUE(materialized.plan);
+  auto joined_request = request; joined_request.plan = materialized.plan;
+  joined_request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto owners = parent.use_count();
+  const auto joined = retained::evaluate_materialized_stop(joined_request, *parent);
+  ASSERT_TRUE(joined.proof && joined.proof->applied_program) << retained::to_string(joined.reason);
+  EXPECT_EQ(parent.use_count(), owners);
+  const auto & proof = *joined.proof->applied_program;
+  EXPECT_TRUE(proof.reused_numerical_tube());
+  EXPECT_TRUE(proof.matches(joined_request)); EXPECT_TRUE(proof.matches(*joined.proof));
+  EXPECT_FALSE(proof.matches(request)); EXPECT_FALSE(parent->matches(joined_request));
+  EXPECT_TRUE(production::build(joined).authority);
+  const auto fresh = retained::evaluate(joined_request);
+  ASSERT_TRUE(fresh.proof && fresh.proof->applied_program);
+  EXPECT_FALSE(fresh.proof->applied_program->reused_numerical_tube());
+  const auto & a = proof.tube(); const auto & b = fresh.proof->applied_program->tube();
+  EXPECT_EQ(a.context_fingerprint, b.context_fingerprint);
+  EXPECT_DOUBLE_EQ(a.rest_sec, b.rest_sec);
+  EXPECT_EQ(proof.checked_samples(), fresh.proof->applied_program->checked_samples());
+  EXPECT_DOUBLE_EQ(proof.minimum_peer_clearance_m(), fresh.proof->applied_program->minimum_peer_clearance_m());
+  const auto same_ranges = [](const auto & x, const auto & y) {
+    for (std::size_t i = 0; i < x.size(); ++i) {
+      EXPECT_DOUBLE_EQ(x[i].lower, y[i].lower); EXPECT_DOUBLE_EQ(x[i].upper, y[i].upper);
+    }
+  };
+  same_ranges(a.publication_body, b.publication_body);
+  ASSERT_TRUE(a.publication_footprint && b.publication_footprint);
+  same_ranges(*a.publication_footprint, *b.publication_footprint);
+  ASSERT_EQ(a.source_to_rest.size(), b.source_to_rest.size());
+  for (std::size_t i = 0; i < a.source_to_rest.size(); ++i) {
+    const auto & x = a.source_to_rest[i]; const auto & y = b.source_to_rest[i];
+    EXPECT_DOUBLE_EQ(x.begin_sec, y.begin_sec); EXPECT_DOUBLE_EQ(x.end_sec, y.end_sec);
+    same_ranges(x.swept_body, y.swept_body); same_ranges(x.endpoint_body, y.endpoint_body);
+    ASSERT_TRUE(x.swept_footprint && y.swept_footprint && x.endpoint_footprint && y.endpoint_footprint);
+    same_ranges(*x.swept_footprint, *y.swept_footprint);
+    same_ranges(*x.endpoint_footprint, *y.endpoint_footprint);
+  }
+  // A later decision must independently predict, even with identical inputs.
+  auto later = joined_request; ++later.decision_id;
+  const auto next = retained::evaluate_materialized_stop(later, *parent);
+  ASSERT_TRUE(next.proof && next.proof->applied_program) << retained::to_string(next.reason);
+  EXPECT_FALSE(next.proof->applied_program->reused_numerical_tube());
+  EXPECT_TRUE(production::build(next).authority);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, SameDecisionStopJoinCannotHideMissingHistoryOrNewPeer)
+{
+  auto request = applied_request(); request.applied_program_required = true;
+  request.input_application_profile = vehicle::InputApplicationProfile{"test-receiver", .25, .25, .02};
+  const auto original = retained::evaluate(request);
+  ASSERT_TRUE(original.proof && original.proof->applied_program);
+  const auto materialized = stop_bundle::build_certified_terminal(request, original, 1001U);
+  ASSERT_TRUE(materialized.plan);
+  request.plan = materialized.plan;
+  request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto joined = retained::evaluate(request);
+  ASSERT_TRUE(joined.proof);
+  const auto * parent = original.proof->applied_program.get();
+  auto missing = request; missing.publication_prefix->observation.commands.resize(1);
+  auto nominal = *joined.proof; nominal.publication_prefix = missing.publication_prefix;
+  const auto gap = applied::certify_terminal_stop(missing, nominal, *request.input_application_profile, parent);
+  EXPECT_EQ(gap.prediction_reason, vehicle::AppliedInputRejectReason::HistoryUnavailable);
+  EXPECT_FALSE(gap.certificate);
+  auto collision = request;
+  const auto & body = request.publication_prefix->observation.initial.state;
+  collision.obstacles.obstacles.push_back({"new-peer", {body.x_m, body.y_m, 0, 0, .5}});
+  // Lower-level negatives do not mint a nominal proof for a changed world.
+  const auto peer = applied::certify_terminal_stop(collision, *joined.proof,
+    *request.input_application_profile, parent);
+  EXPECT_EQ(peer.reason, applied::Reason::PeerRejected); EXPECT_FALSE(peer.certificate);
+  auto changed_profile = *request.input_application_profile; changed_profile.acceleration_age_sec = .2;
+  auto changed = request; changed.input_application_profile = changed_profile;
+  const auto independent = applied::certify_terminal_stop(changed, *joined.proof, changed_profile, parent);
+  ASSERT_TRUE(independent.certificate) << static_cast<int>(independent.reason);
+  EXPECT_FALSE(independent.certificate->reused_numerical_tube());
+}
+
 TEST(MpccRateResolvedRetainedRevalidation, AppliedStopChecksFollowGapAcrossTheWholeUncertainBodyPath)
 {
   auto request = applied_request(contract::ControlIntent::Follow);

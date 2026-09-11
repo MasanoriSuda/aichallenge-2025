@@ -27038,7 +27038,8 @@ struct MPC
     const MpcProblem & problem, const double now_sec,
     const mpcc_contract::ControlIntent evaluation_intent,
     std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan,
-    const rate_resolved_retained::ExecutionClock execution_clock) const
+    const rate_resolved_retained::ExecutionClock execution_clock,
+    const multi_purpose_mpc_ros::mpcc_rate_resolved_applied_program::Certificate * materialized_from = nullptr) const
   {
     const auto started = SteadyClock::now();
     RateResolvedRetainedShadowEvaluation evaluation;
@@ -27077,7 +27078,9 @@ struct MPC
         problem, plan, request.value());
     }
     evaluation.obstacle_count = request->obstacles.obstacles.size();
-    auto result = rate_resolved_retained::evaluate(request.value());
+    auto result = materialized_from ?
+      rate_resolved_retained::evaluate_materialized_stop(request.value(), *materialized_from) :
+      rate_resolved_retained::evaluate(request.value());
     evaluation.runtime = result.runtime;
     evaluation.applied_program_reason = result.applied_program_reason;
     evaluation.applied_program_prepare_reason = result.applied_program_prepare_reason;
@@ -30128,7 +30131,8 @@ struct MPC
         return canonical_normal_emergency_stop(problem, intent,
           std::string{"certified terminal Stop materialization/"} + stop_successor_bundle::to_string(terminal.reason));
       }
-      auto joined = evaluate_current_world_stop_successor_plan(problem, input.revalidation_request->now_sec, intent, terminal.plan);
+      auto joined = evaluate_current_world_stop_successor_plan(problem, input.revalidation_request->now_sec,
+        intent, terminal.plan, input.production_authority->applied_program.get());
       if (!joined.production_authority || !joined.terminal_stop_uses_solved_suffix ||
         joined.stateless_current_world_bundle ||
         joined.production_authority->command.predicted_speed_mps !=
@@ -30142,10 +30146,12 @@ struct MPC
       }
       joined.certified_terminal_contingency_selected = true;
       RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
-        "Certified terminal Stop materialized: decision=%lu, source=%lu, plan=%lu, duration=%.6f, complete_rest=1",
+        "Certified terminal Stop materialized: decision=%lu, source=%lu, plan=%lu, duration=%.6f, complete_rest=1, numerical_tube_reused=%d",
         static_cast<unsigned long>(active_control_decision_id_),
         static_cast<unsigned long>(input.sequence), static_cast<unsigned long>(sequence),
-        input.revalidated_result->proof->terminal_stop_trajectory.elapsed_time_sec.back());
+        input.revalidated_result->proof->terminal_stop_trajectory.elapsed_time_sec.back(),
+        joined.production_authority->applied_program &&
+        joined.production_authority->applied_program->reused_numerical_tube());
       terminal_execution = std::move(joined);
     }
     const auto & retained = terminal_execution ? *terminal_execution : input;
@@ -30326,7 +30332,8 @@ struct MPC
   evaluate_current_world_stop_successor_plan(
     const MpcProblem & problem, const double now_sec,
     const mpcc_contract::ControlIntent intent,
-    const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & plan)
+    const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & plan,
+    const multi_purpose_mpc_ros::mpcc_rate_resolved_applied_program::Certificate * materialized_from = nullptr)
   {
     // A materialized Stop keeps its upstream immutable proof identity. Its
     // publication role is Stop; the requested next normal intent owns a
@@ -30339,7 +30346,7 @@ struct MPC
       rate_resolved_retained::ExecutionClock{
         rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
         std::numeric_limits<double>::quiet_NaN(),
-        std::numeric_limits<double>::quiet_NaN()});
+        std::numeric_limits<double>::quiet_NaN()}, materialized_from);
   }
 
   RateResolvedRetainedShadowEvaluation

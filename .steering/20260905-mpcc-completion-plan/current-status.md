@@ -1,20 +1,25 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。直近dev2-r26（963f9aa3）はD1928、1.20m/sでEmergency・25ms未達。**
+**全体は未完。壁判定修正4a4b4148のdev2-r27で、D1842の317ms処理後に843が認証喪失。**
+監視が検出した移動中のEmergencyは848、.11m/s、WP29。
 
-元の全入力応答を保った方向付き壁判定を追加した。外接矩形の隅だけが壁と重なる場合、
-元の車体・剛体頂点の区間と占有/未知cell全体を分離できるときのみ認証する。
-入力母集団・物理モデル・安全余裕・全認証条件を維持している。
+直前のStop121は元入力で完全認証するが、191packet・1071区間の停止証明に約101ms、
+格納後の再検証にも約100ms必要だった。実送信間隔が315msに開き、元の250ms履歴条件を
+超えた。元842からStop128を再構成し、843のHistoryUnavailableも再現できた。
+同じ判断内の停止計画格納では、元の不変証明を明示的に渡し、数値計算を重複しないよう
+修正した。新計画の公称証明と全物理検査は維持。ノードと同じ送信前予測を組み直した
+元842入力で、再検証は15.123690ms、独立した全計算は101.293818ms、全区間がbit一致。
+初回の101ms処理と、実送信時刻と認証時刻の整合は依然として未解決。
 
-- buildr54:26package、testsr44:2451記録/62group、error/failure/skip0。
-- 実公開元143の通常指令と同じ認証から格納した停止は、完全再検証まで通過。
-- 別途生成された旋回停止は壁拒否を維持。過去の正常ケースと履歴欠損の拒否も維持。
-- 元の応答範囲の同一性、回転車体の接触・接線・不正地図・他車・Follow・指令同一性を検証。
-- 次は新規dev2-r27。実送信時刻と25ms、および統合走行の受入れは未完。
+- 最新ローカル検証: buildr56は26package、testsr46は2453記録/62group、失敗0。
+- 元r27/r26/r23で全計算と再利用の全区間一致・指令/認証一致。過去の実履歴欠落や壁・他車の負例も維持。
+- testsr45の関数名契約失敗を記録し、既存判定・テストは変えず、新関数を役割に合わせて改名。
+- 微分の疎化・単純区間・関数展開の診断は25msを解決せず、本番へ未採用。
+- 次は必要分をローカルcommitし、同一buildでdev2-r28。25msと統合走行の受入れは未完。
 
-[設計と監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r26-wall-direction-audit.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/oriented-wall-evidence.json)、
+[最新の遅延監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r27-stop-timing-audit.md)、
+[完了した壁修正](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r26-wall-direction-audit.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
 dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。

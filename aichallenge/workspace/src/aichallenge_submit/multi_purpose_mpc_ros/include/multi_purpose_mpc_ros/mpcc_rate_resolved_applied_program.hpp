@@ -30,6 +30,7 @@ public:
   }
   double minimum_follow_gap_m() const noexcept { return minimum_follow_gap_m_; }
   std::size_t checked_samples() const noexcept { return checked_samples_; }
+  bool reused_numerical_tube() const noexcept { return reused_numerical_tube_; }
   bool matches(const retained::Request &request) const noexcept;
   bool matches(const retained::Proof &proof) const noexcept;
 
@@ -37,7 +38,9 @@ private:
   Certificate() = default;
   friend Result certify_terminal_stop(const retained::Request &,
                                       const retained::Proof &,
-                                      const vehicle::InputApplicationProfile &);
+                                      const vehicle::InputApplicationProfile &,
+                                      const Certificate *);
+  bool reused_numerical_tube_{};
   std::uint64_t nominal_fingerprint_{};
   bool source_horizon_program_{};
   std::optional<double> forward_velocity_ceiling_mps_;
@@ -78,5 +81,14 @@ struct Result {
 Result certify_terminal_stop(const retained::Request &request,
                              const retained::Proof &nominal,
                              const vehicle::InputApplicationProfile &profile);
+
+/// Borrow numerical ranges only while joining a materialization of this exact
+/// certificate in the same decision/world/input context. All nominal and
+/// physical checks still run. Mismatch runs the original predictor. The pointer
+/// is neither retained nor used as a cross-cycle cache.
+Result certify_terminal_stop(const retained::Request &request,
+                             const retained::Proof &nominal,
+                             const vehicle::InputApplicationProfile &profile,
+                             const Certificate *materialized_from);
 
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_applied_program

@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp"
@@ -2849,6 +2850,61 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
     }
     root["revalidation_evidence"] = revalidation_evidence_node(request, association, "",
       inspected_grid, observed_grid, certified_grid);
+    const recovery_footprint::OccupancyGrid *scheduled_inspected=nullptr, *scheduled_observed=nullptr, *scheduled_certified=nullptr;
+    if (o.scheduled_capture) {
+      const auto &capture=*o.scheduled_capture;
+      root["schema"]="mpcc-scheduled-dispatch-observation/v1";
+      auto node=root["scheduled"];
+      node["boundary"]=capture.boundary; node["detail"]=capture.detail;
+      node["source_request"]=revalidation_evidence_node(&capture.original.observed,true,"scheduled-",
+        scheduled_inspected,scheduled_observed,scheduled_certified);
+      node["prior_program"]=mpcc_vehicle_model::encode_input_program(capture.original.prior_program);
+      node["prior_index"]=capture.original.prior_index;
+      node["preceding_packet_count"]=capture.original.preceding_packet_count;
+      node["planned_control_origin_sec"]=capture.original.planned_control_origin_sec;
+      node["progress_frame_xy_yaw_progress"]=std::vector<double>{capture.original.progress_frame.pose.x_m,
+        capture.original.progress_frame.pose.y_m,capture.original.progress_frame.pose.yaw_rad,capture.original.progress_frame.progress_m};
+      node["suffix_index"]=capture.suffix_index;
+      node["current_request"]=revalidation_evidence_node(capture.current.get(),capture.current && capture.current->decision_id==o.decision_id,"",
+        inspected_grid,observed_grid,certified_grid);
+      node["current_context"]=problem_context_node(capture.current_context);
+      node["current_check"]=std::vector<int>{static_cast<int>(capture.current_check.reason),static_cast<int>(capture.current_check.context),
+        static_cast<int>(capture.current_check.measurement.reason),static_cast<int>(capture.current_check.prefix),
+        static_cast<int>(capture.current_check.world.reason),static_cast<int>(capture.current_check.world.physical_reason)};
+      node["measurement_rejected_source_sec"]=capture.current_check.measurement.rejected_source_sec;
+      node["world_rejected_sec"]=capture.current_check.world.rejected_sec;
+      node["world_rejected_peer"]=capture.current_check.world.rejected_peer_id;
+      node["original_cursor_available"]=capture.original_cursor.has_value();
+      if (capture.original_cursor) {
+        node["original_cursor_sequence"]=capture.original_cursor->sequence();
+        node["original_cursor_clock_sec"]=capture.original_cursor->last_clock_sec();
+      }
+      node["ledger_continuous"]=capture.transactions.has_value();
+      if (capture.transactions) for (const auto &event:*capture.transactions) {
+        YAML::Node item;
+        item["sequence"]=event.sequence;
+        item["nominal_wire_acceleration_wire_steering_before_after"]=std::vector<double>{event.nominal.published_sec,
+          event.nominal.wire_acceleration_mps2,event.nominal.wire_steering_rad,event.before_clock_sec,event.after_clock_sec};
+        item["recorded_publication_sec"]=event.published.published_sec;
+        if (event.source) item["source_job_solution_problem_input_index"]=std::vector<std::uint64_t>{event.source->decision_id,
+          event.source->solution_id,event.source->problem_fingerprint,event.source->input_context_fingerprint,event.source->packet_index};
+        node["transactions"].push_back(item);
+      }
+      if (capture.certificate) {
+        const auto &certificate=*capture.certificate;
+        node["program"]=mpcc_vehicle_model::encode_input_program(certificate.suffix().program);
+        node["physical_steering_witnesses"]=certificate.suffix().physical_steering_rad;
+        node["rest_sec"]=certificate.tube().rest_sec;
+        node["input_context_fingerprint"]=certificate.tube().context_fingerprint;
+        node["source_context_active_at_write"]=certificate.nominal()->source_context().valid();
+        boundary["publication_bracket_admitted"]=mpcc_vehicle_model::scheduled_publication_bracket_admitted(
+          certificate.suffix().program,capture.suffix_index,certificate.nominal()->observed().now_sec,o.before_clock_sec,o.after_clock_sec);
+        boundary["planning_clock_sec"]=certificate.nominal()->observed().now_sec;
+        boundary["dispatch_clock_sec"]=o.decision_clock_sec;
+        boundary["deadline_sec"]=mpcc_vehicle_model::publication_epoch(certificate.suffix().program,capture.suffix_index,true).
+          value_or(std::numeric_limits<double>::quiet_NaN());
+      }
+    }
     std::ostringstream name;
     name << "publication-" << std::setw(12) << std::setfill('0') << o.decision_id
          << (o.after_publication ? "-post" : "-pre") << (o.moving ? "-moving" : "-stationary");
@@ -2873,6 +2929,9 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
       stream.close();
       if (!stream) throw std::runtime_error("cannot write publication observation grid");
     };
+    write_grid(scheduled_inspected,"scheduled-inspected-wall-grid.bin");
+    write_grid(scheduled_observed,"scheduled-revalidation-wall-grid.bin");
+    write_grid(scheduled_certified,"scheduled-inspected-certified-wall-grid.bin");
     write_grid(inspected_grid, "inspected-wall-grid.bin");
     write_grid(observed_grid, "revalidation-wall-grid.bin");
     write_grid(certified_grid, "inspected-certified-wall-grid.bin");

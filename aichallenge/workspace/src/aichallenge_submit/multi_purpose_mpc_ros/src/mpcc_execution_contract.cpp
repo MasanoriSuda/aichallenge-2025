@@ -1103,7 +1103,8 @@ FinalControlDecision resolve_final_control_decision(
       CanonicalNormalAuthoritySource::FreshCertified;
     if (
       command.decision_id != request.decision_id ||
-      command.execution_certificate_decision_id != request.decision_id ||
+      (request.scheduled_publication ? !request.scheduled_publication->matches(command) :
+        command.execution_certificate_decision_id != request.decision_id) ||
       command.execution_plan_id == 0U ||
       command.problem_fingerprint != request.problem->fingerprint ||
       command.solution_id != request.solution->solution_id ||

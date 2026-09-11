@@ -27,9 +27,9 @@ run_kind = 'application-' if application_diagnostic else ''
 root = Path('output/20260910-nine-state-'+run_kind+mode+'-'+attempt)
 host_duration_sec = 120 if application_diagnostic else 840
 assert not subprocess.check_output(['docker', 'ps', '-q']).strip(), 'Other containers running'
-test_log = Path('/tmp/mpcc-nine-state-tests-r70.log')
-build_log = Path('/tmp/mpcc-nine-state-build-r81.log')
-assert 'Summary: 2517 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
+test_log = Path('/tmp/mpcc-nine-state-tests-r73.log')
+build_log = Path('/tmp/mpcc-nine-state-build-r85.log')
+assert 'Summary: 2524 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
 assert 'Summary: 26 packages finished' in build_log.read_text()
 original_dll = Path('aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll')
 assert hashlib.sha256(original_dll.read_bytes()).hexdigest() == '703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172'
@@ -165,7 +165,7 @@ try:
                     'action=NormalControl' not in line):
                     first_override = re.sub(r'\x1b\[[0-9;]*m','',line)
                     break
-            stops = [line for line in lines if 'canonical-certified-terminal-stop' in line]
+            stops = [line for line in lines if 'canonical-certified-terminal-stop' in line or 'canonical-scheduled-stop/' in line]
             laps = [line for line in lines if 'Lap ' in line and 'completed!' in line]
             summary[domain] = dict(lines=len(lines),phases=phases[-3:],laps=laps[-1:],certified_stop_traces=len(stops),
                                    stop_executed_traces=sum('executed-retained' in line for line in stops),
@@ -175,7 +175,7 @@ try:
             summary[domain]['causal_input_failsafes'] = sum('missing causal body/tire/input observation' in line for line in lines)
             publication_violations = [line for line in lines if 'MPCC publication window violated:' in line]
             summary[domain]['publication_window_violations'] = publication_violations
-            summary[domain]['certified_publications'] = sum('MPCC applied publication:' in line for line in lines)
+            summary[domain]['certified_publications'] = sum('MPCC applied publication:' in line or 'MPCC scheduled publication:' in line for line in lines)
             if launch_errors:
                 summary[domain]['launch_errors'] = launch_errors
             tactical_rejoins = [line for line in phases if 'Pass -> Recovery,' in line and

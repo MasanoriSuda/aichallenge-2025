@@ -494,6 +494,7 @@ target_include_directories(
   ${EIGEN3_INCLUDE_DIRS}
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+  ${PROJECT_NAME}_v2x_overtake_core
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
   ${PROJECT_NAME}_mpcc_latest_state_feedback
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter

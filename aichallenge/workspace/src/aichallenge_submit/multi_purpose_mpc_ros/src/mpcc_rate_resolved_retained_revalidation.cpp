@@ -2275,14 +2275,8 @@ Result evaluate(const Request &request) {
       request.prior_program.maximum_publication_delay_sec != execution.publication_interval_sec)
     return result;
   const auto &frame = request.progress_frame;
-  const auto project = [&](const recovery_footprint::Pose2D &pose) -> std::optional<double> {
-    for (double value : {frame.pose.x_m, frame.pose.y_m, frame.pose.yaw_rad, frame.progress_m,
-        pose.x_m, pose.y_m, pose.yaw_rad})
-      if (!std::isfinite(value)) return std::nullopt;
-    const double lag = std::cos(frame.pose.yaw_rad) * (pose.x_m - frame.pose.x_m) +
-      std::sin(frame.pose.yaw_rad) * (pose.y_m - frame.pose.y_m);
-    const double value = frame.progress_m + lag;
-    return std::isfinite(value) ? std::optional{value} : std::nullopt;
+  const auto project = [&](const recovery_footprint::Pose2D &pose) {
+    return project_progress(frame, pose);
   };
   const auto original_progress = project(observed.control_pose);
   if (!original_progress || *original_progress != observed.control_origin_physical_progress_m) {

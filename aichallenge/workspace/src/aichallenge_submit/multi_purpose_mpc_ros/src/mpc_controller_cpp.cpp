@@ -1,3 +1,6 @@
+#include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
+#include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
+#include "multi_purpose_mpc_ros/mpcc_scheduled_observation.hpp"
 #include <multi_purpose_mpc_ros/mpcc_wire_command.hpp>
 #include <multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp>
 #include <multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp>
@@ -6171,6 +6174,7 @@ struct MpcProblem
   bool stop_shadow_requested{false};
   race_mpcc::StopShadowIntentReason stop_shadow_reason{
     race_mpcc::StopShadowIntentReason::NotStop};
+  double observation_sec{std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct ExtendedProgressMpcProblem
@@ -8242,6 +8246,23 @@ struct CertifiedStopSuccessorTelemetryWindow
   }
 };
 
+struct ScheduledProductionOutcome
+{
+  scheduled_control::Request request;
+  scheduled_control::Result result;
+  std::optional<mpcc_vehicle_model::PublishedInputLedger::Snapshot> cursor;
+  mpcc_contract::MpccProblemContext proposed_context;
+  std::optional<mpcc_contract::MpccProblemContext> committed_context;
+  std::optional<scheduled_control::FollowCourseAnchor> follow_anchor;
+  std::size_t sent{};
+  double elapsed_ms{};
+};
+struct ScheduledProductionMailbox
+{
+  std::mutex mutex;
+  std::shared_ptr<ScheduledProductionOutcome> latest;
+};
+
 struct MPC
 {
   MPC(
@@ -8258,6 +8279,13 @@ struct MPC
     (void)use_obstacle_avoidance;
     (void)use_path_constraints_topic;
     if (enable_async_tactical_worker) {
+      scheduled_worker_ = std::make_unique<LatestOnlyWorker>();
+      const auto report_scheduled=[](const auto &o,const auto &r) {
+        RCLCPP_WARN(rclcpp::get_logger("mpc_controller"),"MPCC scheduled evidence: decision=%lu, status=%s, file=%s, detail=%s",
+          static_cast<unsigned long>(o.decision_id),mpcc_architecture_snapshot::to_string(r.status),r.snapshot_file.string().c_str(),r.detail.c_str());
+      };
+      scheduled_admission_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
+      scheduled_proof_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       rate_resolved_track_cruise_shadow_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_normal_avoidance_negative_solver_context_ =
@@ -26053,9 +26081,8 @@ struct MPC
       }
       return false;
     }
-    static_cast<void>(
-      submit_rate_resolved_current_world_stop_observation(
-        current_world_snapshot));
+    // The retired synchronous Stop-lattice bridge has no production consumer.
+    // Keep its offline evaluator, but do not enqueue unused live proofs.
     ++rate_resolved_track_cruise_shadow_telemetry_window_.submission_count;
     rate_resolved_track_cruise_shadow_telemetry_window_.
       replaced_pending_count += submission.replaced_pending ? 1U : 0U;
@@ -30546,481 +30573,385 @@ struct MPC
     return alternate;
   }
 
-  MpcControlCycleResult rate_resolved_normal_production_control(
-    MpcProblem problem, const double now_sec,
-    const mpcc_contract::ControlIntent intent)
+  std::optional<scheduled_control::ProgressFrame> scheduled_progress_frame() const
   {
-    const auto production_started = SteadyClock::now();
-    const bool racing_scope =
-      problem.track_cruise_shadow_requested &&
-      (intent == mpcc_contract::ControlIntent::Track ||
-      intent == mpcc_contract::ControlIntent::Cruise);
-    const bool follow_scope =
-      problem.follow_shadow_requested &&
-      intent == mpcc_contract::ControlIntent::Follow;
-    const bool overtake_scope =
-      problem.progress_execution_context_active &&
-      mpcc_contract::canonical_normal_intent_requires_execution_side(intent);
-    const bool rejoin_scope =
-      problem.rejoin_shadow_requested &&
-      intent == mpcc_contract::ControlIntent::Rejoin;
-    if (!racing_scope && !follow_scope && !overtake_scope && !rejoin_scope) {
-      std::ostringstream detail;
-      detail << "rate-resolved normal admission unavailable"
-             << "/track=" << (problem.track_cruise_shadow_requested ? 1 : 0)
-             << "/follow=" << (problem.follow_shadow_requested ? 1 : 0)
-             << "/execution="
-             << (problem.progress_execution_context_active ? 1 : 0)
-             << "/rejoin=" << (problem.rejoin_shadow_requested ? 1 : 0)
-             << "/rejoin_reason="
-             << race_mpcc::rejoin_shadow_eligibility_reason_name(
-               problem.rejoin_shadow_eligibility_reason);
-      return canonical_normal_emergency_stop(
-        problem, intent, detail.str());
-    }
+    if (!model || !model->current_waypoint || !model->reference_path) return std::nullopt;
+    const auto &wp = *model->current_waypoint;
+    return scheduled_control::ProgressFrame{{wp.x, wp.y, wp.psi}, model->s};
+  }
 
-    std::string preentry_execution_draft_reject_reason;
-    auto preentry_execution_draft =
-      build_rate_resolved_preentry_execution_draft(
-      last_v2x_behavior_output_, now_sec,
-      preentry_execution_draft_reject_reason);
-    if (preentry_execution_draft.has_value()) {
-      const auto & draft = preentry_execution_draft.value();
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Gate A lifecycle: boundary=draft, admitted=1, reason=built, "
-        "kind=%s, decision=%lu, target=%s, side=%d, tactical=%lu, "
-        "generation=%lu, source=%s, authority=observation-only",
-        rate_resolved_intent_transition_kind_name(draft.kind),
-        static_cast<unsigned long>(draft.decision_id), draft.target_id.c_str(),
-        draft.selected_side_sign,
-        static_cast<unsigned long>(draft.tactical_source_sequence),
-        static_cast<unsigned long>(draft.prospective_mission_generation),
-        overtake_core::to_string(draft.tactical_input_source));
+  std::optional<scheduled_control::FollowCourseAnchor> scheduled_follow_anchor(
+    const MpcProblem &problem) const
+  {
+    const auto &follow = problem.follow_longitudinal_contract;
+    const auto index = problem.progress_stage_geometry.tracking_waypoint;
+    if (!follow.valid || !model || !model->reference_path || !std::isfinite(problem.observation_sec) ||
+        index < 0 || index >= model->reference_path->n_waypoints) return std::nullopt;
+    double path_progress{};
+    for (int i = 1; i <= index; ++i) {
+      const auto &a = model->reference_path->get_waypoint(i-1);
+      const auto &b = model->reference_path->get_waypoint(i);
+      path_progress += std::hypot(b.x-a.x, b.y-a.y);
     }
-    const auto preentry_draft_finished = SteadyClock::now();
+    return scheduled_control::FollowCourseAnchor{follow.target_id, problem.observation_sec,
+      path_progress + follow.current_ego_progress_offset_m + follow.current_target_gap_m,
+      follow.target_speed_mps};
+  }
 
-    std::string draft_reject_reason;
-    const auto submission_draft =
-      build_rate_resolved_track_cruise_submission_draft(
-      problem, intent, now_sec, draft_reject_reason);
-    const auto submission_draft_finished = SteadyClock::now();
-    // Consume the retained artifact against the predecessor which entered
-    // this cycle. The next asynchronous problem is bound only after the
-    // current command is committed, so all intents share one causal steering
-    // origin and one nine-state actuation time base.
-    auto effective_intent = intent;
-    bool published_stop_retained = false;
-    double primary_retained_ms{};
-    double stop_lattice_ms{};
-    double stop_successor_ms{};
-    double published_stop_join_ms{};
-    double failure_snapshot_ms{};
-    double normal_authority_snapshot_ms{};
-    double gate_a_join_ms{};
-    double previous_intent_join_ms{};
-    auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
-      problem, now_sec, intent);
-    primary_retained_ms = retained.elapsed_ms;
-    const double primary_applied_ms = retained.aggregate_runtime.applied_program_ms;
-    const double primary_continuation_ms = retained.aggregate_runtime.continuation_proof_ms;
-    const auto ordinary_retained = retained;
-    if (!retained.production_authority.has_value()) {
-      const auto stop_lattice_started = SteadyClock::now();
-      auto lattice_alternate =
-        evaluate_rate_resolved_stop_lattice_current_world_alternate(
-        problem, now_sec, intent, ordinary_retained);
-      stop_lattice_ms = std::chrono::duration<double, std::milli>(
-        SteadyClock::now() - stop_lattice_started).count();
-      const auto alternate_snapshot_started = SteadyClock::now();
-      record_rate_resolved_stop_alternate_overrun_snapshot(
-        problem, submission_draft, now_sec, intent, lattice_alternate);
-      failure_snapshot_ms += std::chrono::duration<double, std::milli>(
-        SteadyClock::now() - alternate_snapshot_started).count();
-      if (lattice_alternate.production_authority.has_value()) {
-        ++rate_resolved_stop_lattice_shadow_telemetry_window_.
-          current_world_alternate_selected_count;
-        RCLCPP_WARN(
-          rclcpp::get_logger("mpc_controller"),
-          "Stop lattice production bridge: decision=%lu, intent=%s, "
-          "ordinary=%s, source=%lu, join=%s, "
-          "authority=certified-stop, selected=1",
-          static_cast<unsigned long>(active_control_decision_id_),
-          mpcc_contract::to_string(intent),
-          rate_resolved_retained::to_string(ordinary_retained.reason),
-          static_cast<unsigned long>(lattice_alternate.sequence),
-          rate_resolved_retained::to_string(lattice_alternate.reason));
-        retained = std::move(lattice_alternate);
+  std::optional<rate_resolved_retained::Request> build_scheduled_observed_request(
+    const MpcProblem &problem,
+    std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan,
+    const mpcc_vehicle_model::ObservationProvenance &observation,
+    const mpcc_contract::ControlIntent intent,
+    const std::optional<scheduled_control::FollowCourseAnchor> &follow_anchor,
+    std::optional<mpcc_vehicle_model::PublishedCommand> exact_packet = std::nullopt) const
+  {
+    const auto frame = scheduled_progress_frame();
+    if (!frame || !plan || !plan->execution_artifact || !gap_planner ||
+        !overtake_static_wall_grid_snapshot_owner_ ||
+        mpcc_vehicle_model::fingerprint(plan->execution_artifact->vehicle_model) !=
+        mpcc_vehicle_model::fingerprint(cfg.vehicle_model)) return std::nullopt;
+    const auto world = gap_planner->dynamic_world_observation(observation.now_sec);
+    rate_resolved_retained::Request seed;
+    seed.plan = std::move(plan); seed.decision_id = active_control_decision_id_;
+    seed.current_intent = intent;
+    seed.execution_clock.kind = rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate;
+    if (last_committed_canonical_publication_decision_id_ == 0) seed.execution_clock.kind = rate_resolved_retained::ExecutionClockKind::BootstrapCandidate;
+    seed.path_length_m = model->reference_path->length;
+    seed.circular = model->reference_path->circular;
+    seed.progress_continuity_tolerance_m = kV2XCourseProgressContinuityToleranceM;
+    seed.current_wall_grid = overtake_static_wall_grid_snapshot_owner_;
+    seed.current_footprint = overtake_static_wall_footprint_;
+    seed.obstacles.generation = world.observation_generation;
+    seed.obstacles.observed_sec = world.current ? observation.now_sec : world.receipt_sec;
+    seed.obstacles.current = world.current;
+    for (const auto &peer : world.vehicles) {
+      const auto radius = rate_resolved_retained::resolve_peer_circle_radius(cfg.v2x_gap.peer_body_radius_m,
+        cfg.v2x_gap.prediction_margin + std::max(peer.covariance_x, peer.covariance_y));
+      if (!radius) return std::nullopt;
+      rate_resolved_retained::DynamicObstacle obstacle;
+      obstacle.id = peer.id;
+      obstacle.circle.x_m = peer.x; obstacle.circle.y_m = peer.y;
+      obstacle.circle.velocity_x_mps = peer.vx; obstacle.circle.velocity_y_mps = peer.vy;
+      obstacle.circle.acceleration_x_mps2 = peer.ax; obstacle.circle.acceleration_y_mps2 = peer.ay;
+      obstacle.circle.acceleration_horizon_sec = rate_resolved_shadow::kPeerAccelerationHorizonSec;
+      obstacle.circle.radius_m = *radius;
+      seed.obstacles.obstacles.push_back(std::move(obstacle));
+    }
+    seed.stop_lateral_policy = stop_path_tracking_policy();
+    seed.minimum_acceleration_mps2 = cfg.a_min; seed.maximum_acceleration_mps2 = cfg.a_max;
+    seed.applied_program_required = true; seed.input_application_profile = cfg.input_application_profile;
+    auto current = scheduled_control::bind_current_observation(std::move(seed), observation, *frame, exact_packet);
+    if (!current) return std::nullopt;
+    if (intent == mpcc_contract::ControlIntent::Follow) {
+      if (!world.current || !follow_anchor || follow_anchor->target_id !=
+          current->plan->execution_artifact->identity.source_context.target_id) return std::nullopt;
+      const auto target = std::find_if(current->obstacles.obstacles.begin(), current->obstacles.obstacles.end(),
+        [&](const auto &peer) { return peer.id == follow_anchor->target_id; });
+      if (target == current->obstacles.obstacles.end()) return std::nullopt;
+      std::vector<v2x_overtake_core::CoursePoint> course;
+      for (int i = 0; i < model->reference_path->n_waypoints; ++i) {
+        const auto &wp = model->reference_path->get_waypoint(i); course.push_back({wp.x,wp.y});
       }
+      double maximum_cross_track = model->width;
+      for (Eigen::Index i = 0; i < problem.progress_state_lower.size(); i += 3) {
+        if (std::isfinite(problem.progress_state_lower[i])) maximum_cross_track =
+          std::max(maximum_cross_track, std::abs(problem.progress_state_lower[i]));
+        if (i < problem.progress_state_upper.size() && std::isfinite(problem.progress_state_upper[i]))
+          maximum_cross_track = std::max(maximum_cross_track, std::abs(problem.progress_state_upper[i]));
+      }
+      const auto projection = scheduled_control::project_follow_at_observation(course,
+        v2x_overtake_core::ForwardCourseProjectionRequest{
+          static_cast<std::size_t>(std::max(0, problem.tracking_wp_id)), model->reference_path->circular,
+          current->control_pose.x_m, current->control_pose.y_m, target->circle.x_m, target->circle.y_m,
+          target->circle.velocity_x_mps, target->circle.velocity_y_mps,
+          cfg.v2x_behavior.front_progress_lookbehind_distance,
+          std::max(cfg.v2x_behavior.follow_distance, cfg.v2x_behavior.front_progress_detection_distance),
+          maximum_cross_track + cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin,
+          std::nullopt, kV2XCourseProgressContinuityToleranceM},
+        *follow_anchor, current->obstacles.observed_sec);
+      if (!projection.valid || projection.forward_distance_m < 0) return std::nullopt;
+      std::vector<double> durations;
+      for (const auto &stage : current->plan->execution_artifact->control_stages) durations.push_back(stage.duration_sec);
+      current->follow_target = rate_resolved_retained::build_physical_origin_follow_target_observation(
+        rate_resolved_retained::PhysicalOriginFollowTargetBuildRequest{
+          follow_anchor->target_id, world.observation_generation, current->obstacles.observed_sec,
+          projection.forward_distance_m, cfg.v2x_behavior.moving_follow_hard_distance,
+          std::max(0.0,projection.along_track_speed_mps), std::move(durations),true});
+      if (!current->follow_target) return std::nullopt;
     }
-    std::optional<PublishedStopSuccessorEvaluation> stop_successor;
-    if (!retained.production_authority.has_value()) {
-      const auto stop_successor_started = SteadyClock::now();
-      stop_successor = evaluate_published_stop_successor_shadow(
-        now_sec, intent, retained.reason);
-      stop_successor_ms = std::chrono::duration<double, std::milli>(
-        SteadyClock::now() - stop_successor_started).count();
+    return current;
+  }
+
+  std::shared_ptr<mpcc_architecture_snapshot::ScheduledFailureCapture> scheduled_failure_capture(
+    const std::shared_ptr<ScheduledProductionOutcome> &entry,
+    const mpcc_vehicle_model::PublishedInputLedger &ledger,
+    std::shared_ptr<const rate_resolved_retained::Request> current,
+    const std::string &boundary) const
+  {
+    if (!entry) return nullptr;
+    auto capture=std::make_shared<mpcc_architecture_snapshot::ScheduledFailureCapture>();
+    capture->original=entry->request; capture->certificate=entry->result.applied.certificate;
+    capture->original_cursor=entry->cursor; capture->current=std::move(current);
+    if (entry->cursor) capture->transactions=ledger.since(*entry->cursor);
+    capture->suffix_index=entry->sent; capture->boundary=boundary;
+    return capture;
+  }
+
+  std::shared_ptr<const scheduled_control::DispatchCandidate> scheduled_dispatch_candidate() const
+  { return pending_scheduled_dispatch_; }
+
+  void submit_scheduled_post_publication(
+    const mpcc_vehicle_model::PublishedPrediction &actual,
+    const mpcc_vehicle_model::PublishedInputLedger &ledger)
+  {
+    // Only the main callback reads the live world/ledger. The worker owns values.
+    if (!scheduled_worker_ || !pending_rate_resolved_publication_successor_ ||
+        !pending_rate_resolved_publication_successor_->normal_draft || !rate_resolved_track_cruise_certified_plan_store_)
+      return;
+    const auto cursor = ledger.snapshot(); const auto *last = ledger.latest_transaction();
+    const auto frame = scheduled_progress_frame();
+    if (!cursor || !last || !frame || actual.provenance.commands.size() != ledger.history().size()) return;
+    const auto &pending = *pending_rate_resolved_publication_successor_;
+    const auto &context = pending.normal_draft->source_context;
+    const auto anchor = scheduled_follow_anchor(pending.source_problem);
+    std::vector<std::shared_ptr<const rate_resolved_certified::CertifiedPlan>> plans;
+    const auto add = [&](const auto &plan) {
+      if (plan && plan->execution_artifact && plan->solver_source_snapshot &&
+          plan->solver_source_snapshot->normal_context_generation.same_generation(current_normal_context_generation()) &&
+          plan->execution_artifact->identity.source_context.intent == context.intent &&
+          std::none_of(plans.begin(),plans.end(),[&](const auto &p) { return p == plan; })) plans.push_back(plan);
+    };
+    // Tactical proposals are source candidates only; their old synchronous
+    // current-world joins no longer write normal commands.
+    const auto &behavior = last_v2x_behavior_output_;
+    if (behavior.rate_resolved_pass_gate_a_proposal && behavior.rate_resolved_pass_gate_a_proposal->complete())
+      add(behavior.rate_resolved_pass_gate_a_proposal->certified_plan);
+    if (behavior.rate_resolved_return_gate_a_proposal && behavior.rate_resolved_return_gate_a_proposal->complete())
+      add(behavior.rate_resolved_return_gate_a_proposal->certified_plan);
+    if (behavior.rate_resolved_mission_gate_a_proposal && behavior.rate_resolved_mission_gate_a_proposal->complete())
+      add(behavior.rate_resolved_mission_gate_a_proposal->certified_plan);
+    const auto bank = rate_resolved_track_cruise_certified_plan_store_->candidate_with_sibling_snapshot();
+    add(bank.plan); add(bank.sibling_plan);
+    add(rate_resolved_track_cruise_certified_plan_store_->published_bundle_source_snapshot().plan);
+    add(rate_resolved_track_cruise_certified_plan_store_->executed_snapshot().plan);
+    if (plans.empty()) return;
+    mpcc_vehicle_model::PublishedInputProgram prior;
+    std::size_t next_index{};
+    if (scheduled_active_ && scheduled_active_->result.applied.certificate && last->source &&
+        last->source->decision_id == scheduled_active_->result.applied.certificate->suffix().decision_id &&
+        last->source->input_context_fingerprint == scheduled_active_->result.applied.certificate->tube().context_fingerprint) {
+      prior = scheduled_active_->result.applied.certificate->suffix().program;
+      next_index = scheduled_active_->sent;
+    } else {
+      // Bootstrap is anchored to the actual preceding Emergency packet, never
+      // to completion time. No unissued positive input enters this prefix.
+      prior.publication_interval_sec = 1.0/cfg.control_rate;
+      prior.maximum_publication_delay_sec = prior.publication_interval_sec;
+      prior.commands = {last->nominal}; prior.repeat_last_until_rest = true;
+      prior.nanosecond_clock = mpcc_vehicle_model::publication_nanosecond_clock(
+        last->nominal.published_sec,prior.publication_interval_sec,prior.maximum_publication_delay_sec);
+      next_index = 1;
     }
-    // Observation only: capture the immutable current-world problem at the
-    // proof boundary before atomic intent bridging can replace the rejected
-    // proposed intent.  This never solves, stores, publishes or changes
-    // production authority.
-    const auto failure_snapshot_started = SteadyClock::now();
-    static_cast<void>(record_rate_resolved_terminal_contingency_failure_snapshot(
-      problem, submission_draft, now_sec, intent, ordinary_retained));
-    if (
-      ordinary_retained.reason == rate_resolved_retained::Reason::Accepted &&
-      ordinary_retained.production_authority.has_value() &&
-      ordinary_retained.terminal_stop_certified &&
-      mpcc_contract::canonical_normal_intent_supported(intent))
-    {
-      rate_resolved_last_accepted_terminal_viability_boundary_ =
-        RateResolvedTerminalViabilityBoundarySample{
-        intent, ordinary_retained};
+    const auto appointment = mpcc_vehicle_model::publication_epoch(prior,next_index);
+    const auto control_origin=scheduled_control::publication_control_origin(
+      prior,next_index,execution_prediction_delay_sec_);
+    if (!appointment || !control_origin || *appointment < actual.provenance.now_sec) return;
+    std::vector<scheduled_control::Request> requests;
+    for (const auto &plan : plans) {
+      auto observed = build_scheduled_observed_request(pending.source_problem,plan,actual.provenance,context.intent,anchor);
+      if (!observed) continue;
+      scheduled_control::Request request;
+      request.observed = std::move(*observed); request.prior_program = prior;
+      request.prior_index = next_index; request.preceding_packet_count = 0;
+      request.planned_control_origin_sec = *control_origin;
+      request.progress_frame = *frame;
+      requests.push_back(std::move(request));
     }
-    failure_snapshot_ms += std::chrono::duration<double, std::milli>(
-      SteadyClock::now() - failure_snapshot_started).count();
-    if (
-      !retained.production_authority.has_value() &&
-      stop_successor.has_value() && stop_successor->request.has_value() &&
-      stop_successor->result.accepted() &&
-      rate_resolved_track_cruise_shadow_next_sequence_ <
-      std::numeric_limits<std::uint64_t>::max())
-    {
-      const std::uint64_t stop_sequence =
-        rate_resolved_track_cruise_shadow_next_sequence_++;
-      const auto bundle = stop_successor_bundle::build(
-        stop_successor->request.value(), stop_successor->result,
-        stop_sequence);
-      auto published_stop_join_reason = retained.reason;
-      if (bundle.plan != nullptr) {
-        const auto published_stop_join_started = SteadyClock::now();
-        auto joined_stop = evaluate_current_world_stop_successor_plan(
-          problem, now_sec, intent, bundle.plan);
-        published_stop_join_reason = joined_stop.reason;
-        published_stop_join_ms = std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - published_stop_join_started).count();
-        if (joined_stop.production_authority.has_value()) {
-          joined_stop.certified_terminal_contingency_selected = true;
-          retained = std::move(joined_stop);
+    if (requests.empty()) return;
+    const auto mailbox = scheduled_mailbox_;
+    static_cast<void>(scheduled_worker_->submit_latest([requests=std::move(requests),cursor=*cursor,context,anchor,mailbox]() mutable {
+      const auto started = SteadyClock::now();
+      auto outcome = std::make_shared<ScheduledProductionOutcome>();
+      outcome->cursor = cursor; outcome->proposed_context = context; outcome->follow_anchor = anchor;
+      for (const auto &request : requests) {
+        outcome->request = request;
+        outcome->result = scheduled_control::evaluate(request);
+        if (outcome->result.applied.certificate) break;
+      }
+      outcome->elapsed_ms = std::chrono::duration<double,std::milli>(SteadyClock::now()-started).count();
+      std::lock_guard<std::mutex> lock(mailbox->mutex);
+      if (!mailbox->latest || mailbox->latest->request.observed.decision_id < context.decision_id)
+        mailbox->latest = std::move(outcome);
+    }));
+  }
+
+  MpcControlCycleResult scheduled_normal_control(
+    const MpcProblem &problem, const mpcc_contract::ControlIntent intent,
+    const std::optional<mpcc_contract::MpccProblemContext> &proposed_context,
+    const mpcc_vehicle_model::PublishedInputLedger &ledger)
+  {
+    std::shared_ptr<ScheduledProductionOutcome> ready;
+    { std::lock_guard<std::mutex> lock(scheduled_mailbox_->mutex); ready=std::move(scheduled_mailbox_->latest); }
+    const auto consider = [&](const std::shared_ptr<ScheduledProductionOutcome> &entry) {
+      if (!entry || !entry->cursor || !entry->result.applied.certificate || !vehicle_observation_provenance_) return false;
+      const auto certificate = entry->result.applied.certificate;
+      const auto &program = certificate->suffix().program;
+      const auto &source = certificate->suffix().source.source_context;
+      auto packet = program.commands[std::min(entry->sent, program.commands.size()-1)];
+      if ((intent == mpcc_contract::ControlIntent::Stop || intent == mpcc_contract::ControlIntent::Hold) &&
+          packet.wire_acceleration_mps2 > 0) return false;
+      packet.published_sec = vehicle_observation_provenance_->now_sec;
+      auto anchor = scheduled_follow_anchor(problem);
+      if (!anchor || anchor->target_id != source.target_id) anchor = entry->follow_anchor;
+      auto current = build_scheduled_observed_request(problem,certificate->nominal()->observed().plan,
+        *vehicle_observation_provenance_,source.intent,anchor,packet);
+      if (!current) {
+        RCLCPP_WARN(rclcpp::get_logger("mpc_controller"),"MPCC scheduled admission: dispatch=%lu, job=%lu, source=%lu, index=%zu, reason=current-observation-unavailable",
+          static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(certificate->suffix().decision_id),
+          static_cast<unsigned long>(certificate->suffix().source.sequence),entry->sent);
+        return false;
+      }
+      std::optional<mpcc_contract::MpccProblemContext> context = proposed_context;
+      if (entry->sent > 0) {
+        // This permission was committed by an authenticated actual first send.
+        // New proposals do not relabel it. Hard mission/session/policy changes
+        // still revoke, and each current target/world/prefix is checked below.
+        context = entry->committed_context;
+        if (!context) return false;
+        if (mpcc_contract::canonical_normal_intent_requires_execution_side(source.intent) &&
+            (current_overtake_mission_invalidated() || source.intent_generation != overtake_line_state_.mission_generation ||
+             source.target_id != overtake_line_state_.target_vehicle_id || source.execution_side_sign != overtake_line_state_.pass_side_sign)) return false;
+        context->decision_id = active_control_decision_id_;
+        context->observation_generation = active_control_decision_id_;
+        if (mpcc_contract::canonical_normal_intent_requires_target_observation(source.intent))
+          context->target_obstacle_generation = current->obstacles.generation;
+        if (context->dynamic_obstacle_constraint_active) context->dynamic_obstacle_generation=current->obstacles.generation;
+        *context = mpcc_contract::seal_problem_context(*context);
+      }
+      if (!context) return false;
+      const auto result = scheduled_control::prepare_dispatch(certificate,*current,*context,
+        current_normal_context_generation(),ledger,*entry->cursor,{},entry->sent);
+      RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
+        "MPCC scheduled admission: dispatch=%lu, job=%lu, source=%lu, index=%zu, reason=%d/current:%d/context:%d/measurement:%d/prefix:%d/world:%d/physical:%d, source_geometry=%lu, current_geometry=%lu, source_intent=%s, proposed=%s, worker_ms=%.3f",
+        static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(certificate->suffix().decision_id),
+        static_cast<unsigned long>(certificate->suffix().source.sequence),entry->sent,static_cast<int>(result.reason),
+        static_cast<int>(result.current.reason),static_cast<int>(result.current.context),static_cast<int>(result.current.measurement.reason),
+        static_cast<int>(result.current.prefix),static_cast<int>(result.current.world.reason),static_cast<int>(result.current.world.physical_reason),
+        static_cast<unsigned long>(source.stage_geometry_id),static_cast<unsigned long>(context->stage_geometry_id),
+        mpcc_contract::to_string(source.intent),mpcc_contract::to_string(intent),entry->elapsed_ms);
+      if (!result.candidate) {
+        if (scheduled_admission_recorder_) {
+          auto capture=scheduled_failure_capture(entry,ledger,std::make_shared<const rate_resolved_retained::Request>(*current),"current-evidence");
+          capture->current_context=*context; capture->current_check=result.current;
+          mpcc_architecture_snapshot::PublicationFailureObservation observation;
+          observation.decision_id=active_control_decision_id_; observation.nominal_sec=packet.published_sec;
+          observation.moving=current->current_speed_mps>0.1;
+          observation.output_root="mpcc_architecture_snapshots/scheduled-admission"; observation.scheduled_capture=std::move(capture);
+          static_cast<void>(scheduled_admission_recorder_->submit(std::move(observation)));
         }
+        return false;
       }
-      RCLCPP_WARN(
-        rclcpp::get_logger("mpc_controller"),
-        "Published Stop successor production: decision=%lu, intent=%s, "
-        "source=%lu, bundle=%s/%lu, bundle_detail=%s/index:%lu/"
-        "observed:%.9f/required:%.9f/tolerance:%.9f, "
-        "joined=%d, join_reason=%s, "
-        "authority=%s",
-        static_cast<unsigned long>(active_control_decision_id_),
-        mpcc_contract::to_string(intent),
-        static_cast<unsigned long>(stop_successor->result.source_sequence),
-        stop_successor_bundle::to_string(bundle.reason),
-        static_cast<unsigned long>(stop_sequence),
-        stop_successor_bundle::to_string(bundle.actuation_detail),
-        static_cast<unsigned long>(bundle.rejected_index),
-        bundle.observed_value, bundle.required_bound,
-        bundle.certificate_tolerance,
-        retained.production_authority.has_value() ? 1 : 0,
-        rate_resolved_retained::to_string(published_stop_join_reason),
-        retained.production_authority.has_value() ?
-        "certified-stop" : "external-emergency");
-    }
-    observe_published_certified_stop_successor_join(
-      retained, active_control_decision_id_);
-    if (retained.certified_terminal_contingency_selected && retained.production_authority) {
-      effective_intent = retained.production_authority->command.intent;
-    }
-    if (
-      !retained.production_authority.has_value() &&
-      last_published_authority_intent_ !=
-      mpcc_contract::ControlIntent::Unknown &&
-      last_published_authority_intent_ != intent)
-    {
-      // Gate A may bridge an intent transition before the background normal
-      // worker has completed the next homotopy. It is immutable tactical
-      // evidence and becomes retained normal evidence only after publication.
-      const auto previous_intent = last_published_authority_intent_;
-      bool gate_a_plan_attempted = false;
-      bool gate_a_plan_joined = false;
-      std::uint64_t gate_a_sequence = 0U;
-      std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
-      gate_a_certified_plan;
-      bool gate_a_identity_matches = false;
-      const auto & mission_gate_a_proposal =
-        last_v2x_behavior_output_.rate_resolved_mission_gate_a_proposal;
-      const auto & pass_gate_a_proposal =
-        last_v2x_behavior_output_.rate_resolved_pass_gate_a_proposal;
-      const auto & return_gate_a_proposal =
-        last_v2x_behavior_output_.rate_resolved_return_gate_a_proposal;
-      if (
-        intent == mpcc_contract::ControlIntent::Pass &&
-        pass_gate_a_proposal.has_value() &&
-        pass_gate_a_proposal->complete())
-      {
-        gate_a_certified_plan = pass_gate_a_proposal->certified_plan;
-        const auto & artifact = gate_a_certified_plan->execution_artifact;
-        const auto & source_context = artifact->identity.source_context;
-        gate_a_sequence = artifact->identity.sequence;
-        gate_a_identity_matches =
-          source_context.intent == intent &&
-          source_context.intent_generation ==
-          overtake_line_state_.mission_generation &&
-          source_context.target_id == overtake_line_state_.target_vehicle_id &&
-          source_context.execution_side_sign ==
-          overtake_line_state_.pass_side_sign &&
-          pass_gate_a_proposal->mission_generation ==
-          overtake_line_state_.mission_generation &&
-          pass_gate_a_proposal->target_id ==
-          overtake_line_state_.target_vehicle_id &&
-          pass_gate_a_proposal->side_sign ==
-          overtake_line_state_.pass_side_sign;
-      } else if (
-        intent == mpcc_contract::ControlIntent::Return &&
-        return_gate_a_proposal.has_value() &&
-        return_gate_a_proposal->complete())
-      {
-        gate_a_certified_plan = return_gate_a_proposal->certified_plan;
-        const auto & artifact = gate_a_certified_plan->execution_artifact;
-        const auto & source_context = artifact->identity.source_context;
-        gate_a_sequence = artifact->identity.sequence;
-        gate_a_identity_matches =
-          source_context.intent == intent &&
-          source_context.intent_generation ==
-          overtake_line_state_.mission_generation &&
-          source_context.target_id == overtake_line_state_.target_vehicle_id &&
-          source_context.execution_side_sign ==
-          overtake_line_state_.pass_side_sign &&
-          return_gate_a_proposal->mission_generation ==
-          overtake_line_state_.mission_generation &&
-          return_gate_a_proposal->target_id ==
-          overtake_line_state_.target_vehicle_id &&
-          return_gate_a_proposal->side_sign ==
-          overtake_line_state_.pass_side_sign;
-      } else if (
-        mission_gate_a_proposal.has_value() &&
-        mission_gate_a_proposal->complete() &&
-        mission_gate_a_proposal->certified_plan != nullptr &&
-        mission_gate_a_proposal->certified_plan->execution_artifact != nullptr)
-      {
-        gate_a_certified_plan = mission_gate_a_proposal->certified_plan;
-        const auto & artifact = gate_a_certified_plan->execution_artifact;
-        const auto & source_context = artifact->identity.source_context;
-        gate_a_sequence = artifact->identity.sequence;
-        gate_a_identity_matches =
-          source_context.intent == intent &&
-          source_context.intent_generation ==
-          overtake_line_state_.mission_generation &&
-          source_context.target_id == overtake_line_state_.target_vehicle_id &&
-          source_context.execution_side_sign ==
-          overtake_line_state_.pass_side_sign &&
-          mission_gate_a_proposal->prospective_mission_generation ==
-          overtake_line_state_.mission_generation &&
-          mission_gate_a_proposal->target_id ==
-          overtake_line_state_.target_vehicle_id &&
-          mission_gate_a_proposal->selected_side_sign ==
-          overtake_line_state_.pass_side_sign;
+      pending_scheduled_current_=std::make_shared<const rate_resolved_retained::Request>(std::move(*current));
+      pending_scheduled_dispatch_ = result.candidate; pending_scheduled_entry_ = entry;
+      pending_scheduled_context_ = *context;
+      return true;
+    };
+    if (ready && !ready->result.applied.certificate) {
+      if (scheduled_proof_recorder_) {
+        auto capture=scheduled_failure_capture(ready,ledger,nullptr,"scheduled-proof");
+        capture->detail=std::string{rate_resolved_retained::to_string(ready->result.reason)}+"/physical:"+
+          std::to_string(static_cast<int>(ready->result.applied.reason));
+        mpcc_architecture_snapshot::PublicationFailureObservation observation;
+        observation.decision_id=active_control_decision_id_;
+        observation.moving=ready->request.observed.current_speed_mps>0.1;
+        observation.output_root="mpcc_architecture_snapshots/scheduled-proof"; observation.scheduled_capture=std::move(capture);
+        static_cast<void>(scheduled_proof_recorder_->submit(std::move(observation)));
       }
-      if (gate_a_identity_matches && gate_a_certified_plan != nullptr) {
-        gate_a_plan_attempted = true;
-        const auto gate_a_join_started = SteadyClock::now();
-        retained = evaluate_rate_resolved_track_cruise_plan(
-          problem, now_sec, intent, gate_a_certified_plan,
-          rate_resolved_retained::ExecutionClock{
-            rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
-            std::numeric_limits<double>::quiet_NaN(),
-            std::numeric_limits<double>::quiet_NaN()});
-        gate_a_join_ms = std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - gate_a_join_started).count();
-        gate_a_plan_joined = retained.production_authority.has_value();
-      }
-      auto previous_retained =
-        RateResolvedRetainedShadowEvaluation{};
-      const bool previous_stop_authority =
-        previous_intent == mpcc_contract::ControlIntent::Stop;
-      if (
-        !retained.production_authority.has_value() &&
-        !previous_stop_authority)
-      {
-        const auto previous_intent_join_started = SteadyClock::now();
-        previous_retained =
-          evaluate_rate_resolved_track_cruise_retained_shadow(
-          problem, now_sec, previous_intent);
-        previous_intent_join_ms = std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - previous_intent_join_started).count();
-      }
-      const auto atomic_resolution =
-        mpcc_contract::resolve_atomic_intent_admission(
-        mpcc_contract::AtomicIntentAdmissionRequest{
-          intent, previous_intent,
-          retained.production_authority.has_value(),
-          previous_stop_authority ||
-          previous_retained.production_authority.has_value()});
-      const auto proposed_world_reason = retained.reason;
-      const std::string proposed_blocker = retained.blocking_obstacle_id;
-      const auto previous_world_reason = previous_retained.reason;
-      const auto previous_candidate_reason = previous_retained.candidate_reason;
-      const auto previous_candidate_sequence =
-        previous_retained.candidate_sequence;
-      const auto previous_executed_reason = previous_retained.executed_reason;
-      const auto previous_executed_sequence =
-        previous_retained.executed_sequence;
-      const bool previous_joined = previous_stop_authority ||
-        previous_retained.production_authority.has_value();
-      published_stop_retained =
-        atomic_resolution.previous_retained &&
-        atomic_resolution.effective_intent ==
-        mpcc_contract::ControlIntent::Stop;
-      if (atomic_resolution.previous_retained && !published_stop_retained) {
-        retained = std::move(previous_retained);
-      }
-      if (atomic_resolution.authority_available) {
-        effective_intent = atomic_resolution.effective_intent;
-      }
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Rate-resolved canonical atomic admission: decision=%lu, "
-        "previous=%s, proposed=%s, effective=%s, resolution=%s, "
-        "gate_a_attempted=%d, gate_a_joined=%d, previous_joined=%d, "
-        "previous_external_stop=%d, "
-        "proposed_world=%s, previous_world=%s, "
-        "previous_candidate=%s/%lu, previous_executed=%s/%lu, "
-        "gate_a_sequence=%lu, blocker=%s",
-        static_cast<unsigned long>(active_control_decision_id_),
-        mpcc_contract::to_string(previous_intent),
-        mpcc_contract::to_string(intent),
-        mpcc_contract::to_string(effective_intent),
-        mpcc_contract::to_string(atomic_resolution.reason),
-        gate_a_plan_attempted ? 1 : 0, gate_a_plan_joined ? 1 : 0,
-        previous_joined ? 1 : 0,
-        previous_stop_authority ? 1 : 0,
-        rate_resolved_retained::to_string(proposed_world_reason),
-        rate_resolved_retained::to_string(previous_world_reason),
-        rate_resolved_retained::to_string(previous_candidate_reason),
-        static_cast<unsigned long>(previous_candidate_sequence),
-        rate_resolved_retained::to_string(previous_executed_reason),
-        static_cast<unsigned long>(previous_executed_sequence),
-        static_cast<unsigned long>(gate_a_sequence),
-        proposed_blocker.empty() ? "none" : proposed_blocker.c_str());
+      RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
+        "MPCC scheduled proof rejected: job=%lu, source=%lu, nominal=%s, physical=%d/program:%d/input:%d, rejected_sec=%.9f, peer=%s, worker_ms=%.3f",
+        static_cast<unsigned long>(ready->request.observed.decision_id),
+        static_cast<unsigned long>(ready->request.observed.plan ? ready->request.observed.plan->execution_artifact->identity.sequence : 0),
+        rate_resolved_retained::to_string(ready->result.reason),static_cast<int>(ready->result.applied.reason),
+        static_cast<int>(ready->result.applied.program_reason),static_cast<int>(ready->result.applied.prediction_reason),
+        ready->result.applied.rejected_sec,ready->result.applied.rejected_peer_id.c_str(),ready->elapsed_ms);
     }
-    // Observation only: freeze the final current-world boundary after every
-    // normal, Stop-suffix, Gate-A and previous-intent join has failed, but
-    // before command selection converts that missing authority into external
-    // Emergency Stop.  The snapshot cannot feed any production store.
-    const auto normal_authority_snapshot_started = SteadyClock::now();
-    // An ordinary terminal rejection and final authority loss are different
-    // first-event categories. The observer preserves both admitted records;
-    // neither a previous bucket nor pending I/O can suppress this boundary.
-    record_rate_resolved_normal_authority_failure_snapshot(
-      problem, submission_draft, now_sec, intent, effective_intent, retained,
-      published_stop_retained);
-    normal_authority_snapshot_ms =
-      std::chrono::duration<double, std::milli>(
-      SteadyClock::now() - normal_authority_snapshot_started).count();
-    const auto retained_join_finished = SteadyClock::now();
-    record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);
-    auto output = published_stop_retained ?
-      canonical_normal_emergency_stop(
-        problem, mpcc_contract::ControlIntent::Stop,
-        "published Stop retained until normal authority joins") :
-      rate_resolved_track_cruise_control(
-        problem, effective_intent, retained);
-    record_rate_resolved_track_cruise_command(retained, output, now_sec);
-    if (!submission_draft.has_value()) {
-      ++rate_resolved_track_cruise_shadow_telemetry_window_.
-        submission_reject_count;
-      static rclcpp::Clock submission_log_clock{RCL_STEADY_TIME};
-      RCLCPP_WARN_THROTTLE(
-        rclcpp::get_logger("mpc_controller"), submission_log_clock, 1000,
-        "Rate-resolved normal submission unavailable: intent=%s, reason=%s",
-        mpcc_contract::to_string(intent), draft_reject_reason.c_str());
+    if (!consider(ready) && !consider(scheduled_active_)) {
+      scheduled_active_.reset();
+      return canonical_normal_emergency_stop(problem,intent,"scheduled current evidence unavailable");
     }
-    if (!preentry_execution_draft.has_value() &&
-      (overtake_successor_reference_available() ||
-      last_v2x_behavior_output_.overtake_selected_mission.has_value() ||
-      last_v2x_behavior_output_.
-      rate_resolved_preentry_selected_mission_hint.has_value()))
-    {
-      static rclcpp::Clock preentry_draft_log_clock{RCL_STEADY_TIME};
-      RCLCPP_WARN_THROTTLE(
-        rclcpp::get_logger("mpc_controller"), preentry_draft_log_clock, 1000,
-        "Rate-resolved pre-entry causal draft unavailable: target=%s, "
-        "side=%d, tactical=%lu, reason=%s, authority=shadow,selected=0",
-        last_v2x_behavior_output_.target_vehicle_id.c_str(),
-        last_v2x_behavior_output_.rate_resolved_preentry_branch_selection.
-        selected_side_sign,
-        static_cast<unsigned long>(last_v2x_behavior_output_.
-          rate_resolved_preentry_tactical_source_sequence),
-        preentry_execution_draft_reject_reason.c_str());
+    const auto &dispatch = *pending_scheduled_dispatch_;
+    const auto &certificate = *dispatch.certificate();
+    const auto &execution = *certificate.nominal()->observed().plan->execution_artifact;
+    const auto &source = execution.identity.source_context;
+    const auto command=dispatch.canonical_command();
+    previous_steering=command.steering_tire_angle_rad;
+    current_control=Eigen::VectorXd::Zero(2*std::max(0,problem.N));
+    for (int i=0;i<problem.N;++i) {current_control[2*i]=command.predicted_speed_mps;current_control[2*i+1]=previous_steering;}
+    current_prediction.first.clear(); current_prediction.second.clear();
+    last_problem_context_=source;
+    mpcc_contract::CertifiedMpccSolution solution;
+    solution.solution_id=execution.identity.sequence; solution.problem_fingerprint=source.fingerprint;
+    solution.formulation=source.formulation; solution.solved=true; solution.finite=true; solution.constraints_satisfied=true;
+    solution.maximum_constraint_violation=execution.maximum_constraint_violation;
+    solution.physical={true,true,true,certificate.nominal()->proof().continuation_trajectory.minimum_lateral_bound_reserve_m,
+      certificate.minimum_peer_clearance_m()};
+    solution.prediction_stage_count=execution.control_stages.size();
+    solution.valid_until_sec=execution.prediction_origin_sec;
+    for (const auto &stage:execution.control_stages) solution.valid_until_sec+=stage.duration_sec;
+    last_solution_contract_=solution; last_solution_is_retained_=true;
+    failure_fallback_speed_.reset(); infeasibility_counter=0; overtake_infeasibility_counter_=0;
+    last_control_was_fallback_=false;
+    last_control_resolution_reason_="canonical-scheduled-program";
+    MpcControlCycleResult output{Eigen::Vector2d(command.predicted_speed_mps,previous_steering),std::abs(previous_steering)};
+    output.canonical_normal_command=command;
+    // Every subsequent suffix packet belongs to the proved stopping programme.
+    output.published_authority_intent=(pending_scheduled_entry_->sent > 0 ||
+      intent == mpcc_contract::ControlIntent::Stop || intent == mpcc_contract::ControlIntent::Hold) ? mpcc_contract::ControlIntent::Stop : source.intent;
+    return output;
+  }
+
+  void record_scheduled_final_command(const mpcc_vehicle_model::PublishedInputLedger &ledger)
+  {
+    if (!pending_scheduled_dispatch_ || !pending_scheduled_entry_ || !pending_scheduled_context_ ||
+        !pending_scheduled_dispatch_->matches_after_publication(ledger, current_normal_context_generation())) return;
+    last_scheduled_publication_=pending_scheduled_dispatch_->publication_identity(ledger, current_normal_context_generation());
+    if (!last_scheduled_publication_) return;
+    const auto entry=pending_scheduled_entry_;
+    const auto &certificate=*entry->result.applied.certificate;
+    if (entry->sent==0) {
+      entry->committed_context=pending_scheduled_context_;
+      // A resampled programme is a published source, never an unmodified
+      // execution of the old solver trajectory.
+      if (rate_resolved_track_cruise_certified_plan_store_)
+        static_cast<void>(rate_resolved_track_cruise_certified_plan_store_->record_published_bundle_source(
+          certificate.nominal()->observed().plan,nullptr,active_control_decision_id_,
+          certificate.nominal()->proof().control_origin_sec,certificate.nominal()->proof().cursor.elapsed_sec));
     }
-    // Do not bind or enqueue the next solve yet. The complete predecessor
-    // input for this decision does not exist until the ROS command has been
-    // serialized successfully. Moving the source problem retains the exact
-    // observation without copying its sparse matrices.
-    pending_rate_resolved_publication_successor_ =
-      PendingRateResolvedPublicationSuccessor{
-      active_control_decision_id_, now_sec, std::move(problem),
-      std::move(submission_draft), std::move(preentry_execution_draft)};
-    const auto production_finished = SteadyClock::now();
-    const double production_total_ms =
-      std::chrono::duration<double, std::milli>(
-      production_finished - production_started).count();
-    last_normal_join_timing = NormalJoinTimingObservation{
-      primary_retained_ms, stop_lattice_ms, stop_successor_ms + published_stop_join_ms,
-      std::chrono::duration<double, std::milli>(
-        production_finished - retained_join_finished).count(),
-      failure_snapshot_ms + normal_authority_snapshot_ms,
-      primary_applied_ms, primary_continuation_ms};
-    if (production_total_ms > 20.0) {
-      static rclcpp::Clock runtime_log_clock{RCL_STEADY_TIME};
-      RCLCPP_WARN_THROTTLE(
-        rclcpp::get_logger("mpc_controller"), runtime_log_clock, 1000,
-        "Canonical production join runtime: decision=%lu, total=%.3fms, "
-        "regions=preentry-draft:%.3f/submission-draft:%.3f/"
-        "retained-join:%.3f/output-successor:%.3fms, intent=%s, "
-        "join_detail=primary:%.3f/stop_lattice:%.3f/stop_successor:%.3f/"
-        "published_stop_join:%.3f/failure_snapshot:%.3f/"
-        "normal_authority_snapshot:%.3f/gate_a:%.3f/"
-        "previous_intent:%.3fms, "
-        "retained_attempts=%lu/retained_evaluations:%.3f/"
-        "retained_orchestration:%.3f, "
-        "retained_proof=pre:%.3f/continuation_build:%.3f/"
-        "continuation_proof:%.3f(delay_wall:%.3f/dynamic:%.3f/wall:%.3f)/"
-        "terminal_build:%.3f/"
-        "terminal_dynamic:%.3f/terminal_wall:%.3fms, "
-        "preentry=%d, retained=%d, selected=%d",
-        static_cast<unsigned long>(active_control_decision_id_),
-        production_total_ms,
-        std::chrono::duration<double, std::milli>(
-          preentry_draft_finished - production_started).count(),
-        std::chrono::duration<double, std::milli>(
-          submission_draft_finished - preentry_draft_finished).count(),
-        std::chrono::duration<double, std::milli>(
-          retained_join_finished - submission_draft_finished).count(),
-        std::chrono::duration<double, std::milli>(
-          production_finished - retained_join_finished).count(),
-        mpcc_contract::to_string(intent),
-        primary_retained_ms, stop_lattice_ms, stop_successor_ms,
-        published_stop_join_ms, failure_snapshot_ms,
-        normal_authority_snapshot_ms, gate_a_join_ms,
-        previous_intent_join_ms,
-        static_cast<unsigned long>(retained.plan_evaluation_count),
-        retained.plan_evaluation_elapsed_ms,
-        retained.orchestration_elapsed_ms,
-        retained.aggregate_runtime.pre_continuation_ms,
-        retained.aggregate_runtime.continuation_build_ms,
-        retained.aggregate_runtime.continuation_proof_ms,
-        retained.aggregate_runtime.continuation_delay_wall_ms,
-        retained.aggregate_runtime.continuation_dynamic_ms,
-        retained.aggregate_runtime.continuation_wall_ms,
-        retained.aggregate_runtime.terminal_build_ms,
-        retained.aggregate_runtime.terminal_dynamic_ms,
-        retained.aggregate_runtime.terminal_wall_ms,
-        pending_rate_resolved_publication_successor_->
-        preentry_draft.has_value() ? 1 : 0,
-        retained.production_authority.has_value() ? 1 : 0,
-        output.canonical_normal_command.has_value() ? 1 : 0);
-    }
+    ++entry->sent; scheduled_active_=entry;
+    last_published_canonical_intent_=certificate.suffix().source.source_context.intent;
+    last_committed_canonical_publication_decision_id_=active_control_decision_id_;
+    pending_scheduled_entry_.reset(); pending_scheduled_context_.reset(); pending_scheduled_dispatch_.reset();
+  }
+
+  MpcControlCycleResult rate_resolved_normal_production_control(
+    MpcProblem problem, const double now_sec, const mpcc_contract::ControlIntent intent)
+  {
+    const auto started=SteadyClock::now();
+    const auto source_intent=problem.stop_shadow_requested ? problem.problem_intent : intent;
+    std::string draft_reject_reason, preentry_reject_reason;
+    auto draft=build_rate_resolved_track_cruise_submission_draft(problem,source_intent,now_sec,draft_reject_reason);
+    auto preentry=build_rate_resolved_preentry_execution_draft(last_v2x_behavior_output_,now_sec,preentry_reject_reason);
+    std::optional<mpcc_contract::MpccProblemContext> current_context;
+    if (draft) current_context=draft->source_context;
+    auto output=scheduled_live_ledger_ ? scheduled_normal_control(problem,intent,current_context,*scheduled_live_ledger_) :
+      canonical_normal_emergency_stop(problem,intent,"scheduled ledger unavailable");
+    // No synchronous retained/Stop-lattice/Stop materialization/Gate-A/previous-
+    // intent reproof remains in the production join. They cannot compete with
+    // the one scheduled dispatcher. Source solves bind only after the send.
+    pending_rate_resolved_publication_successor_=PendingRateResolvedPublicationSuccessor{
+      active_control_decision_id_,now_sec,std::move(problem),std::move(draft),std::move(preentry)};
+    last_normal_join_timing.primary_ms=std::chrono::duration<double,std::milli>(SteadyClock::now()-started).count();
     return output;
   }
 
@@ -31034,6 +30965,8 @@ struct MPC
     last_problem_initialization_ms = 0.0;
     last_normal_join_timing = {};
     pending_canonical_normal_actuation_.reset();
+    pending_scheduled_dispatch_.reset(); pending_scheduled_entry_.reset(); pending_scheduled_context_.reset();
+    pending_scheduled_current_.reset(); last_scheduled_publication_.reset();
     pending_rate_resolved_publication_successor_.reset();
     last_overtake_authority_trace_.reset();
     last_problem_context_.reset();
@@ -31067,6 +31000,7 @@ struct MPC
           nullptr);
       last_problem_initialization_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - problem_initialization_started).count();
+      problem.observation_sec = now_sec;
       const auto control_intent = problem.resolved_control_intent;
       if (!problem.lateral_bounds_contract_valid) {
         static rclcpp::Clock bound_contract_log_clock{RCL_STEADY_TIME};
@@ -31095,20 +31029,8 @@ struct MPC
         }
         return safe_failure_control("invalid lateral bound contract", now_sec);
       }
-      if (
-        race_mpcc::resolve_stop_authority_action(control_intent) ==
-        race_mpcc::StopAuthorityAction::EmergencyStop)
-      {
-        auto output = canonical_normal_emergency_stop(
-          problem, control_intent, "safety-brake-stop-authority");
-        if (problem.stop_shadow_requested) {
-          const auto stop_shadow_intent = problem.problem_intent;
-          const auto stop_shadow_reason = problem.stop_shadow_reason;
-          prepare_rate_resolved_stop_shadow_successor(
-            std::move(problem), stop_shadow_intent, now_sec,
-            stop_shadow_reason);
-        }
-        return output;
+      if (control_intent == mpcc_contract::ControlIntent::Stop || control_intent == mpcc_contract::ControlIntent::Hold) {
+        return rate_resolved_normal_production_control(std::move(problem),now_sec,control_intent);
       }
       if (
         rate_resolved_artifact::supports_intent(control_intent))
@@ -31304,6 +31226,17 @@ struct MPC
   bool mpcc_lite_shadow_last_logged_agreement_{false};
   bool mpcc_lite_shadow_last_logged_hold_{false};
   bool mpcc_lite_async_worker_context_{false};
+  const mpcc_vehicle_model::PublishedInputLedger *scheduled_live_ledger_{};
+  std::shared_ptr<ScheduledProductionMailbox> scheduled_mailbox_{std::make_shared<ScheduledProductionMailbox>()};
+  std::unique_ptr<LatestOnlyWorker> scheduled_worker_;
+  std::shared_ptr<ScheduledProductionOutcome> scheduled_active_;
+  std::shared_ptr<ScheduledProductionOutcome> pending_scheduled_entry_;
+  std::optional<mpcc_contract::MpccProblemContext> pending_scheduled_context_;
+  std::shared_ptr<const scheduled_control::DispatchCandidate> pending_scheduled_dispatch_;
+  std::shared_ptr<const rate_resolved_retained::Request> pending_scheduled_current_;
+  std::shared_ptr<const mpcc_contract::PublishedScheduledIdentity> last_scheduled_publication_;
+  std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_admission_recorder_;
+  std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_proof_recorder_;
   mutable scheduled_control::ContextOwner normal_context_owner_;
   scheduled_control::ContextSnapshot captured_normal_context_generation_{};
   std::shared_ptr<MpccLiteAsyncMailbox> mpcc_lite_async_mailbox_;
@@ -54923,7 +54856,8 @@ private:
         mpc_ != nullptr ? mpc_->last_solution_contract() :
         std::optional<mpcc_contract::CertifiedMpccSolution>{},
         mpc_ != nullptr && mpc_->last_solution_is_retained(),
-        canonical_normal_command, supervisor_intent});
+        canonical_normal_command, supervisor_intent,
+        mpc_ ? mpc_->last_scheduled_publication_ : nullptr});
     trace.published = published;
     trace.actual_speed_mps = actual_speed_mps;
     trace.target_speed_mps = raw_control[0];
@@ -55181,92 +55115,76 @@ private:
     }
   }
 
+  void record_scheduled_publication_failure(
+    const std::shared_ptr<const scheduled_control::DispatchCandidate> &dispatch,
+    const bool after_publication,const rclcpp::Time &before,const rclcpp::Time &after,
+    const AckermannControlCommand &command)
+  {
+    if (!mpc_ || !dispatch) return;
+    auto capture=mpc_->scheduled_failure_capture(mpc_->pending_scheduled_entry_,published_input_ledger_,
+      mpc_->pending_scheduled_current_,after_publication ? "after-publication" : "before-publication");
+    if (capture && mpc_->pending_scheduled_context_) capture->current_context=*mpc_->pending_scheduled_context_;
+    mpcc_architecture_snapshot::PublicationFailureObservation observation{
+      nullptr,active_control_decision_id_,dispatch->packet().published_sec,active_control_callback_ros_clock_sec_,
+      before.seconds(),after.seconds(),command.longitudinal.acceleration,command.lateral.steering_tire_angle,
+      after_publication,odom_ && std::abs(odom_->twist.twist.linear.x)>0.1};
+    observation.scheduled_capture=std::move(capture);
+    mpc_->record_applied_publication_failure(std::move(observation));
+  }
+
   std::optional<double> publish_control_command(
-    const rclcpp::Time & stamp, const Eigen::Vector2d & u, const double acc,
+    const rclcpp::Time &stamp, const Eigen::Vector2d &u, const double acc,
     const bool canonical_execution)
   {
-    auto raw_command = create_ackermann_control_command(stamp, u, acc);
-    const auto published_steering =
-      mpcc_contract::resolve_published_steering_tire_angle(
-      raw_command.lateral.steering_tire_angle,
-      mpc_cfg_.steering_tire_angle_gain_var);
-    if (!published_steering.has_value()) {
-      publish_failsafe_command(stamp, "invalid steering publication contract");
-      return std::nullopt;
+    const auto dispatch=canonical_execution && mpc_ ? mpc_->scheduled_dispatch_candidate() : nullptr;
+    auto publication_stamp=stamp;
+    if (canonical_execution) {
+      const auto epoch=dispatch ? mpcc_vehicle_model::publication_nanoseconds(dispatch->packet().published_sec) : std::nullopt;
+      if (!epoch) {publish_failsafe_command(stamp,"scheduled packet identity unavailable");return std::nullopt;}
+      publication_stamp=rclcpp::Time(*epoch,stamp.get_clock_type());
     }
-    auto final_command = raw_command;
-    final_command.lateral.steering_tire_angle = published_steering.value();
+    auto raw_command=create_ackermann_control_command(publication_stamp,u,acc);
+    const auto published_steering=mpcc_contract::resolve_published_steering_tire_angle(
+      raw_command.lateral.steering_tire_angle,mpc_cfg_.steering_tire_angle_gain_var);
+    if (!published_steering) {publish_failsafe_command(stamp,"invalid steering publication contract");return std::nullopt;}
+    auto final_command=raw_command; final_command.lateral.steering_tire_angle=*published_steering;
     if (!command_is_finite(raw_command) || !command_is_finite(final_command)) {
-      publish_failsafe_command(stamp, "non-finite control command rejected");
-      return std::nullopt;
+      publish_failsafe_command(stamp,"non-finite control command rejected");return std::nullopt;
     }
-    const auto publication_clock_before = now();
-    const auto publication_before = publication_clock_before < stamp ? stamp : publication_clock_before;
-    double publication_deadline_sec = std::numeric_limits<double>::quiet_NaN();
-    if (canonical_execution && (!mpc_ || !mpc_->applied_program_matches_final_packet(
-        active_control_decision_id_, stamp.seconds(), active_control_callback_ros_clock_sec_,
-        publication_clock_before.seconds(), publication_clock_before.seconds(),
-        final_command.longitudinal.acceleration, final_command.lateral.steering_tire_angle,
-        &publication_deadline_sec))) {
-      mpcc_architecture_snapshot::PublicationFailureObservation observation{
-        mpc_ ? mpc_->applied_publication_observation() : nullptr,
-        active_control_decision_id_, stamp.seconds(), active_control_callback_ros_clock_sec_,
-        publication_clock_before.seconds(), publication_clock_before.seconds(),
-        final_command.longitudinal.acceleration, final_command.lateral.steering_tire_angle,
-        false, odom_ && std::abs(odom_->twist.twist.linear.x) > 0.1};
-      publish_failsafe_command(stamp, "applied program does not cover final packet/publication time");
-      if (mpc_) mpc_->record_applied_publication_failure(std::move(observation));
-      return std::nullopt;
+    const auto before=now();
+    const auto deadline=dispatch ? mpcc_vehicle_model::publication_epoch(dispatch->certificate()->suffix().program,
+      dispatch->source().packet_index,true).value_or(std::numeric_limits<double>::quiet_NaN()) :
+      std::numeric_limits<double>::quiet_NaN();
+    if (canonical_execution && !dispatch->matches_before_publication(published_input_ledger_, mpc_->current_normal_context_generation(), active_control_decision_id_, before.seconds(), final_command.longitudinal.acceleration, final_command.lateral.steering_tire_angle)) {
+      RCLCPP_ERROR(get_logger(),
+        "MPCC scheduled publication rejected: dispatch=%lu, job=%lu, index=%zu, nominal=%.9f, decision_clock=%.9f, before=%.9f, deadline=%.9f",
+        static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(dispatch->source().decision_id),
+        dispatch->source().packet_index,publication_stamp.seconds(),active_control_callback_ros_clock_sec_,before.seconds(),deadline);
+      record_scheduled_publication_failure(dispatch,false,before,before,final_command);
+      publish_failsafe_command(stamp,"scheduled program does not cover final packet/publication time");return std::nullopt;
     }
-    std::optional<mpcc_vehicle_model::PublishedProgramSource> publication_source;
-    if (canonical_execution) {
-      const auto certificate = mpc_->applied_publication_observation();
-      if (certificate) {
-        const auto & prepared = certificate->prepared();
-        publication_source = mpcc_vehicle_model::PublishedProgramSource{
-          prepared.decision_id, prepared.source.sequence,
-          prepared.source.source_context.fingerprint, certificate->tube().context_fingerprint, 0};
-      }
+    command_raw_pub_->publish(raw_command); command_pub_->publish(final_command);
+    auto after=before;
+    record_published_vehicle_command(publication_stamp,final_command.longitudinal.acceleration,
+      final_command.lateral.steering_tire_angle,before,&after,
+      dispatch ? std::optional<mpcc_vehicle_model::PublishedProgramSource>{dispatch->source()} : std::nullopt);
+    // Update the actual predecessor even if the post-send boundary detects a
+    // violation; a failsafe must start from the command which really left ROS.
+    last_published_physical_steering_rad_=u[1];
+    last_published_steering_steady_=SteadyClock::now();
+    if (canonical_execution && !dispatch->matches_after_publication(published_input_ledger_, mpc_->current_normal_context_generation())) {
+      RCLCPP_ERROR(get_logger(),
+        "MPCC publication window violated: decision=%lu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f",
+        static_cast<unsigned long>(active_control_decision_id_),publication_stamp.seconds(),before.seconds(),after.seconds(),deadline);
+      record_scheduled_publication_failure(dispatch,true,before,after,final_command);
+      publish_failsafe_command(stamp,"publication crossed certified input window");return std::nullopt;
     }
-    command_raw_pub_->publish(raw_command);
-    command_pub_->publish(final_command);
-    auto publication_clock_after = publication_clock_before;
-    record_published_vehicle_command(stamp, final_command.longitudinal.acceleration,
-      final_command.lateral.steering_tire_angle, publication_clock_before,
-      &publication_clock_after, publication_source);
-    if (canonical_execution) {
-      const double publication_after_sec = last_published_steering_control_time_ ?
-        last_published_steering_control_time_->seconds() : std::numeric_limits<double>::quiet_NaN();
-      // The recorded epoch brackets the publisher call from above. A crossing
-      // is a detected contract violation, never retroactive authorization.
-      if (!std::isfinite(publication_after_sec) ||
-          !mpc_->applied_program_matches_final_packet(active_control_decision_id_, stamp.seconds(),
-          active_control_callback_ros_clock_sec_, publication_clock_before.seconds(),
-          publication_clock_after.seconds(), final_command.longitudinal.acceleration,
-          final_command.lateral.steering_tire_angle)) {
-        RCLCPP_ERROR(get_logger(),
-          "MPCC publication window violated: decision=%lu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f",
-          static_cast<unsigned long>(active_control_decision_id_), stamp.seconds(),
-          publication_before.seconds(), publication_after_sec, publication_deadline_sec);
-        mpcc_architecture_snapshot::PublicationFailureObservation observation{
-          mpc_->applied_publication_observation(), active_control_decision_id_, stamp.seconds(),
-          active_control_callback_ros_clock_sec_, publication_clock_before.seconds(),
-          publication_clock_after.seconds(), final_command.longitudinal.acceleration,
-          final_command.lateral.steering_tire_angle,
-          true, odom_ && std::abs(odom_->twist.twist.linear.x) > 0.1};
-        publish_failsafe_command(stamp, "publication crossed certified input window");
-        mpc_->record_applied_publication_failure(std::move(observation));
-        return std::nullopt;
-      }
-      RCLCPP_INFO(get_logger(),
-        "MPCC applied publication: decision=%lu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f",
-        static_cast<unsigned long>(active_control_decision_id_), stamp.seconds(),
-        publication_before.seconds(), publication_after_sec, publication_deadline_sec);
-    }
-    last_published_physical_steering_rad_ =
-      raw_command.lateral.steering_tire_angle;
-    last_published_steering_steady_ = SteadyClock::now();
-    command_failsafe_active_ = false;
+    if (canonical_execution) RCLCPP_INFO(get_logger(),
+      "MPCC scheduled publication: dispatch=%lu, job=%lu, source=%lu, index=%zu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f",
+      static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(dispatch->source().decision_id),
+      static_cast<unsigned long>(dispatch->source().solution_id),dispatch->source().packet_index,
+      publication_stamp.seconds(),before.seconds(),after.seconds(),deadline);
+    command_failsafe_active_=false;
     return published_steering;
   }
 
@@ -59180,6 +59098,7 @@ private:
     callback_timing.pre_mpc_ms = std::chrono::duration<double, std::milli>(
       mpc_start - steady_now).count();
     callback_timing.checkpoint = "pre-mpc-complete";
+    mpc_->scheduled_live_ledger_ = &published_input_ledger_;
     const auto mpc_cycle = mpc_->get_control(
       current_time.seconds(), active_control_decision_id_);
     const auto post_mpc_start = SteadyClock::now();
@@ -59306,14 +59225,19 @@ private:
     if (!published_steering.has_value()) {
       return;
     }
-    mpc_->record_canonical_normal_final_command(
-      active_control_decision_id_, u[0], acc, published_steering.value(),
-      current_time.seconds());
+    if (canonical_normal_execution_active && !recovery_command_active)
+      mpc_->record_scheduled_final_command(published_input_ledger_);
     mpc_->record_final_published_authority(
       mpc_cycle.published_authority_intent,
       recovery_command_active || !enable_control_ ||
       executed_solution_wall_hold_active);
     const auto publication_successor_started = SteadyClock::now();
+    if (!recovery_command_active && enable_control_) {
+      const auto post_send_clock = now();
+      const auto post_send = predict_observed_vehicle(pose,rclcpp::Time(odom_->header.stamp).seconds(),
+        post_send_clock.seconds(),SteadyClock::now());
+      if (post_send) mpc_->submit_scheduled_post_publication(*post_send,published_input_ledger_);
+    }
     mpc_->record_rate_resolved_publication_successor(
       active_control_decision_id_, u[0], acc, u[1],
       published_steering.value(),
@@ -59323,9 +59247,9 @@ private:
     callback_timing.publication_successor_ms = std::chrono::duration<double, std::milli>(
       SteadyClock::now() - publication_successor_started).count();
     if (
-      !recovery_command_active && !mpc_fallback_active &&
-      !executed_solution_wall_hold_active &&
-      overtake_authority.has_value() &&
+      canonical_normal_execution_active && !recovery_command_active && !mpc_fallback_active &&
+      mpc_cycle.published_authority_intent != mpcc_contract::ControlIntent::Stop &&
+      !executed_solution_wall_hold_active && overtake_authority.has_value() &&
       (overtake_authority->request.phase ==
       overtake_orchestrator::Phase::ShiftOut ||
       overtake_authority->request.phase == overtake_orchestrator::Phase::Pass))
@@ -59350,7 +59274,8 @@ private:
     } else if (canonical_emergency_stop) {
       output_reason = "canonical-normal-emergency-stop";
     } else if (canonical_normal_execution_active) {
-      output_reason = std::string{"canonical-"} +
+      output_reason = std::string{mpc_cycle.published_authority_intent == mpcc_contract::ControlIntent::Stop ?
+        "canonical-scheduled-stop/source-" : "canonical-scheduled-"} +
         mpcc_contract::to_string(canonical_normal_command->intent) +
         (canonical_normal_command->retained_solution ?
         "-retained-published" : "-fresh-published");

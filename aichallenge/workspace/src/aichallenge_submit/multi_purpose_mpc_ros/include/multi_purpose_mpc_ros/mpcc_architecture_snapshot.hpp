@@ -153,6 +153,8 @@ enum class ObservationAdmission
   Stopped,
 };
 
+struct ScheduledFailureCapture;
+
 /// Exact late publisher boundary, separate from an earlier solver-source world.
 /// The certificate is immutable evidence only; the final guard already failed.
 struct PublicationFailureObservation
@@ -168,6 +170,7 @@ struct PublicationFailureObservation
   bool after_publication{false};
   bool moving{false};
   std::filesystem::path output_root{"mpcc_architecture_snapshots"};
+  std::shared_ptr<const ScheduledFailureCapture> scheduled_capture{};
 };
 
 RecordResult record_publication_failure(const PublicationFailureObservation &) noexcept;

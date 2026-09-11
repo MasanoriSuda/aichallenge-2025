@@ -19,20 +19,21 @@ public:
   const vehicle::PublishedProgramSource &source() const noexcept { return source_; }
   const std::shared_ptr<const applied::ScheduledCertificate> &certificate() const noexcept { return certificate_; }
 
+  retained::contract::CanonicalNormalCommand canonical_command() const;
+  std::shared_ptr<const retained::contract::PublishedScheduledIdentity> publication_identity(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation) const;
+
+  /// The creation clock comes from the immutable proof's original observation.
+  /// A current callback may enter inside the predeclared window; it may not
+  /// choose a new appointment. Both actual endpoints remain strictly bounded.
   /// Check unchanged authenticated history, generation, decision, exact wire,
   /// strict integer window and steering slew from the predecessor's recorded
   /// publication epoch (including its existing causal floor). No causal floor, extra tolerance or retiming.
-  bool matches_before_publication(
-    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
-    std::uint64_t dispatch_decision_id, double decision_clock_sec, double before_clock_sec,
-    double wire_acceleration_mps2, double wire_steering_rad) const;
+  bool matches_before_publication(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation, std::uint64_t dispatch_decision_id, double before_clock_sec, double wire_acceleration_mps2, double wire_steering_rad) const;
 
   /// The one actual send must be in the ledger with this intended source and
   /// both valid raw endpoints. Failure is a detected violation, never a reason
   /// to erase the send or to authorize it retrospectively.
-  bool matches_after_publication(
-    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
-    double decision_clock_sec) const;
+  bool matches_after_publication(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation) const;
 
 private:
   DispatchCandidate() = default;
@@ -41,8 +42,7 @@ private:
     const retained::contract::MpccProblemContext &, const ContextSnapshot &,
     const vehicle::PublishedInputLedger &, const vehicle::PublishedInputLedger::Snapshot &,
     const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t);
-  bool clock_and_slew_match(double decision_clock_sec, double before_clock_sec,
-                           double after_clock_sec) const noexcept;
+  bool clock_and_slew_match(double before_clock_sec, double after_clock_sec) const noexcept;
   std::shared_ptr<const applied::ScheduledCertificate> certificate_;
   std::optional<vehicle::PublishedInputLedger::Snapshot> ledger_cursor_;
   ContextSnapshot current_generation_;

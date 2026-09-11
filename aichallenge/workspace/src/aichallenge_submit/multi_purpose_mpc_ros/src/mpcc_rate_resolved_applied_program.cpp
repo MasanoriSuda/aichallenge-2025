@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_scheduled_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
 #include <cstring>
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
@@ -1035,13 +1036,12 @@ DispatchResult prepare_dispatch(
   return result;
 }
 
-bool DispatchCandidate::clock_and_slew_match(double decision_clock_sec, double before_clock_sec,
-                                            double after_clock_sec) const noexcept {
+bool DispatchCandidate::clock_and_slew_match(double before_clock_sec, double after_clock_sec) const noexcept {
   if (!certificate_ || !certificate_->nominal() || !std::isfinite(before_clock_sec) ||
       !std::isfinite(after_clock_sec) || before_clock_sec < observed_sec_ ||
       before_clock_sec < previous_publication_sec_ || after_clock_sec > certificate_->tube().rest_sec ||
       !vehicle::scheduled_publication_bracket_admitted(certificate_->suffix().program, packet_index_,
-        decision_clock_sec, before_clock_sec, after_clock_sec)) return false;
+        certificate_->nominal()->observed().now_sec, before_clock_sec, after_clock_sec)) return false;
   const auto &execution = *certificate_->nominal()->observed().plan->execution_artifact;
   const double step = std::abs(packet_.wire_steering_rad - previous_wire_steering_rad_) /
     execution.vehicle_model.steering_wire_gain;
@@ -1050,22 +1050,17 @@ bool DispatchCandidate::clock_and_slew_match(double decision_clock_sec, double b
   return std::isfinite(step) && std::isfinite(allowed) && step <= allowed;
 }
 
-bool DispatchCandidate::matches_before_publication(
-    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
-    std::uint64_t dispatch_decision_id, double decision_clock_sec, double before_clock_sec,
-    double wire_acceleration_mps2, double wire_steering_rad) const {
+bool DispatchCandidate::matches_before_publication(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation, std::uint64_t dispatch_decision_id, double before_clock_sec, double wire_acceleration_mps2, double wire_steering_rad) const {
   if (!ledger_cursor_ || dispatch_decision_id != dispatch_decision_id_ ||
       !current_generation_.same_generation(current_generation) ||
       !same_dispatch_wire(wire_acceleration_mps2, packet_.wire_acceleration_mps2) ||
       !same_dispatch_wire(wire_steering_rad, packet_.wire_steering_rad) ||
-      !clock_and_slew_match(decision_clock_sec, before_clock_sec, before_clock_sec)) return false;
+      !clock_and_slew_match(before_clock_sec, before_clock_sec)) return false;
   const auto changes = ledger.since(*ledger_cursor_);
   return changes && changes->empty();
 }
 
-bool DispatchCandidate::matches_after_publication(
-    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
-    double decision_clock_sec) const {
+bool DispatchCandidate::matches_after_publication(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation) const {
   if (!ledger_cursor_ || !current_generation_.same_generation(current_generation)) return false;
   const auto changes = ledger.since(*ledger_cursor_);
   if (!changes || changes->size() != 1) return false;
@@ -1074,6 +1069,125 @@ bool DispatchCandidate::matches_after_publication(
     actual.nominal.published_sec == packet_.published_sec &&
     same_dispatch_wire(actual.nominal.wire_acceleration_mps2, packet_.wire_acceleration_mps2) &&
     same_dispatch_wire(actual.nominal.wire_steering_rad, packet_.wire_steering_rad) &&
-    clock_and_slew_match(decision_clock_sec, actual.before_clock_sec, actual.after_clock_sec);
+    clock_and_slew_match(actual.before_clock_sec, actual.after_clock_sec);
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+std::optional<double> project_progress(
+    const ProgressFrame &frame, const recovery_footprint::Pose2D &pose) {
+  for (double value : {frame.pose.x_m, frame.pose.y_m, frame.pose.yaw_rad,
+      frame.progress_m, pose.x_m, pose.y_m, pose.yaw_rad})
+    if (!std::isfinite(value)) return std::nullopt;
+  const double lag = std::cos(frame.pose.yaw_rad) * (pose.x_m - frame.pose.x_m) +
+    std::sin(frame.pose.yaw_rad) * (pose.y_m - frame.pose.y_m);
+  const double progress = frame.progress_m + lag;
+  return std::isfinite(progress) ? std::optional{progress} : std::nullopt;
+}
+
+std::optional<double> publication_control_origin(
+    const vehicle::PublishedInputProgram &program, std::size_t index,
+    double prediction_delay_sec) {
+  const auto epoch=vehicle::publication_epoch(program,index);
+  const auto epoch_ns=epoch?vehicle::publication_nanoseconds(*epoch):std::nullopt;
+  const auto delay_ns=vehicle::publication_nanoseconds(prediction_delay_sec);
+  if (!epoch_ns || !delay_ns) return std::nullopt;
+  // Both inputs are in the unique ns domain (<=2^51), so their sum cannot
+  // overflow int64. Reject a result outside that domain rather than round it.
+  const auto origin_ns=*epoch_ns+*delay_ns;
+  const double origin=static_cast<double>(origin_ns)/1e9;
+  if (vehicle::publication_nanoseconds(origin)!=origin_ns) return std::nullopt;
+  return origin;
+}
+
+std::optional<retained::Request> bind_current_observation(
+    retained::Request request, const vehicle::ObservationProvenance &observation,
+    const ProgressFrame &frame, std::optional<vehicle::PublishedCommand> exact_next_packet) {
+  if (!request.plan || !request.plan->execution_artifact ||
+      !vehicle::valid(observation) ||
+      !std::isfinite(frame.pose.x_m) || !std::isfinite(frame.pose.y_m) ||
+      !std::isfinite(frame.pose.yaw_rad) || !std::isfinite(frame.progress_m)) return std::nullopt;
+  const auto &model = request.plan->execution_artifact->vehicle_model;
+  const auto held = vehicle::predict_published_history(observation.initial,
+    observation.now_sec, observation.control_origin_sec, observation.commands, model,
+    observation.acceleration_delay_sec,
+    observation.steering_delay_sec);
+  if (!held) return std::nullopt;
+  request.now_sec = observation.now_sec;
+  request.control_origin_sec = observation.control_origin_sec;
+  request.previous_published_steering_rad = observation.initial.state.desired_steering_rad;
+  request.previous_published_command_age_sec = observation.now_sec - observation.commands.back().published_sec;
+  request.publication_prefix_required = true;
+  request.publication_prefix.reset();
+  request.follow_target.reset();
+  const auto assign_prediction = [&](const auto &prediction) {
+    const auto &origin = prediction.control_origin;
+    request.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+    request.control_origin_physical_progress_m = project_progress(frame, request.control_pose)
+      .value_or(std::numeric_limits<double>::quiet_NaN());
+    request.current_speed_mps = prediction.current.forward_velocity_mps;
+    request.control_origin_speed_mps = origin.forward_velocity_mps;
+    request.current_time_steering_rad = prediction.current.tire_steering_rad;
+    request.current_steering_rad = origin.desired_steering_rad;
+    request.current_response_steering_rad = origin.tire_steering_rad;
+    request.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+    request.current_yaw_rate_radps = origin.yaw_rate_radps;
+    request.measured_to_control_path.clear();
+    request.measured_to_control_elapsed_sec.clear();
+    for (const auto &sample : prediction.current_to_control) {
+      request.measured_to_control_path.push_back({sample.state.x_m, sample.state.y_m, sample.state.yaw_rad});
+      request.measured_to_control_elapsed_sec.push_back(sample.source_sec - observation.now_sec);
+    }
+  };
+  assign_prediction(*held);
+  if (!exact_next_packet) exact_next_packet = retained::prospective_artifact_packet(request);
+  if (!exact_next_packet || exact_next_packet->published_sec != observation.now_sec) return std::nullopt;
+  auto prospective = vehicle::predict_prospective_publication(observation, *exact_next_packet, model);
+  if (!prospective) return std::nullopt;
+  assign_prediction(*prospective);
+  request.publication_prefix = std::move(prospective);
+  if (!retained::current_publication_prefix_matches(request)) return std::nullopt;
+  return request;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+v2x_overtake_core::ForwardCourseProjection project_follow_at_observation(
+    const std::vector<v2x_overtake_core::CoursePoint> &course,
+    v2x_overtake_core::ForwardCourseProjectionRequest current,
+    const FollowCourseAnchor &anchor, double observed_sec) {
+  if (anchor.target_id.empty() || !std::isfinite(anchor.observed_sec) ||
+      !std::isfinite(observed_sec) || observed_sec < anchor.observed_sec ||
+      !std::isfinite(anchor.target_path_progress_m) ||
+      !std::isfinite(anchor.along_track_speed_mps) || anchor.along_track_speed_mps < 0 ||
+      !std::isfinite(current.max_target_path_progress_change_m) ||
+      current.max_target_path_progress_change_m < 0) return {};
+  current.preferred_target_path_progress_m = anchor.target_path_progress_m +
+    anchor.along_track_speed_mps * (observed_sec - anchor.observed_sec);
+  try { return v2x_overtake_core::project_forward_course_progress(course, current); }
+  catch (const std::exception &) { return {}; }
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+retained::contract::CanonicalNormalCommand DispatchCandidate::canonical_command() const {
+  const auto &execution=*certificate_->nominal()->observed().plan->execution_artifact;
+  const auto &source=execution.identity.source_context;
+  retained::contract::CanonicalNormalCommand command;
+  command.decision_id=dispatch_decision_id_; command.execution_plan_id=execution.identity.sequence;
+  command.execution_certificate_decision_id=certificate_->suffix().decision_id;
+  command.problem_fingerprint=source.fingerprint; command.solution_id=execution.identity.sequence;
+  command.source=retained::contract::CanonicalNormalAuthoritySource::RetainedCertified;
+  command.intent=source.intent; command.formulation=source.formulation; command.retained_solution=true;
+  command.predicted_speed_mps=predicted_speed_mps_; command.acceleration_mps2=packet_.wire_acceleration_mps2;
+  command.steering_tire_angle_rad=physical_steering_rad_;
+  command.curvature_radpm=std::tan(physical_steering_rad_)/execution.wheelbase_m;
+  command.virtual_progress_speed_mps=std::max(0.0,certificate_->nominal()->proof().actuation.virtual_progress_speed_mps);
+  return command;
+}
+std::shared_ptr<const retained::contract::PublishedScheduledIdentity> DispatchCandidate::publication_identity(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation) const {
+  if (!matches_after_publication(ledger, current_generation)) return nullptr;
+  return std::shared_ptr<const retained::contract::PublishedScheduledIdentity>(
+    new retained::contract::PublishedScheduledIdentity(canonical_command()));
 }
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

@@ -4593,64 +4593,31 @@ v1–v3の意味は維持し、表現の欠落・混在・改変を拒否する�
 [整数公開時刻の設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/nanosecond-publication-design.md)。
 
 
-予定公開の共通数値APIは、実観測の`ObservationProvenance.now_sec`と未来programmeの
-最初の公開時刻を分ける。元のnowから待機中の各body/rigid-footprint区間を含め、
-未来の加速と完全停止まで検査する。未送信指令をactual historyへ入れず、早期公開の
-判定に受信済み観測用のcausal floorを流用しない。`ScheduledInputTube`とそのhashは
-従来Certificateから区別し、現時点でnormal authorityへ未接続とする。既存の同時刻API、
-保存形式、物理境界・公開周期/window・receiver profileは維持する。
-[予定公開の設計と受入れ範囲](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/planned-publication-design.md)。
+予定公開は実観測と予定指令列を分け、元の観測から待機中・完全停止までの
+body/tire/rigid-footprint・壁・他車・Followを`ScheduledCertificate`へ束縛する。
+名目予測は明示された元programmeのprefixと未来control-originを使い、未送信指令を
+actual historyへ入れない。受信250ms、公開25ms、名目control-origin130ms、
+名目操舵delay100msは2025由来の現行値を維持する。共通数値写像の包含は、実車体や
+自己位置推定の誤差保証とは別である。
+[予定証明の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-certificate-design.md)。
 
+`PublishedInputLedger`はnormal・Emergency・終了時の実送信とraw clock前後を記録する。
+単一dispatcherは、solver入力で取得した失効可能generation、現在の各sensor source時刻、
+全実送信prefix、現在contextと残存worldを照合する。参照内容・設定・session・clock・
+Recovery・reset・shutdown変更は生成元で失効する。同一値更新やworkerの私有コピー変更で
+親を失効させない。実送信前後は元の整数window・正確なwire値・実操舵速度を再検査する。
+source jobとcurrent dispatchのIDは別に保持し、最終ログは実送信後のopaque receiptで
+認証する。診断・intent名・同じtarget IDだけでは権限にならない。
 
-最終送信は`PublishedInputLedger`が既存のserialized historyと送信transactionを所有する。
-normal・Emergency・終了時のraw clock前後と意図したsourceを記録し、途中指令・clock逆行・
-reset・履歴脱落を不透明なsnapshotで照合する。意図したsourceだけでは公開後のauthorityを
-示さない。予定prefix照合は数値/物理/現在worldの検査を代替しない。
-[送信台帳の設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-ledger-design.md)。
+実送信後の観測生成と非同期worker/dispatcherはnodeへ接続済み。旧同期normal・
+Stop-lattice・Stop-successor・GateA・previous-intentの通常出力呼出しは退役した。
+Followは現在のCartesian位置を元コース枝との対応の下で再投影し、古い車間の時刻だけを
+変更しない。証明作成時刻はimmutable certificateが所有する。大きいmap座標の進捗投影と
+予定ns→秒の変換は生成側と検査側で共通化する。内部診断schema
+`mpcc-scheduled-dispatch-observation/v1`は元入力・現在入力・台帳を保持し、評価JSON契約は維持。
 
-
-予定公開の名目点予測も実観測と分離する。`ScheduledPublicationPrediction`は元の
-観測・送信済み履歴を保持し、明示された予定prefixと将来control originを別に持つ。
-将来の整数wordはapplication境界と積分区間長も整数nsで求める。旧履歴APIとzero-lead
-の演算は維持する。予定点予測は既存normal Certificateの代替ではない。
-[設計と数値検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-nominal-design.md)。
-
-
-予定指令列の全停止証明は`ScheduledCertificate`として別型で保持する。旧programmeの
-明示prefixを時刻・wire値を変えず連結し、元の観測から待機中と新programmeのrestまで
-壁・他車・Follow・車体境界を検査する。予定nominalの他車予測は元の観測時刻から照会し、
-元のFollow車間違反も先に検査する。診断結果から既存の即時実行proofを取り出せない。
-この型の生成だけでは公開を許可しない。現在sensor/world/context・実送信prefix・
-非同期単一dispatchの接続と旧同期authorityの退役は未完。
-[設計・反例・保存入力の証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-certificate-design.md)。
-
-
-予定証明の現在観測チェックは、元のtubeを維持し、pose/velocity/yaw-rate/tireを
-各source時刻で照合する。実送信台帳は途中のStopを含む全指令を照合し、現在worldは
-元のbody/rigid cornersの残区間からrestまで再検査する。これらは必要条件であり、
-単独で公開を許可しない。可変設定・参照軌道・mission等の採用contextとC5は未接続。
-Followの現在予測は物理的なcontrol-originからの距離を使い、waypointのlagを加えない。
-[設計・反例・検証範囲](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-current-evidence-design.md)。
-
-
-予定証明の採用検査は、solver入力時の失効可能generationを保持し、現在のmodel・intent・
-mission・target・side・horizon・schemaを照合する。単一Requestの原観測・実送信台帳・
-現在worldをまとめて検査し、台帳で認証された新suffixの実送信がある場合のみ、継続中の
-source windowとして扱う。これも必要条件であり、nodeの全変更元の失効、solverからの
-generation伝搬、単一dispatcherでの実時計・操舵・最終packet照合は未接続。
-[採用境界の設計とテスト](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-adoption-boundary-design.md)。
-
-
-予定証明のcontextは実solver Snapshotに保持し、factoryがその生成元から直接取得する。
-呼び出し側が現在世代を後付けするRequest引数は削除した。参照速度・境界・セル・設定・
-管理/時計/Recovery/終了の変更元で失効し、同一値更新とworkerコピーを区別する。
-現状は生成元の接続までで、予定dispatchへのauthority切替は未完。実送信後の観測生成、
-mission geometry/予定intent採用、単一worker/dispatcherと旧同期authorityの同時退役が残る。
-[生成元・取消しの設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-context-producer-design.md)。
-
-
-予定送信境界は、元の操舵値と正確なwire packetを保持し、現在証拠と実送信台帳で次indexを
-固定する。実送信前後に世代・packet・元のinteger window・実公開時刻からの操舵速度を
-再検査する。現在decisionと元の証明job decisionは分離し、送信後の違反も履歴に残す。
-このAPIはまだnode未接続で、旧同期authorityの切替は行っていない。
-[予定送信境界の設計とテスト](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-dispatch-boundary-design.md)。
+統合受入れは未完。Dev2-r45では起動中にD1/D2で20/25回の認証済み送信があるが、
+Ready以降は新しい観測が元の静止予測範囲外となり停止し、完走・複数tick Stop・Followは
+未検証。停止中のcallback最大21.44/24.27msと超過0は、移動中の40Hz受入れの代わりには
+ならない。観測・モデル誤差の扱い、mission/sibling採用、全M4–M6と提出evalが残る。
+[接続・反例・検証範囲](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-node-integration-design.md)。

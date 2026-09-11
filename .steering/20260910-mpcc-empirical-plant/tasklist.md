@@ -157,3 +157,23 @@ C5final packet boundary (baseline73049f17):
 - [x] 実送信前後のclock/source/index/ledger/slewと失効を回帰検証。R276全127native、buildr81/testsr70全2517記録合格。
 - [ ] 実送信後の観測・Follow原点、worker/dispatcherを接続し旧同期authorityを同時退役。
 - [ ] 全M4–M6と提出eval。現在nodeはまだ旧同期authority。
+
+C5 node integration (baselinea8c70824; working):
+- [x] 実post-send観測再構成、fresh Follow枝対応、予定worker/単一dispatcherを接続。
+- [x] 同期normal/Stop/GateA/previous-intentの通常出力呼出しを退役。
+- [x] 実送信後receiptによりsource job/current dispatch IDを分離して記録。
+- [x] Buildr83/testsr71:26package/2521records/64groups合格。
+- [x] R280固定入力で作成時刻と送信callback時刻の混同を再現。作成時刻を証明へ束縛。
+- [x] Buildr84/testsr72/native r281合格。Dev2-r45は起動中20/25送信後、新観測不一致で停止し失敗。
+- [ ] Geometry/mission/sibling adoptionの残監査、全M4–M6と提出eval。
+
+
+C5 r45 first-failure checkpoint (baselinea8c70824):
+- [x] 原入力/現在入力4snapshot、送信/MCAP/終了時刻と保護成果物復元を保存。
+- [x] R283同じinput fingerprintで元証明Accepted/新観測PoseMismatchを再現。
+- [x] R284進捗加算順序、R286予定nsの非正規秒表現を再現し生成側を共通化。
+- [x] R285全133native合格。R286後も元startupの物理拒否は維持。
+- [x] R287全134native/buildr85全26package/testsr73全2524記録/64group合格、証拠/registry保存。
+- [ ] 検証済みC5接続・拒否証拠をローカルcommit。
+- [ ] 観測/モデル誤差と独立した現在証明方式を比較し、同じ物理条件で修復。
+- [ ] Mission/geometry/siblingと台帳/Store/current観測欠落を監査し、全M4–M6/提出eval。

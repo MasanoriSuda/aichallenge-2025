@@ -16,6 +16,10 @@ struct ProgressFrame {
   double progress_m{};
 };
 
+/// One arithmetic owner for the observation producer and exact frame check.
+std::optional<double> project_progress(
+  const ProgressFrame &frame, const recovery_footprint::Pose2D &pose);
+
 struct Request {
   retained::Request observed;
   vehicle::PublishedInputProgram prior_program;

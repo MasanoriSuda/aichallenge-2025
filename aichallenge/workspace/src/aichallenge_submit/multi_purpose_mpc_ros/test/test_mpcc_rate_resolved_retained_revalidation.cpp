@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_scheduled_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
@@ -4274,7 +4275,7 @@ TEST(MpccScheduledDispatch, BindsCurrentDecisionAndStrictRawPublicationWindow)
   EXPECT_EQ(candidate.dispatch_decision_id(), f.fresh.decision_id);
   EXPECT_NE(candidate.source().decision_id, candidate.dispatch_decision_id());
   const auto before=[&](double clock, std::uint64_t id, double acc, double steer) {
-    return candidate.matches_before_publication(f.ledger, f.owner.capture(), id,1.1,clock,acc,steer);
+    return candidate.matches_before_publication(f.ledger, f.owner.capture(), id, clock, acc, steer);
   };
   EXPECT_TRUE(before(1.1,f.fresh.decision_id,packet.wire_acceleration_mps2,packet.wire_steering_rad));
   EXPECT_FALSE(before(1.099999999,f.fresh.decision_id,packet.wire_acceleration_mps2,packet.wire_steering_rad));
@@ -4284,7 +4285,7 @@ TEST(MpccScheduledDispatch, BindsCurrentDecisionAndStrictRawPublicationWindow)
   EXPECT_FALSE(before(1.1,f.fresh.decision_id,packet.wire_acceleration_mps2,
     std::nextafter(static_cast<float>(packet.wire_steering_rad),INFINITY)));
   ASSERT_TRUE(f.ledger.record(packet,1.1,1.105,2,candidate.source()));
-  EXPECT_TRUE(candidate.matches_after_publication(f.ledger,f.owner.capture(),1.1));
+  EXPECT_TRUE(candidate.matches_after_publication(f.ledger, f.owner.capture()));
   EXPECT_FALSE(before(1.105,f.fresh.decision_id,packet.wire_acceleration_mps2,packet.wire_steering_rad));
 }
 
@@ -4298,7 +4299,7 @@ TEST(MpccScheduledDispatch, ActualLateMissingExtraWrongSourceOrRevokedSendCannot
     if(variant==3) { ASSERT_TRUE(f.ledger.record(packet,1.1,1.1,2,source)); }
     if(variant==4) f.owner.invalidate();
     if(variant==5) f.ledger.reset();
-    EXPECT_FALSE(candidate.matches_after_publication(f.ledger,f.owner.capture(),1.1));
+    EXPECT_FALSE(candidate.matches_after_publication(f.ledger, f.owner.capture()));
   }
 }
 
@@ -4316,8 +4317,7 @@ TEST(MpccScheduledDispatch, CurrentWorldAndActualPrefixAreMandatoryBeforePrepari
   EXPECT_FALSE(conflict.candidate); EXPECT_EQ(conflict.current.reason,scheduled::CurrentReason::WorldRejected);
   const auto ready=f.prepare(); ASSERT_TRUE(ready.candidate);
   f.owner.invalidate(); const auto &packet=ready.candidate->packet();
-  EXPECT_FALSE(ready.candidate->matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
-    1.1,1.1,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_FALSE(ready.candidate->matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id, 1.1, packet.wire_acceleration_mps2, packet.wire_steering_rad));
 }
 
 TEST(MpccScheduledDispatch, SlewUsesActualPreviousCompletionRatherThanNominalPeriod)
@@ -4328,8 +4328,7 @@ TEST(MpccScheduledDispatch, SlewUsesActualPreviousCompletionRatherThanNominalPer
   const double gain=f.fresh.plan->execution_artifact->vehicle_model.steering_wire_gain;
   ASSERT_GT(std::abs(packet.wire_steering_rad-f.ledger.latest_transaction()->nominal.wire_steering_rad)/gain,
     f.fresh.plan->execution_artifact->physical_global_tolerance);
-  EXPECT_FALSE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,1.1,1.1,
-    packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_FALSE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id, 1.1, packet.wire_acceleration_mps2, packet.wire_steering_rad));
 }
 
 TEST(MpccScheduledDispatch, NextRealSuffixSlotKeepsOriginalProofAndRequiresTheFirstActualSend)
@@ -4345,8 +4344,7 @@ TEST(MpccScheduledDispatch, NextRealSuffixSlotKeepsOriginalProofAndRequiresTheFi
   EXPECT_EQ(next.candidate->source().packet_index,1U);
   EXPECT_DOUBLE_EQ(next.candidate->packet().published_sec,1.125);
   const auto &packet=next.candidate->packet();
-  EXPECT_TRUE(next.candidate->matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,1.125,1.125,
-    packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_TRUE(next.candidate->matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id, 1.125, packet.wire_acceleration_mps2, packet.wire_steering_rad));
 }
 
 
@@ -4367,6 +4365,165 @@ TEST(MpccScheduledDispatch, NominalProofAlreadyBoundsCausalPredecessorWhenRawClo
   // The first-packet builder already limits this example to the recorded
   // causal predecessor. The suspected unsafe first packet was not reproduced.
   ASSERT_LE(step,causal_bound);
-  EXPECT_TRUE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,1.055,1.055,
-    packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_TRUE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id, 1.055, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+}
+
+TEST(MpccScheduledObservation, RebuildsPostSendDependenciesWithoutPublishingTheNextPacket)
+{
+  ScheduledDispatchFixture fixture;
+  const auto dispatch = fixture.prepare(); ASSERT_TRUE(dispatch.candidate);
+  const auto first = dispatch.candidate;
+  ASSERT_TRUE(fixture.ledger.record(first->packet(), 1.1, 1.1, 2, first->source()));
+  auto observation = fixture.fresh.publication_prefix->observation;
+  observation.now_sec = 1.105; observation.control_origin_sec = 1.235;
+  observation.commands = fixture.ledger.history();
+  observation.initial.state.desired_steering_rad = first->physical_steering_rad();
+  auto next = fixture.certificate->suffix().program.commands[1]; next.published_sec = observation.now_sec;
+  const auto rebuilt = scheduled::bind_current_observation(fixture.fresh, observation,
+    scheduled::ProgressFrame{{0,0,0},0}, next);
+  ASSERT_TRUE(rebuilt);
+  EXPECT_EQ(rebuilt->now_sec, observation.now_sec);
+  EXPECT_EQ(rebuilt->control_origin_sec, observation.control_origin_sec);
+  EXPECT_EQ(rebuilt->previous_published_steering_rad, first->physical_steering_rad());
+  EXPECT_DOUBLE_EQ(rebuilt->previous_published_command_age_sec, observation.now_sec - 1.1);
+  EXPECT_EQ(rebuilt->publication_prefix->observation.commands.size(), fixture.ledger.history().size());
+  EXPECT_EQ(fixture.ledger.latest_transaction()->nominal.published_sec, 1.1);
+  EXPECT_EQ(rebuilt->publication_prefix->observation.initial.source_sec, observation.initial.source_sec);
+  EXPECT_EQ(rebuilt->publication_prefix->observation.tire_source_sec, observation.tire_source_sec);
+  EXPECT_EQ(rebuilt->control_pose.x_m, rebuilt->publication_prefix->control_origin.x_m);
+  EXPECT_EQ(rebuilt->control_origin_physical_progress_m, rebuilt->control_pose.x_m);
+  EXPECT_TRUE(retained::current_publication_prefix_matches(*rebuilt));
+  auto stale = fixture.fresh; stale.now_sec = observation.now_sec;
+  EXPECT_FALSE(retained::current_publication_prefix_matches(stale));
+}
+
+TEST(MpccScheduledObservation, ExactFutureEpochCannotBeInsertedIntoAnActualCurrentPrefix)
+{
+  ScheduledDispatchFixture fixture;
+  const auto observation = fixture.fresh.publication_prefix->observation;
+  auto packet = fixture.certificate->suffix().program.commands[1];
+  ASSERT_GT(packet.published_sec, observation.now_sec);
+  EXPECT_FALSE(scheduled::bind_current_observation(fixture.fresh, observation,
+    scheduled::ProgressFrame{{0,0,0},0}, packet));
+  packet.published_sec = observation.now_sec;
+  auto rebuilt = scheduled::bind_current_observation(fixture.fresh, observation,
+    scheduled::ProgressFrame{{0,0,0},0}, packet);
+  ASSERT_TRUE(rebuilt);
+  EXPECT_EQ(rebuilt->publication_prefix->observation.commands.size(), observation.commands.size());
+  auto invalid = observation; invalid.commands.back().published_sec = observation.now_sec + 1;
+  EXPECT_FALSE(scheduled::bind_current_observation(fixture.fresh, invalid,
+    scheduled::ProgressFrame{{0,0,0},0}, packet));
+}
+
+TEST(MpccScheduledObservation, LargeMapCoordinatesKeepTheExactCapturedFrameAssociation)
+{
+  ScheduledDispatchFixture fixture;
+  auto observation=fixture.fresh.publication_prefix->observation;
+  // r45 D1 decision552: the two plausible addition orders differ by one ULP.
+  const scheduled::ProgressFrame frame{{89631.78902878,43128.72920636,2.416480975901258},28.773461394486684};
+  observation.initial.state={89631.01605908728,43128.034320916144,2.12649352748336,0,0,0,0,0};
+  for(auto &packet:observation.commands) {packet.wire_acceleration_mps2=-3;packet.wire_steering_rad=0;}
+  const vehicle::PublishedCommand packet{observation.now_sec,-3,0};
+  const auto rebuilt=scheduled::bind_current_observation(fixture.fresh,observation,frame,packet);
+  ASSERT_TRUE(rebuilt);
+  const auto &pose=rebuilt->control_pose;
+  const double dx=std::cos(frame.pose.yaw_rad)*(pose.x_m-frame.pose.x_m);
+  const double dy=std::sin(frame.pose.yaw_rad)*(pose.y_m-frame.pose.y_m);
+  const double correct=frame.progress_m+(dx+dy);
+  ASSERT_NE((frame.progress_m+dx)+dy,correct);
+  EXPECT_EQ(rebuilt->control_origin_physical_progress_m,correct);
+  EXPECT_EQ(scheduled::project_progress(frame,pose),correct);
+  EXPECT_TRUE(retained::current_publication_prefix_matches(*rebuilt));
+  auto invalid=frame;invalid.pose.yaw_rad=std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(scheduled::project_progress(invalid,pose));
+}
+
+TEST(MpccScheduledObservation, CapturedAppointmentsPreserveTheCanonicalNanosecondOrigin)
+{
+  for (const std::int64_t first_ns : {319999992,334999992}) {
+    const double first=static_cast<double>(first_ns)/1e9;
+    vehicle::PublishedInputProgram program{.025,{{first,-3,0}},true,.025};
+    program.nanosecond_clock=vehicle::publication_nanosecond_clock(first,.025,.025);
+    const auto origin=scheduled::publication_control_origin(program,1,.13);
+    ASSERT_TRUE(origin);
+    const std::int64_t expected_ns=first_ns+25000000+130000000;
+    EXPECT_EQ(vehicle::publication_nanoseconds(*origin),expected_ns);
+    EXPECT_EQ(*origin,static_cast<double>(expected_ns)/1e9);
+    EXPECT_FALSE(vehicle::publication_nanoseconds(static_cast<double>(expected_ns)*1e-9));
+    EXPECT_FALSE(scheduled::publication_control_origin(program,1,-.13));
+    EXPECT_FALSE(scheduled::publication_control_origin(program,10001,.13));
+  }
+}
+
+TEST(MpccScheduledObservation, FreshFollowUsesActualPeerPositionOnTheOriginalBranch)
+{
+  namespace core = multi_purpose_mpc_ros::v2x_overtake_core;
+  const std::vector<core::CoursePoint> course{{0,0},{10,0},{10,1},{0,1},{0,2},{10,2}};
+  core::ForwardCourseProjectionRequest query{0,false,1,0,8,1.2,1,0,2,40,3,std::nullopt,1.5};
+  const scheduled::FollowCourseAnchor anchor{"peer",1,8,1};
+  ASSERT_EQ(core::project_forward_course_progress(course,query).segment_index,4U);
+  const auto same = scheduled::project_follow_at_observation(course,query,anchor,1);
+  ASSERT_TRUE(same.valid); EXPECT_EQ(same.segment_index,0U); EXPECT_DOUBLE_EQ(same.forward_distance_m,7);
+  query.origin_x_m = 1.02; query.target_x_m = 8.05;
+  const auto fresh = scheduled::project_follow_at_observation(course,query,anchor,1.05);
+  ASSERT_TRUE(fresh.valid); EXPECT_EQ(fresh.segment_index,0U);
+  EXPECT_NEAR(fresh.forward_distance_m,7.03,1e-12);
+  // The retired stale-gap formula advances only ego:7-.02=6.98.
+  EXPECT_GT(fresh.forward_distance_m,7-.02);
+  EXPECT_FALSE(scheduled::project_follow_at_observation(course,query,anchor,.99).valid);
+  query.target_x_m = 3; // Actual discontinuous target cannot borrow the old branch anchor.
+  EXPECT_FALSE(scheduled::project_follow_at_observation(course,query,anchor,1.05).valid);
+}
+
+TEST(MpccScheduledDispatch, FinalIdentityRequiresTheActualSendAndKeepsBothDecisions)
+{
+  ScheduledDispatchFixture fixture;
+  const auto result=fixture.prepare(); ASSERT_TRUE(result.candidate);
+  const auto &dispatch=*result.candidate;
+  const auto command=dispatch.canonical_command();
+  EXPECT_NE(command.decision_id,command.execution_certificate_decision_id);
+  EXPECT_FALSE(dispatch.publication_identity(fixture.ledger, fixture.owner.capture()));
+  ASSERT_TRUE(fixture.ledger.record(dispatch.packet(),1.1,1.105,2,dispatch.source()));
+  const auto receipt=dispatch.publication_identity(fixture.ledger, fixture.owner.capture());
+  ASSERT_TRUE(receipt); EXPECT_TRUE(receipt->matches(command));
+  auto changed=command; changed.decision_id++; EXPECT_FALSE(receipt->matches(changed));
+  changed=command; changed.execution_certificate_decision_id=command.decision_id; EXPECT_FALSE(receipt->matches(changed));
+  changed=command; changed.acceleration_mps2+=1; EXPECT_FALSE(receipt->matches(changed));
+  contract::CertifiedMpccSolution solution;
+  solution.solution_id=command.solution_id; solution.problem_fingerprint=command.problem_fingerprint;
+  solution.formulation=command.formulation; solution.solved=true; solution.finite=true; solution.constraints_satisfied=true;
+  solution.maximum_constraint_violation=0; solution.physical={true,true,true,1,2};
+  solution.prediction_stage_count=fixture.certificate->suffix().source.source_context.horizon_steps;
+  solution.valid_until_sec=fixture.certificate->tube().rest_sec;
+  contract::FinalControlDecisionRequest request{command.decision_id,contract::FinalAuthorityClass::CertifiedNormalSolution,
+    "scheduled",fixture.certificate->suffix().source.source_context,solution,true,command};
+  EXPECT_FALSE(contract::resolve_final_control_decision(request).identity_complete);
+  request.scheduled_publication=receipt;
+  const auto accepted=contract::resolve_final_control_decision(request);
+  EXPECT_TRUE(accepted.identity_complete); EXPECT_TRUE(accepted.canonical_contract_satisfied);
+  EXPECT_EQ(accepted.execution_certificate_decision_id,command.execution_certificate_decision_id);
+  request.decision_id++; EXPECT_FALSE(contract::resolve_final_control_decision(request).identity_complete);
+  fixture.owner.invalidate(); EXPECT_FALSE(dispatch.publication_identity(fixture.ledger, fixture.owner.capture()));
+}
+
+TEST(MpccScheduledDispatch, UsesImmutablePlanningClockWhileCurrentCheckOccursInsideTheWindow)
+{
+  ScheduledDispatchFixture fixture;
+  auto observation=fixture.fresh.publication_prefix->observation;
+  observation.now_sec=1.11; observation.control_origin_sec=1.15;
+  auto packet=fixture.certificate->suffix().program.commands.front(); packet.published_sec=observation.now_sec;
+  const auto fresh=scheduled::bind_current_observation(fixture.fresh,observation,{{0,0,0},0},packet);
+  ASSERT_TRUE(fresh); fixture.fresh=*fresh; fixture.fresh.obstacles.observed_sec=observation.now_sec;
+  const auto result=fixture.prepare(); ASSERT_TRUE(result.candidate);
+  const auto &dispatch=*result.candidate;
+  EXPECT_LT(fixture.certificate->nominal()->observed().now_sec,dispatch.packet().published_sec);
+  EXPECT_LT(dispatch.packet().published_sec,observation.now_sec);
+  EXPECT_TRUE(dispatch.matches_before_publication(fixture.ledger,fixture.owner.capture(),fixture.fresh.decision_id,
+    1.115,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_FALSE(dispatch.matches_before_publication(fixture.ledger,fixture.owner.capture(),fixture.fresh.decision_id,
+    1.099999999,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_FALSE(dispatch.matches_before_publication(fixture.ledger,fixture.owner.capture(),fixture.fresh.decision_id,
+    1.125000001,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  ASSERT_TRUE(fixture.ledger.record(dispatch.packet(),1.115,1.12,2,dispatch.source()));
+  EXPECT_TRUE(dispatch.matches_after_publication(fixture.ledger,fixture.owner.capture()));
 }

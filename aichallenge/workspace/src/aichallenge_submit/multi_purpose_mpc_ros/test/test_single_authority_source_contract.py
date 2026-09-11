@@ -378,13 +378,16 @@ def test_overtake_intents_use_the_rate_resolved_normal_owner() -> None:
     owner_start = SOURCE.index("rate_resolved_normal_production_control(")
     owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
     owner = SOURCE[owner_start:owner_end]
-    consume = owner.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
-    resolve = owner.index("rate_resolved_track_cruise_control(")
-    stage = owner.index("pending_rate_resolved_publication_successor_ =")
+    consume = owner.index("build_rate_resolved_track_cruise_submission_draft(")
+    resolve = owner.index("scheduled_normal_control(")
+    stage = owner.index("pending_rate_resolved_publication_successor_=")
     assert consume < resolve < stage
+    assert "evaluate_rate_resolved_track_cruise_retained_shadow(" not in owner
     assert "bind_rate_resolved_track_cruise_submission(" not in owner
     assert "submit_rate_resolved_track_cruise_shadow(" not in owner
     assert "VelocityProgress5State" not in owner
+
+
 
 
 def test_follow_uses_the_shared_rate_resolved_normal_owner() -> None:
@@ -507,10 +510,11 @@ def test_rate_resolved_normal_snapshot_separates_command_and_response_states() -
     owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
     owner = SOURCE[owner_start:owner_end]
 
-    consume = owner.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
-    resolve = owner.index("rate_resolved_track_cruise_control(")
-    stage = owner.index("pending_rate_resolved_publication_successor_ =")
+    consume = owner.index("build_rate_resolved_track_cruise_submission_draft(")
+    resolve = owner.index("scheduled_normal_control(")
+    stage = owner.index("pending_rate_resolved_publication_successor_=")
     assert consume < resolve < stage
+    assert "evaluate_rate_resolved_track_cruise_retained_shadow(" not in owner
     assert "bind_rate_resolved_track_cruise_submission(" not in owner
     assert "submit_rate_resolved_track_cruise_shadow(" not in owner
 
@@ -525,6 +529,8 @@ def test_rate_resolved_normal_snapshot_separates_command_and_response_states() -
     assert "command_control_origin_steering_rad_" in update
     assert "current_physical_steering_state_->committed_steering_rad" in update
     assert "prediction_origin_steering_rad" not in update
+
+
 
 
 def test_rate_resolved_successor_is_bound_only_after_exact_publication() -> None:
@@ -582,49 +588,27 @@ def test_rate_resolved_successor_is_bound_only_after_exact_publication() -> None
 
 
 def test_rate_resolved_intent_transition_reuses_gate_a_without_sync_solve() -> None:
-    """Overtake entry joins Gate A evidence without solving in the callback."""
+    """Gate A is an immutable worker source; current admission remains mandatory."""
+    owner = _cpp_function("MpcControlCycleResult rate_resolved_normal_production_control(")
+    assert owner.index("build_rate_resolved_track_cruise_submission_draft(") < owner.index("scheduled_normal_control(")
+    assert owner.index("scheduled_normal_control(") < owner.index("pending_rate_resolved_publication_successor_=")
+    for retired in ("evaluate_rate_resolved_track_cruise_retained_shadow(",
+                    "rate_resolved_track_cruise_control(",
+                    "evaluate_rate_resolved_stop_lattice_current_world_alternate(",
+                    "evaluate_published_stop_successor_shadow(",
+                    "resolve_atomic_intent_admission("):
+        assert retired not in owner
+    assert "submit_rate_resolved_track_cruise_shadow(" not in owner
+    submit = _cpp_function("void submit_scheduled_post_publication(")
+    for phase in ("mission", "pass", "return"):
+        assert f"rate_resolved_{phase}_gate_a_proposal->complete()" in submit
+        assert f"rate_resolved_{phase}_gate_a_proposal->certified_plan" in submit
+    assert submit.index("submit_latest(") < submit.index("scheduled_control::evaluate(")
+    assert "normal_context_generation.same_generation(" in submit
+    for forbidden in ("command_pub_", "mark_executed(", "record_published_bundle_source("):
+        assert forbidden not in submit
 
-    assert "RateResolvedTransitionAdmissionEvaluation" not in SOURCE
-    assert "evaluate_rate_resolved_transition_admission(" not in SOURCE
-    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
-    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
-    owner = SOURCE[owner_start:owner_end]
-    first_revalidation = owner.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow("
-    )
-    gate_a_lookup = owner.index(
-        "last_v2x_behavior_output_.rate_resolved_mission_gate_a_proposal"
-    )
-    gate_a_revalidation = owner.index(
-        "evaluate_rate_resolved_track_cruise_plan("
-    )
-    previous_revalidation = owner.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow(",
-        first_revalidation + 1,
-    )
-    publication = owner.index("rate_resolved_track_cruise_control(")
-    assert (
-        first_revalidation
-        < gate_a_lookup
-        < gate_a_revalidation
-        < previous_revalidation
-        < publication
-    )
-    assert "gate_a_proposal->certified_plan" in owner
-    assert "gate_a_proposal->prospective_mission_generation" in owner
-    assert "gate_a_proposal->target_id" in owner
-    assert "gate_a_proposal->selected_side_sign" in owner
-    assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 2
-    assert "!retained.production_authority.has_value()" in owner
-    assert "ControlIntent::Unknown" in owner
-    assert "last_published_authority_intent_ != intent" in owner
-    assert "const auto previous_intent = last_published_authority_intent_" in owner
-    assert "resolve_atomic_intent_admission(" in owner
-    assert "effective_intent = atomic_resolution.effective_intent" in owner
-    assert "problem, effective_intent, retained" in owner
-    assert "evaluate_rate_resolved_pipeline(" not in owner
-    assert "build_rate_resolved_submission_snapshot(" not in owner
-    assert "rate_resolved_track_cruise_shadow_solver_context_" not in owner
+
 
 
 def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
@@ -713,33 +697,26 @@ def test_canonical_execution_certificate_keeps_the_complete_hard_proved_horizon(
 
 
 def test_stop_keeps_the_same_canonical_pipeline_warm_without_normal_authority() -> None:
-    """Emergency owns the wire; its publication only seeds a 7-state shadow."""
+    """Stop can continue a checked nonpositive programme while the same solver works."""
+    owner = _cpp_function("MpcControlCycleResult rate_resolved_normal_production_control(")
+    assert owner.index("build_rate_resolved_track_cruise_submission_draft(") < owner.index("scheduled_normal_control(")
+    assert owner.index("scheduled_normal_control(") < owner.index("pending_rate_resolved_publication_successor_=")
+    for retired in ("evaluate_rate_resolved_track_cruise_retained_shadow(",
+                    "rate_resolved_track_cruise_control(",
+                    "evaluate_rate_resolved_stop_lattice_current_world_alternate(",
+                    "evaluate_published_stop_successor_shadow(",
+                    "resolve_atomic_intent_admission("):
+        assert retired not in owner
+    assert "submit_rate_resolved_track_cruise_shadow(" not in owner
+    assert "problem.stop_shadow_requested ? problem.problem_intent : intent" in owner
+    control = _cpp_function("MpcControlCycleResult get_control(")
+    assert "ControlIntent::Stop || control_intent == mpcc_contract::ControlIntent::Hold" in control
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "packet.wire_acceleration_mps2 > 0) return false" in dispatch
+    assert "consider(scheduled_active_)" in dispatch
+    assert "canonical_normal_emergency_stop(" in dispatch
 
-    prepare_start = SOURCE.index(
-        "prepare_rate_resolved_stop_shadow_successor("
-    )
-    prepare_end = SOURCE.index(
-        "rate_resolved_track_cruise_control(", prepare_start
-    )
-    prepare = SOURCE[prepare_start:prepare_end]
-    assert "build_rate_resolved_track_cruise_submission_draft(" in prepare
-    assert "problem, shadow_intent, now_sec" in prepare
-    assert "pending_rate_resolved_publication_successor_" in prepare
-    assert "rate_resolved_track_cruise_control(" not in prepare
-    assert "production_authority" not in prepare
 
-    stop_start = SOURCE.index(
-        "resolve_stop_authority_action(control_intent)"
-    )
-    stop_end = SOURCE.index(
-        "rate_resolved_artifact::supports_intent(control_intent)", stop_start
-    )
-    stop = SOURCE[stop_start:stop_end]
-    assert "canonical_normal_emergency_stop(" in stop
-    assert "prepare_rate_resolved_stop_shadow_successor(" in stop
-    assert stop.index("canonical_normal_emergency_stop(") < stop.index(
-        "prepare_rate_resolved_stop_shadow_successor("
-    )
 
 
 def test_moving_stop_uses_emergency_path_tracking_without_normal_authority() -> None:
@@ -818,7 +795,10 @@ def test_problem_intent_is_resolved_after_current_cycle_authority_trace() -> Non
     )
     assert problem < production_intent
     assert "const auto control_intent = current_control_intent();" not in control
-    assert "const auto stop_shadow_intent = problem.problem_intent;" in control
+    owner = _cpp_function("MpcControlCycleResult rate_resolved_normal_production_control(")
+    assert "problem.stop_shadow_requested ? problem.problem_intent : intent" in owner
+
+
 
 
 def test_dynamic_escape_is_normal_obstacle_avoidance_not_overtake_identity() -> None:
@@ -937,30 +917,22 @@ def test_live_overtake_identity_does_not_depend_on_legacy_stage_corridor() -> No
 
 
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
-    """Follow waits on async evidence while the published intent keeps authority."""
+    """A proposal cannot relabel the actual published programme's intent."""
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "!consider(ready) && !consider(scheduled_active_)" in dispatch
+    assert "context = entry->committed_context" in dispatch
+    assert "if (entry->sent > 0)" in dispatch
+    assert "scheduled_control::prepare_dispatch(" in dispatch
+    assert "current_normal_context_generation(),ledger,*entry->cursor,{},entry->sent" in dispatch
+    assert "anchor = entry->follow_anchor" in dispatch
+    follow = _cpp_function("  build_current_follow_target_observation(")
+    assert "build_physical_origin_follow_target_observation(" in follow
+    current = _cpp_function("std::optional<rate_resolved_retained::Request> build_scheduled_observed_request(")
+    assert "project_follow_at_observation(" in current
+    assert "current->obstacles.observed_sec" in current
+    assert "projection.forward_distance_m" in current
 
-    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
-    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
-    owner = SOURCE[owner_start:owner_end]
-    initial_revalidation = owner.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow("
-    )
-    previous_revalidation = owner.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow(",
-        initial_revalidation + 1,
-    )
-    resolution = owner.index("resolve_atomic_intent_admission(")
-    production = owner.index("rate_resolved_track_cruise_control(")
-    assert initial_revalidation < previous_revalidation < resolution < production
-    assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 2
-    assert "last_published_authority_intent_" in owner
-    assert "previous_stop_authority" in owner
-    assert "ControlIntent::Follow" in owner
-    assert "resolve_atomic_intent_admission(" in owner
-    assert "effective_intent = atomic_resolution.effective_intent" in owner
-    assert "evaluate_rate_resolved_pipeline(" not in owner
-    assert "build_rate_resolved_submission_snapshot(" not in owner
-    assert "rate_resolved_track_cruise_shadow_solver_context_" not in owner
+
 
 
 def test_pass_entry_does_not_recertify_published_canonical_execution() -> None:
@@ -1033,119 +1005,32 @@ def test_pass_entry_queries_phase_compatible_published_overtake_execution() -> N
 
 
 def test_last_published_intent_is_a_publication_ledger() -> None:
-    """Solver selection may not advance the actually-published intent ledger."""
+    """Scheduled selection cannot commit until its one actual send is authenticated."""
+    owner = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "last_published_canonical_intent_=" not in owner
+    record = _cpp_function("void record_scheduled_final_command(")
+    assert record.index("matches_after_publication(") < record.index("last_published_canonical_intent_=")
+    assert record.index("publication_identity(") < record.index("last_committed_canonical_publication_decision_id_=")
+    control = _cpp_function("void control()")
+    assert control.index("publish_control_command(") < control.index("record_scheduled_final_command(")
+    assert control.index("record_scheduled_final_command(") < control.index("record_final_published_authority(")
 
-    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
-    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
-    owner = SOURCE[owner_start:owner_end]
-    assert "last_published_canonical_intent_ =" not in owner
 
-    recorder_start = SOURCE.index("record_canonical_normal_final_command(")
-    recorder_end = SOURCE.index(
-        "const std::optional<overtake_orchestrator::AuthorityTrace> &",
-        recorder_start,
-    )
-    recorder = SOURCE[recorder_start:recorder_end]
-    serialized_join = recorder.index(
-        "canonical_normal_command_matches_serialized_actuation("
-    )
-    ledger_update = recorder.index(
-        "last_published_canonical_intent_ = pending.command.intent"
-    )
-    assert serialized_join < ledger_update
-    assert recorder.index("mark_executed(") < ledger_update
-
-    authority_recorder = recorder[
-        recorder.index("record_final_published_authority(") :
-    ]
-    interruption_clear = authority_recorder.index(
-        "rate_resolved_track_cruise_certified_plan_store_->clear()"
-    )
-    authority_ledger_update = authority_recorder.index(
-        "last_published_authority_intent_ = authority_intent"
-    )
-    assert interruption_clear < authority_ledger_update
-    assert "normal_execution_interrupted" in authority_recorder
-    assert (
-        "authority_intent == mpcc_contract::ControlIntent::Stop"
-        in authority_recorder
-    )
-    assert "discard-executed-clock/retain-candidates" in authority_recorder
-    assert "last_published_authority_intent_ = authority_intent" in authority_recorder
-    assert "ControlIntent::Stop" in authority_recorder
-
-    publish_call = SOURCE.index(
-        "const auto published_steering = publish_control_command("
-    )
-    normal_record = SOURCE.index(
-        "mpc_->record_canonical_normal_final_command(", publish_call
-    )
-    authority_record = SOURCE.index(
-        "mpc_->record_final_published_authority(", normal_record
-    )
-    assert publish_call < normal_record < authority_record
-    assert "mpc_cycle.published_authority_intent" in SOURCE[
-        authority_record : authority_record + 240
-    ]
 
 
 def test_certified_terminal_contingency_publishes_stop_not_normal_evidence() -> None:
-    """A proved Stop suffix may not masquerade as retained ShiftOut/Pass."""
+    """Continued stopping packets retain source identity and publish the Stop role."""
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "output.canonical_normal_command=command" in dispatch
+    assert "output.published_authority_intent=(pending_scheduled_entry_->sent > 0" in dispatch
+    assert "ControlIntent::Stop : source.intent" in dispatch
+    commit = _cpp_function("void record_scheduled_final_command(")
+    assert "record_published_bundle_source(" in commit
+    assert "mark_executed(" not in commit
+    control = _cpp_function("void control()")
+    assert "mpc_cycle.published_authority_intent != mpcc_contract::ControlIntent::Stop" in control
 
-    retained_start = SOURCE.index("struct RateResolvedRetainedShadowEvaluation")
-    retained_end = SOURCE.index("struct RateResolvedCommandShadowTelemetryWindow")
-    retained = SOURCE[retained_start:retained_end]
-    assert "certified_terminal_contingency_selected" in retained
 
-    pending_start = SOURCE.index("struct CanonicalNormalPendingActuation")
-    pending_end = SOURCE.index("using PublishedStopSuccessorEvaluation")
-    pending = SOURCE[pending_start:pending_end]
-    assert "published_authority_intent" in pending
-
-    production_start = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_track_cruise_control("
-    )
-    production_end = SOURCE.index(
-        "PublishedStopSuccessorEvaluation", production_start
-    )
-    production = SOURCE[production_start:production_end]
-    assert "resolve_published_authority_intent(" in production
-    assert "normal_execution_evidence" in production
-    assert "promote_certified_stop_to_executed" in production
-    assert (
-        "canonical_normal_intent_supported(" in production
-    )
-    assert "output.published_authority_intent = published_authority_intent" in production
-    assert "canonical-certified-terminal-stop/source-" in production
-
-    alternate_start = SOURCE.index(
-        "evaluate_rate_resolved_stop_lattice_current_world_alternate("
-    )
-    alternate_end = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control(",
-        alternate_start,
-    )
-    alternate = SOURCE[alternate_start:alternate_end]
-    assert "alternate.certified_terminal_contingency_selected = true" in alternate
-
-    owner_start = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control("
-    )
-    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
-    owner = SOURCE[owner_start:owner_end]
-    assert "joined_stop.certified_terminal_contingency_selected = true" in owner
-
-    record_start = SOURCE.index("void record_canonical_normal_final_command(")
-    record_end = SOURCE.index("void record_final_published_authority(", record_start)
-    record = SOURCE[record_start:record_end]
-    assert "pending.published_authority_intent !=" in record
-    assert "mpcc_contract::ControlIntent::Stop" in record
-
-    final_start = SOURCE.index("void record_final_published_authority(")
-    final_end = SOURCE.index("const std::optional<overtake_orchestrator::AuthorityTrace>", final_start)
-    final = SOURCE[final_start:final_end]
-    assert "authority_intent == mpcc_contract::ControlIntent::Stop" in final
-    assert "invalidate_current_world_stop_observation();" in final
 
 
 def test_certified_stop_publication_preserves_the_single_execution_ledger() -> None:
@@ -1868,9 +1753,9 @@ def test_five_state_overtake_tactical_gate_is_physically_deleted() -> None:
     production = SOURCE[production_start:production_end]
     assert "consume_rate_resolved_preentry_execution_shadow(" not in production
     build_position = production.index("build_rate_resolved_preentry_execution_draft(")
-    command_position = production.index("rate_resolved_track_cruise_control(")
+    command_position = production.index("scheduled_normal_control(")
     stage_position = production.index(
-        "pending_rate_resolved_publication_successor_ ="
+        "pending_rate_resolved_publication_successor_="
     )
     assert build_position < command_position < stage_position
     assert "submit_rate_resolved_preentry_execution_shadow(" not in production
@@ -1908,6 +1793,8 @@ def test_five_state_overtake_tactical_gate_is_physically_deleted() -> None:
         "            six_state_gate_a_proposal->target_obstacle_generation" in fsm
     )
     assert "publish_control_command(" not in fsm
+
+
 
 
 def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:
@@ -2354,10 +2241,9 @@ def test_rate_resolved_worker_is_observation_only_but_retained_proof_owns_contro
     branch_start = SOURCE.index("rate_resolved_normal_production_control(")
     branch_end = SOURCE.index("MpcControlCycleResult get_control(", branch_start)
     branch = SOURCE[branch_start:branch_end]
-    assert "record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);" in branch
-    assert "record_rate_resolved_track_cruise_command(" in branch
-    assert "auto retained" in branch
-    assert "rate_resolved_track_cruise_control(" in branch
+    assert "scheduled_normal_control(" in branch
+    assert "evaluate_rate_resolved_track_cruise_retained_shadow(" not in branch
+    assert "rate_resolved_track_cruise_control(" not in branch
     assert "canonical_result.selected.complete()" not in branch
     assert "output = canonical_normal_control(" not in branch
     assert "output = canonical_normal_emergency_stop(" not in branch
@@ -2385,6 +2271,8 @@ def test_rate_resolved_worker_is_observation_only_but_retained_proof_owns_contro
         assert "CanonicalExecutionPlanStore" not in header
         assert "CanonicalNormalCommand" not in header
         assert "publish_control" not in header
+
+
 
 
 def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> None:
@@ -2718,10 +2606,10 @@ def test_racing_follow_and_overtake_have_only_rate_resolved_normal_owner() -> No
     branch_start = SOURCE.index("rate_resolved_normal_production_control(")
     branch_end = SOURCE.index("MpcControlCycleResult get_control(", branch_start)
     branch = SOURCE[branch_start:branch_end]
-    assert "evaluate_rate_resolved_track_cruise_retained_shadow(" in branch
-    assert "rate_resolved_track_cruise_control(" in branch
+    assert "scheduled_normal_control(" in branch
+    assert "evaluate_rate_resolved_track_cruise_retained_shadow(" not in branch
     assert "build_rate_resolved_track_cruise_submission_draft(" in branch
-    assert "pending_rate_resolved_publication_successor_ =" in branch
+    assert "pending_rate_resolved_publication_successor_=" in branch
     assert "bind_rate_resolved_track_cruise_submission(" not in branch
     assert "submit_rate_resolved_track_cruise_shadow(" not in branch
     assert "evaluate_canonical_normal_shadow(" not in branch
@@ -2734,7 +2622,7 @@ def test_racing_follow_and_overtake_have_only_rate_resolved_normal_owner() -> No
         control_start,
     )
     dispatch = SOURCE[control_start:control_end]
-    assert dispatch.count("return rate_resolved_normal_production_control(") == 1
+    assert dispatch.count("return rate_resolved_normal_production_control(") == 2
     assert "rate_resolved_artifact::supports_intent(control_intent)" in dispatch
     assert "canonical_overtake_production_control(" not in dispatch
 
@@ -2771,6 +2659,8 @@ def test_racing_follow_and_overtake_have_only_rate_resolved_normal_owner() -> No
         "VelocityProgress5State",
     ):
         assert forbidden not in adapter_source
+
+
 
 
 def test_five_state_track_cruise_owner_is_physically_deleted() -> None:
@@ -2858,167 +2748,43 @@ def test_certified_stop_successor_is_observed_only_after_publication_join() -> N
 
 
 def test_published_stop_evaluation_cannot_publish_or_store_authority() -> None:
-    """Bound Stop evaluation needs the existing materialization/publication owner."""
-
-    shadow_start = SOURCE.index(
-        "evaluate_published_stop_successor_shadow("
-    )
-    shadow_end = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control(",
-        shadow_start,
-    )
-    shadow = SOURCE[shadow_start:shadow_end]
-    assert "latest_published_source_snapshot()" in shadow
-    assert "evaluate_published_stop_successor(" in shadow
-    assert "authority=shadow" in shadow
-    for forbidden in (
-        "canonical_normal_emergency_stop(",
-        "publish_control_command(",
-        "record_canonical_normal_final_command(",
-        "store_executed(",
-        "store_candidate(",
-    ):
+    """The old observer is detached; all continued sends need the scheduled gate."""
+    shadow = _cpp_function("  evaluate_published_stop_successor_shadow(")
+    for forbidden in ("publish_control_command(", "mark_executed(", "record_published_bundle_source("):
         assert forbidden not in shadow
+    assert SOURCE.count("evaluate_published_stop_successor_shadow(") == 1
+    owner = _cpp_function("MpcControlCycleResult rate_resolved_normal_production_control(")
+    assert owner.index("build_rate_resolved_track_cruise_submission_draft(") < owner.index("scheduled_normal_control(")
+    assert owner.index("scheduled_normal_control(") < owner.index("pending_rate_resolved_publication_successor_=")
+    for retired in ("evaluate_rate_resolved_track_cruise_retained_shadow(",
+                    "rate_resolved_track_cruise_control(",
+                    "evaluate_rate_resolved_stop_lattice_current_world_alternate(",
+                    "evaluate_published_stop_successor_shadow(",
+                    "resolve_atomic_intent_admission("):
+        assert retired not in owner
+    assert "submit_rate_resolved_track_cruise_shadow(" not in owner
 
-    owner_start = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control("
-    )
-    owner_end = SOURCE.index(
-        "MpcControlCycleResult get_control(", owner_start
-    )
-    owner = SOURCE[owner_start:owner_end]
-    authority_loss = owner.index(
-        "if (!retained.production_authority.has_value())"
-    )
-    shadow_call = owner.index(
-        "evaluate_published_stop_successor_shadow(", authority_loss
-    )
-    observation_join = owner.index(
-        "observe_published_certified_stop_successor_join(", shadow_call
-    )
-    assert authority_loss < shadow_call < observation_join
+
 
 
 def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
-    """A published-source lattice alternate has one canonical selection edge."""
+    """Retired lattice reproof has no production authority edge."""
+    assert SOURCE.count("evaluate_rate_resolved_stop_lattice_current_world_alternate(") == 1
+    owner = _cpp_function("MpcControlCycleResult rate_resolved_normal_production_control(")
+    assert owner.index("build_rate_resolved_track_cruise_submission_draft(") < owner.index("scheduled_normal_control(")
+    assert owner.index("scheduled_normal_control(") < owner.index("pending_rate_resolved_publication_successor_=")
+    for retired in ("evaluate_rate_resolved_track_cruise_retained_shadow(",
+                    "rate_resolved_track_cruise_control(",
+                    "evaluate_rate_resolved_stop_lattice_current_world_alternate(",
+                    "evaluate_published_stop_successor_shadow(",
+                    "resolve_atomic_intent_admission("):
+        assert retired not in owner
+    assert "submit_rate_resolved_track_cruise_shadow(" not in owner
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "scheduled_control::prepare_dispatch(" in dispatch
+    assert "!consider(ready) && !consider(scheduled_active_)" in dispatch
 
-    for forbidden in (
-        "certify_and_replace(",
-        "replace_pair(",
-        "mark_executed(",
-        "record_published_bundle_source(",
-        "publish_control_command(",
-        "canonical_normal_emergency_stop(",
-        "mpcc_rate_resolved_production_adapter",
-    ):
-        assert forbidden not in MPCC_RATE_RESOLVED_STOP_LATTICE_SHADOW_SOURCE
 
-    submit_start = SOURCE.index(
-        "bool submit_rate_resolved_track_cruise_shadow("
-    )
-    submit_end = SOURCE.index(
-        "bool submit_rate_resolved_preentry_execution_shadow(", submit_start
-    )
-    submit = SOURCE[submit_start:submit_end]
-    normal_admission = submit.index(
-        "evaluate_rate_resolved_normal_population("
-    )
-    assert normal_admission >= 0
-    assert "submit_rate_resolved_current_world_stop_observation(" in submit
-    assert "std::make_shared<const rate_resolved_shadow::Snapshot>" in submit
-    assert "evaluate_current_world(" not in submit
-    assert "candidate_snapshot()" not in submit
-
-    stop_submit_start = SOURCE.index(
-        "bool submit_rate_resolved_current_world_stop_observation("
-    )
-    stop_submit_end = submit_start
-    stop_submit = SOURCE[stop_submit_start:stop_submit_end]
-    assert "submit_latest(" in stop_submit
-    assert "evaluate_current_world(" in stop_submit
-    assert "DirectSevenStateOnly" in stop_submit
-    assert "solver_source_snapshot" not in stop_submit
-    assert "ExecutionArtifact" not in stop_submit
-
-    assert "rate_resolved_artifact::supports_intent(intent)" in stop_submit
-    assert "same_current_world_stop_scope(" in stop_submit
-    assert "rate_resolved_stop_lattice_submitted_source_identity_ = source->identity" in stop_submit
-    assert stop_submit.index("submit_latest(") < stop_submit.index("if (submission.accepted)")
-    assert "invalidate_current_world_stop_observation();" in stop_submit
-    assert "update_published_stop_lattice_observation(" not in SOURCE
-    assert "rate_resolved_stop_lattice_published_source_identity_" not in SOURCE
-
-    final_start = SOURCE.index("void record_canonical_normal_final_command(")
-    final_end = SOURCE.index(
-        "const std::optional<overtake_orchestrator::AuthorityTrace>", final_start
-    )
-    final_publication = SOURCE[final_start:final_end]
-    assert "rate_resolved_stop_lattice_submitted_source_identity_ =" not in final_publication
-    assert "invalidate_current_world_stop_observation();" in final_publication
-
-    observe_start = SOURCE.index(
-        "void record_rate_resolved_stop_lattice_shadow("
-    )
-    observe_end = SOURCE.index(
-        "void record_rate_resolved_track_cruise_shadow(", observe_start
-    )
-    observe = SOURCE[observe_start:observe_end]
-    assert "authority=shadow, selected=0" in observe
-    for forbidden in (
-        "publish_control_command(",
-        "canonical_normal_emergency_stop(",
-        "mark_executed(",
-    ):
-        assert forbidden not in observe
-
-    join_start = SOURCE.index(
-        "evaluate_rate_resolved_stop_lattice_current_world_alternate("
-    )
-    join_end = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control(",
-        join_start,
-    )
-    join = SOURCE[join_start:join_end]
-    assert "evaluate_current_world_stop_successor_plan(" in join
-    for forbidden in (
-        "certify_and_replace(",
-        "replace_pair(",
-        "mark_executed(",
-        "record_published_bundle_source(",
-        "publish_control_command(",
-        "pending_canonical_normal_actuation_ =",
-    ):
-        assert forbidden not in join
-
-    owner_start = join_end
-    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
-    owner = SOURCE[owner_start:owner_end]
-    ordinary = owner.index("const auto ordinary_retained = retained;")
-    join_call = owner.index(
-        "evaluate_rate_resolved_stop_lattice_current_world_alternate("
-    )
-    join_select = owner.index("retained = std::move(lattice_alternate);")
-    production_stop = owner.index(
-        "evaluate_published_stop_successor_shadow(", join_select
-    )
-    assert ordinary < join_call < join_select < production_stop
-    assert owner.count(
-        "evaluate_rate_resolved_stop_lattice_current_world_alternate("
-    ) == 1
-    assert "lattice_alternate.production_authority.has_value()" in owner
-
-    mailbox_start = SOURCE.index(
-        "void record_rate_resolved_stop_lattice_shadow("
-    )
-    mailbox_end = SOURCE.index(
-        "evaluate_rate_resolved_stop_lattice_current_world_alternate(",
-        mailbox_start,
-    )
-    mailbox = SOURCE[mailbox_start:mailbox_end]
-    assert "current_source_scope_result" in mailbox
-    assert "same_current_world_stop_scope(" in mailbox
-    assert "result->source_normal_identity" in mailbox
-    assert "observe_rate_resolved_stop_lattice_current_world_join(" not in SOURCE
 
 def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     """Resolved normal intents must use canonical MPCC or explicit Emergency."""
@@ -3251,34 +3017,16 @@ def test_canonical_publisher_does_not_postprocess_certified_actuation() -> None:
 
 
 def test_certified_candidate_becomes_retained_only_after_exact_publication() -> None:
-    """Solver certification alone must not create retained execution evidence."""
+    """A scheduled programme cannot claim the old source artifact was executed."""
+    commit = _cpp_function("void record_scheduled_final_command(")
+    assert commit.index("matches_after_publication(") < commit.index("record_published_bundle_source(")
+    assert "mark_executed(" not in commit
+    assert "++entry->sent; scheduled_active_=entry" in commit
+    control = _cpp_function("void control()")
+    assert control.index("publish_control_command(") < control.index("record_scheduled_final_command(")
+    assert "!recovery_command_active" in control[:control.index("record_scheduled_final_command(")]
 
-    record_start = SOURCE.index("void record_canonical_normal_final_command(")
-    record_end = SOURCE.index(
-        "last_overtake_authority_trace() const noexcept", record_start
-    )
-    record = SOURCE[record_start:record_end]
-    assert "canonical_normal_command_matches_serialized_actuation(" in record
-    assert "pending.promote_to_executed" in record
-    assert "mark_executed(" in record
-    assert "pending.selected_plan, pending.selected_sibling_plan" in record
-    assert "pending.record_published_bundle_source" in record
-    assert "record_published_bundle_source(" in record
-    assert "supersede_published_bundle_source(" in record
-    assert record.index(
-        "canonical_normal_command_matches_serialized_actuation("
-    ) < record.index("mark_executed(")
-    assert record.index(
-        "canonical_normal_command_matches_serialized_actuation("
-    ) < record.index("record_published_bundle_source(")
 
-    control_start = SOURCE.index("void control()")
-    control_end = SOURCE.index("void publish_zero_command()", control_start)
-    control = SOURCE[control_start:control_end]
-    publish = control.index("const auto published_steering = publish_control_command(")
-    record_call = control.index("mpc_->record_canonical_normal_final_command(")
-    assert publish < record_call
-    assert "published_steering.value()" in control[record_call : record_call + 250]
 
 
 def test_overtake_sibling_authority_commits_only_after_exact_publication() -> None:
@@ -3634,25 +3382,14 @@ def test_latest_state_feedback_bundle_uses_common_proof_and_publisher() -> None:
 
 
 def test_normal_candidate_clock_separates_bootstrap_from_moving_successor() -> None:
-    """Only a Store with no executed predecessor may start at cursor zero."""
+    """Losing a current certificate cannot restart a moving source at time zero."""
+    build = _cpp_function("std::optional<rate_resolved_retained::Request> build_scheduled_observed_request(")
+    assert "ExecutionClockKind::TimeAlignedCandidate" in build
+    assert "last_committed_canonical_publication_decision_id_ == 0" in build
+    assert "ExecutionClockKind::BootstrapCandidate" in build
+    assert "if (!scheduled_active_)" not in build
 
-    retained_start = SOURCE.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow("
-    )
-    retained_end = SOURCE.index(
-        "void record_rate_resolved_track_cruise_shadow(", retained_start
-    )
-    retained = SOURCE[retained_start:retained_end]
-    assert "executed_plan == nullptr ?" in retained
-    assert "ExecutionClockKind::BootstrapCandidate" in retained
-    assert "ExecutionClockKind::TimeAlignedCandidate" in retained
-    assert retained.index("executed_plan == nullptr ?") < retained.index(
-        "ExecutionClockKind::BootstrapCandidate"
-    ) < retained.index("ExecutionClockKind::TimeAlignedCandidate")
 
-    # Gate-A and pre-entry proposals are successors to live normal authority;
-    # they must never acquire cold-bootstrap cursor semantics.
-    assert SOURCE.count("ExecutionClockKind::BootstrapCandidate") == 1
 
 
 def test_progress_rebase_is_current_world_bundle_authority() -> None:
@@ -3709,48 +3446,24 @@ def test_terminal_stop_does_not_extrapolate_executable_prefix_geometry() -> None
 
 
 def test_current_world_stop_successor_uses_the_canonical_normal_boundary() -> None:
-    """A proved Stop becomes an artifact; its adapter never becomes a publisher."""
+    """Scheduled Stop uses its unchanged suffix; synchronous rematerialization is retired."""
+    owner = _cpp_function("MpcControlCycleResult rate_resolved_normal_production_control(")
+    assert owner.index("build_rate_resolved_track_cruise_submission_draft(") < owner.index("scheduled_normal_control(")
+    assert owner.index("scheduled_normal_control(") < owner.index("pending_rate_resolved_publication_successor_=")
+    for retired in ("evaluate_rate_resolved_track_cruise_retained_shadow(",
+                    "rate_resolved_track_cruise_control(",
+                    "evaluate_rate_resolved_stop_lattice_current_world_alternate(",
+                    "evaluate_published_stop_successor_shadow(",
+                    "resolve_atomic_intent_admission("):
+        assert retired not in owner
+    assert "submit_rate_resolved_track_cruise_shadow(" not in owner
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "const auto &program = certificate->suffix().program" in dispatch
+    assert "scheduled_control::prepare_dispatch(" in dispatch
+    assert "stop_successor_bundle::build(" not in dispatch
+    assert "evaluate_current_world_stop_successor_plan(" not in dispatch
 
-    bundle_header = (
-        PACKAGE_ROOT
-        / "include"
-        / "multi_purpose_mpc_ros"
-        / "mpcc_rate_resolved_stop_successor_bundle.hpp"
-    ).read_text(encoding="utf-8")
-    bundle_source = (
-        PACKAGE_ROOT / "src" / "mpcc_rate_resolved_stop_successor_bundle.cpp"
-    ).read_text(encoding="utf-8")
-    bundle = bundle_header + bundle_source
-    assert "certified::build(execution, snapshot, physical_result)" in bundle_source
-    assert "physical::evaluate(snapshot)" in bundle_source
-    assert "UnsupportedTerminalIntent" in bundle
-    assert "enum class ActuationRejectDetail" in bundle_header
-    assert "ProgressRegressed" in bundle_header
-    assert "publish_control_command(" not in bundle
-    assert "CanonicalNormalCommand" not in bundle
-    assert "mark_executed(" not in bundle
-    assert "record_published_bundle_source(" not in bundle
 
-    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
-    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
-    owner = SOURCE[owner_start:owner_end]
-    ordinary_join = owner.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow("
-    )
-    stop_proof = owner.index("evaluate_published_stop_successor_shadow(")
-    bundle_build = owner.index("stop_successor_bundle::build(")
-    current_world_join = owner.index(
-        "evaluate_current_world_stop_successor_plan("
-    )
-    canonical_output = owner.index("rate_resolved_track_cruise_control(")
-    assert "bundle_detail=%s/index:%lu/" in owner
-    assert (
-        ordinary_join
-        < stop_proof
-        < bundle_build
-        < current_world_join
-        < canonical_output
-    )
 
 
 def test_stop_successor_separates_serialized_and_effective_acceleration() -> None:
@@ -3840,18 +3553,14 @@ def test_pass_to_return_requires_causal_certified_gate_a() -> None:
     assert "mpcc_contract::ControlIntent::Return" in return_builder
     assert "build_extended_progress_problem(" in return_builder
 
-    control_start = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control("
-    )
-    control_end = SOURCE.index(
-        "MpcControlCycleResult get_control(", control_start
-    )
-    control = SOURCE[control_start:control_end]
-    assert "return_gate_a_proposal" in control
-    assert control.index("return_gate_a_proposal") < control.index(
-        "resolve_atomic_intent_admission("
-    )
-    assert "evaluate_rate_resolved_track_cruise_plan(" in control
+    submit = _cpp_function("void submit_scheduled_post_publication(")
+    assert "rate_resolved_return_gate_a_proposal->complete()" in submit
+    assert "rate_resolved_return_gate_a_proposal->certified_plan" in submit
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "scheduled_control::prepare_dispatch(" in dispatch
+    assert "if (!context) return false" in dispatch
+
+
 
 
 def test_return_gate_a_has_an_isolated_worker_and_solver_lane() -> None:
@@ -3920,116 +3629,44 @@ def test_shiftout_to_pass_requires_causal_certified_gate_a() -> None:
     assert "mpcc_contract::ControlIntent::Pass" in pass_builder
     assert "build_extended_progress_problem(" in pass_builder
 
-    control_start = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control("
-    )
-    control_end = SOURCE.index(
-        "MpcControlCycleResult get_control(", control_start
-    )
-    control = SOURCE[control_start:control_end]
-    proposal = control.index("pass_gate_a_proposal")
-    atomic_admission = control.index("resolve_atomic_intent_admission(")
-    assert proposal < atomic_admission
-    assert "evaluate_rate_resolved_track_cruise_plan(" in control
-    assert "RateResolvedIntentTransitionKind::PassGateA" in SOURCE
+    submit = _cpp_function("void submit_scheduled_post_publication(")
+    assert "rate_resolved_pass_gate_a_proposal->complete()" in submit
+    assert "rate_resolved_pass_gate_a_proposal->certified_plan" in submit
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "scheduled_control::prepare_dispatch(" in dispatch
+    assert "if (!context) return false" in dispatch
+
+
 
 
 def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
-    """Architecture evidence persistence cannot consume normal authority time."""
+    """Preserve the actual scheduled boundary without doing filesystem I/O in control."""
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "scheduled-proof" in dispatch
+    assert "scheduled_failure_capture(" in dispatch
+    assert "->submit(std::move(observation))" in dispatch
+    for forbidden in ("ofstream", "create_directories", "record_publication_failure(", "record_authority_failure("):
+        assert forbidden not in dispatch
+    capture = _cpp_function("std::shared_ptr<mpcc_architecture_snapshot::ScheduledFailureCapture> scheduled_failure_capture(")
+    assert "capture->original=entry->request" in capture
+    assert "capture->transactions=ledger.since(*entry->cursor)" in capture
 
-    submitter_start = SOURCE.index(
-        "bool submit_rate_resolved_architecture_failure_snapshot("
-    )
-    submitter_end = SOURCE.index(
-        "bool record_rate_resolved_terminal_contingency_failure_snapshot(",
-        submitter_start,
-    )
-    submitter = SOURCE[submitter_start:submitter_end]
-    assert "rate_resolved_terminal_failure_snapshot_worker_->submit(" in submitter
-    assert "FirstAuthorityFailureRecorder" in SOURCE
-    assert "submit_latest(" not in submitter
-    assert "record_authority_failure(" not in submitter
-    assert "std::move(snapshot)" in submitter
-    assert "record_published_execution(" not in submitter
-    assert "record_proof_failure(" not in submitter
 
-    recorder_start = SOURCE.index(
-        "bool record_rate_resolved_terminal_contingency_failure_snapshot("
-    )
-    recorder_end = SOURCE.index(
-        "void record_rate_resolved_normal_authority_failure_snapshot(",
-        recorder_start,
-    )
-    recorder = SOURCE[recorder_start:recorder_end]
-    assert "submit_rate_resolved_architecture_failure_snapshot(" in recorder
-    assert "mpcc_architecture_snapshot::record_authority_failure(" not in recorder
-
-    production_start = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control("
-    )
-    production_end = SOURCE.index(
-        "MpcControlCycleResult get_control(", production_start
-    )
-    production = SOURCE[production_start:production_end]
-    assert "record_rate_resolved_terminal_contingency_failure_snapshot(" in production
-    assert "terminal_snapshot_submitted" not in production
-    assert "mpcc_architecture_snapshot::record_authority_failure(" not in production
 
 
 def test_final_normal_authority_loss_is_frozen_without_control_authority() -> None:
-    """The Stop symptom is recorded only after every normal join has failed."""
+    """Preserve the actual scheduled boundary without doing filesystem I/O in control."""
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "current-evidence" in dispatch
+    assert "scheduled_failure_capture(" in dispatch
+    assert "->submit(std::move(observation))" in dispatch
+    for forbidden in ("ofstream", "create_directories", "record_publication_failure(", "record_authority_failure("):
+        assert forbidden not in dispatch
+    capture = _cpp_function("std::shared_ptr<mpcc_architecture_snapshot::ScheduledFailureCapture> scheduled_failure_capture(")
+    assert "capture->original=entry->request" in capture
+    assert "capture->transactions=ledger.since(*entry->cursor)" in capture
 
-    builder_start = SOURCE.index(
-        "build_rate_resolved_current_world_interaction_snapshot("
-    )
-    builder_end = SOURCE.index(
-        "bool submit_rate_resolved_architecture_failure_snapshot(", builder_start
-    )
-    builder = SOURCE[builder_start:builder_end]
-    assert "last_rate_resolved_serialized_predecessor_" in builder
-    assert "build_rate_resolved_track_cruise_physical_snapshot(" in builder
-    assert "bind_rate_resolved_replay_world(" in builder
-    assert "interaction_snapshot_complete(" in builder
-    assert "certified_plan_store" not in builder
-    assert "mailbox" not in builder
 
-    recorder_start = SOURCE.index(
-        "void record_rate_resolved_normal_authority_failure_snapshot("
-    )
-    recorder_end = SOURCE.index(
-        "bool submit_rate_resolved_current_world_stop_observation(", recorder_start
-    )
-    recorder = SOURCE[recorder_start:recorder_end]
-    assert "retained.production_authority.has_value()" in recorder
-    assert "published_stop_retained" in recorder
-    guard = recorder[recorder.index("    if ("):recorder.index("    const auto reject =")]
-    # A previous Stop label selects Emergency if current proof failed; that
-    # event must retain the actual executed Stop before the ledger is cleared.
-    assert "published_stop_retained" not in guard
-    assert '"normal-authority-unavailable"' in recorder
-    # The observation may read the publication ledger before Emergency clears
-    # it; no Store mutation or alternate authority is permitted here.
-    store_calls = re.findall(
-        r"certified_plan_store_->\s*(\w+)\(", recorder
-    )
-    assert store_calls == ["latest_published_source_snapshot"]
-    assert "mailbox" not in recorder
-    assert "canonical_normal_emergency_stop(" not in recorder
-
-    production_start = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control("
-    )
-    production_end = SOURCE.index(
-        "MpcControlCycleResult get_control(", production_start
-    )
-    production = SOURCE[production_start:production_end]
-    atomic_admission = production.index("resolve_atomic_intent_admission(")
-    freeze = production.index(
-        "record_rate_resolved_normal_authority_failure_snapshot("
-    )
-    output = production.index("auto output = published_stop_retained ?")
-    assert atomic_admission < freeze < output
-    assert "authority=observation-only" in recorder
 
 
 def test_outer_exact_wall_failure_is_frozen_in_planning_worker() -> None:
@@ -4052,54 +3689,17 @@ def test_outer_exact_wall_failure_is_frozen_in_planning_worker() -> None:
 
 
 def test_terminal_failure_pairs_last_accepted_same_source_before_overwrite() -> None:
-    """The viable boundary is observation-only and cannot consume failure state."""
+    """A new failed job preserves its own source and the real intervening sends."""
+    dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
+    assert "scheduled_failure_capture(ready,ledger,nullptr" in dispatch
+    assert "scheduled_failure_capture(entry,ledger" in dispatch
+    assert "!consider(ready) && !consider(scheduled_active_)" in dispatch
+    capture = _cpp_function("std::shared_ptr<mpcc_architecture_snapshot::ScheduledFailureCapture> scheduled_failure_capture(")
+    assert "capture->original_cursor=entry->cursor" in capture
+    assert "capture->certificate=entry->result.applied.certificate" in capture
+    assert "capture->suffix_index=entry->sent" in capture
 
-    recorder_start = SOURCE.index(
-        "bool record_rate_resolved_terminal_contingency_failure_snapshot("
-    )
-    recorder_end = SOURCE.index(
-        "bool submit_rate_resolved_track_cruise_shadow(", recorder_start
-    )
-    recorder = SOURCE[recorder_start:recorder_end]
-    assert "accepted_boundary_matches" in recorder
-    assert (
-        "rate_resolved_last_accepted_terminal_viability_boundary_->intent ==\n"
-        "      intent" in recorder
-    )
-    assert (
-        "rate_resolved_last_accepted_terminal_viability_boundary_->evaluation.\n"
-        "      sequence == retained.sequence" in recorder
-    )
-    assert "Rate-resolved terminal viability boundary:" in recorder
-    assert "accepted_boundary_decision=" in recorder
-    assert "authority=observation-only" in recorder
 
-    production_start = SOURCE.index(
-        "MpcControlCycleResult rate_resolved_normal_production_control("
-    )
-    production_end = SOURCE.index(
-        "MpcControlCycleResult get_control(", production_start
-    )
-    production = SOURCE[production_start:production_end]
-    record = production.index(
-        "record_rate_resolved_terminal_contingency_failure_snapshot("
-    )
-    update = production.index(
-        "rate_resolved_last_accepted_terminal_viability_boundary_ ="
-    )
-    assert record < update
-    assert "ordinary_retained.terminal_stop_certified" in production
-    # The snapshot region may accumulate another observation's measured cost.
-    # Its variable marks this boundary for either assignment or accumulation.
-    boundary_end = production.index("failure_snapshot_ms", update)
-    assert "canonical_normal_intent_supported(intent)" in production[record:boundary_end]
-    assert "ControlIntent::ShiftOut" not in production[record:boundary_end]
-    evaluator = SOURCE[SOURCE.index("RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan("):
-                       SOURCE.index("  evaluate_rate_resolved_track_cruise_retained_shadow(")]
-    # Actual accepted inputs must survive return, including adapter failures.
-    finish = evaluator[:evaluator.index("    if (plan == nullptr")]
-    assert "std::move(request.value())" in finish
-    assert "result.proof" not in finish
 
 
 def test_terminal_stop_geometry_rejection_reports_every_shape_owner() -> None:
@@ -4141,3 +3741,17 @@ def test_stateless_successors_do_not_require_retired_mission_geometry():
     helper = SOURCE[helper_start:SOURCE.index("  void ", helper_start)]
     assert "publisher_bound_stateless_overtake_source_active()" in helper
     assert "mission_plan->valid" in helper
+
+
+def _cpp_function(signature: str) -> str:
+    """Read one complete function instead of including unrelated inserted methods."""
+    start = SOURCE.index(signature)
+    masked = re.sub(r'//[^\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"',
+                    lambda match: " " * len(match.group()), SOURCE[start:])
+    begin = masked.index("{")
+    depth = 0
+    for index in range(begin, len(masked)):
+        depth += (masked[index] == "{") - (masked[index] == "}")
+        if depth == 0:
+            return SOURCE[start:start + index + 1]
+    raise AssertionError(f"unterminated function: {signature}")

@@ -1087,6 +1087,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-dispatch-boundary-evidence.json",
       "replay_ready": true,
       "reason": "Immutable next scheduled packet and pre/post publisher boundary; no node authority promotion."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-node-integration",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-node-integration-evidence.json",
+      "replay_ready": true,
+      "reason": "Actual scheduled node integration, first live rejection snapshots, representation repairs; integrated acceptance failed."
     }
   ],
   "experiments": [
@@ -13087,6 +13093,125 @@
         "No old normal authority removed before node promotion."
       ],
       "revisit_condition": "New failing invariant or actual node integration; no retry of falsified unsafe-first-packet example without changed evidence."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-node-integration-r277-r281",
+      "baseline_commit": "a8c7082402825ec625b3ded63b22fe500aacd5b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-node-integration"
+      ],
+      "hypothesis": "Actual post-send/fresh Follow/receipt/immutable planning-clock identities pass native tests",
+      "changed_dimension": "Scheduled worker/dispatcher and exact current/source/actual-publication integration; unchanged physical bounds/model/profile/budgets",
+      "result": "accepted",
+      "reason": "R277129tests; R280original clock-owner reproduction; R281132tests. R278/279are separate diagnostic setup failures.",
+      "production_impact": "Single scheduled normal output replaces synchronous normal/Stop/GateA/previous-intent joins. Integrated acceptance remains failed; positive diagnostics grant no authority.",
+      "deleted_code": [
+        "Production calls to synchronous retained/Stop lattice/Stop successor/GateA/previous-intent authority joins",
+        "Unused live Stop-lattice enqueue"
+      ],
+      "revisit_condition": "A reproduced producer or observation/model contract change with its own full physical proof; no identical stopped-run retry or tolerance/cache bypass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-node-integration-r278-r279-r282",
+      "baseline_commit": "a8c7082402825ec625b3ded63b22fe500aacd5b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-node-integration"
+      ],
+      "hypothesis": "Diagnostic reconstruction compiles with captured dependencies",
+      "changed_dimension": "Scheduled worker/dispatcher and exact current/source/actual-publication integration; unchanged physical bounds/model/profile/budgets",
+      "result": "inconclusive",
+      "reason": "R278same-file copy, r279fixture include, r282static versus shared V2X library failed before model execution.",
+      "production_impact": "Single scheduled normal output replaces synchronous normal/Stop/GateA/previous-intent joins. Integrated acceptance remains failed; positive diagnostics grant no authority.",
+      "deleted_code": [
+        "Production calls to synchronous retained/Stop lattice/Stop successor/GateA/previous-intent authority joins",
+        "Unused live Stop-lattice enqueue"
+      ],
+      "revisit_condition": "A reproduced producer or observation/model contract change with its own full physical proof; no identical stopped-run retry or tolerance/cache bypass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-node-integration-r82-r84-r72",
+      "baseline_commit": "a8c7082402825ec625b3ded63b22fe500aacd5b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-node-integration"
+      ],
+      "hypothesis": "Integrated worker and single dispatcher build and pass package regressions",
+      "changed_dimension": "Scheduled worker/dispatcher and exact current/source/actual-publication integration; unchanged physical bounds/model/profile/budgets",
+      "result": "accepted",
+      "reason": "R82transitive V2X link failed; r83/r84passed26packages; final pre-run r72passed2522records/64groups.104source contracts cover new live edges.",
+      "production_impact": "Single scheduled normal output replaces synchronous normal/Stop/GateA/previous-intent joins. Integrated acceptance remains failed; positive diagnostics grant no authority.",
+      "deleted_code": [
+        "Production calls to synchronous retained/Stop lattice/Stop successor/GateA/previous-intent authority joins",
+        "Unused live Stop-lattice enqueue"
+      ],
+      "revisit_condition": "A reproduced producer or observation/model contract change with its own full physical proof; no identical stopped-run retry or tolerance/cache bypass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-node-integration-dev2-r45",
+      "baseline_commit": "a8c7082402825ec625b3ded63b22fe500aacd5b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-node-integration"
+      ],
+      "hypothesis": "Scheduled dispatch provides sustained valid normal authority",
+      "changed_dimension": "Scheduled worker/dispatcher and exact current/source/actual-publication integration; unchanged physical bounds/model/profile/budgets",
+      "result": "rejected",
+      "reason": "D1/D2send20/25authenticated packets beforeReady, then stationary pose mismatch. No Ready/Start normal authority, suffix index1 send or laps. No race acceptance.",
+      "production_impact": "Single scheduled normal output replaces synchronous normal/Stop/GateA/previous-intent joins. Integrated acceptance remains failed; positive diagnostics grant no authority.",
+      "deleted_code": [
+        "Production calls to synchronous retained/Stop lattice/Stop successor/GateA/previous-intent authority joins",
+        "Unused live Stop-lattice enqueue"
+      ],
+      "revisit_condition": "A reproduced producer or observation/model contract change with its own full physical proof; no identical stopped-run retry or tolerance/cache bypass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-node-integration-r283-measurement",
+      "baseline_commit": "a8c7082402825ec625b3ded63b22fe500aacd5b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-node-integration"
+      ],
+      "hypothesis": "Fresh measured rest state belongs to original scheduled numerical population",
+      "changed_dimension": "Scheduled worker/dispatcher and exact current/source/actual-publication integration; unchanged physical bounds/model/profile/budgets",
+      "result": "rejected",
+      "reason": "Original proof accepts with matching input fingerprints; freshXYchanges21/29um lie outside the singleton rest tube. PoseMismatch is a correct rejection under this model; observation/model error remains open.",
+      "production_impact": "Single scheduled normal output replaces synchronous normal/Stop/GateA/previous-intent joins. Integrated acceptance remains failed; positive diagnostics grant no authority.",
+      "deleted_code": [
+        "Production calls to synchronous retained/Stop lattice/Stop successor/GateA/previous-intent authority joins",
+        "Unused live Stop-lattice enqueue"
+      ],
+      "revisit_condition": "A reproduced producer or observation/model contract change with its own full physical proof; no identical stopped-run retry or tolerance/cache bypass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-node-integration-r284-r286-producer",
+      "baseline_commit": "a8c7082402825ec625b3ded63b22fe500aacd5b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-node-integration"
+      ],
+      "hypothesis": "Unify frame arithmetic and canonical seconds at the node producer",
+      "changed_dimension": "Scheduled worker/dispatcher and exact current/source/actual-publication integration; unchanged physical bounds/model/profile/budgets",
+      "result": "accepted",
+      "reason": "D1progress differs1ULP; same pose/shared projection reaches next gate. Canonical appointed ns+130ms eliminates prefix representation rejection in D1/D2; original startup applied-input rejection is retained.",
+      "production_impact": "Single scheduled normal output replaces synchronous normal/Stop/GateA/previous-intent joins. Integrated acceptance remains failed; positive diagnostics grant no authority.",
+      "deleted_code": [
+        "Production calls to synchronous retained/Stop lattice/Stop successor/GateA/previous-intent authority joins",
+        "Unused live Stop-lattice enqueue"
+      ],
+      "revisit_condition": "A reproduced producer or observation/model contract change with its own full physical proof; no identical stopped-run retry or tolerance/cache bypass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-node-integration-r285-r287-r85-r73",
+      "baseline_commit": "a8c7082402825ec625b3ded63b22fe500aacd5b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-node-integration"
+      ],
+      "hypothesis": "The final producer fixes retain all physical, prefix, clock and identity negatives",
+      "changed_dimension": "Scheduled worker/dispatcher and exact current/source/actual-publication integration; unchanged physical bounds/model/profile/budgets",
+      "result": "accepted",
+      "reason": "R285133native; R287134native; r85build26packages; r73tests2524records/64groups/zeroerrors-failures-skips. No new runtime after these last representation fixes.",
+      "production_impact": "Single scheduled normal output replaces synchronous normal/Stop/GateA/previous-intent joins. Integrated acceptance remains failed; positive diagnostics grant no authority.",
+      "deleted_code": [
+        "Production calls to synchronous retained/Stop lattice/Stop successor/GateA/previous-intent authority joins",
+        "Unused live Stop-lattice enqueue"
+      ],
+      "revisit_condition": "A reproduced producer or observation/model contract change with its own full physical proof; no identical stopped-run retry or tolerance/cache bypass."
     }
   ]
 }

@@ -4,9 +4,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+#include <utility>
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled { class DispatchCandidate; }
 
 namespace multi_purpose_mpc_ros::mpcc_execution_contract
 {
@@ -508,6 +512,28 @@ struct CanonicalNormalCommand
   double virtual_progress_speed_mps{};
 };
 
+/// Opaque identity of one actual scheduled publication. Only the dispatcher
+/// can construct it after checking the live ledger and raw post-send bracket.
+/// Historical log evidence; it grants no permission for another command.
+class PublishedScheduledIdentity {
+public:
+  bool matches(const CanonicalNormalCommand &command) const noexcept {
+    const auto &actual=command_;
+    return command.decision_id==actual.decision_id && command.execution_plan_id==actual.execution_plan_id &&
+      command.execution_certificate_decision_id==actual.execution_certificate_decision_id &&
+      command.problem_fingerprint==actual.problem_fingerprint && command.solution_id==actual.solution_id &&
+      command.source==actual.source && command.intent==actual.intent && command.formulation==actual.formulation &&
+      command.retained_solution==actual.retained_solution && command.predicted_speed_mps==actual.predicted_speed_mps &&
+      command.acceleration_mps2==actual.acceleration_mps2 && command.curvature_radpm==actual.curvature_radpm &&
+      command.steering_tire_angle_rad==actual.steering_tire_angle_rad &&
+      command.virtual_progress_speed_mps==actual.virtual_progress_speed_mps;
+  }
+private:
+  friend class mpcc_rate_resolved_scheduled::DispatchCandidate;
+  explicit PublishedScheduledIdentity(const CanonicalNormalCommand &command) : command_(command) {}
+  CanonicalNormalCommand command_;
+};
+
 enum class CanonicalNormalCommandReason
 {
   Available,
@@ -598,6 +624,8 @@ struct FinalControlDecisionRequest
   std::optional<CanonicalNormalCommand> canonical_normal_command;
   ControlIntent supervisor_intent{ControlIntent::Unknown};
 
+  std::shared_ptr<const PublishedScheduledIdentity> scheduled_publication;
+
   FinalControlDecisionRequest() = default;
 
   FinalControlDecisionRequest(
@@ -609,7 +637,8 @@ struct FinalControlDecisionRequest
     const bool retained_solution_in = false,
     const std::optional<CanonicalNormalCommand> & canonical_normal_command_in =
     std::nullopt,
-    const ControlIntent supervisor_intent_in = ControlIntent::Unknown)
+    const ControlIntent supervisor_intent_in = ControlIntent::Unknown,
+    std::shared_ptr<const PublishedScheduledIdentity> scheduled_publication_in = {})
   : decision_id(decision_id_in),
     authority(authority_in),
     source(source_in),
@@ -617,7 +646,8 @@ struct FinalControlDecisionRequest
     solution(solution_in),
     retained_solution(retained_solution_in),
     canonical_normal_command(canonical_normal_command_in),
-    supervisor_intent(supervisor_intent_in)
+    supervisor_intent(supervisor_intent_in),
+    scheduled_publication(std::move(scheduled_publication_in))
   {
   }
 };

@@ -1,41 +1,32 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。承認済みM1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体未完。実公開期限とM4–M6は未解決。**
+2026-09-11 JST。承認済みM1–M6を追加確認なしで自律実行中。必要分のローカルcommitのみ。
+**全体未完。C5接続は実装済みだが、現在観測の整合とM4–M6は未達。**
 
-C3予定full-rest証明に対するC4個別source観測・実送信prefix・現在worldの必要条件を
-実装した。Follow現在位置のwaypoint lag二重加算をR259/r261で再現し、両live producerを
-物理control-origin専用APIに変更。R265全115native、buildr75全26package、testsr64全
-2505記録/64groupでエラー・失敗・skip0。R63の旧API名テスト失敗も履歴に保存。
+単一の予定worker/dispatcherへ切り替え、旧同期normal/Stop/GateA/previous-intentの
+通常出力呼出しを退役。実post-send観測、fresh Follow、生成元の失効世代、実送信後の
+source/job/current decision照合を接続した。Buildr84全26package、testsr72全2522記録/
+64groupで失敗0。R281全132native合格。
 
-Dev2-r44はD1判断892で送信前約10ms超過、905で送信後約5ms超過し失敗。Follow記録0件、
-完走なし。今回のFollow修正はnativeのみ検証済みで、実走確認は未完。
-その後のepoch不一致はteardown開始後で、最初の原因ではない。コンテナ停止・ユーザー
-成果物復元済み。公開履歴と原観測を固定し、追加の確認待ちなしで接続実装を続ける。
+Dev2-r45は失敗。起動中にD1/D2で20/25回の予定指令を送信したが、Ready以降のnormalは0。
+元の静止予測範囲に新しい位置観測が入らず、停止が続く。原入力と現在入力を保存し、
+R283で同じinput fingerprintの元証明Acceptedと新観測PoseMismatchを再現した。
+位置差はD1約21µm、D2約29µm。これは観測・モデル誤差を未表現のまま一点予測へ
+厳密一致を求める契約の未解決事項で、任意の許容値追加や古い観測の使用では閉じない。
 
-C4 APIに加え、実solver入力へgenerationを保持し、予定証明はその入力からだけ取得する
-接続を実装。参照速度・外部境界・設定・clock/control/Recovery/session/shutdown等で失効。
-同一値更新やworker内の変更は親の世代を失効させない。R270で旧11失敗→R271全30合格。
-最終buildr79全26package/testsr68全2510記録/64groupでエラー・失敗・skip0。
-[入力元と取消しの証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-context-producer-design.md)。
-Snapshotとscheduled RequestのABIが変わったため、過去の単独replayは再compileが必要。
+別の生成側欠陥として、進捗投影の加算順序1ULP差と予定ns→秒の非正規表現を確認。
+R284/R286でそれぞれ次の必要条件へ到達することを確認し、共通関数へ修正。
+元のstartup入力の物理拒否は保持。追加時刻回帰を含むR287全134native、
+final buildr85全26package/testsr73全2524記録/64group合格。r45は最後の修正前のrun。
 
-C5の送信境界APIは、現在証拠で次packetを固定し、実送信前後のledger・世代・float32・
-integer window・操舵速度を検査する。R276全127native、buildr81全26package、testsr70全
-2517記録/64groupで失敗0。元操舵witnessを保持するためPrepared ABIが変わり、過去の
-単独replayは再compileが必要。追加時計例のunsafe packet仮説は既存のnominal制限により
-反証され、実走原因とはしていない。
-[送信境界の証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-dispatch-boundary-design.md)。
+次は観測/モデル誤差と独立した現在の全残存programme証明方式を保存入力で比較し、
+選んだ方式自身に同じ全rest・壁・他車・車体条件を課す。r193/r194の棄却済みcacheを
+復活させない。mission/geometry/sibling採用、実Stop/rest/restart、全intent、Recovery/
+Rejoin/Boost/async、同一HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/
+evalは未完。現在の完了条件を維持して継続する。
 
-C5のworkerとnode dispatcherはまだ未接続。Mission geometryと予定intent commit、実送信後の新しい観測・world・
-Follow原点を結合し、単一worker/dispatcherへ移す。旧同期normal/Stop/GateA/previous-intent
-joinは同じpromotion sliceで退役する。新しいauthorityや走行合格はまだ主張しない。
-実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalは未完。確認待ちなしで継続する。
-
-[現在証拠の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-current-evidence-design.md)、
-[接続義務](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-dispatch-design.md)、
-[tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
+[接続設計・保存入力](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-node-integration-design.md)、
+[tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence
 

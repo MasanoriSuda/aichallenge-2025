@@ -4697,3 +4697,13 @@ Recovery5.066ms中に次の集中更新を受けて原期限を超えた。R52�
 時計・公開窓は維持し、通常状態で不要なRecovery経路計算の有無を次に監査する。
 R51の現在証明コストと全M4–M6は引き続き未解決。
 [時計生成の同時観測](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/clock-producer-design.md)。
+
+2026-09-12: 認証済み通常指令があり、Recovery状態がNormalで、動的横移動・再arm・
+fallback・協調停止・追越し引継ぎのない周期では、現在の壁・接触・車体情報を保ち、
+使用されない前後進経路の計算を省く。Normalはその周期にNormal維持またはSuspectStuck
+までしか進まず、候補確定やギア操作は許可しない。次のRecovery周期と引継ぎでは
+新しい全経路・壁・他車情報を評価する。過去のclearanceは再利用しない。
+R314/R315の実core比較で停止検出と状態/操作遷移を維持し、新しい他車閉塞で移動を拒否。
+Build r92全26package、tests r80全2547記録/65groupが合格。R51の現在証明コストは
+別の未解決事項であり、r54標準2台走行と全体受入れは未検証。
+[Recovery計算需要の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rollout-demand-design.md)。

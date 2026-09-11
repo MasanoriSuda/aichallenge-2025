@@ -4245,4 +4245,99 @@ TEST(StuckRecoveryCore, EnumStringsAreStableAndUnknownSafe)
   EXPECT_STREQ(to_string(static_cast<RecoveryReason>(999)), "unknown");
 }
 
+using multi_purpose_mpc_ros::stuck_recovery::RecoverySafetyEvaluationScope;
+using multi_purpose_mpc_ros::stuck_recovery::recovery_safety_evaluation_scope;
+
+TEST(StuckRecoveryDemand, CertifiedNormalPreservesDetectorThenRequiresFreshBlockedClearance)
+{
+  CoreConfig config;
+  config.enabled = true;
+  config.shadow_mode = false;
+  config.simulation_only = true;
+  config.detector = detector_config();
+  config.supervisor = supervisor_config();
+  StuckRecoveryCore complete(config), staged(config);
+  bool observed_footprint_only = false, reached_clearance = false;
+  for (int tick = 0; tick < 180; ++tick) {
+    const double now = tick * 0.025;
+    CoreInput input;
+    input.simulation_environment = true;
+    input.detector = eligible_detector_input(now);
+    input.recovery = healthy_recovery_input(now);
+    // A peer now blocks reverse clearance. No previous positive rollout may
+    // authorize a gear request or motion when the supervisor needs it.
+    input.recovery.rear_v2x_clear = false;
+    input.recovery.awsim_recovery_resolved = false;
+    const auto before = staged.supervisor().state();
+    RecoverySafetyEvaluationRequest request{before, 0.0, 0.2, true, false, false, false};
+    const auto scope = recovery_safety_evaluation_scope(request, true);
+    auto current = input;
+    if (scope == RecoverySafetyEvaluationScope::CurrentFootprint) {
+      observed_footprint_only = true;
+      EXPECT_EQ(before, RecoveryState::Normal);
+      // Preserve current wall/contact detector evidence. Uncomputed candidate
+      // values stay negative/unknown and never become affirmative clearance.
+      current.recovery.maneuver_direction = ManeuverDirection::Unknown;
+      current.recovery.rear_static_clear = false;
+      current.recovery.rear_information_complete = false;
+      current.recovery.rejoin_safe = false;
+      current.recovery.rejoin_forward_clear = false;
+    } else {
+      EXPECT_EQ(scope, RecoverySafetyEvaluationScope::FullRollout);
+    }
+    const auto a = complete.update(input), b = staged.update(current);
+    EXPECT_EQ(a.detector.verdict, b.detector.verdict);
+    EXPECT_EQ(a.detector.reject_reason, b.detector.reject_reason);
+    EXPECT_DOUBLE_EQ(a.detector.stationary_duration_sec, b.detector.stationary_duration_sec);
+    EXPECT_EQ(a.state, b.state);
+    EXPECT_EQ(a.action.type, b.action.type);
+    EXPECT_NE(b.action.type, RecoveryActionType::RequestReverse);
+    EXPECT_NE(b.action.type, RecoveryActionType::ReverseCreep);
+    EXPECT_NE(b.action.type, RecoveryActionType::ForwardCreep);
+    if (before == RecoveryState::CheckClearance || before == RecoveryState::WaitForClear) {
+      reached_clearance = true;
+      EXPECT_EQ(scope, RecoverySafetyEvaluationScope::FullRollout);
+    }
+  }
+  EXPECT_TRUE(observed_footprint_only);
+  EXPECT_TRUE(reached_clearance);
+}
+
+TEST(StuckRecoveryDemand, OnlyCurrentUnencumberedNormalAuthorityCanDeferRollouts)
+{
+  RecoverySafetyEvaluationRequest request{RecoveryState::Normal, 0.11, 0.2, true, false, false, false};
+  EXPECT_EQ(
+    recovery_safety_evaluation_scope(request, true),
+    RecoverySafetyEvaluationScope::CurrentFootprint);
+  EXPECT_EQ(
+    recovery_safety_evaluation_scope(request, false),
+    RecoverySafetyEvaluationScope::FullRollout);
+  for (bool RecoverySafetyEvaluationRequest::* member : {
+      &RecoverySafetyEvaluationRequest::solver_fallback,
+      &RecoverySafetyEvaluationRequest::recovery_rearm_guard_armed,
+      &RecoverySafetyEvaluationRequest::dynamic_lateral_execution_active}) {
+    auto special = request;
+    special.*member = true;
+    EXPECT_EQ(
+      recovery_safety_evaluation_scope(special, true),
+      RecoverySafetyEvaluationScope::FullRollout);
+  }
+  for (auto state : {RecoveryState::SuspectStuck, RecoveryState::WaitAwsimRecovery,
+      RecoveryState::StopAndConfirm, RecoveryState::CheckClearance, RecoveryState::WaitForClear,
+      RecoveryState::ShiftToReverse, RecoveryState::WaitReverseReport, RecoveryState::ReverseManeuver,
+      RecoveryState::ForwardManeuver, RecoveryState::StopAndReassess, RecoveryState::StopBeforeDrive,
+      RecoveryState::ShiftToDrive, RecoveryState::WaitDriveReport, RecoveryState::LowSpeedRejoin,
+      RecoveryState::SafeStop, static_cast<RecoveryState>(999)}) {
+    auto active = request;
+    active.supervisor_state = state;
+    EXPECT_EQ(
+      recovery_safety_evaluation_scope(active, true),
+      RecoverySafetyEvaluationScope::FullRollout);
+  }
+  request.signed_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_EQ(
+    recovery_safety_evaluation_scope(request, true),
+    RecoverySafetyEvaluationScope::FullRollout);
+}
+
 }  // namespace

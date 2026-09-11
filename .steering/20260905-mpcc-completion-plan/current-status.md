@@ -1,24 +1,22 @@
 # Current status and remaining completion work
 
-2026-09-12JST。M1–M6を追加確認なしで自律実行。必要分のローカルcommitのみ。
-**全体未完。R53でclock集中更新の発生をシミュレータ公開側まで確認。**
+2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分のローカルcommitのみ。
+**全体未完。Recoveryの不要な通常時経路計算を除去し、標準dev2-r54へ進む。**
 
-原本DLLのコピーへの二つの観測追加は全3690methodの元CILと一致、20記録smoke合格。
-R52は初期化中に0.1s/frame5で停止し不成立。R53は診断用に起動順を分け、移動中の
-D1decision218を記録。原nominal9.304999799、deadline9.329999799、before9.334999791。
-現在証明13.33mswall/11.13msCPU後、Recovery5.066ms中に次frameのclockが集中更新。
-R313で元入力hash・完全な現在物理証明・遅い送信の拒否を再現。標準走行の合格ではない。
+認証済みNormalで引継ぎ等がない場合のみ、現在壁/接触/車体証拠を保って経路計算を省く。
+Normalはその周期にSuspectStuckまで。候補確定/ギア操作は不可、実Recoveryの次周期は
+新しい全経路/他車証拠を使う。R314旧policyで新規需要testが失敗、R315実core147件合格。
+Build r92全26package、tests r80全2547記録/65group、source105合格。標準r54未実行。
 
-次はNormal状態でcurrent-wall証拠とRecovery経路計算の需要を分けられるか監査する。
-まだ本番変更なし。R51の現在証明18.33ms問題を別に保持し、Recoveryだけで解決としない。
-本番制御は12c29078と同じ。既存buildr91/testsr79(2545records/65groups)、source105。
+R53診断では元clockの同一frame内集中更新とRecovery5.066msを観測。今回の修正は
+この不要計算を除くが、R51の独立した現在全物理証明18.33msの問題は解決していない。
+元の25ms公開窓・250ms受信profile・130mscontrol origin・100ms操舵遅延と全証明を維持。
 
-残り: 公開期限と現在証明の因果修復、全intent/Mission/sibling/Store、実Stop/rest/restart、
-Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、
-同一tar/image/eval。停止した試行や個別の修正を全体完了として扱わない。
+残り: r54で実需要/期限確認、現在全証明コスト/スケジューリング、全intent/Mission/sibling/
+Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、
+dev3/dev4六周、gate1–3、同一tar/image/eval。個別修正や停止runを全体完了としない。
 
-[時計の観測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/clock-producer-design.md)、
-[次の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rollout-demand-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rollout-demand-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

@@ -1,7 +1,8 @@
-# Recovery rollout demand audit, baseline808830ac
+# Recovery rollout demand, baseline e1ce2571
 
 2026-09-12JST. M1–M6authorized; no routine confirmation, local commits only.
-No production change yet. Do not claim this repairs R51's first current-proof cost.
+The bounded production change below preserves current detector evidence.
+Do not claim this repairs R51's first current-proof cost.
 
 R53diagnostic startup order reaches moving D1decision218/job217/source187 at0.11m/s.
 Original nominal9.304999799, entry9.309999791, deadline9.329999799; before9.334999791.
@@ -13,7 +14,7 @@ later. Receiver set() follows them. Source clustering is observed; transport can
 still contribute additional delay. Do not slow/suppress clock, alter original
 appointments/windows/rates, or infer25mswall guarantees25msROS.
 
-Next bounded audit: node evaluate_stuck_recovery calls evaluate_recovery_safety
+Causal audit: node evaluate_stuck_recovery calls evaluate_recovery_safety
 with evaluate_rollout=true whenever recovery_safety_evaluation_required says the
 slow/forward-intent normal state needs current wall evidence. The callee already
 separates current footprint/contact/wall evidence from expensive forward/reverse
@@ -22,7 +23,7 @@ Normal can remain Normal or enter SuspectStuck with normal/hold; it does not
 command a reverse/forward maneuver. This suggests a distinct demand predicate,
 not dropping current safety evidence or caching a prior rollout.
 
-Before any edit:
+Audit requirements (completed for this slice):
 - Audit every node consumer of safety fields around57639–58580 and the supervisor
   pre-switch validation. Check entry-side effects and coordinated/overtake handoff.
 - Narrow candidate only to Normal with healthy normal authority, no dynamic lateral
@@ -50,3 +51,35 @@ exact current membership and unchanged prefix/context/final guards. Merely widen
 measurement tolerances, declaring covariance a hard error bound, translating old
 certificates or retiming prior programmes is not this theorem. Feasibility and
 cost of such a domain are Unknown; do not promote from this design note.
+
+Implemented 2026-09-12: a pure demand policy returns None, CurrentFootprint or
+FullRollout. None preserves the old no-evidence decision. CurrentFootprint requires
+the existing joined certified normal command, supervisor Normal, finite speeds,
+no fallback/rearm/dynamic lateral execution, no coordinated stop, no validated
+overtake handoff and no pending drive handoff. All other requested cases keep
+FullRollout; fault retries and active maneuver/rejoin evaluators remain unchanged.
+The node uses the evaluator's existing evaluate_rollout boundary. Current wall,
+footprint, contact and detector times still run; no prior clearance is reused.
+
+Normal update can only remain Normal or enter SuspectStuck. The existing
+recovery_candidate_commit_allowed rejects Normal, SuspectStuck and waiting states;
+Normal entry cannot commit a maneuver from uncomputed fields. Pre-switch finite
+checks do not require affirmative maneuver fields in Normal. Coordinated/overtake
+consumers explicitly retain full evaluation. The next active Recovery tick uses
+fresh full wall/peer/gear evidence before any maneuver selection. No authority,
+physical model, source identity, bound, margin, timing or clock setting changes.
+The obsolete unconditional rollout request is removed only for this proven case.
+Existing current-wall trace remains; telemetry separately counts deferred rollouts.
+
+R314 applies the old unconditional-full policy to the new tests and intentionally
+fails both demand expectations; it is a failing specification regression, not a
+claim that an old production test failed. R315 compiles the actual changed policy
+and entire core suite: 147 tests in 31 suites pass. Paired real-core executions
+compare detector verdict/duration and supervisor state/action across 180 ticks
+from Normal into clearance with freshly blocked reverse peer evidence; no gear
+request or creep is authorized. Missing certified authority, active/rearm/fallback
+contexts and invalid state/speed retain full evaluation. Source contracts: 105 pass.
+Build r92: 26 packages pass. Package tests r80: 2547 records in 65 groups,
+zero errors/failures/skips. Standard uninstrumented dev2-r54 remains pending.
+[Sealed evidence](recovery-rollout-demand-evidence.json).
+Rollback is e1ce2571 plus reversal of this slice only, preserving unrelated changes.

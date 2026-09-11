@@ -1,0 +1,149 @@
+{
+  "baseline_commit": "e1ce2571adfb4e73f7f95fe08d81a5f1ff12f5f3",
+  "rollback_commit": "e1ce2571adfb4e73f7f95fe08d81a5f1ff12f5f3",
+  "normal_authority_change": false,
+  "integrated_acceptance": false,
+  "change": "Current footprint-only demand in certified Normal with no active/pending Recovery or coordinated/overtake consumers; all actual maneuver clearance remains freshly evaluated.",
+  "validation": {
+    "build_packages": 26,
+    "package_test_records": 2547,
+    "ctest_groups": 65,
+    "native_core_tests": 147,
+    "source_tests": 105,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0
+  },
+  "failing_specification": "R314 uses old full-every-request demand and fails both newly specified work-demand expectations; paired detector and state/action comparisons remain equal.",
+  "limitations": [
+    "R51 current proof cost is independent and unresolved.",
+    "R315 tests actual core and policy; live node timing requires standard uninstrumented dev2-r54.",
+    "All M4-M6 integrated acceptance remains open."
+  ],
+  "files": [
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r314/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r314/compile-command.json",
+      "sha256": "a1f5411c478aadb06cd9c132e38c9ff682b45fce9685f9d94f8a3a415d7fef0d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r314/old_policy.cpp",
+      "sha256": "474663049d90f03f3cb2fc8cc6c9ad985d85499dda3b77cfbc26628dbe90b687"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r314/result.json",
+      "sha256": "7e0e72049dcc41351ca83158b565246f1750ab48f8292f09607a5827cb2c2cbb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r314/runner.py",
+      "sha256": "98da86eea65cdd088293a737b754b367c448eed3bc3adf04343363e6d2be94af"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r314/test",
+      "sha256": "6917b0f4624321cf13eaa118062cba4bd6f440737dffcc79481244991e141e7d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r314/tests.log",
+      "sha256": "b799ac812347953a4671bde04280236be45e962a4737450682af2a25fc14138f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r315/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r315/compile-command.json",
+      "sha256": "7df99d2e937dabdc3f6903bf8d83a5c2740e4cdd25040f29e847da4944dedce9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r315/result.json",
+      "sha256": "a934847fe7ce991020a37dec53f119026aa2862faf3d6e7918dce726f0c456ce"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r315/runner.py",
+      "sha256": "1a2ff30b7d14e77932c77cfac7c1b3db32cd85b7b966dc7dbefc75cd7ff75d1d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r315/test",
+      "sha256": "bd1da81184d7bdd736d41b580f9a07beacad8cd26c0716232b3b300c4cf31583"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r315/tests.log",
+      "sha256": "237dab21299dd846096cdd030bef4301e4189b9dd98bd251fc5bcce6fb28cd7e"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/final-binaries/libmulti_purpose_mpc_ros_stuck_recovery_core.so",
+      "sha256": "8539a3753d0583463612c852e31f1a30dc56aa2519bd088a9ec0885493de5bcc"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/final-binaries/mpc_controller_cpp",
+      "sha256": "cb3fbe248fa49e4d26569829ca241f784d257e8ebe137fe8dc4b20947259042c"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/final-source/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp",
+      "sha256": "54ca7a9e7800df3655358ac8128f022c357640936aa64e8c6879cf125790b177"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/final-source/src/mpc_controller_cpp.cpp",
+      "sha256": "0002df2f1c9d0651db459a632ff125de8c825f6568fa52cda9ea4af31c9574aa"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/final-source/src/stuck_recovery_core.cpp",
+      "sha256": "2f6ff667ba0ce35fea73548c18de170addbae22eb9ba6143e1502945e5b5dc13"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/final-source/test/test_stuck_recovery_core.cpp",
+      "sha256": "f93fe21ed2e448172e0a92cff2d34ac0d5f3e016fe354117092d5677956494fe"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc-nine-state-build-r92.log",
+      "sha256": "f8cc19d5b8eb9d90a79c30a1b7f2291017b3b2d058bf08a20d4abf56386f4a1e"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc-nine-state-tests-r80.log",
+      "sha256": "2e26c25966c6ca7e72c67673b85d90b3cc3e49431276f2fee30cc84aa2d6c417"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc-recovery-demand-r314.log",
+      "sha256": "030a555c65576523df8d877e9cd5d5e0d731c8c2468102a88fdd1de4d71706ff"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc-recovery-demand-r315.log",
+      "sha256": "639d36647a382d79c67638e83d950359a4f487d3f69d7f2609ac72f980b7e992"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc-recovery-demand-source-contract.log",
+      "sha256": "653dbb5d263d48312928dcf6d28f64f4e3dd031ae80bae0681edf1326e150fb2"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc_recovery_demand_impl.py",
+      "sha256": "a91574a27d26c4d66f5c9b3f50466eee65ebf712635efd39d7b17b2096085498"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc_recovery_demand_r314.py",
+      "sha256": "98da86eea65cdd088293a737b754b367c448eed3bc3adf04343363e6d2be94af"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc_recovery_demand_r315.py",
+      "sha256": "1a2ff30b7d14e77932c77cfac7c1b3db32cd85b7b966dc7dbefc75cd7ff75d1d"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc_recovery_demand_seal.py",
+      "sha256": "56febf9b745e3cd7d6ec7bc7b24ae5f6091fc3beed375cca46396d3e63e94c74"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/mpcc_recovery_demand_test_edit.py",
+      "sha256": "ca32896f2b1a6f7d3dfd8fa01e1961fd610c992cb38db18df8325663e22dc17f"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/quality.log",
+      "sha256": "bd4dc0f7e042ea2b2a59976ff3c077ba1ab69f7ad862a0f6d49101f69966b94e"
+    },
+    {
+      "path": "output/20260912-nine-state-recovery-rollout-demand/review.md",
+      "sha256": "c91230106333cbf407a15d9d37eebde1ee394d162dc6174ec0a8048ffccc84b1"
+    }
+  ]
+}

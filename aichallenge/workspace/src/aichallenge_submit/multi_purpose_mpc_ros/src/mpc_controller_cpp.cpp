@@ -57192,7 +57192,7 @@ private:
     const Pose2D & pose, const double actual_v, const Eigen::Vector2d & normal_u,
     const double normal_acc, const double path_forward_intent_speed_mps,
     const bool mpc_fallback_active, const SteadyClock::time_point steady_now,
-    const rclcpp::Time & control_time)
+    const rclcpp::Time & control_time, const bool certified_normal_execution)
   {
     if (!cfg_.stuck_recovery.core.enabled || !stuck_recovery_core_) {
       return std::nullopt;
@@ -57368,17 +57368,17 @@ private:
       behavior.overtake_committed_execution_active ||
       behavior.overtake_paused_mission_active ||
       behavior.dynamic_obstacle_lateral_escape_active;
+    const stuck_recovery::RecoverySafetyEvaluationRequest recovery_safety_request{
+      supervisor_state,
+      actual_v,
+      cfg_.stuck_recovery.core.detector.moving_speed_mps,
+      forward_intent,
+      mpc_fallback_active,
+      recovery_forward_rearm_guard_started_.has_value() ||
+      recovery_forward_rearm_guard_start_progress_m_.has_value(),
+      dynamic_lateral_execution_active};
     const bool recovery_safety_required =
-      stuck_recovery::recovery_safety_evaluation_required(
-      stuck_recovery::RecoverySafetyEvaluationRequest{
-        supervisor_state,
-        actual_v,
-        cfg_.stuck_recovery.core.detector.moving_speed_mps,
-        forward_intent,
-        mpc_fallback_active,
-        recovery_forward_rearm_guard_started_.has_value() ||
-        recovery_forward_rearm_guard_start_progress_m_.has_value(),
-        dynamic_lateral_execution_active});
+      stuck_recovery::recovery_safety_evaluation_required(recovery_safety_request);
     if (recovery_safety_required) {
       ++recovery_safety_full_count_;
     } else {
@@ -57636,6 +57636,16 @@ private:
     const auto rejoin_steering_tire_angle = recovery_rejoin_steering_tire_angle(normal_u);
     const double checked_rejoin_steering_tire_angle_rad =
       rejoin_steering_tire_angle.value_or(0.0);
+    // Normal can only remain Normal or enter SuspectStuck. Preserve current
+    // wall/contact evidence for that detector; compute fresh maneuver rollouts
+    // when an episode or explicit handoff can consume them. No cached clearance.
+    const auto recovery_safety_scope = stuck_recovery::recovery_safety_evaluation_scope(
+      recovery_safety_request, certified_normal_execution && !coordinated_stop_active &&
+      !validated_forward_overtake_handoff_available &&
+      !recovery_forward_overtake_handoff_drive_pending_);
+    if (recovery_safety_scope == stuck_recovery::RecoverySafetyEvaluationScope::CurrentFootprint) {
+      ++recovery_rollout_deferred_count_;
+    }
     const auto safety = recovery_safety_required ? evaluate_recovery_safety(
       pose, steady_now, control_time.seconds(), reverse_distance_to_check_m,
       forward_distance_to_check_m,
@@ -57645,7 +57655,8 @@ private:
       checked_rejoin_steering_tire_angle_rad,
       reverse_only,
       candidate_direction_policy,
-      true) : RecoverySafetySnapshot{};
+      recovery_safety_scope == stuck_recovery::RecoverySafetyEvaluationScope::FullRollout) :
+      RecoverySafetySnapshot{};
     last_current_wall_trace_snapshot_ = CurrentWallTraceSnapshot{
       active_control_decision_id_, safety.wall_proximity_valid,
       safety.current_footprint_valid, safety.current_footprint_out_of_map,
@@ -58878,7 +58889,8 @@ private:
         get_logger(),
         "Control callback runtime: cycles=%zu, elapsed_ms=%.3f/%.3f(avg/max), "
         "mpc_ms=%.3f/%.3f(avg/max), recovery_ms=%.3f/%.3f(avg/max), "
-        "recovery_safety=%zu/%zu(full/skipped), period_ms=%.3f, overruns=%zu",
+        "recovery_safety=%zu/%zu(current/skipped), recovery_rollout_deferred=%zu, "
+        "period_ms=%.3f, overruns=%zu",
         static_cast<std::size_t>(control_callback_count_),
         control_callback_total_ms_ / static_cast<double>(control_callback_count_),
         control_callback_maximum_ms_,
@@ -58887,7 +58899,8 @@ private:
         control_callback_recovery_total_ms_ / static_cast<double>(control_callback_count_),
         control_callback_recovery_maximum_ms_,
         static_cast<std::size_t>(recovery_safety_full_count_),
-        static_cast<std::size_t>(recovery_safety_skipped_count_), period_ms,
+        static_cast<std::size_t>(recovery_safety_skipped_count_),
+        static_cast<std::size_t>(recovery_rollout_deferred_count_), period_ms,
         static_cast<std::size_t>(control_callback_overrun_count_));
       std::ostringstream samples;
       samples.precision(9);
@@ -58929,6 +58942,7 @@ private:
     control_callback_recovery_maximum_ms_ = 0.0;
     recovery_safety_full_count_ = 0U;
     recovery_safety_skipped_count_ = 0U;
+    recovery_rollout_deferred_count_ = 0U;
     last_control_callback_telemetry_steady_ = finished;
   }
 
@@ -59329,7 +59343,8 @@ private:
       recovery_start - post_mpc_start).count();
     callback_timing.checkpoint = "post-mpc-complete";
     const auto recovery_output = evaluate_stuck_recovery(
-      pose, actual_v, u, acc, effective_v_max, mpc_fallback_active, steady_now, current_time);
+      pose, actual_v, u, acc, effective_v_max, mpc_fallback_active, steady_now, current_time,
+      canonical_normal_execution_active);
     const bool recovery_command_active = recovery_output.has_value() &&
       apply_stuck_recovery_arbitration(
       recovery_output.value(), actual_v, current_time, u, acc);
@@ -59620,6 +59635,7 @@ private:
   double control_callback_recovery_maximum_ms_{0.0};
   std::uint64_t recovery_safety_full_count_{0U};
   std::uint64_t recovery_safety_skipped_count_{0U};
+  std::uint64_t recovery_rollout_deferred_count_{0U};
   std::optional<SteadyClock::time_point> last_control_callback_telemetry_steady_;
   double last_acc_{0.0};
   Eigen::Vector2d last_u_{0.0, 0.0};

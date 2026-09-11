@@ -1041,6 +1041,22 @@ bool recovery_safety_evaluation_required(
          std::abs(request.signed_speed_mps) <= request.moving_speed_mps;
 }
 
+RecoverySafetyEvaluationScope recovery_safety_evaluation_scope(
+  const RecoverySafetyEvaluationRequest & request, const bool certified_normal_only) noexcept
+{
+  if (!recovery_safety_evaluation_required(request)) {
+    return RecoverySafetyEvaluationScope::None;
+  }
+  if (certified_normal_only && request.supervisor_state == RecoveryState::Normal &&
+    !request.solver_fallback && !request.recovery_rearm_guard_armed &&
+    !request.dynamic_lateral_execution_active && std::isfinite(request.signed_speed_mps) &&
+    std::isfinite(request.moving_speed_mps) && request.moving_speed_mps >= 0.0)
+  {
+    return RecoverySafetyEvaluationScope::CurrentFootprint;
+  }
+  return RecoverySafetyEvaluationScope::FullRollout;
+}
+
 RecoveryRetrySnapshot recovery_retry_snapshot(const RecoveryInput & input) noexcept
 {
   return RecoveryRetrySnapshot{

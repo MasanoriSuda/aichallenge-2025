@@ -720,6 +720,17 @@ struct RecoverySafetyEvaluationRequest
 bool recovery_safety_evaluation_required(
   const RecoverySafetyEvaluationRequest & request) noexcept;
 
+enum class RecoverySafetyEvaluationScope {None, CurrentFootprint, FullRollout};
+
+// A certified normal command with no pending handoff needs current detector
+// evidence, but Normal cannot command a recovery maneuver. A later recovery
+// state must request fresh full rollout evidence before selecting motion.
+// The caller may assert certified_normal_only only for the current joined
+// normal authority and when no coordinated/overtake handoff consumes rollouts.
+RecoverySafetyEvaluationScope recovery_safety_evaluation_scope(
+  const RecoverySafetyEvaluationRequest & request, bool certified_normal_only) noexcept;
+
+
 // Candidate evaluation may switch direction while the currently commanded
 // primitive is stopping. Escape distance belongs to the direction that was
 // actually actuated, never to the newly evaluated candidate.

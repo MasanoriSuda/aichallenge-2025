@@ -240,3 +240,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R313exact proof/late rejection and completeR53analysis. No acceptance claim.
 - [ ] Audit and remove provably unused Normal-state Recovery rollouts while preserving current-wall evidence and every maneuver gate.
 - [ ] Current full-proof cost/scheduling structure, all remaining M4-M6.
+
+
+2026-09-12 Recovery rollout demand (baseline e1ce2571):
+- [x] Audit every Normal consumer and preserve current footprint/contact/wall detector evidence.
+- [x] Remove unused rollout work only with joined certified Normal and no active/pending Recovery or coordinated/overtake consumer. No physical/timing/authority changes.
+- [x] R314 old-policy specification fails; r315 entire core 147 tests, source 105, build r92 all 26 packages, tests r80 all 2547 records/65 groups pass.
+- [ ] Standard uninstrumented dev2-r54 live work-demand/timing validation.
+- [ ] Independent current proof cost/scheduling and all remaining M4-M6.

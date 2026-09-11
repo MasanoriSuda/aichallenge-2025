@@ -1141,6 +1141,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/clock-producer-evidence.json",
       "replay_ready": true,
       "reason": "Original simulator clock producer and controller receiver observed in the same moving first-failure interval."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-recovery-rollout-demand",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rollout-demand-evidence.json",
+      "replay_ready": true,
+      "reason": "R53 Recovery work demand separated from required current detector evidence; actual core transition regression."
     }
   ],
   "experiments": [
@@ -13788,6 +13794,38 @@
       "production_impact": "None. Native model, original clock/window/rate, authority and every final guard unchanged.",
       "deleted_code": [],
       "revisit_condition": "Distinct causal instrumentation or implementation; do not repeat unchanged micro-optimizations, old point-proof reuse or clock/timeouts/grace relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-recovery-rollout-demand-r314",
+      "baseline_commit": "e1ce2571adfb4e73f7f95fe08d81a5f1ff12f5f3",
+      "snapshot_ids": [
+        "20260912-nine-state-recovery-rollout-demand"
+      ],
+      "hypothesis": "Old unconditional rollout request meets minimum Normal work demand",
+      "changed_dimension": "Recovery evaluator demand only for certified unencumbered Normal; current wall/contact and every maneuver gate preserved",
+      "result": "rejected",
+      "reason": "Both new demand expectations fail under old full-only policy; no prior production-test failure claimed.",
+      "production_impact": "No normal authority, bounds, margins, programme, physical proof or clock/rate/window changes.",
+      "deleted_code": [
+        "Unconditional full-rollout request in the proven Normal case"
+      ],
+      "revisit_condition": "New live evidence or different causal consumer; no old clearance reuse or parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-recovery-rollout-demand-r315-r92-r80",
+      "baseline_commit": "e1ce2571adfb4e73f7f95fe08d81a5f1ff12f5f3",
+      "snapshot_ids": [
+        "20260912-nine-state-recovery-rollout-demand"
+      ],
+      "hypothesis": "Current footprint demand preserves detection and all actual maneuver gates",
+      "changed_dimension": "Recovery evaluator demand only for certified unencumbered Normal; current wall/contact and every maneuver gate preserved",
+      "result": "accepted",
+      "reason": "Actual paired core transitions preserve detector/state/action and block fresh peer obstruction; native 147, source 105, build 26, package 2547/65 pass. Live timing remains unverified.",
+      "production_impact": "No normal authority, bounds, margins, programme, physical proof or clock/rate/window changes.",
+      "deleted_code": [
+        "Unconditional full-rollout request in the proven Normal case"
+      ],
+      "revisit_condition": "New live evidence or different causal consumer; no old clearance reuse or parameter relaxation."
     }
   ]
 }

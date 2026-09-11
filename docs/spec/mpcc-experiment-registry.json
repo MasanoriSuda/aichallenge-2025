@@ -1081,6 +1081,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-context-producer-evidence.json",
       "replay_ready": true,
       "reason": "Actual solver source propagation and producer revocation; C5normal dispatch remains pending."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-dispatch-boundary",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-dispatch-boundary-evidence.json",
+      "replay_ready": true,
+      "reason": "Immutable next scheduled packet and pre/post publisher boundary; no node authority promotion."
     }
   ],
   "experiments": [
@@ -13017,6 +13023,70 @@
         "Unused ReferencePath.get_waypoint_mutable accessor"
       ],
       "revisit_condition": "A new failing source invariant or C5integration; then finalHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-dispatch-boundary-r80-r69",
+      "baseline_commit": "73049f17e1c89499b1d00eabf9afaff635a64969",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-dispatch-boundary"
+      ],
+      "hypothesis": "Scheduled dispatch necessary gates compile and pass current package tests",
+      "changed_dimension": "Exact physical serialization witness and immutable scheduled dispatch boundary",
+      "result": "accepted",
+      "reason": "26packages/2516records. Six new tests pass; two test dangling-else warnings corrected.",
+      "production_impact": "Detached boundary only. Worker/node integration and simultaneous retirement of old synchronous authority remain mandatory.",
+      "deleted_code": [
+        "No old normal authority removed before node promotion."
+      ],
+      "revisit_condition": "New failing invariant or actual node integration; no retry of falsified unsafe-first-packet example without changed evidence."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-dispatch-boundary-r272-r273",
+      "baseline_commit": "73049f17e1c89499b1d00eabf9afaff635a64969",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-dispatch-boundary"
+      ],
+      "hypothesis": "The added causal-floor example is a valid scheduled first-packet input",
+      "changed_dimension": "Exact physical serialization witness and immutable scheduled dispatch boundary",
+      "result": "inconclusive",
+      "reason": "Appointment1.01 precedes original observation1.05. Factory rejects publication-prefix-unavailable; invalid diagnostic fixture, no controller regression.",
+      "production_impact": "Detached boundary only. Worker/node integration and simultaneous retirement of old synchronous authority remain mandatory.",
+      "deleted_code": [
+        "No old normal authority removed before node promotion."
+      ],
+      "revisit_condition": "New failing invariant or actual node integration; no retry of falsified unsafe-first-packet example without changed evidence."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-dispatch-boundary-r274-r275",
+      "baseline_commit": "73049f17e1c89499b1d00eabf9afaff635a64969",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-dispatch-boundary"
+      ],
+      "hypothesis": "A lagging old raw clock admits an unsafe first packet in these examples",
+      "changed_dimension": "Exact physical serialization witness and immutable scheduled dispatch boundary",
+      "result": "rejected",
+      "reason": "R274step0.009 fits0.010001; r275nominal selection already limits step to0.005001 causal bound. Unsafe first-packet hypothesis falsified; final guard aligned to same ledger epoch.",
+      "production_impact": "Detached boundary only. Worker/node integration and simultaneous retirement of old synchronous authority remain mandatory.",
+      "deleted_code": [
+        "No old normal authority removed before node promotion."
+      ],
+      "revisit_condition": "New failing invariant or actual node integration; no retry of falsified unsafe-first-packet example without changed evidence."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-dispatch-boundary-r276-r81-r70",
+      "baseline_commit": "73049f17e1c89499b1d00eabf9afaff635a64969",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-dispatch-boundary"
+      ],
+      "hypothesis": "Packet/source/index/generation/clock/slew gates preserve original proof and actual-send ordering",
+      "changed_dimension": "Exact physical serialization witness and immutable scheduled dispatch boundary",
+      "result": "accepted",
+      "reason": "127native tests/796ms;26packages/2517records/64groups,0errors/failures/skips. Actual second suffix retains original certificate. No live promotion.",
+      "production_impact": "Detached boundary only. Worker/node integration and simultaneous retirement of old synchronous authority remain mandatory.",
+      "deleted_code": [
+        "No old normal authority removed before node promotion."
+      ],
+      "revisit_condition": "New failing invariant or actual node integration; no retry of falsified unsafe-first-packet example without changed evidence."
     }
   ]
 }

@@ -1,3 +1,5 @@
+#include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
+#include <cstring>
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 
@@ -942,5 +944,136 @@ CurrentCheck check_current_evidence(
   result.context = check_current_context(certificate, fresh_generation, fresh_problem, use);
   result.reason = result.context == ContextReason::Compatible ? CurrentReason::Compatible : CurrentReason::ContextRejected;
   return result;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+namespace {
+bool same_dispatch_wire(double lhs, double rhs) noexcept {
+  if (!std::isfinite(lhs) || !std::isfinite(rhs)) return false;
+  const float a = static_cast<float>(lhs), b = static_cast<float>(rhs);
+  if (static_cast<double>(a) != lhs || static_cast<double>(b) != rhs) return false;
+  std::uint32_t a_bits{}, b_bits{};
+  std::memcpy(&a_bits, &a, sizeof(a_bits));
+  std::memcpy(&b_bits, &b, sizeof(b_bits));
+  return a_bits == b_bits;
+}
+bool same_dispatch_source(const vehicle::PublishedProgramSource &a,
+                          const vehicle::PublishedProgramSource &b) noexcept {
+  return a.decision_id == b.decision_id && a.solution_id == b.solution_id &&
+    a.problem_fingerprint == b.problem_fingerprint &&
+    a.input_context_fingerprint == b.input_context_fingerprint && a.packet_index == b.packet_index;
+}
+} // namespace
+
+DispatchResult prepare_dispatch(
+    std::shared_ptr<const applied::ScheduledCertificate> certificate,
+    const retained::Request &fresh, const retained::contract::MpccProblemContext &fresh_problem,
+    const ContextSnapshot &current_generation, const vehicle::PublishedInputLedger &ledger,
+    const vehicle::PublishedInputLedger::Snapshot &original_cursor,
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
+    std::size_t already_published_suffix_packets) {
+  DispatchResult result;
+  if (!certificate || !certificate->nominal()) return result;
+  const auto &suffix = certificate->suffix();
+  const auto &program = suffix.program;
+  const auto index = already_published_suffix_packets;
+  const auto epoch = vehicle::publication_epoch(program, index);
+  const auto source = scheduled_program_source(*certificate, index);
+  result.reason = DispatchReason::InvalidPacket;
+  if (!epoch || !source || program.commands.empty() ||
+      suffix.physical_steering_rad.size() != program.commands.size() ||
+      (index >= program.commands.size() && !program.repeat_last_until_rest) ||
+      !fresh.publication_prefix) return result;
+  const auto explicit_index = std::min(index, program.commands.size() - 1);
+  auto packet = program.commands[explicit_index]; packet.published_sec = *epoch;
+  const double steering = suffix.physical_steering_rad[explicit_index];
+  const auto &execution = *certificate->nominal()->observed().plan->execution_artifact;
+  const auto &proposed = fresh.publication_prefix->proposed_packet;
+  if (!std::isfinite(steering) ||
+      !same_dispatch_wire(mpcc_wire_command::steering(steering,
+        execution.vehicle_model.steering_wire_gain), packet.wire_steering_rad) ||
+      !same_dispatch_wire(proposed.wire_steering_rad, packet.wire_steering_rad) ||
+      !same_dispatch_wire(proposed.wire_acceleration_mps2, packet.wire_acceleration_mps2) ||
+      proposed.published_sec != fresh.now_sec || !std::isfinite(fresh.control_origin_speed_mps) ||
+      fresh.control_origin_speed_mps < 0) return result;
+  if (packet.published_sec > certificate->tube().rest_sec || fresh.now_sec > certificate->tube().rest_sec) {
+    result.reason = DispatchReason::RestExpired; return result;
+  }
+  result.current = check_current_evidence(*certificate, fresh, fresh_problem, current_generation,
+    ledger, original_cursor, prior_sources, index);
+  if (result.current.reason != CurrentReason::Compatible) {
+    result.reason = DispatchReason::CurrentEvidenceRejected; return result;
+  }
+  const auto cursor = ledger.snapshot();
+  const auto *previous = ledger.latest_transaction();
+  if (!cursor || !previous || previous->sequence != cursor->sequence() ||
+      !std::isfinite(previous->published.published_sec) || previous->published.published_sec > fresh.now_sec ||
+      !same_dispatch_wire(mpcc_wire_command::steering(fresh.previous_published_steering_rad,
+        execution.vehicle_model.steering_wire_gain), previous->nominal.wire_steering_rad)) {
+    result.reason = DispatchReason::InvalidPredecessor; return result;
+  }
+  auto candidate = std::shared_ptr<DispatchCandidate>(new DispatchCandidate);
+  candidate->certificate_ = std::move(certificate);
+  candidate->ledger_cursor_ = *cursor;
+  candidate->current_generation_ = current_generation;
+  candidate->packet_ = packet;
+  candidate->source_ = *source;
+  candidate->packet_index_ = index;
+  candidate->dispatch_decision_id_ = fresh.decision_id;
+  candidate->observed_sec_ = fresh.now_sec;
+  candidate->physical_steering_rad_ = steering;
+  candidate->predicted_speed_mps_ = fresh.control_origin_speed_mps;
+  candidate->previous_wire_steering_rad_ = previous->nominal.wire_steering_rad;
+  // The ledger already applies the historic causal floor when /clock was
+  // behind a received observation. That stored epoch is also the predecessor
+  // used by scheduled nominal selection; do not borrow an earlier raw clock.
+  candidate->previous_publication_sec_ = previous->published.published_sec;
+  result.candidate = std::move(candidate);
+  result.reason = DispatchReason::Candidate;
+  return result;
+}
+
+bool DispatchCandidate::clock_and_slew_match(double decision_clock_sec, double before_clock_sec,
+                                            double after_clock_sec) const noexcept {
+  if (!certificate_ || !certificate_->nominal() || !std::isfinite(before_clock_sec) ||
+      !std::isfinite(after_clock_sec) || before_clock_sec < observed_sec_ ||
+      before_clock_sec < previous_publication_sec_ || after_clock_sec > certificate_->tube().rest_sec ||
+      !vehicle::scheduled_publication_bracket_admitted(certificate_->suffix().program, packet_index_,
+        decision_clock_sec, before_clock_sec, after_clock_sec)) return false;
+  const auto &execution = *certificate_->nominal()->observed().plan->execution_artifact;
+  const double step = std::abs(packet_.wire_steering_rad - previous_wire_steering_rad_) /
+    execution.vehicle_model.steering_wire_gain;
+  const double allowed = execution.maximum_abs_steering_rate_radps *
+    (before_clock_sec - previous_publication_sec_) + execution.physical_global_tolerance;
+  return std::isfinite(step) && std::isfinite(allowed) && step <= allowed;
+}
+
+bool DispatchCandidate::matches_before_publication(
+    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
+    std::uint64_t dispatch_decision_id, double decision_clock_sec, double before_clock_sec,
+    double wire_acceleration_mps2, double wire_steering_rad) const {
+  if (!ledger_cursor_ || dispatch_decision_id != dispatch_decision_id_ ||
+      !current_generation_.same_generation(current_generation) ||
+      !same_dispatch_wire(wire_acceleration_mps2, packet_.wire_acceleration_mps2) ||
+      !same_dispatch_wire(wire_steering_rad, packet_.wire_steering_rad) ||
+      !clock_and_slew_match(decision_clock_sec, before_clock_sec, before_clock_sec)) return false;
+  const auto changes = ledger.since(*ledger_cursor_);
+  return changes && changes->empty();
+}
+
+bool DispatchCandidate::matches_after_publication(
+    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
+    double decision_clock_sec) const {
+  if (!ledger_cursor_ || !current_generation_.same_generation(current_generation)) return false;
+  const auto changes = ledger.since(*ledger_cursor_);
+  if (!changes || changes->size() != 1) return false;
+  const auto &actual = changes->front();
+  return actual.source && same_dispatch_source(*actual.source, source_) &&
+    actual.nominal.published_sec == packet_.published_sec &&
+    same_dispatch_wire(actual.nominal.wire_acceleration_mps2, packet_.wire_acceleration_mps2) &&
+    same_dispatch_wire(actual.nominal.wire_steering_rad, packet_.wire_steering_rad) &&
+    clock_and_slew_match(decision_clock_sec, actual.before_clock_sec, actual.after_clock_sec);
 }
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

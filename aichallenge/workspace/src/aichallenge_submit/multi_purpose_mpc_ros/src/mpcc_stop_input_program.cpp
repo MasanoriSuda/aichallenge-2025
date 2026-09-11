@@ -69,6 +69,7 @@ Result prepare(const Request &r) noexcept {
   if (command_count == 0 || command_count > 10000)
     return {R::InvalidTiming, {}};
   out.program.commands.reserve(command_count);
+  out.physical_steering_rad.reserve(command_count);
   std::size_t start_index = 0, end_index = 0;
   for (std::size_t command = 0; command < command_count; ++command) {
     const double begin = command * period,
@@ -133,6 +134,7 @@ Result prepare(const Request &r) noexcept {
             r.maximum_abs_steering_rate_radps * period + tolerance)
       return {R::SteeringStepOutsideBounds, {}};
     out.program.commands.push_back(packet);
+    out.physical_steering_rad.push_back(steering);
   }
   // Sampling cannot change a delayed-braking reference into early braking,
   // and a sampled positive final packet cannot become an implicit brake tail.
@@ -145,6 +147,7 @@ Result prepare(const Request &r) noexcept {
         last.wire_steering_rad != prior.wire_steering_rad)
       break;
     out.program.commands.pop_back();
+    out.physical_steering_rad.pop_back();
   }
   return {R::Available, std::move(out)};
 }

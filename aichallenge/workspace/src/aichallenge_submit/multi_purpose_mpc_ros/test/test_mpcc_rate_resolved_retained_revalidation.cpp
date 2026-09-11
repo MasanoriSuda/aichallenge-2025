@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
@@ -4138,4 +4139,234 @@ TEST(MpccScheduledContext, LateProofCannotBorrowCurrentGenerationForAnOldSolverS
     result.applied.certificate->suffix().source.source_context, scheduled::ContextUse::NewSource),
     scheduled::ContextReason::Compatible);
   EXPECT_EQ(request.observed.plan->solver_source_snapshot, original);
+}
+
+
+struct ScheduledDispatchFixture {
+  scheduled::ContextOwner owner;
+  scheduled::Request request{scheduled_request()};
+  std::shared_ptr<const applied::ScheduledCertificate> certificate;
+  vehicle::PublishedInputLedger ledger{256};
+  std::optional<vehicle::PublishedInputLedger::Snapshot> original_cursor;
+  std::vector<std::optional<vehicle::PublishedProgramSource>> prior_sources{2};
+  retained::Request fresh;
+  contract::MpccProblemContext context;
+
+  explicit ScheduledDispatchFixture(double last_prior_after = 1.075, bool initial_clock_floor = false) {
+    if (initial_clock_floor) {
+      request.preceding_packet_count = 0;
+      request.prior_program.commands = {{1.055,-3,
+        request.observed.publication_prefix->observation.commands.back().wire_steering_rad}};
+      request.prior_program.nanosecond_clock = vehicle::publication_nanosecond_clock(1.055,.025,.025);
+      request.planned_control_origin_sec = 1.14;
+      prior_sources.clear();
+      // The original frame is at1.05, not1.0. Add its real causal-floor
+      // predecessor and rebuild all dependent point-prefix values.
+      auto &observed = request.observed;
+      auto observation = observed.publication_prefix->observation;
+      auto last = observation.commands.back(); last.published_sec = 1.05;
+      observation.commands.push_back(last);
+      auto prediction = vehicle::predict_prospective_publication(observation,
+        observed.publication_prefix->proposed_packet, observed.plan->execution_artifact->vehicle_model);
+      if (!prediction) throw std::runtime_error("causal predecessor source prefix unavailable");
+      const auto &origin = prediction->control_origin;
+      observed.control_pose = {origin.x_m,origin.y_m,origin.yaw_rad};
+      observed.control_origin_physical_progress_m = origin.x_m;
+      observed.current_speed_mps = prediction->current.forward_velocity_mps;
+      observed.control_origin_speed_mps = origin.forward_velocity_mps;
+      observed.current_time_steering_rad = prediction->current.tire_steering_rad;
+      observed.current_steering_rad = origin.desired_steering_rad;
+      observed.current_response_steering_rad = origin.tire_steering_rad;
+      observed.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+      observed.current_yaw_rate_radps = origin.yaw_rate_radps;
+      observed.previous_published_command_age_sec = 0;
+      observed.measured_to_control_path.clear(); observed.measured_to_control_elapsed_sec.clear();
+      for (const auto &sample : prediction->current_to_control) {
+        observed.measured_to_control_path.push_back({sample.state.x_m,sample.state.y_m,sample.state.yaw_rad});
+        observed.measured_to_control_elapsed_sec.push_back(sample.source_sec-observed.now_sec);
+      }
+      observed.publication_prefix = std::move(prediction);
+    }
+    attach_synthetic_source_generation(request, owner.capture());
+    const auto proof_result = scheduled::evaluate(request);
+    certificate = proof_result.applied.certificate;
+    if (!certificate) throw std::runtime_error(std::string{"dispatch fixture certificate unavailable/"} +
+      retained::to_string(proof_result.reason) + "/physical:" + std::to_string(static_cast<int>(proof_result.applied.reason)) +
+      "/program:" + std::to_string(static_cast<int>(proof_result.applied.program_reason)));
+    for (const auto &packet : certificate->tube().observation.commands) {
+      const double raw = initial_clock_floor && packet.published_sec == 1.05 ? 1.04 : packet.published_sec;
+      if (!ledger.record(packet, raw, raw, 2))
+        throw std::runtime_error("dispatch fixture initial ledger unavailable");
+    }
+    original_cursor = ledger.snapshot();
+    for (std::size_t i = 0; i < request.preceding_packet_count; ++i) {
+      const auto &packet = request.prior_program.commands[i];
+      if (!ledger.record(packet, packet.published_sec, i == 1 ? last_prior_after : packet.published_sec, 2))
+        throw std::runtime_error("dispatch fixture prior send unavailable");
+    }
+    if (initial_clock_floor) {
+      fresh = certificate->nominal()->observed();
+      fresh.now_sec = 1.055; fresh.control_origin_sec = 1.095; fresh.decision_id++;
+      fresh.publication_prefix->observation.now_sec = fresh.now_sec;
+      fresh.publication_prefix->observation.control_origin_sec = fresh.control_origin_sec;
+      fresh.obstacles.generation++; fresh.obstacles.observed_sec = fresh.now_sec;
+    } else {
+      fresh = scheduled_fresh_world(*certificate);
+    }
+    bind_next(0);
+  }
+  void bind_next(std::size_t index) {
+    auto observation = fresh.publication_prefix->observation;
+    observation.commands = ledger.history();
+    auto packet = certificate->suffix().program.commands.at(
+      std::min(index, certificate->suffix().program.commands.size()-1));
+    packet.published_sec = fresh.now_sec;
+    auto prediction = vehicle::predict_prospective_publication(observation, packet,
+      fresh.plan->execution_artifact->vehicle_model);
+    if (!prediction) throw std::runtime_error("dispatch fixture current packet prefix unavailable");
+    const auto &origin = prediction->control_origin;
+    fresh.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+    fresh.control_origin_physical_progress_m = origin.x_m;
+    fresh.current_speed_mps = prediction->current.forward_velocity_mps;
+    fresh.control_origin_speed_mps = origin.forward_velocity_mps;
+    fresh.current_time_steering_rad = prediction->current.tire_steering_rad;
+    fresh.current_steering_rad = origin.desired_steering_rad;
+    fresh.current_response_steering_rad = origin.tire_steering_rad;
+    fresh.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+    fresh.current_yaw_rate_radps = origin.yaw_rate_radps;
+    fresh.measured_to_control_path.clear(); fresh.measured_to_control_elapsed_sec.clear();
+    for (const auto &sample : prediction->current_to_control) {
+      fresh.measured_to_control_path.push_back({sample.state.x_m,sample.state.y_m,sample.state.yaw_rad});
+      fresh.measured_to_control_elapsed_sec.push_back(sample.source_sec-fresh.now_sec);
+    }
+    fresh.previous_published_command_age_sec = fresh.now_sec-observation.commands.back().published_sec;
+    fresh.publication_prefix = std::move(prediction);
+    context = certificate->suffix().source.source_context;
+    context.decision_id = fresh.decision_id; context.observation_generation++;
+    context = contract::seal_problem_context(context);
+  }
+  scheduled::DispatchResult prepare(std::size_t sent = 0) {
+    return scheduled::prepare_dispatch(certificate, fresh, context, owner.capture(),
+      ledger, *original_cursor, prior_sources, sent);
+  }
+};
+
+TEST(MpccScheduledDispatch, RetainsOriginalPhysicalSerializationWitnessesWithTheWireTail)
+{
+  ScheduledDispatchFixture f;
+  const auto &suffix = f.certificate->suffix();
+  ASSERT_EQ(suffix.physical_steering_rad.size(), suffix.program.commands.size());
+  ASSERT_FALSE(suffix.physical_steering_rad.empty());
+  const double gain = f.request.observed.plan->execution_artifact->vehicle_model.steering_wire_gain;
+  for (std::size_t index = 0; index < suffix.physical_steering_rad.size(); ++index)
+    EXPECT_DOUBLE_EQ(multi_purpose_mpc_ros::mpcc_wire_command::steering(suffix.physical_steering_rad[index], gain),
+      suffix.program.commands[index].wire_steering_rad);
+  EXPECT_DOUBLE_EQ(suffix.physical_steering_rad.front(),
+    f.certificate->nominal()->proof().terminal_stop_actuation_samples.front().end_steering_rad);
+}
+
+TEST(MpccScheduledDispatch, BindsCurrentDecisionAndStrictRawPublicationWindow)
+{
+  ScheduledDispatchFixture f; const auto result=f.prepare();
+  ASSERT_TRUE(result.candidate) << static_cast<int>(result.reason) << '/' << static_cast<int>(result.current.reason);
+  const auto &candidate=*result.candidate; const auto &packet=candidate.packet();
+  EXPECT_EQ(candidate.source().decision_id, f.certificate->suffix().decision_id);
+  EXPECT_EQ(candidate.dispatch_decision_id(), f.fresh.decision_id);
+  EXPECT_NE(candidate.source().decision_id, candidate.dispatch_decision_id());
+  const auto before=[&](double clock, std::uint64_t id, double acc, double steer) {
+    return candidate.matches_before_publication(f.ledger, f.owner.capture(), id,1.1,clock,acc,steer);
+  };
+  EXPECT_TRUE(before(1.1,f.fresh.decision_id,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_FALSE(before(1.099999999,f.fresh.decision_id,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_FALSE(before(1.125000001,f.fresh.decision_id,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_FALSE(before(1.1,f.fresh.decision_id+1,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+  EXPECT_FALSE(before(1.1,f.fresh.decision_id,packet.wire_acceleration_mps2+1,packet.wire_steering_rad));
+  EXPECT_FALSE(before(1.1,f.fresh.decision_id,packet.wire_acceleration_mps2,
+    std::nextafter(static_cast<float>(packet.wire_steering_rad),INFINITY)));
+  ASSERT_TRUE(f.ledger.record(packet,1.1,1.105,2,candidate.source()));
+  EXPECT_TRUE(candidate.matches_after_publication(f.ledger,f.owner.capture(),1.1));
+  EXPECT_FALSE(before(1.105,f.fresh.decision_id,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+}
+
+TEST(MpccScheduledDispatch, ActualLateMissingExtraWrongSourceOrRevokedSendCannotCommit)
+{
+  for(int variant=0;variant<6;++variant) {
+    SCOPED_TRACE(variant); ScheduledDispatchFixture f; const auto result=f.prepare(); ASSERT_TRUE(result.candidate);
+    const auto &candidate=*result.candidate; auto source=candidate.source(); const auto packet=candidate.packet();
+    if(variant==0) source.packet_index++;
+    if(variant!=1) { ASSERT_TRUE(f.ledger.record(packet,1.1,variant==2?1.125000001:1.1,2,source)); }
+    if(variant==3) { ASSERT_TRUE(f.ledger.record(packet,1.1,1.1,2,source)); }
+    if(variant==4) f.owner.invalidate();
+    if(variant==5) f.ledger.reset();
+    EXPECT_FALSE(candidate.matches_after_publication(f.ledger,f.owner.capture(),1.1));
+  }
+}
+
+TEST(MpccScheduledDispatch, CurrentWorldAndActualPrefixAreMandatoryBeforePreparingAPacket)
+{
+  ScheduledDispatchFixture f;
+  auto changed=f.fresh; changed.publication_prefix->proposed_packet.wire_acceleration_mps2+=1;
+  EXPECT_EQ(scheduled::prepare_dispatch(f.certificate,changed,f.context,f.owner.capture(),f.ledger,
+    *f.original_cursor,f.prior_sources,0).reason, scheduled::DispatchReason::InvalidPacket);
+  EXPECT_FALSE(f.prepare(1).candidate);
+  changed=f.fresh; const auto &body=f.certificate->nominal()->forecast().publication_state;
+  changed.obstacles.obstacles.push_back({"new-contact",{body.x_m,body.y_m,0,0,.1}});
+  const auto conflict=scheduled::prepare_dispatch(f.certificate,changed,f.context,f.owner.capture(),f.ledger,
+    *f.original_cursor,f.prior_sources,0);
+  EXPECT_FALSE(conflict.candidate); EXPECT_EQ(conflict.current.reason,scheduled::CurrentReason::WorldRejected);
+  const auto ready=f.prepare(); ASSERT_TRUE(ready.candidate);
+  f.owner.invalidate(); const auto &packet=ready.candidate->packet();
+  EXPECT_FALSE(ready.candidate->matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
+    1.1,1.1,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+}
+
+TEST(MpccScheduledDispatch, SlewUsesActualPreviousCompletionRatherThanNominalPeriod)
+{
+  ScheduledDispatchFixture f(1.099999999);
+  const auto result=f.prepare(); ASSERT_TRUE(result.candidate) << static_cast<int>(result.reason) << '/' << static_cast<int>(result.current.reason);
+  const auto &candidate=*result.candidate;const auto &packet=candidate.packet();
+  const double gain=f.fresh.plan->execution_artifact->vehicle_model.steering_wire_gain;
+  ASSERT_GT(std::abs(packet.wire_steering_rad-f.ledger.latest_transaction()->nominal.wire_steering_rad)/gain,
+    f.fresh.plan->execution_artifact->physical_global_tolerance);
+  EXPECT_FALSE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,1.1,1.1,
+    packet.wire_acceleration_mps2,packet.wire_steering_rad));
+}
+
+TEST(MpccScheduledDispatch, NextRealSuffixSlotKeepsOriginalProofAndRequiresTheFirstActualSend)
+{
+  ScheduledDispatchFixture f;const auto first=f.prepare(); ASSERT_TRUE(first.candidate);
+  const auto fingerprint=f.certificate->tube().context_fingerprint;
+  ASSERT_TRUE(f.ledger.record(first.candidate->packet(),1.1,1.1,2,first.candidate->source()));
+  f.fresh=scheduled_fresh_world(*f.certificate,1.125,true);f.bind_next(1);
+  f.context.stage_geometry_id++;f.context=contract::seal_problem_context(f.context);
+  const auto next=f.prepare(1);ASSERT_TRUE(next.candidate) << static_cast<int>(next.reason) << '/' << static_cast<int>(next.current.reason);
+  EXPECT_EQ(next.candidate->certificate(),f.certificate);
+  EXPECT_EQ(next.candidate->certificate()->tube().context_fingerprint,fingerprint);
+  EXPECT_EQ(next.candidate->source().packet_index,1U);
+  EXPECT_DOUBLE_EQ(next.candidate->packet().published_sec,1.125);
+  const auto &packet=next.candidate->packet();
+  EXPECT_TRUE(next.candidate->matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,1.125,1.125,
+    packet.wire_acceleration_mps2,packet.wire_steering_rad));
+}
+
+
+TEST(MpccScheduledDispatch, NominalProofAlreadyBoundsCausalPredecessorWhenRawClockLags)
+{
+  ScheduledDispatchFixture f(1.075,true);
+  const auto prepared=f.prepare(); ASSERT_TRUE(prepared.candidate) << static_cast<int>(prepared.reason) << '/' << static_cast<int>(prepared.current.reason);
+  const auto &candidate=*prepared.candidate; const auto &packet=candidate.packet();
+  const auto &previous=*f.ledger.latest_transaction();
+  const auto &execution=*f.fresh.plan->execution_artifact;
+  const double step=std::abs(packet.wire_steering_rad-previous.nominal.wire_steering_rad)/execution.vehicle_model.steering_wire_gain;
+  const double tolerance=execution.physical_global_tolerance;
+  ASSERT_DOUBLE_EQ(previous.after_clock_sec,1.04);
+  ASSERT_DOUBLE_EQ(previous.published.published_sec,1.05);
+  const double causal_bound=execution.maximum_abs_steering_rate_radps*(1.055-previous.published.published_sec)+tolerance;
+  const double raw_bound=execution.maximum_abs_steering_rate_radps*(1.055-previous.after_clock_sec)+tolerance;
+  ASSERT_LT(causal_bound,raw_bound);
+  // The first-packet builder already limits this example to the recorded
+  // causal predecessor. The suspected unsafe first packet was not reproduced.
+  ASSERT_LE(step,causal_bound);
+  EXPECT_TRUE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,1.055,1.055,
+    packet.wire_acceleration_mps2,packet.wire_steering_rad));
 }

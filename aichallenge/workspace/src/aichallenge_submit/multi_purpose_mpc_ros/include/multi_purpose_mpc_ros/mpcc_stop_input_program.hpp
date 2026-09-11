@@ -38,6 +38,10 @@ struct Prepared {
   /// A continuous reference sampled at publication boundaries is a different
   /// physical input law. Do not label its old point trajectory as executed.
   bool resampled_controls{false};
+  /// Original physical values which produced each retained wire packet through
+  /// the two float32 serialization steps. Trim together with duplicate tails;
+  /// never recover an immutable actuation witness by dividing a wire value.
+  std::vector<double> physical_steering_rad{};
 };
 
 enum class Reason {

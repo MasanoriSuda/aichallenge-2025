@@ -151,3 +151,9 @@ Source-context producer checkpoint (baselined94aa556):
 - [x] R270の11失敗→R271全30合格。Buildr79全26package/testsr68全2510記録/64group合格。
 - [ ] Mission geometry/予定intent commit、post-publication観測、単一dispatchと旧authority退役。
 - [ ] FinalHEADのM4–M6・提出eval。r44公開期限失敗は未解決。
+
+C5final packet boundary (baseline73049f17):
+- [x] 原操舵witnessを保持し、現在証拠から次の予定packetを固定する。
+- [x] 実送信前後のclock/source/index/ledger/slewと失効を回帰検証。R276全127native、buildr81/testsr70全2517記録合格。
+- [ ] 実送信後の観測・Follow原点、worker/dispatcherを接続し旧同期authorityを同時退役。
+- [ ] 全M4–M6と提出eval。現在nodeはまだ旧同期authority。

@@ -1,0 +1,85 @@
+#pragma once
+
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_scheduled.hpp"
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+
+struct DispatchResult;
+
+/// Immutable candidate from one current observation and authenticated ledger
+/// prefix. It permits no send until matches_before_publication() succeeds at
+/// the actual publisher boundary. Only the single control thread may inspect
+/// the live ledger; a worker must never own this object as publication authority.
+class DispatchCandidate {
+public:
+  const vehicle::PublishedCommand &packet() const noexcept { return packet_; }
+  double physical_steering_rad() const noexcept { return physical_steering_rad_; }
+  double predicted_speed_mps() const noexcept { return predicted_speed_mps_; }
+  std::uint64_t dispatch_decision_id() const noexcept { return dispatch_decision_id_; }
+  const vehicle::PublishedProgramSource &source() const noexcept { return source_; }
+  const std::shared_ptr<const applied::ScheduledCertificate> &certificate() const noexcept { return certificate_; }
+
+  /// Check unchanged authenticated history, generation, decision, exact wire,
+  /// strict integer window and steering slew from the predecessor's recorded
+  /// publication epoch (including its existing causal floor). No causal floor, extra tolerance or retiming.
+  bool matches_before_publication(
+    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
+    std::uint64_t dispatch_decision_id, double decision_clock_sec, double before_clock_sec,
+    double wire_acceleration_mps2, double wire_steering_rad) const;
+
+  /// The one actual send must be in the ledger with this intended source and
+  /// both valid raw endpoints. Failure is a detected violation, never a reason
+  /// to erase the send or to authorize it retrospectively.
+  bool matches_after_publication(
+    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
+    double decision_clock_sec) const;
+
+private:
+  DispatchCandidate() = default;
+  friend DispatchResult prepare_dispatch(
+    std::shared_ptr<const applied::ScheduledCertificate>, const retained::Request &,
+    const retained::contract::MpccProblemContext &, const ContextSnapshot &,
+    const vehicle::PublishedInputLedger &, const vehicle::PublishedInputLedger::Snapshot &,
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t);
+  bool clock_and_slew_match(double decision_clock_sec, double before_clock_sec,
+                           double after_clock_sec) const noexcept;
+  std::shared_ptr<const applied::ScheduledCertificate> certificate_;
+  std::optional<vehicle::PublishedInputLedger::Snapshot> ledger_cursor_;
+  ContextSnapshot current_generation_;
+  vehicle::PublishedCommand packet_;
+  vehicle::PublishedProgramSource source_;
+  std::size_t packet_index_{};
+  std::uint64_t dispatch_decision_id_{};
+  double observed_sec_{};
+  double physical_steering_rad_{};
+  double predicted_speed_mps_{};
+  double previous_wire_steering_rad_{};
+  double previous_publication_sec_{};
+};
+
+enum class DispatchReason {
+  Candidate,
+  MissingCertificate,
+  InvalidPacket,
+  CurrentEvidenceRejected,
+  InvalidPredecessor,
+  RestExpired,
+};
+struct DispatchResult {
+  DispatchReason reason{DispatchReason::MissingCertificate};
+  CurrentCheck current;
+  std::shared_ptr<const DispatchCandidate> candidate;
+};
+
+/// The next index equals the number of actual suffix sends, verified against
+/// the full original cursor and preceding sources. The fresh point prefix must
+/// consider that exact next wire payload, not a newly sampled source command.
+DispatchResult prepare_dispatch(
+  std::shared_ptr<const applied::ScheduledCertificate> certificate,
+  const retained::Request &fresh, const retained::contract::MpccProblemContext &fresh_problem,
+  const ContextSnapshot &current_generation, const vehicle::PublishedInputLedger &ledger,
+  const vehicle::PublishedInputLedger::Snapshot &original_cursor,
+  const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
+  std::size_t already_published_suffix_packets);
+
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

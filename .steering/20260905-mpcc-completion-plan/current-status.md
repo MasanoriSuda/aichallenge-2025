@@ -20,7 +20,14 @@ C4 APIに加え、実solver入力へgenerationを保持し、予定証明はそ�
 [入力元と取消しの証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-context-producer-design.md)。
 Snapshotとscheduled RequestのABIが変わったため、過去の単独replayは再compileが必要。
 
-C5はまだ未接続。Mission geometryと予定intent commit、実送信後の新しい観測・world・
+C5の送信境界APIは、現在証拠で次packetを固定し、実送信前後のledger・世代・float32・
+integer window・操舵速度を検査する。R276全127native、buildr81全26package、testsr70全
+2517記録/64groupで失敗0。元操舵witnessを保持するためPrepared ABIが変わり、過去の
+単独replayは再compileが必要。追加時計例のunsafe packet仮説は既存のnominal制限により
+反証され、実走原因とはしていない。
+[送信境界の証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-dispatch-boundary-design.md)。
+
+C5のworkerとnode dispatcherはまだ未接続。Mission geometryと予定intent commit、実送信後の新しい観測・world・
 Follow原点を結合し、単一worker/dispatcherへ移す。旧同期normal/Stop/GateA/previous-intent
 joinは同じpromotion sliceで退役する。新しいauthorityや走行合格はまだ主張しない。
 実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、

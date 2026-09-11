@@ -4647,3 +4647,10 @@ generation伝搬、単一dispatcherでの実時計・操舵・最終packet照合
 現状は生成元の接続までで、予定dispatchへのauthority切替は未完。実送信後の観測生成、
 mission geometry/予定intent採用、単一worker/dispatcherと旧同期authorityの同時退役が残る。
 [生成元・取消しの設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-context-producer-design.md)。
+
+
+予定送信境界は、元の操舵値と正確なwire packetを保持し、現在証拠と実送信台帳で次indexを
+固定する。実送信前後に世代・packet・元のinteger window・実公開時刻からの操舵速度を
+再検査する。現在decisionと元の証明job decisionは分離し、送信後の違反も履歴に残す。
+このAPIはまだnode未接続で、旧同期authorityの切替は行っていない。
+[予定送信境界の設計とテスト](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-dispatch-boundary-design.md)。

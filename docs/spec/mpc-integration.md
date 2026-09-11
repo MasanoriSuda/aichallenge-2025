@@ -4631,3 +4631,11 @@ reset・履歴脱落を不透明なsnapshotで照合する。意図したsource�
 単独で公開を許可しない。可変設定・参照軌道・mission等の採用contextとC5は未接続。
 Followの現在予測は物理的なcontrol-originからの距離を使い、waypointのlagを加えない。
 [設計・反例・検証範囲](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-current-evidence-design.md)。
+
+
+予定証明の採用検査は、solver入力時の失効可能generationを保持し、現在のmodel・intent・
+mission・target・side・horizon・schemaを照合する。単一Requestの原観測・実送信台帳・
+現在worldをまとめて検査し、台帳で認証された新suffixの実送信がある場合のみ、継続中の
+source windowとして扱う。これも必要条件であり、nodeの全変更元の失効、solverからの
+generation伝搬、単一dispatcherでの実時計・操舵・最終packet照合は未接続。
+[採用境界の設計とテスト](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-adoption-boundary-design.md)。

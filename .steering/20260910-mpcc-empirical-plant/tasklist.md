@@ -123,3 +123,12 @@
 - [ ] Live Followは記録0件で未検証。全intent/Stop/rest/restartはC5後に再開。
 - [ ] 可変param・参照軌道・外部境界・session等を含む原子的C4採用context。
 - [ ] C5単一非同期dispatchの接続と旧同期authorityの同時退役、全M4–M6。
+
+
+Scheduled adoption API (baseline48b6623b):
+- [x] 元solver input用の失効可能なgenerationを予定proofへ保持する境界を追加。
+- [x] source/current semantic条件と、実送信照合に基づく新規/継続条件を分離。
+- [x] 同一Requestの観測・履歴・context・現在worldを一つの必要条件APIへ集約。
+- [x] R268全119native、buildr76全26package、testsr65全2509記録/64groupで失敗0。
+- [ ] 実solver input→candidate/Store→scheduled jobへgenerationを伝搬。
+- [ ] 全live変更元の失効・post-publication観測生成・C5単一dispatchと旧authority退役。

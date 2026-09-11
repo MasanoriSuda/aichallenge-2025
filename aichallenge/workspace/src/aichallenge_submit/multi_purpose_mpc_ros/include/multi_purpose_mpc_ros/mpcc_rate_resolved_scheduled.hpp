@@ -2,11 +2,49 @@
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_publication_ledger.hpp"
+#include <atomic>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
 namespace retained = mpcc_rate_resolved_retained_revalidation;
 namespace vehicle = mpcc_vehicle_model;
 namespace applied = mpcc_rate_resolved_applied_program;
+
+class ContextOwner;
+
+/// Captured with solver input, before work starts. A live owner invalidates its
+/// generation BEFORE policy/reference/session mutations, including partial
+/// failures. Shared ownership prevents pointer reuse from reviving old work.
+class ContextSnapshot {
+public:
+  bool valid() const noexcept { return generation_ && generation_->active.load(); }
+  bool same_generation(const ContextSnapshot &other) const noexcept {
+    return valid() && other.valid() && generation_ == other.generation_;
+  }
+private:
+  friend class ContextOwner;
+  struct Generation { mutable std::atomic<bool> active{true}; };
+  std::shared_ptr<const Generation> generation_;
+};
+
+/// One control-thread owner; workers receive only snapshots. Invalidation never
+/// allocates. A later capture creates a new generation even if values reverted.
+class ContextOwner {
+public:
+  ContextOwner() = default;
+  ~ContextOwner() { invalidate(); }
+  ContextOwner(const ContextOwner &) = delete;
+  ContextOwner &operator=(const ContextOwner &) = delete;
+  ContextSnapshot capture() {
+    if (!current_.valid()) current_.generation_ = std::make_shared<const ContextSnapshot::Generation>();
+    return current_;
+  }
+  void invalidate() noexcept {
+    if (current_.generation_) current_.generation_->active.store(false);
+    current_.generation_.reset();
+  }
+private:
+  ContextSnapshot current_;
+};
 
 /// Exact frame used by the captured live progress projection. It must reproduce
 /// the original request's progress; a guessed nearest frame is not sufficient.
@@ -22,6 +60,10 @@ struct Request {
   std::size_t preceding_packet_count{};
   double planned_control_origin_sec{};
   ProgressFrame progress_frame;
+  /// Must originate from this plan's SOLVER input capture, not be assigned to
+  /// an old plan using the present generation after solving. Empty is allowed
+  /// for numerical diagnostics; such a certificate cannot pass current context.
+  ContextSnapshot source_context{};
 };
 
 struct Result;
@@ -37,6 +79,7 @@ public:
   const retained::Proof &proof() const noexcept { return proof_; }
   const vehicle::ScheduledPublicationPrediction &forecast() const noexcept { return forecast_; }
   double original_follow_reference_progress_m() const noexcept { return original_follow_reference_progress_m_; }
+  const ContextSnapshot &source_context() const noexcept { return source_context_; }
 
 private:
   NominalProof() = default;
@@ -46,6 +89,7 @@ private:
   retained::Proof proof_;
   vehicle::ScheduledPublicationPrediction forecast_;
   double original_follow_reference_progress_m_{};
+  ContextSnapshot source_context_;
 };
 
 struct Result {
@@ -128,5 +172,36 @@ struct CurrentWorldCheck {
 /// also pass before any actual dispatch.
 CurrentWorldCheck recheck_remaining_world(
   const applied::ScheduledCertificate &certificate, const retained::Request &fresh);
+
+enum class ContextUse { NewSource, PublishedRemainder };
+enum class ContextReason { Compatible, MissingGeneration, GenerationChanged, InvalidProblem, SemanticChanged, GeometryChanged };
+/// Necessary context gate, not an executable token. The node must bind the
+/// source generation to actual solver input and cover ALL mutable policy/course/
+/// session producers. Fresh component/ledger/world and actual clock/slew gates
+/// remain mandatory. PublishedRemainder is only for a programme already sent:
+/// its immutable source window advances under the fresh physical recheck, while
+/// a newly adopted source must also match current stage geometry exactly.
+ContextReason check_current_context(
+  const applied::ScheduledCertificate &certificate, const ContextSnapshot &fresh_generation,
+  const retained::contract::MpccProblemContext &fresh, ContextUse use);
+
+enum class CurrentReason { Compatible, InvalidFrame, ContextRejected, MeasurementRejected, PrefixRejected, WorldRejected };
+struct CurrentCheck {
+  CurrentReason reason{CurrentReason::InvalidFrame};
+  ContextReason context{ContextReason::InvalidProblem};
+  MeasurementCheck measurement;
+  PrefixReason prefix{PrefixReason::InvalidDeclaredPrefix};
+  CurrentWorldCheck world;
+};
+/// Compose necessary evidence from ONE current request and its own observation.
+/// Only authenticated suffix sends allow the published-remainder context rule;
+/// callers cannot label a new source as already published. This grants no send
+/// permission: the single dispatcher still owns actual clock/slew/packet checks.
+CurrentCheck check_current_evidence(
+  const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
+  const retained::contract::MpccProblemContext &fresh_problem, const ContextSnapshot &fresh_generation,
+  const vehicle::PublishedInputLedger &ledger, const vehicle::PublishedInputLedger::Snapshot &original_cursor,
+  const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
+  std::size_t already_published_suffix_packets);
 
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

@@ -13,6 +13,12 @@ Dev2-r44はD1判断892で送信前約10ms超過、905で送信後約5ms超過し
 その後のepoch不一致はteardown開始後で、最初の原因ではない。コンテナ停止・ユーザー
 成果物復元済み。公開履歴と原観測を固定し、追加の確認待ちなしで接続実装を続ける。
 
+追加のC4境界APIは、元solver inputの失効可能generationと現在の意味的条件を照合し、
+同一Requestの全証拠を一つの必要条件チェックへ集約。R268全119native、buildr76全
+26package、testsr65全2509記録/64groupで失敗0。現nodeへgeneration伝搬・失効hook・
+新規dispatcherはまだ接続していない。歴史的なC3単独replayバイナリは新layoutで再buildが必要。
+[採用境界の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-adoption-boundary-design.md)。
+
 可変ROS parameter、参照軌道、外部境界を含むC4採用contextとC5非同期単一dispatchは
 未完。旧同期authorityの退役は同じ接続sliceで行う。r43/r44実公開期限失敗は未解決。
 実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、

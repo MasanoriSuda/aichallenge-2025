@@ -75,3 +75,9 @@ Existing tactical epoch invalidation handles mission/reset paths but is not yet
 proved complete for these normal-context sources. Audit session/admin/clock,
 Recovery and shutdown before reusing it. These findings are integration design,
 not authority changes in this slice.
+
+
+Context revocation and the composite necessary evidence API are specified in
+[adoption boundary](scheduled-adoption-boundary-design.md). They remain detached
+from the node's actual source-generation and mutation producers. No authority
+is inferred from their native tests.

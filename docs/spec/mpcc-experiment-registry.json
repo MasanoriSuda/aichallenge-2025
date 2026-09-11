@@ -1069,6 +1069,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-current-evidence.json",
       "replay_ready": true,
       "reason": "Current observation/prefix/world necessary gates and physical Follow origin counterexamples. C4full context/C5and integrated acceptance pending."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-adoption-boundary",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-adoption-boundary-evidence.json",
+      "replay_ready": true,
+      "reason": "Revocable source context and composed necessary current evidence; live producer/C5integration pending."
     }
   ],
   "experiments": [
@@ -12873,6 +12879,70 @@
         "No diagnostic promoted to authority."
       ],
       "revisit_condition": "C4full adoption context/C5single dispatcher or a newly reproduced causal defect; then sameHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-adoption-boundary-r266",
+      "baseline_commit": "48b6623bbb19f0a01da22e8c6591671e895af92e",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-adoption-boundary"
+      ],
+      "hypothesis": "Revoked/cross-session/changed-semantic inputs reject without changing physical population",
+      "changed_dimension": "Opaque source context revocation and composed measurement/prefix/context/world checks",
+      "result": "accepted",
+      "reason": "118tests pass; explicit invalidation also revokes old snapshot copies and owner destruction. Warning about omitted default field corrected.",
+      "production_impact": "Necessary API only; source capture/mutation producers and C5single dispatcher remain unconnected.",
+      "deleted_code": [
+        "No existing normal authority replaced yet; replacement is mandatory at C5promotion."
+      ],
+      "revisit_condition": "New failing invariant/changed inputs or C5integration; then finalHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-adoption-boundary-r267",
+      "baseline_commit": "48b6623bbb19f0a01da22e8c6591671e895af92e",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-adoption-boundary"
+      ],
+      "hypothesis": "The synthetic post-send observation matches actual last-issued steering",
+      "changed_dimension": "Opaque source context revocation and composed measurement/prefix/context/world checks",
+      "result": "rejected",
+      "reason": "118/119pass; current measurement correctly rejects the fixture whose history changed without updating last-issued angle.",
+      "production_impact": "Necessary API only; source capture/mutation producers and C5single dispatcher remain unconnected.",
+      "deleted_code": [
+        "No existing normal authority replaced yet; replacement is mandatory at C5promotion."
+      ],
+      "revisit_condition": "New failing invariant/changed inputs or C5integration; then finalHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-adoption-boundary-r268",
+      "baseline_commit": "48b6623bbb19f0a01da22e8c6591671e895af92e",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-adoption-boundary"
+      ],
+      "hypothesis": "One fresh frame composes all required evidence and cannot fake published continuation",
+      "changed_dimension": "Opaque source context revocation and composed measurement/prefix/context/world checks",
+      "result": "accepted",
+      "reason": "119/119pass after rebuilding fresh prefix and dependent fields. Unsent suffix count cannot bypass stage geometry; actual ledger send can select remaining-window context rule.",
+      "production_impact": "Necessary API only; source capture/mutation producers and C5single dispatcher remain unconnected.",
+      "deleted_code": [
+        "No existing normal authority replaced yet; replacement is mandatory at C5promotion."
+      ],
+      "revisit_condition": "New failing invariant/changed inputs or C5integration; then finalHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-adoption-boundary-r76-r65",
+      "baseline_commit": "48b6623bbb19f0a01da22e8c6591671e895af92e",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-adoption-boundary"
+      ],
+      "hypothesis": "Current adoption boundary compiles and passes package checks",
+      "changed_dimension": "Opaque source context revocation and composed measurement/prefix/context/world checks",
+      "result": "accepted",
+      "reason": "26packages/2509records/64groups,0errors/failures/skips. No live authority change.",
+      "production_impact": "Necessary API only; source capture/mutation producers and C5single dispatcher remain unconnected.",
+      "deleted_code": [
+        "No existing normal authority replaced yet; replacement is mandatory at C5promotion."
+      ],
+      "revisit_condition": "New failing invariant/changed inputs or C5integration; then finalHEAD M4-M6acceptance."
     }
   ]
 }

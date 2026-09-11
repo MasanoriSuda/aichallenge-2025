@@ -3838,10 +3838,15 @@ TEST(MpccFollowOriginBoundary, StopCannotBorrowWaypointOffsetAsExtraHardGap)
   }
 }
 
-retained::Request scheduled_fresh_world(const applied::ScheduledCertificate &certificate, double now = 1.1)
+retained::Request scheduled_fresh_world(const applied::ScheduledCertificate &certificate, double now = 1.1,
+  bool suffix_published = false)
 {
   auto fresh = certificate.nominal()->observed();
   auto observation = scheduled_fresh_observation(certificate);
+  if (suffix_published) {
+    observation.commands.push_back(certificate.suffix().program.commands.front());
+    observation.initial.state.desired_steering_rad = certificate.nominal()->proof().actuation.steering_rad;
+  }
   observation.now_sec = now; observation.control_origin_sec = now + .04;
   fresh.now_sec = now; fresh.control_origin_sec = observation.control_origin_sec;
   fresh.decision_id++;
@@ -3964,4 +3969,140 @@ TEST(MpccScheduledCurrentWorld, BindsFreshFollowForecastAndCircularPhysicalOrigi
   EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidFollowObservation);
   fresh = original; fresh.obstacles.observed_sec = original.now_sec + .01;
   EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidContext);
+}
+
+TEST(MpccScheduledContext, RevokedSourceCannotReviveWithOldCopiesOrRestoredValues)
+{
+  scheduled::ContextOwner owner;
+  auto request = scheduled_request();
+  request.source_context = owner.capture();
+  const auto captured = request.source_context;
+  const auto result = scheduled::evaluate(request); ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  auto current = certificate.suffix().source.source_context;
+  current.decision_id++; current.observation_generation++;
+  current = contract::seal_problem_context(current);
+  EXPECT_EQ(scheduled::check_current_context(certificate, owner.capture(), current,
+    scheduled::ContextUse::NewSource), scheduled::ContextReason::Compatible);
+  scheduled::ContextOwner another_session;
+  EXPECT_EQ(scheduled::check_current_context(certificate, another_session.capture(), current,
+    scheduled::ContextUse::NewSource), scheduled::ContextReason::GenerationChanged);
+  owner.invalidate();
+  EXPECT_FALSE(captured.valid());
+  EXPECT_NE(scheduled::check_current_context(certificate, captured, current,
+    scheduled::ContextUse::NewSource), scheduled::ContextReason::Compatible);
+  // Identical field values after a policy/reference/reset round trip do not
+  // make work captured before that event current again.
+  EXPECT_NE(scheduled::check_current_context(certificate, owner.capture(), current,
+    scheduled::ContextUse::NewSource), scheduled::ContextReason::Compatible);
+  scheduled::ContextSnapshot stopped_owner;
+  { scheduled::ContextOwner session; stopped_owner = session.capture(); ASSERT_TRUE(stopped_owner.valid()); }
+  EXPECT_FALSE(stopped_owner.valid());
+}
+
+TEST(MpccScheduledContext, RequiresBoundGenerationAndCompleteCurrentSemanticIdentity)
+{
+  scheduled::ContextOwner owner;
+  const auto diagnostic = scheduled::evaluate(scheduled_request()); ASSERT_TRUE(diagnostic.applied.certificate);
+  EXPECT_EQ(scheduled::check_current_context(*diagnostic.applied.certificate, owner.capture(),
+    diagnostic.applied.certificate->suffix().source.source_context, scheduled::ContextUse::NewSource),
+    scheduled::ContextReason::MissingGeneration);
+  auto request = scheduled_request(contract::ControlIntent::Follow); request.source_context = owner.capture();
+  const auto result = scheduled::evaluate(request); ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  const auto original = certificate.suffix().source.source_context;
+  auto fresh = original; fresh.decision_id++; fresh.observation_generation++; fresh.target_obstacle_generation++;
+  fresh = contract::seal_problem_context(fresh);
+  EXPECT_EQ(scheduled::check_current_context(certificate, owner.capture(), fresh,
+    scheduled::ContextUse::NewSource), scheduled::ContextReason::Compatible);
+  for (int change = 0; change < 13; ++change) {
+    SCOPED_TRACE(change); fresh = original;
+    switch (change) {
+      case 0: fresh.intent = contract::ControlIntent::Cruise; break;
+      case 1: fresh.intent_generation++; break;
+      case 2: fresh.target_id = "d3"; break;
+      case 3: fresh.execution_side_sign = 1; break;
+      case 4: fresh.horizon_steps++; break;
+      case 5: fresh.formulation = contract::Formulation::SolverDerivedBypass; break;
+      case 6: fresh.vehicle_model_fingerprint++; break;
+      case 7: fresh.state_schema_id += "-changed"; break;
+      case 8: fresh.input_schema_id += "-changed"; break;
+      case 9: fresh.bounds_schema_id += "-changed"; break;
+      case 10: fresh.cost_schema_id += "-changed"; break;
+      case 11:
+        fresh.dynamic_obstacle_constraint_active = true; fresh.dynamic_obstacle_id = "d3";
+        fresh.dynamic_obstacle_generation = 7; fresh.dynamic_obstacle_side_sign = -1; break;
+      case 12: fresh.fingerprint++; break;
+    }
+    if (change != 12) fresh = contract::seal_problem_context(fresh);
+    for (auto use : {scheduled::ContextUse::NewSource, scheduled::ContextUse::PublishedRemainder})
+      EXPECT_NE(scheduled::check_current_context(certificate, owner.capture(), fresh, use),
+        scheduled::ContextReason::Compatible);
+  }
+}
+
+TEST(MpccScheduledContext, NewSourceGeometryAndPublishedWindowHaveDistinctObligations)
+{
+  scheduled::ContextOwner owner;
+  auto request = scheduled_request(); request.source_context = owner.capture();
+  const auto result = scheduled::evaluate(request); ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  auto fresh = certificate.suffix().source.source_context; fresh.stage_geometry_id++;
+  fresh = contract::seal_problem_context(fresh);
+  EXPECT_EQ(scheduled::check_current_context(certificate, owner.capture(), fresh,
+    scheduled::ContextUse::NewSource), scheduled::ContextReason::GeometryChanged);
+  // This necessary context result is not authority: the dispatcher must prove
+  // prior publication and every fresh physical/clock/slew condition separately.
+  EXPECT_EQ(scheduled::check_current_context(certificate, owner.capture(), fresh,
+    scheduled::ContextUse::PublishedRemainder), scheduled::ContextReason::Compatible);
+  EXPECT_EQ(scheduled::check_current_context(certificate, owner.capture(), fresh,
+    static_cast<scheduled::ContextUse>(-1)), scheduled::ContextReason::InvalidProblem);
+}
+
+TEST(MpccScheduledCurrentEvidence, BindsOneFrameAndRequiresEveryIndependentGate)
+{
+  scheduled::ContextOwner owner;
+  auto request = scheduled_request(); request.source_context = owner.capture();
+  const auto result = scheduled::evaluate(request); ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  vehicle::PublishedInputLedger ledger(256);
+  for (const auto &packet : certificate.tube().observation.commands)
+    ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2));
+  const auto cursor = ledger.snapshot(); ASSERT_TRUE(cursor);
+  const std::vector<std::optional<vehicle::PublishedProgramSource>> prior_sources(2);
+  for (std::size_t i = 0; i < 2; ++i) {
+    const auto &packet = request.prior_program.commands[i];
+    ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2));
+  }
+  auto fresh = scheduled_fresh_world(certificate);
+  auto context = certificate.suffix().source.source_context;
+  context.decision_id = fresh.decision_id; context.observation_generation++;
+  context = contract::seal_problem_context(context);
+  const auto check = [&] (const retained::Request &world, const contract::MpccProblemContext &problem, std::size_t sent = 0) {
+    return scheduled::check_current_evidence(certificate, world, problem, owner.capture(), ledger, *cursor, prior_sources, sent);
+  };
+  ASSERT_EQ(check(fresh, context).reason, scheduled::CurrentReason::Compatible);
+  auto changed = fresh; changed.decision_id++;
+  EXPECT_EQ(check(changed, context).reason, scheduled::CurrentReason::InvalidFrame);
+  changed = fresh; changed.publication_prefix->observation.now_sec += .001;
+  EXPECT_EQ(check(changed, context).reason, scheduled::CurrentReason::InvalidFrame);
+  changed = fresh; changed.publication_prefix->observation.initial.state.forward_velocity_mps += 1;
+  EXPECT_EQ(check(changed, context).reason, scheduled::CurrentReason::MeasurementRejected);
+  changed = fresh;
+  const auto &body = certificate.nominal()->forecast().publication_state;
+  changed.obstacles.obstacles.push_back({"new-contact", {body.x_m, body.y_m, 0, 0, .1}});
+  EXPECT_EQ(check(changed, context).reason, scheduled::CurrentReason::WorldRejected);
+  EXPECT_EQ(check(fresh, context, 1).reason, scheduled::CurrentReason::PrefixRejected);
+  auto changed_context = context; changed_context.stage_geometry_id++;
+  changed_context = contract::seal_problem_context(changed_context);
+  EXPECT_EQ(check(fresh, changed_context).reason, scheduled::CurrentReason::ContextRejected);
+  // A real authenticated first suffix send changes the context obligation;
+  // just passing sent=1 above could not bypass the new-source geometry gate.
+  const auto packet = certificate.suffix().program.commands.front();
+  const auto source = scheduled::scheduled_program_source(certificate, 0); ASSERT_TRUE(source);
+  ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2, source));
+  fresh = scheduled_fresh_world(certificate, 1.1, true);
+  EXPECT_EQ(check(fresh, changed_context, 1).reason, scheduled::CurrentReason::Compatible);
+  owner.invalidate();
+  EXPECT_EQ(check(fresh, changed_context, 1).reason, scheduled::CurrentReason::ContextRejected);
 }

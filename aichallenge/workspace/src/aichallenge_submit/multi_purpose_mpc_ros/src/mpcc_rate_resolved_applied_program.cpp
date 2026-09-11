@@ -876,3 +876,71 @@ CurrentWorldCheck recheck_remaining_world(
   return result;
 }
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+ContextReason check_current_context(
+    const applied::ScheduledCertificate &certificate, const ContextSnapshot &fresh_generation,
+    const retained::contract::MpccProblemContext &fresh, const ContextUse use) {
+  if (!certificate.nominal() || !certificate.nominal()->source_context().valid() || !fresh_generation.valid())
+    return ContextReason::MissingGeneration;
+  if (!certificate.nominal()->source_context().same_generation(fresh_generation))
+    return ContextReason::GenerationChanged;
+  const auto &source = certificate.suffix().source.source_context;
+  if (!retained::contract::problem_context_complete(source) ||
+      !retained::contract::problem_context_complete(fresh) ||
+      (use != ContextUse::NewSource && use != ContextUse::PublishedRemainder)) return ContextReason::InvalidProblem;
+  // Fresh observations are authenticated by the component/ledger/world gates.
+  // Their generations and decision ID necessarily change. They cannot change
+  // the selected problem's model, intent, mission, target, side or formulation.
+  if (fresh.intent != source.intent || fresh.intent_generation != source.intent_generation ||
+      fresh.target_id != source.target_id || fresh.execution_side_sign != source.execution_side_sign ||
+      fresh.dynamic_obstacle_constraint_active != source.dynamic_obstacle_constraint_active ||
+      fresh.dynamic_obstacle_id != source.dynamic_obstacle_id ||
+      fresh.dynamic_obstacle_side_sign != source.dynamic_obstacle_side_sign ||
+      fresh.horizon_steps != source.horizon_steps || fresh.formulation != source.formulation ||
+      fresh.vehicle_model_fingerprint != source.vehicle_model_fingerprint ||
+      fresh.state_schema_id != source.state_schema_id || fresh.input_schema_id != source.input_schema_id ||
+      fresh.bounds_schema_id != source.bounds_schema_id || fresh.cost_schema_id != source.cost_schema_id)
+    return ContextReason::SemanticChanged;
+  if (use == ContextUse::NewSource && fresh.stage_geometry_id != source.stage_geometry_id)
+    return ContextReason::GeometryChanged;
+  return ContextReason::Compatible;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+CurrentCheck check_current_evidence(
+    const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
+    const retained::contract::MpccProblemContext &fresh_problem, const ContextSnapshot &fresh_generation,
+    const vehicle::PublishedInputLedger &ledger, const vehicle::PublishedInputLedger::Snapshot &original_cursor,
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
+    const std::size_t already_published_suffix_packets) {
+  CurrentCheck result;
+  if (!fresh.publication_prefix || fresh_problem.decision_id != fresh.decision_id ||
+      fresh_problem.intent != fresh.current_intent ||
+      fresh.publication_prefix->observation.now_sec != fresh.now_sec ||
+      fresh.publication_prefix->observation.control_origin_sec != fresh.control_origin_sec ||
+      (retained::contract::canonical_normal_intent_requires_target_observation(fresh_problem.intent) &&
+        fresh_problem.target_obstacle_generation != fresh.obstacles.generation) ||
+      (fresh_problem.dynamic_obstacle_constraint_active &&
+        fresh_problem.dynamic_obstacle_generation != fresh.obstacles.generation)) return result;
+  const auto &observation = fresh.publication_prefix->observation;
+  result.measurement = check_measurement_consistency(certificate, observation);
+  if (result.measurement.reason != MeasurementReason::Compatible) {
+    result.reason = CurrentReason::MeasurementRejected; return result;
+  }
+  result.prefix = check_actual_publication_prefix(certificate, ledger, original_cursor,
+    observation, prior_sources, already_published_suffix_packets);
+  if (result.prefix != PrefixReason::Consistent) { result.reason = CurrentReason::PrefixRejected; return result; }
+  const auto use = already_published_suffix_packets ? ContextUse::PublishedRemainder : ContextUse::NewSource;
+  result.context = check_current_context(certificate, fresh_generation, fresh_problem, use);
+  if (result.context != ContextReason::Compatible) { result.reason = CurrentReason::ContextRejected; return result; }
+  result.world = recheck_remaining_world(certificate, fresh);
+  if (result.world.reason != CurrentWorldReason::Current) { result.reason = CurrentReason::WorldRejected; return result; }
+  // Revocation can be observed while a worker is checking physical evidence.
+  // The final main-thread dispatcher must check the generation again at send.
+  result.context = check_current_context(certificate, fresh_generation, fresh_problem, use);
+  result.reason = result.context == ContextReason::Compatible ? CurrentReason::Compatible : CurrentReason::ContextRejected;
+  return result;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

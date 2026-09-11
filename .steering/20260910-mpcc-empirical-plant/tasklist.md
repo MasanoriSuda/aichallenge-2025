@@ -231,3 +231,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R306exact proof/profile, R307packed force, R308outward tiny intervals, R309same-map trig/zero comparisons. All unpromoted; no physical/window/rate changes.
 - [x] Completed logs contain D2post1074before shutdown; R51is failed, no laps.
 - [ ] Trace original clock producer/appointment relation and repair causal structure; all M4-M6remain open.
+
+
+2026-09-12 original clock producer (baseline808830ac):
+- [x] R311original CIL read, R312two observation sites/3690methods match and20record smoke.
+- [x] R52startup stall preserved/inconclusive; original artifacts restored.
+- [x] R53diagnostic startup order reaches movingD1218; original source frame groups create clock bursts, receiver follows exact values. No clock policy change.
+- [x] R313exact proof/late rejection and completeR53analysis. No acceptance claim.
+- [ ] Audit and remove provably unused Normal-state Recovery rollouts while preserving current-wall evidence and every maneuver gate.
+- [ ] Current full-proof cost/scheduling structure, all remaining M4-M6.

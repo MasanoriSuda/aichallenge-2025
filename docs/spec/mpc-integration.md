@@ -4689,3 +4689,11 @@ R306–309の保存入力比較は全て未採用。力微分の追加ベクト�
 極小値の外向き丸めは遅く、同一map内の三角関数共有も効果が小さい。現在の権限・
 物理条件・時計・窓を維持し、clock生成と制御起動の対応を次に調べる。全M4–M6は未完。
 [原因計測と未採用比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-proof-cost-design.md)。
+
+R53の同時観測では、シミュレータの1描画frame内で複数のFixedUpdateからclockが
+集中公開され、車両Domainの時計はその値へ追従した。D1decision218は現在証明の後、
+Recovery5.066ms中に次の集中更新を受けて原期限を超えた。R52の起動停止は別の不成立
+試行として保存。R53は起動順・観測コードを変えた診断であり、標準走行の合格ではない。
+時計・公開窓は維持し、通常状態で不要なRecovery経路計算の有無を次に監査する。
+R51の現在証明コストと全M4–M6は引き続き未解決。
+[時計生成の同時観測](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/clock-producer-design.md)。

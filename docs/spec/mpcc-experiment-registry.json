@@ -1135,6 +1135,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-proof-cost-evidence.json",
       "replay_ready": true,
       "reason": "R51first moving late publication causally dominated by complete independent current physical proof; exact frozen input comparisons."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-clock-producer",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/clock-producer-evidence.json",
+      "replay_ready": true,
+      "reason": "Original simulator clock producer and controller receiver observed in the same moving first-failure interval."
     }
   ],
   "experiments": [
@@ -13712,6 +13718,76 @@
       "production_impact": "None. Existing scheduled single authority, native FP environment, physical bounds, profiles, original publication window and rate retained.",
       "deleted_code": [],
       "revisit_condition": "A distinct implementation or measured structural cause; no unchanged micro-optimization, point-proof reuse, affinity, timeout or grace repeat."
+    },
+    {
+      "experiment_id": "20260912-nine-state-clock-producer-r310",
+      "baseline_commit": "808830acd7619d870f7ae5ee2ff2660fcf2baa87",
+      "snapshot_ids": [
+        "20260912-nine-state-clock-producer"
+      ],
+      "hypothesis": "Existing container user can extract saved CIL compiler packages",
+      "changed_dimension": "Observation-only original simulator CIL and MPCC rclclockget/set; r53diagnostic startup ordering",
+      "result": "inconclusive",
+      "reason": "No container/usr write permission; no code/run change. Retryr311uses disposable container root.",
+      "production_impact": "None. Native model, original clock/window/rate, authority and every final guard unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal instrumentation or implementation; do not repeat unchanged micro-optimizations, old point-proof reuse or clock/timeouts/grace relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-clock-producer-r311-r312",
+      "baseline_commit": "808830acd7619d870f7ae5ee2ff2660fcf2baa87",
+      "snapshot_ids": [
+        "20260912-nine-state-clock-producer"
+      ],
+      "hypothesis": "Observe original clock publishing without changing original CIL behavior",
+      "changed_dimension": "Observation-only original simulator CIL and MPCC rclclockget/set; r53diagnostic startup ordering",
+      "result": "accepted",
+      "reason": "3690methods equivalent after removing two observation sites, branches/EH preserved; mapped recorder20events passed. Timing perturbation remains.",
+      "production_impact": "None. Native model, original clock/window/rate, authority and every final guard unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal instrumentation or implementation; do not repeat unchanged micro-optimizations, old point-proof reuse or clock/timeouts/grace relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-clock-producer-dev2-r52",
+      "baseline_commit": "808830acd7619d870f7ae5ee2ff2660fcf2baa87",
+      "snapshot_ids": [
+        "20260912-nine-state-clock-producer"
+      ],
+      "hypothesis": "Default startup permits moving producer/receiver correlation",
+      "changed_dimension": "Observation-only original simulator CIL and MPCC rclclockget/set; r53diagnostic startup ordering",
+      "result": "inconclusive",
+      "reason": "Clock stalls frame5/0.1s for>200s, zero normal publications, unknown startup cause; no observer exception; original artifacts restored.",
+      "production_impact": "None. Native model, original clock/window/rate, authority and every final guard unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal instrumentation or implementation; do not repeat unchanged micro-optimizations, old point-proof reuse or clock/timeouts/grace relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-clock-producer-dev2-r53",
+      "baseline_commit": "808830acd7619d870f7ae5ee2ff2660fcf2baa87",
+      "snapshot_ids": [
+        "20260912-nine-state-clock-producer"
+      ],
+      "hypothesis": "Moving clock clusters originate at simulator FixedUpdate publishing",
+      "changed_dimension": "Observation-only original simulator CIL and MPCC rclclockget/set; r53diagnostic startup ordering",
+      "result": "accepted",
+      "reason": "At D1218frame551three ticks/2.817ms and552four/2.777ms, receiver follows. Diagnostic startup order changed; original deadline still fails. Not integrated acceptance.",
+      "production_impact": "None. Native model, original clock/window/rate, authority and every final guard unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal instrumentation or implementation; do not repeat unchanged micro-optimizations, old point-proof reuse or clock/timeouts/grace relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-clock-producer-r313",
+      "baseline_commit": "808830acd7619d870f7ae5ee2ff2660fcf2baa87",
+      "snapshot_ids": [
+        "20260912-nine-state-clock-producer"
+      ],
+      "hypothesis": "R53first moving original physical proof and late rejection reproduce",
+      "changed_dimension": "Observation-only original simulator CIL and MPCC rclclockget/set; r53diagnostic startup ordering",
+      "result": "accepted",
+      "reason": "Unchanged R306compiled driver reproduces original input hash, independent current proof7.021349ms and captured late rejection. No rebuild claimed.",
+      "production_impact": "None. Native model, original clock/window/rate, authority and every final guard unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal instrumentation or implementation; do not repeat unchanged micro-optimizations, old point-proof reuse or clock/timeouts/grace relaxation."
     }
   ]
 }

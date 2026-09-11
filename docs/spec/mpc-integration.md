@@ -4763,3 +4763,16 @@ R332は元source14/742をAで受理。B/C/DはTrack/Cruise非対応で結論な�
 拒否が一致した。ここでは本番変更なし。全期間の開始時刻範囲、独立した状態boxの層、
 source-prefixとdomainの重複計算解消を比較し、元の各packet25ms窓と全入力記憶を保持する。
 [現在の比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/retained-dispatch-comparison.md)。
+
+独立開始集合の適用を、Follow targetを持たない元指令列の停止時刻まで拡張した。
+元sourceの全状態範囲を候補集合として宣言し、全開始時刻・車体状態・四隅から停止まで
+新規計算する専用APIを追加。元のpoint futureを再利用・再配置して証明とはしない。
+実送信後の短いprefixは実履歴と残指令列から求め、未来証明は過去packetの遅延反映を
+含む元指令列全体を保持する。元source付きactualprefix照合、現在の世界・全範囲包含、
+private proofのindex、各packetの元25ms窓・slew・元停止時刻を維持。
+Followの全状態/時刻直積は既存gap回帰で不成立だったため採用せず、従来first-window証明
+と残packetの完全再計算を維持する。元証明と独立証明のworker重複計算も未解消。
+R337比較、native、buildr96、testsr84、R340六再生を確認。制御判断に使わない固定長の
+wall/threadCPU/context-switch区間計測を加え、残るoff-CPU原因を次の標準r57で調べる。
+[設計と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-domain-design.md)。
+統合走行とM4-M6は未完。

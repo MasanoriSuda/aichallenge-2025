@@ -80,6 +80,29 @@ StartingDomainPrediction
 predict_starting_domain_to_rest(const StartingDomainRequest &request,
                                 const Parameters &parameters) noexcept;
 
+/// Separate numerical theorem for a complete original programme, including
+/// its repeated braking tail. The nested starting set/time is data; it is not
+/// validated as a first-publication-window request. No send window is widened.
+/// Original history/programme retain already sent packets' delayed input memory.
+struct ProgrammeStartingDomainRequest {
+  StartingDomainRequest domain;
+  double original_rest_sec{};
+};
+struct ProgrammeStartingDomainTube {
+  StartingDomainTube numerical;
+  double original_rest_sec{};
+};
+struct ProgrammeStartingDomainPrediction {
+  AppliedInputRejectReason reason{AppliedInputRejectReason::InvalidObservation};
+  std::optional<ProgrammeStartingDomainTube> tube;
+};
+std::uint64_t programme_starting_domain_context_fingerprint(
+    const ProgrammeStartingDomainRequest &request,
+    const Parameters &parameters) noexcept;
+ProgrammeStartingDomainPrediction predict_programme_starting_domain_to_rest(
+    const ProgrammeStartingDomainRequest &request,
+    const Parameters &parameters) noexcept;
+
 /// Strict geometric/state/time membership only, including every prefix range.
 /// This neither authenticates original history nor grants command authority.
 /// Exact original footprint offsets must agree; frame rotations are outward.

@@ -291,3 +291,13 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [ ] Compare generalized observation-time domain, independent layer chain and combined source-prefix/domain proof; preserve all actual windows/inputmemory and retire replaced source path if chosen.
 - [ ] Attribute earliest unknownMPC/off-CPU phase before scheduling/logging intervention. No repeated unchangedrun.
 - [ ] All remainingM4-M6 intent/Stop/rest/restart/Recovery/async/race/gates/same submission/eval.
+
+
+2026-09-12 programme starting-domain slice (baselinef8a380f6):
+- [x] R335/336tooling limitations preserved; R337whole source-derived D/time through originalrest passes six frozen prefixes/worlds. LayeredD misses R56D1lateral; not promoted.
+- [x] Explicit programme-domain numerical API; original first-window API unchanged. Non-Follow worker domain replaces index0-only scope; all actualprefix/context/current-world gates stay.
+- [x] Current short prefix uses exact remainingprogramme and actualhistory; independent future retains entireoriginal delayedinput memory. Private proof index/finaloriginal25mswindow/rest bound.
+- [x] R339Follow Cartesian-product regression rejected; preserve original Followdomain and assertions. R3388numeric, R341148native; buildr96all26, testsr84all2564, R340six exact-library replays pass.
+- [x] Fixed phase counters observe unknown MPC/off-CPU interval, never used for control.
+- [ ] Standarddev2-r57: real worker availability, current coverage, original deadlines, callbackphases, laps/hz.
+- [ ] LateFollow domain, source/independent proof duplication, unknownoff-CPU and all M4-M6 remain open.

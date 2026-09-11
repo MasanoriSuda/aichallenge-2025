@@ -1,3 +1,4 @@
+#include <sys/resource.h>
 #include <ctime>
 #include "multi_purpose_mpc_ros/mpcc_publication_appointment.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
@@ -8098,6 +8099,46 @@ double observed_thread_cpu_sec() noexcept
     return std::numeric_limits<double>::quiet_NaN();
   return static_cast<double>(value.tv_sec) + static_cast<double>(value.tv_nsec) / 1e9;
 }
+
+// Observation only: fixed storage and counters never participate in admission,
+// timing limits or command selection. Formatting happens after a failed/slow
+// callback, outside the measured first publication boundary.
+struct ScheduledPhaseTimingObservation
+{
+  struct Point {
+    const char *name{};
+    double wall_ms{};
+    double cpu_ms{};
+    long voluntary{};
+    long involuntary{};
+    bool usage_valid{};
+  };
+  std::uint64_t decision_id{};
+  std::chrono::steady_clock::time_point start{};
+  double cpu_start{};
+  std::array<Point, 20> points{};
+  std::size_t count{};
+  void begin(std::uint64_t decision) noexcept {
+    *this = {};
+    decision_id = decision;
+    start = std::chrono::steady_clock::now();
+    cpu_start = observed_thread_cpu_sec();
+    checkpoint("entry");
+  }
+  void checkpoint(const char *name) noexcept {
+    if (!decision_id || count == points.size()) return;
+    auto &point = points[count++];
+    point.name = name;
+    point.wall_ms = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+    point.cpu_ms = 1000.0*(observed_thread_cpu_sec()-cpu_start);
+    rusage usage{};
+    point.usage_valid = getrusage(RUSAGE_THREAD,&usage) == 0;
+    if (point.usage_valid) {
+      point.voluntary = usage.ru_nvcsw;
+      point.involuntary = usage.ru_nivcsw;
+    }
+  }
+};
 
 struct ControlCallbackTimingObservation
 {
@@ -30834,12 +30875,15 @@ struct MPC
     const std::optional<mpcc_contract::MpccProblemContext> &proposed_context,
     const mpcc_vehicle_model::PublishedInputLedger &ledger)
   {
+    last_scheduled_phase_timing.begin(active_control_decision_id_);
     const auto admission_recorder = v2x_race_session_active_ ? scheduled_active_admission_recorder_ : scheduled_admission_recorder_;
     const auto proof_recorder = v2x_race_session_active_ ? scheduled_active_proof_recorder_ : scheduled_proof_recorder_;
     const std::string phase = v2x_race_session_active_ ? "active" : "startup";
     std::shared_ptr<ScheduledProductionOutcome> ready;
     { std::lock_guard<std::mutex> lock(scheduled_mailbox_->mutex); ready=std::move(scheduled_mailbox_->latest); }
+    last_scheduled_phase_timing.checkpoint("mailbox");
     const auto consider = [&](const std::shared_ptr<ScheduledProductionOutcome> &entry) {
+      last_scheduled_phase_timing.checkpoint("consider_begin");
       if (!entry || !entry->cursor || !entry->result.applied.certificate || !vehicle_observation_provenance_) return false;
       const auto certificate = entry->result.applied.certificate;
       const auto &program = certificate->suffix().program;
@@ -30850,6 +30894,7 @@ struct MPC
       packet.published_sec = vehicle_observation_provenance_->now_sec;
       auto anchor = scheduled_follow_anchor(problem);
       if (!anchor || anchor->target_id != source.target_id) anchor = entry->follow_anchor;
+      last_scheduled_phase_timing.checkpoint("request_begin");
       const auto current_request_started = SteadyClock::now();
       std::string observation_failure;
       auto current = build_scheduled_observed_request(problem,certificate->nominal()->observed().plan,
@@ -30896,6 +30941,7 @@ struct MPC
         *context = mpcc_contract::seal_problem_context(*context);
       }
       if (!context) return false;
+      last_scheduled_phase_timing.checkpoint("proof_begin");
       const auto current_proof_started = SteadyClock::now();
       const double current_cpu_started = observed_thread_cpu_sec();
       const auto result = scheduled_control::prepare_dispatch(certificate,*current,*context,
@@ -30905,6 +30951,7 @@ struct MPC
         SteadyClock::now() - current_proof_started).count();
       const double current_request_ms = std::chrono::duration<double,std::milli>(
         current_proof_started - current_request_started).count();
+      last_scheduled_phase_timing.checkpoint("proof_end_log_begin");
       RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
         "MPCC scheduled admission: dispatch=%lu, job=%lu, source=%lu, index=%zu, reason=%d/current:%d/context:%d/measurement:%d/prefix:%d/world:%d/physical:%d, source_geometry=%lu, current_geometry=%lu, source_intent=%s, proposed=%s, worker_ms=%.3f, request_ms=%.6f, current_ms=%.6f, current_cpu_ms=%.6f, domain_use=%d, domain_worker_ms=%.6f",
         static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(certificate->suffix().decision_id),
@@ -30914,6 +30961,7 @@ struct MPC
         static_cast<unsigned long>(source.stage_geometry_id),static_cast<unsigned long>(context->stage_geometry_id),
         mpcc_contract::to_string(source.intent),mpcc_contract::to_string(intent),entry->elapsed_ms,
         current_request_ms,current_proof_ms,current_cpu_ms,static_cast<int>(result.domain_use),entry->starting_domain_ms);
+      last_scheduled_phase_timing.checkpoint("admission_log_end");
       if (!result.candidate) {
         // Ready's expected old-session revocation must not consume the first
         // independent semantic/geometry failure observation in the new session.
@@ -30932,11 +30980,13 @@ struct MPC
           observation.scheduled_capture=std::move(capture);
           static_cast<void>(recorder->submit(std::move(observation)));
         }
+        last_scheduled_phase_timing.checkpoint("capture_end");
         return false;
       }
       pending_scheduled_current_=std::make_shared<const rate_resolved_retained::Request>(std::move(*current));
       pending_scheduled_dispatch_ = result.candidate; pending_scheduled_entry_ = entry;
       pending_scheduled_context_ = *context;
+      last_scheduled_phase_timing.checkpoint("candidate_bound");
       return true;
     };
     if (ready && !ready->result.applied.certificate) {
@@ -30962,6 +31012,7 @@ struct MPC
       scheduled_active_.reset();
       return canonical_normal_emergency_stop(problem,intent,"scheduled current evidence unavailable");
     }
+    last_scheduled_phase_timing.checkpoint("selected");
     const auto &dispatch = *pending_scheduled_dispatch_;
     const auto &certificate = *dispatch.certificate();
     const auto &execution = *certificate.nominal()->observed().plan->execution_artifact;
@@ -31039,6 +31090,7 @@ struct MPC
 
   double last_problem_initialization_ms{};
   NormalJoinTimingObservation last_normal_join_timing;
+  ScheduledPhaseTimingObservation last_scheduled_phase_timing;
 
   MpcControlCycleResult get_control(
     const double now_sec, const std::uint64_t decision_id)
@@ -31046,6 +31098,7 @@ struct MPC
     active_control_decision_id_ = decision_id;
     last_problem_initialization_ms = 0.0;
     last_normal_join_timing = {};
+    last_scheduled_phase_timing = {};
     pending_canonical_normal_actuation_.reset();
     pending_scheduled_dispatch_.reset(); pending_scheduled_entry_.reset(); pending_scheduled_context_.reset();
     pending_scheduled_current_.reset(); last_scheduled_publication_.reset();
@@ -58878,6 +58931,20 @@ private:
         1000.0 * (observed_thread_cpu_sec() - timing.thread_cpu_start_sec),timing.publication_failed ? 1 : 0,
         timing.entry_ros_sec,timing.mpc_begin_ros_sec,timing.mpc_end_ros_sec,
         timing.recovery_begin_ros_sec,timing.recovery_end_ros_sec);
+      if (mpc_ && mpc_->last_scheduled_phase_timing.decision_id == timing.decision_id) {
+        const auto &phases = mpc_->last_scheduled_phase_timing;
+        std::ostringstream details;
+        details << std::fixed << std::setprecision(6);
+        for (std::size_t i=1;i<phases.count;++i) {
+          const auto &a=phases.points[i-1], &b=phases.points[i];
+          details << a.name << "->" << b.name << ":wall=" << b.wall_ms-a.wall_ms
+            << "/cpu=" << b.cpu_ms-a.cpu_ms << "/voluntary=" << b.voluntary-a.voluntary
+            << "/involuntary=" << b.involuntary-a.involuntary
+            << "/usage_valid=" << (a.usage_valid && b.usage_valid) << ";";
+        }
+        RCLCPP_WARN(get_logger(),"MPCC scheduled phase: decision=%lu, intervals=%s, observation_only=1",
+          static_cast<unsigned long>(timing.decision_id),details.str().c_str());
+      }
     }
 
     if (!last_control_callback_telemetry_steady_.has_value()) {

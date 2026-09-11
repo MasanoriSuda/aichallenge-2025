@@ -10,17 +10,22 @@ struct DispatchResult;
 /// Worker numerical evidence bound to this exact immutable source certificate.
 /// It has no current-world or publication authority. Source certificates with
 /// pending prior packets are unsupported: their delayed input memory cannot
-/// be replaced by state membership.
+/// be replaced by state membership. Follow retains the first-window theorem;
+/// other sources can cover original programme windows through original rest.
 class StartingDomainEvidence {
 public:
   static std::shared_ptr<const StartingDomainEvidence> build(
     std::shared_ptr<const applied::ScheduledCertificate> certificate);
   const std::shared_ptr<const applied::ScheduledCertificate> &certificate() const noexcept { return certificate_; }
   const vehicle::StartingDomainTube &tube() const noexcept { return tube_; }
+  double original_rest_sec() const noexcept { return original_rest_sec_; }
+  bool first_window_only() const noexcept { return first_window_only_; }
 private:
   StartingDomainEvidence() = default;
   std::shared_ptr<const applied::ScheduledCertificate> certificate_;
   vehicle::StartingDomainTube tube_;
+  double original_rest_sec_{};
+  bool first_window_only_{true};
 };
 
 enum class DomainUseReason {
@@ -36,6 +41,7 @@ public:
   const vehicle::CurrentInputPrefix &prefix() const noexcept { return prefix_; }
   const std::shared_ptr<const StartingDomainEvidence> &evidence() const noexcept { return evidence_; }
   std::uint64_t physical_input_fingerprint() const noexcept { return physical_input_fingerprint_; }
+  std::size_t first_suffix_index() const noexcept { return first_suffix_index_; }
 private:
   CurrentDomainProof() = default;
   friend DispatchResult prepare_dispatch(
@@ -48,6 +54,7 @@ private:
   vehicle::CurrentInputPrefix prefix_;
   std::shared_ptr<const StartingDomainEvidence> evidence_;
   std::uint64_t physical_input_fingerprint_{};
+  std::size_t first_suffix_index_{};
 };
 
 /// Independently proved physical population for the exact unsent original

@@ -2886,6 +2886,8 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         data["source_input_fingerprint"]=domain_evidence->certificate()->tube().context_fingerprint;
         data["starting_sec"]=std::vector<double>{domain.request.starting_sec.lower,domain.request.starting_sec.upper};
         data["rest_sec"]=domain.rest_sec;
+        data["scope"]=domain_evidence->first_window_only() ? "first-publication-window" : "original-programme-through-original-rest";
+        data["original_rest_sec"]=domain_evidence->original_rest_sec();
         data["sample_count"]=domain.source_to_rest.size();
         data["source_observation"]=mpcc_vehicle_model::encode_observation_provenance(domain.request.source_observation);
         data["program"]=mpcc_vehicle_model::encode_input_program(domain.request.program);
@@ -2902,6 +2904,7 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         if (capture.current_domain_proof) {
           const auto &proof=*capture.current_domain_proof;
           data["current_physical_fingerprint"]=proof.physical_input_fingerprint();
+          data["current_first_suffix_index"]=proof.first_suffix_index();
           data["current_prefix_fingerprint"]=proof.prefix().context_fingerprint;
           data["current_prefix_observation"]=mpcc_vehicle_model::encode_observation_provenance(proof.prefix().observation);
           data["current_prefix_body"]=ranges(proof.prefix().body);

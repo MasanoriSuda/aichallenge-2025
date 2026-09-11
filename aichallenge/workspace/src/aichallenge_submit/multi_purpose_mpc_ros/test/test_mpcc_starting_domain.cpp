@@ -283,3 +283,83 @@ TEST(MpccStartingDomain, InvalidAndUncoveredDomainsReturnNoPartialTube) {
                                                r.footprint_offsets)
                    .prefix);
 }
+
+TEST(MpccProgrammeStartingDomain, LateStartingTimesRetainAllOriginalDelayedPackets)
+{
+  auto r = request();
+  r.starting_sec = {1.575, 1.85};
+  const auto p = vehicle_model();
+  const v::ProgrammeStartingDomainRequest query{r, 1.85};
+  EXPECT_FALSE(v::predict_starting_domain_to_rest(r, p).tube);
+  const auto prediction = v::predict_programme_starting_domain_to_rest(query, p);
+  ASSERT_TRUE(prediction.tube);
+  const auto &tube = prediction.tube->numerical;
+  ASSERT_FALSE(tube.source_to_rest.empty());
+  // The positive original first packet is already nominally in the past, but
+  // its receiver memory remains possible at early members of this time set.
+  EXPECT_GT(tube.source_to_rest.front().inputs.acceleration_mps2.upper, 0);
+  EXPECT_GT(r.starting_sec.lower + tube.source_to_rest.back().relative_end_sec, 1.75);
+  for (double start : {1.575, 1.675, 1.85}) {
+    for (unsigned arm = 0; arm < 256; ++arm) {
+      std::array<double, 8> seed;
+      for (std::size_t i = 0; i < 8; ++i)
+        seed[i] = (arm & (1U << i)) ? r.body[i].upper : r.body[i].lower;
+      v::State state{seed[0],seed[1],seed[2],seed[3],seed[4],seed[5],seed[6],seed[7]};
+      for (std::size_t step = 0; step < tube.source_to_rest.size(); ++step) {
+        const auto inputs = v::applied_input_bounds(r.source_observation.commands,
+          r.program,r.profile,start+step*p.maximum_step_sec,start+(step+1)*p.maximum_step_sec);
+        ASSERT_TRUE(inputs);
+        const double acceleration = (arm & 1) ? inputs->acceleration_mps2.upper : inputs->acceleration_mps2.lower;
+        state.desired_steering_rad = ((arm & 2) ? inputs->wire_steering_rad.upper : inputs->wire_steering_rad.lower) / p.steering_wire_gain;
+        const auto next = v::advance(state,{acceleration,0},p,p.maximum_step_sec);
+        ASSERT_TRUE(next); state = next->state;
+        const auto &sample = tube.source_to_rest[step]; const auto point = values(state);
+        for (std::size_t i = 0; i < 8; ++i) {
+          ASSERT_LE(sample.endpoint_body[i].lower,point[i]);
+          ASSERT_GE(sample.endpoint_body[i].upper,point[i]);
+        }
+        const double co=std::cos(r.coordinate_origin.yaw_rad),so=std::sin(r.coordinate_origin.yaw_rad);
+        const double ca=std::cos(r.coordinate_origin.yaw_rad+state.yaw_rad),sa=std::sin(r.coordinate_origin.yaw_rad+state.yaw_rad);
+        for (std::size_t i = 0; i < 8; i += 2) {
+          const double x=r.footprint_offsets[i].lower,y=r.footprint_offsets[i+1].lower;
+          const double cx=co*state.x_m-so*state.y_m+ca*x-sa*y;
+          const double cy=so*state.x_m+co*state.y_m+sa*x+ca*y;
+          ASSERT_LE(sample.endpoint_footprint[i].lower,cx); ASSERT_GE(sample.endpoint_footprint[i].upper,cx);
+          ASSERT_LE(sample.endpoint_footprint[i+1].lower,cy); ASSERT_GE(sample.endpoint_footprint[i+1].upper,cy);
+        }
+      }
+      EXPECT_DOUBLE_EQ(state.forward_velocity_mps,0);
+      EXPECT_DOUBLE_EQ(state.lateral_velocity_mps,0);
+      EXPECT_DOUBLE_EQ(state.yaw_rate_radps,0);
+    }
+  }
+}
+
+TEST(MpccProgrammeStartingDomain, OriginalHorizonAndWholeIdentityAreBoundWithoutWideningFirstWindowApi)
+{
+  auto r = request(); const auto p = vehicle_model();
+  const v::ProgrammeStartingDomainRequest original{r,1.85};
+  const auto hash = v::programme_starting_domain_context_fingerprint(original,p);
+  ASSERT_NE(hash,0U);
+  EXPECT_NE(hash,v::starting_domain_context_fingerprint(r,p));
+  for (int variant=0;variant<5;++variant) {
+    auto changed=original;
+    if (variant==0) changed.original_rest_sec+=.1;
+    if (variant==1) changed.domain.starting_sec.upper+=.1;
+    if (variant==2) changed.domain.body[0].lower-=.1;
+    if (variant==3) changed.domain.source_observation.commands.back().wire_acceleration_mps2+=.1;
+    if (variant==4) changed.domain.footprint_offsets[0].lower-=.1;
+    EXPECT_NE(v::programme_starting_domain_context_fingerprint(changed,p),hash);
+  }
+  for (int variant=0;variant<6;++variant) {
+    auto bad=original;
+    if (variant==0) bad.original_rest_sec=std::numeric_limits<double>::infinity();
+    if (variant==1) bad.domain.starting_sec.upper=1.851;
+    if (variant==2) bad.domain.starting_sec.lower=1.474;
+    if (variant==3) bad.domain.starting_sec.lower=1.501;
+    if (variant==4) bad.domain.body[2].upper=std::numeric_limits<double>::quiet_NaN();
+    if (variant==5) bad.domain.program.repeat_last_until_rest=false;
+    EXPECT_EQ(v::programme_starting_domain_context_fingerprint(bad,p),0U);
+    EXPECT_FALSE(v::predict_programme_starting_domain_to_rest(bad,p).tube);
+  }
+}

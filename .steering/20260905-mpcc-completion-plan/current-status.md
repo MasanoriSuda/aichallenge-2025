@@ -1,22 +1,20 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。標準r56は残packetの送信期限で失敗。方式比較・厳密再生まで完了。**
+**全体未完。残packetの独立開始集合を拡張し、次は標準dev2-r57。**
 
-本番制御は4495ab3e。Buildr95全26、testsr83全2561/66合格後の標準r56は移動lapなし。
-Domain採用143/91、初回範囲外34/17、非対応残suffix479/464 (全run/終了処理を含む)。
-最初D1pre530/index4、停止契機D2post1268/index4。新worker結果のactualprefix不一致に続き
-残packetを完全再計算。D1にはproof/request外の約18msのMPC待機/off-CPUもあり原因未確定。
+基点f8a380f6。R56D1pre530/D2post1268のindex4はactualprefix厳密再生済み。
+R337方式比較で元指令列の停止時刻までの全開始集合が六場面のprefix/worldを包含。
+Followは全直積によるgap回帰が不成立だったため従来方式を保持。各packetの25ms窓、
+250ms受信モデル、actualprefix、現在世界、元sourceと停止時刻を緩めていない。
+Buildr96all26、testsr84all2564records、R340六場面の実library再生合格。
+短いprefixは従来完全再計算と一致。元source/実送信pre-post判定も保持。
 
-R332のpersistentAは元source14/742を受理。B/C/DはTrack/Cruise非対応で結論なし。
-R334は実.63s履歴剪定と4送信を復元し、現在履歴/物理hash/元pre-post判定を一致再生。
-この監査では本番変更なし。次は全期間の開始時刻範囲、独立boxの層、source-prefixとdomainの
-重複計算解消を比較し、必要なら最初の未解明off-CPU境界を観測。元の25ms公開窓、
-250ms受信モデル、物理条件を緩めない。変更なしの再走行はしない。
-
+worker二重future計算、lateFollow、広いD/timeの曲線・高速coverage、off-CPU原因は未解決。
+最小phase計測を加え、次の標準dev2-r57で現在範囲・worker可用性・期限と周回を確認する。
 全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
 単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の比較](../20260910-mpcc-empirical-plant/receiver-input-enclosure/retained-dispatch-comparison.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-domain-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

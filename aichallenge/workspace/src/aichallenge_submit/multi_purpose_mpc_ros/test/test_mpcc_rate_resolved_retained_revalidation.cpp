@@ -4776,7 +4776,8 @@ TEST(MpccScheduledDomainDispatch, RejectedSetNeverReplacesTheCompletePointProof)
   EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::SourceMismatch);
   EXPECT_FALSE(result.candidate->current_domain_proof());
   EXPECT_TRUE(result.candidate->current_physical_proof());
-  f.fresh.publication_prefix->observation.initial.state.x_m += .2;
+  f.fresh.publication_prefix->observation.initial.state.x_m = domain->tube().request.coordinate_origin.x_m +
+    domain->tube().request.body[0].lower - .2;
   f.bind_next(0);
   result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
     f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
@@ -4831,7 +4832,7 @@ TEST(MpccScheduledDomainDispatch, RejectsFreshWorldEpochContextHistoryAndClockFa
   }
 }
 
-TEST(MpccScheduledDomainDispatch, RetainedIndexRequiresActualSourceAndCompleteCurrentProof)
+TEST(MpccScheduledDomainDispatch, RetainedIndexRequiresActualSourceAndIndependentProgrammeDomain)
 {
   ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Track, true);
   const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
@@ -4843,8 +4844,9 @@ TEST(MpccScheduledDomainDispatch, RetainedIndexRequiresActualSourceAndCompleteCu
   const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
     f.ledger, *f.original_cursor, f.prior_sources, 1, domain);
   ASSERT_TRUE(result.candidate);
-  EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::UnsupportedSuffix);
-  EXPECT_FALSE(result.candidate->current_domain_proof()); EXPECT_TRUE(result.candidate->current_physical_proof());
+  EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::Accepted);
+  ASSERT_TRUE(result.candidate->current_domain_proof()); EXPECT_FALSE(result.candidate->current_physical_proof());
+  EXPECT_EQ(result.candidate->current_domain_proof()->first_suffix_index(),1U);
 }
 
 TEST(MpccScheduledDomainDispatch, FollowUsesCurrentPhysicalOriginAndMonotoneTimeMinimum)
@@ -4919,4 +4921,60 @@ TEST(MpccScheduledDomainDispatch, IndependentlyProvesPoseBehindTheOriginalSource
   EXPECT_GT(result.current.world.checked_samples, 1U);
   EXPECT_TRUE(result.candidate->matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
     f.fresh.now_sec, result.candidate->packet().wire_acceleration_mps2, result.candidate->packet().wire_steering_rad));
+}
+
+TEST(MpccScheduledDomainDispatch, RepeatedTailAuthenticatesEveryActualSendAndKeepsPrefixParity)
+{
+  ScheduledDispatchFixture f(1.075,false,contract::ControlIntent::Track,true);
+  const auto domain=scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+  EXPECT_EQ(domain->original_rest_sec(),f.certificate->tube().rest_sec);
+  for (std::size_t index=0;index<5;++index) {
+    SCOPED_TRACE(index);
+    const double epoch=*vehicle::publication_epoch(f.certificate->suffix().program,index);
+    // Advance the real packet clock/history beyond the finite solver stages.
+    // The older world helper asks for a new solver-stage packet and cannot
+    // represent repeated terminal sends.
+    f.fresh.decision_id++; f.fresh.obstacles.generation++;
+    f.fresh.now_sec=epoch; f.fresh.control_origin_sec=epoch+.04;
+    f.fresh.publication_prefix->observation.now_sec=epoch;
+    f.fresh.publication_prefix->observation.control_origin_sec=epoch+.04;
+    if (index==0) f.fresh.publication_prefix->observation.initial.state.x_m+=.001;
+    const auto &previous=f.ledger.latest_transaction()->nominal;
+    f.fresh.previous_published_steering_rad=previous.wire_steering_rad/f.fresh.plan->execution_artifact->vehicle_model.steering_wire_gain;
+    f.fresh.publication_prefix->observation.initial.state.desired_steering_rad=f.fresh.previous_published_steering_rad;
+    f.fresh.obstacles.observed_sec=epoch;
+    f.bind_next(index);
+    const auto prepare=[&](std::size_t i){return scheduled::prepare_dispatch(f.certificate,f.fresh,f.context,
+      f.owner.capture(),f.ledger,*f.original_cursor,f.prior_sources,i,domain);};
+    EXPECT_FALSE(prepare(index+1).candidate);
+    if (index) { EXPECT_FALSE(prepare(index-1).candidate); }
+    const auto result=prepare(index); ASSERT_TRUE(result.candidate) << static_cast<int>(result.current.reason);
+    ASSERT_EQ(result.domain_use,scheduled::DomainUseReason::Accepted);
+    const auto &candidate=*result.candidate; ASSERT_TRUE(candidate.current_domain_proof());
+    EXPECT_EQ(candidate.current_domain_proof()->first_suffix_index(),index);
+    const auto full=f.prepare(index); ASSERT_TRUE(full.candidate); ASSERT_TRUE(full.candidate->current_physical_proof());
+    const auto &prefix=candidate.current_domain_proof()->prefix();
+    const auto &numerical=full.candidate->current_physical_proof()->tube().numerical;
+    ASSERT_TRUE(numerical.publication_footprint);
+    for (std::size_t i=0;i<8;++i) {
+      EXPECT_EQ(prefix.body[i].lower,numerical.publication_body[i].lower);
+      EXPECT_EQ(prefix.body[i].upper,numerical.publication_body[i].upper);
+      EXPECT_EQ(prefix.footprint[i].lower,(*numerical.publication_footprint)[i].lower);
+      EXPECT_EQ(prefix.footprint[i].upper,(*numerical.publication_footprint)[i].upper);
+    }
+    EXPECT_EQ(prefix.program.commands.front().published_sec,epoch);
+    EXPECT_EQ(domain->tube().request.program.commands.front().published_sec,1.1);
+    const auto &packet=candidate.packet();
+    ASSERT_TRUE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
+      epoch,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+    EXPECT_FALSE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
+      *vehicle::publication_epoch(f.certificate->suffix().program,index,true)+1e-9,
+      packet.wire_acceleration_mps2,packet.wire_steering_rad));
+    auto unsafe=f.fresh;
+    unsafe.obstacles.obstacles.push_back({"contact",{unsafe.control_pose.x_m,unsafe.control_pose.y_m,0,0,.2}});
+    EXPECT_FALSE(scheduled::prepare_dispatch(f.certificate,unsafe,f.context,f.owner.capture(),f.ledger,
+      *f.original_cursor,f.prior_sources,index,domain).candidate);
+    ASSERT_TRUE(f.ledger.record(packet,epoch,epoch,2,candidate.source()));
+    EXPECT_TRUE(candidate.matches_after_publication(f.ledger,f.owner.capture()));
+  }
 }

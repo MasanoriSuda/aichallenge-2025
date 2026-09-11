@@ -1010,15 +1010,60 @@ std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
     const auto symmetric = vehicle::numerical::I(center[i]) + vehicle::numerical::I(-radius, radius);
     range = {symmetric.lo, symmetric.hi};
   }
-  auto prediction = vehicle::predict_starting_domain_to_rest(request, original.plan->execution_artifact->vehicle_model);
-  if (!prediction.tube) return {};
   auto result = std::shared_ptr<StartingDomainEvidence>(new StartingDomainEvidence);
+  result->original_rest_sec_ = source.rest_sec;
+  if (original.follow_target) {
+    // Keep the existing first-window theorem for Follow. A whole-state/time
+    // Cartesian product destroys its progress/time relation and fails the
+    // existing fresh-gap regression; late Follow still requires complete
+    // current reproof until a time-dependent theorem covers that relation.
+    auto prediction = vehicle::predict_starting_domain_to_rest(
+      request, original.plan->execution_artifact->vehicle_model);
+    if (!prediction.tube) return {};
+    result->tube_ = std::move(*prediction.tube);
+  } else {
+    // Declare all source-derived states across the complete original programme,
+    // including repeated braking packets. Old samples propose only this set;
+    // its complete Cartesian population/time/corners are freshly proved below.
+    for (const auto &sample : source.source_to_rest)
+      for (std::size_t i = 0; i < request.body.size(); ++i) {
+        request.body[i].lower = std::min(request.body[i].lower, sample.swept_body[i].lower);
+        request.body[i].upper = std::max(request.body[i].upper, sample.swept_body[i].upper);
+      }
+    request.starting_sec.upper = source.rest_sec;
+    auto prediction = vehicle::predict_programme_starting_domain_to_rest(
+      {request, source.rest_sec}, original.plan->execution_artifact->vehicle_model);
+    if (!prediction.tube) return {};
+    result->tube_ = std::move(prediction.tube->numerical);
+    result->first_window_only_ = false;
+  }
   result->certificate_ = std::move(certificate);
-  result->tube_ = std::move(*prediction.tube);
   return result;
 }
 
 namespace {
+// Exact remaining suffix for the fresh prefix, shared with complete current
+// reproof. The independent programme-domain future still retains ALL original
+// packet windows, including authenticated past packets' delayed effects.
+std::optional<vehicle::PublishedInputProgram> remaining_programme(
+    const applied::ScheduledCertificate &certificate, std::size_t index) {
+  auto remaining = certificate.suffix().program;
+  const auto epoch = vehicle::publication_epoch(remaining, index);
+  if (!epoch || remaining.commands.empty()) return std::nullopt;
+  if (index < remaining.commands.size()) {
+    remaining.commands.erase(remaining.commands.begin(), remaining.commands.begin() + index);
+  } else {
+    if (!remaining.repeat_last_until_rest) return std::nullopt;
+    remaining.commands = {remaining.commands.back()};
+    remaining.commands.front().published_sec = *epoch;
+  }
+  if (remaining.nanosecond_clock) {
+    const auto ns = vehicle::publication_nanoseconds(*epoch);
+    if (!ns) return std::nullopt;
+    remaining.nanosecond_clock->first_ns = *ns;
+  }
+  return remaining;
+}
 std::optional<vehicle::CurrentInputPrefix> check_current_domain(
     const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
     std::size_t index, const std::shared_ptr<const StartingDomainEvidence> &evidence,
@@ -1026,9 +1071,10 @@ std::optional<vehicle::CurrentInputPrefix> check_current_domain(
   use = DomainUseReason::Missing;
   if (!evidence) return std::nullopt;
   use = DomainUseReason::UnsupportedSuffix;
-  if (index != 0) return std::nullopt;
+  if (certificate.first_suffix_index() != 0 || (index != 0 && evidence->first_window_only())) return std::nullopt;
   use = DomainUseReason::SourceMismatch;
-  if (evidence->certificate().get() != &certificate) return std::nullopt;
+  if (evidence->certificate().get() != &certificate ||
+      evidence->original_rest_sec() != certificate.tube().rest_sec) return std::nullopt;
   double follow_reference{};
   std::optional<recovery_footprint::FootprintExtents> footprint;
   use = DomainUseReason::WorldRejected;
@@ -1046,10 +1092,12 @@ std::optional<vehicle::CurrentInputPrefix> check_current_domain(
   vehicle::FootprintRanges offsets;
   const auto vertices = vehicle::numerical::footprint_vertex_offsets(*footprint);
   for (std::size_t i = 0; i < offsets.size(); ++i) offsets[i] = {vertices[i].lo, vertices[i].hi};
-  auto prediction = vehicle::predict_pending_input_prefix(fresh.publication_prefix->observation,
-    certificate.suffix().program, certificate.tube().profile,
-    fresh.plan->execution_artifact->vehicle_model, offsets);
   use = DomainUseReason::PrefixUnavailable;
+  const auto remaining = remaining_programme(certificate, index);
+  if (!remaining) return std::nullopt;
+  auto prediction = vehicle::predict_pending_input_prefix(fresh.publication_prefix->observation,
+    *remaining, certificate.tube().profile,
+    fresh.plan->execution_artifact->vehicle_model, offsets);
   if (!prediction.prefix) return std::nullopt;
   use = DomainUseReason::OutsideDomain;
   if (!vehicle::starting_domain_contains_prefix(domain.request, *prediction.prefix)) return std::nullopt;
@@ -1113,21 +1161,8 @@ std::optional<vehicle::PendingInputTube> prove_current_remaining_program(
   double follow_reference{};
   std::optional<recovery_footprint::FootprintExtents> footprint;
   if (!prepare_current_world(certificate, fresh, result, follow_reference, footprint)) return std::nullopt;
-  auto remaining = certificate.suffix().program;
-  const auto epoch = vehicle::publication_epoch(remaining, index);
-  if (!epoch || remaining.commands.empty()) return std::nullopt;
-  if (index < remaining.commands.size()) {
-    remaining.commands.erase(remaining.commands.begin(), remaining.commands.begin() + index);
-  } else {
-    if (!remaining.repeat_last_until_rest) return std::nullopt;
-    remaining.commands = {remaining.commands.back()};
-    remaining.commands.front().published_sec = *epoch;
-  }
-  if (remaining.nanosecond_clock) {
-    const auto ns = vehicle::publication_nanoseconds(*epoch);
-    if (!ns) return std::nullopt;
-    remaining.nanosecond_clock->first_ns = *ns;
-  }
+  const auto remaining = remaining_programme(certificate, index);
+  if (!remaining) return std::nullopt;
   const auto &observation = fresh.publication_prefix->observation;
   const auto &ceiling = certificate.nominal()->proof().terminal_stop_forward_velocity_ceiling_mps;
   applied::Result diagnostic;
@@ -1144,7 +1179,7 @@ std::optional<vehicle::PendingInputTube> prove_current_remaining_program(
     catch (const std::exception &) { diagnostic.reason = applied::Reason::InvalidWorld; }
     return diagnostic.reason == applied::Reason::Accepted;
   };
-  auto prediction = vehicle::predict_pending_inputs_to_rest(observation, remaining,
+  auto prediction = vehicle::predict_pending_inputs_to_rest(observation, *remaining,
     certificate.tube().profile, fresh.plan->execution_artifact->vehicle_model, {}, &validation);
   if (!prediction.tube || !statistics.checked_samples) {
     result.reason = CurrentWorldReason::PhysicalRejected;
@@ -1312,6 +1347,7 @@ DispatchResult prepare_dispatch(
     auto physical = std::shared_ptr<CurrentDomainProof>(new CurrentDomainProof);
     physical->observed_ = fresh;
     physical->prefix_ = std::move(*domain_prefix);
+    physical->first_suffix_index_ = index;
     physical->evidence_ = std::move(domain);
     // Namespace-separated observation identity, never a caller-supplied token.
     std::uint64_t hash = 14695981039346656037ULL;
@@ -1351,7 +1387,8 @@ bool DispatchCandidate::clock_and_slew_match(double before_clock_sec, double aft
         current_physical_proof_->original_input_fingerprint() != certificate_->tube().context_fingerprint ||
         current_physical_proof_->first_suffix_index() != packet_index_ ||
         current_physical_proof_->observed().decision_id != dispatch_decision_id_)) ||
-      (current_domain_proof_ && (packet_index_ != 0 ||
+      (current_domain_proof_ && (current_domain_proof_->first_suffix_index() != packet_index_ ||
+        (packet_index_ != 0 && current_domain_proof_->evidence()->first_window_only()) ||
         current_domain_proof_->evidence()->certificate() != certificate_ ||
         current_domain_proof_->observed().decision_id != dispatch_decision_id_ ||
         current_domain_proof_->prefix().observation.now_sec != observed_sec_ ||

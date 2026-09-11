@@ -192,12 +192,12 @@ starting_domain_context_fingerprint(const StartingDomainRequest &request,
   return hash.value ? hash.value : 1;
 }
 
-StartingDomainPrediction
-predict_starting_domain_to_rest(const StartingDomainRequest &request,
-                                const Parameters &parameters) noexcept {
+namespace {
+StartingDomainPrediction predict_domain_to_rest(
+    const StartingDomainRequest &request, const Parameters &parameters,
+    const std::uint64_t context) noexcept {
   if (!valid(parameters) || !parameters.nominal_settled_contact)
     return {Reason::InvalidModel, {}};
-  const auto context = starting_domain_context_fingerprint(request, parameters);
   if (!context)
     return {Reason::InvalidObservation, {}};
   try {
@@ -262,6 +262,52 @@ predict_starting_domain_to_rest(const StartingDomainRequest &request,
   } catch (const std::exception &) {
     return {Reason::NumericalFailure, {}};
   }
+}
+
+} // namespace
+
+StartingDomainPrediction predict_starting_domain_to_rest(
+    const StartingDomainRequest &request, const Parameters &parameters) noexcept {
+  return predict_domain_to_rest(request, parameters,
+      starting_domain_context_fingerprint(request, parameters));
+}
+
+std::uint64_t programme_starting_domain_context_fingerprint(
+    const ProgrammeStartingDomainRequest &request,
+    const Parameters &parameters) noexcept {
+  const auto &domain = request.domain;
+  const auto first = publication_epoch(domain.program, 0);
+  if (!first || !std::isfinite(request.original_rest_sec) ||
+      request.original_rest_sec < *first ||
+      domain.starting_sec.upper > request.original_rest_sec ||
+      !std::isfinite(domain.starting_sec.lower) ||
+      !std::isfinite(domain.starting_sec.upper) ||
+      domain.starting_sec.lower < *first ||
+      domain.starting_sec.lower > domain.starting_sec.upper)
+    return 0;
+  // Reuse original model/history/body/offset validation, without changing the
+  // first-window API. Hash the explicitly different time theorem separately.
+  auto first_window = domain;
+  first_window.starting_sec = {*first, *first};
+  const auto base = starting_domain_context_fingerprint(first_window, parameters);
+  if (!base) return 0;
+  Hash hash;
+  hash.string("independent-original-programme-starting-domain-v1");
+  hash.integer(base);
+  hash.number(domain.starting_sec.lower);
+  hash.number(domain.starting_sec.upper);
+  hash.number(request.original_rest_sec);
+  return hash.value ? hash.value : 1;
+}
+
+ProgrammeStartingDomainPrediction predict_programme_starting_domain_to_rest(
+    const ProgrammeStartingDomainRequest &request,
+    const Parameters &parameters) noexcept {
+  auto prediction = predict_domain_to_rest(request.domain, parameters,
+      programme_starting_domain_context_fingerprint(request, parameters));
+  if (!prediction.tube) return {prediction.reason, {}};
+  return {prediction.reason, ProgrammeStartingDomainTube{
+      std::move(*prediction.tube), request.original_rest_sec}};
 }
 
 bool starting_domain_contains_prefix(

@@ -1177,6 +1177,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/retained-dispatch-evidence.json",
       "replay_ready": true,
       "reason": "R56firstpre/firstpost failures, exact4actualpacket/prunedhistory/currentphysical replay, architecture applicability audit."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-programme-domain",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-domain-evidence.json",
+      "replay_ready": true,
+      "reason": "Explicit independent whole programme D/time comparison and final exact actual-library replay, numerical/dispatch/package checks."
     }
   ],
   "experiments": [
@@ -14108,6 +14114,125 @@
       "production_impact": "None. Current4495ab3e remains; alternative proof structures and phase attribution pending.",
       "deleted_code": [],
       "revisit_condition": "New theorem/phase observation or causal implementation; do not rerun unchanged or relax original clocks/physical conditions."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-domain-r335",
+      "baseline_commit": "f8a380f60a7e05ffbe5cf56bafe59fa2f20e4529",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-domain"
+      ],
+      "hypothesis": "Independently proved original-programme state/time set can replace repeated full current propagation after authentic preceding sends.",
+      "changed_dimension": "Explicit numerical theorem and private current index/prefix association; no physical or per-packet clock relaxation.",
+      "result": "inconclusive",
+      "reason": "Old snapshot reader lacked optional transactions handling atindex0.",
+      "production_impact": "Non-Follow programme domain replaces first-only scope; original Follow and complete physical reproof preserved. Phase observer only.",
+      "deleted_code": [
+        "Non-Follow worker index0-only domain scope",
+        "Duplicate remaining-programme construction"
+      ],
+      "revisit_condition": "New time-dependent coverage theorem, concrete coverage/worker/phase evidence; never relax original physical/time/identity guards."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-domain-r336-generalized",
+      "baseline_commit": "f8a380f60a7e05ffbe5cf56bafe59fa2f20e4529",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-domain"
+      ],
+      "hypothesis": "Independently proved original-programme state/time set can replace repeated full current propagation after authentic preceding sends.",
+      "changed_dimension": "Explicit numerical theorem and private current index/prefix association; no physical or per-packet clock relaxation.",
+      "result": "inconclusive",
+      "reason": "Diagnostic time interval covered only explicit packets, omitting repeated braking-tail windows.",
+      "production_impact": "Non-Follow programme domain replaces first-only scope; original Follow and complete physical reproof preserved. Phase observer only.",
+      "deleted_code": [
+        "Non-Follow worker index0-only domain scope",
+        "Duplicate remaining-programme construction"
+      ],
+      "revisit_condition": "New time-dependent coverage theorem, concrete coverage/worker/phase evidence; never relax original physical/time/identity guards."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-domain-r337-whole",
+      "baseline_commit": "f8a380f60a7e05ffbe5cf56bafe59fa2f20e4529",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-domain"
+      ],
+      "hypothesis": "Independently proved original-programme state/time set can replace repeated full current propagation after authentic preceding sends.",
+      "changed_dimension": "Explicit numerical theorem and private current index/prefix association; no physical or per-packet clock relaxation.",
+      "result": "accepted",
+      "reason": "Original-rest-bounded whole source-derived D/time contains all6currentprefixes and passes fullsource/currentworld/rest in diagnostic.",
+      "production_impact": "Non-Follow programme domain replaces first-only scope; original Follow and complete physical reproof preserved. Phase observer only.",
+      "deleted_code": [
+        "Non-Follow worker index0-only domain scope",
+        "Duplicate remaining-programme construction"
+      ],
+      "revisit_condition": "New time-dependent coverage theorem, concrete coverage/worker/phase evidence; never relax original physical/time/identity guards."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-domain-r337-layered",
+      "baseline_commit": "f8a380f60a7e05ffbe5cf56bafe59fa2f20e4529",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-domain"
+      ],
+      "hypothesis": "Independently proved original-programme state/time set can replace repeated full current propagation after authentic preceding sends.",
+      "changed_dimension": "Explicit numerical theorem and private current index/prefix association; no physical or per-packet clock relaxation.",
+      "result": "rejected",
+      "reason": "Independent25msbox chain misses R56D1lateral prefix, despite freshworldpassing.",
+      "production_impact": "Non-Follow programme domain replaces first-only scope; original Follow and complete physical reproof preserved. Phase observer only.",
+      "deleted_code": [
+        "Non-Follow worker index0-only domain scope",
+        "Duplicate remaining-programme construction"
+      ],
+      "revisit_condition": "New time-dependent coverage theorem, concrete coverage/worker/phase evidence; never relax original physical/time/identity guards."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-domain-r339-follow",
+      "baseline_commit": "f8a380f60a7e05ffbe5cf56bafe59fa2f20e4529",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-domain"
+      ],
+      "hypothesis": "Independently proved original-programme state/time set can replace repeated full current propagation after authentic preceding sends.",
+      "changed_dimension": "Explicit numerical theorem and private current index/prefix association; no physical or per-packet clock relaxation.",
+      "result": "rejected",
+      "reason": "Unrestricted whole-state/time Cartesian product fails existing Follow gap domain regression; notpromoted.",
+      "production_impact": "Non-Follow programme domain replaces first-only scope; original Follow and complete physical reproof preserved. Phase observer only.",
+      "deleted_code": [
+        "Non-Follow worker index0-only domain scope",
+        "Duplicate remaining-programme construction"
+      ],
+      "revisit_condition": "New time-dependent coverage theorem, concrete coverage/worker/phase evidence; never relax original physical/time/identity guards."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-domain-r338-r341",
+      "baseline_commit": "f8a380f60a7e05ffbe5cf56bafe59fa2f20e4529",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-domain"
+      ],
+      "hypothesis": "Independently proved original-programme state/time set can replace repeated full current propagation after authentic preceding sends.",
+      "changed_dimension": "Explicit numerical theorem and private current index/prefix association; no physical or per-packet clock relaxation.",
+      "result": "accepted",
+      "reason": "8numeric and148dispatchnative regressions pass; Follow assertions preserved, repeated-tail fixture uses original terminal sends.",
+      "production_impact": "Non-Follow programme domain replaces first-only scope; original Follow and complete physical reproof preserved. Phase observer only.",
+      "deleted_code": [
+        "Non-Follow worker index0-only domain scope",
+        "Duplicate remaining-programme construction"
+      ],
+      "revisit_condition": "New time-dependent coverage theorem, concrete coverage/worker/phase evidence; never relax original physical/time/identity guards."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-domain-r340",
+      "baseline_commit": "f8a380f60a7e05ffbe5cf56bafe59fa2f20e4529",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-domain"
+      ],
+      "hypothesis": "Independently proved original-programme state/time set can replace repeated full current propagation after authentic preceding sends.",
+      "changed_dimension": "Explicit numerical theorem and private current index/prefix association; no physical or per-packet clock relaxation.",
+      "result": "accepted",
+      "reason": "6actual-library replays adopt domain, preserve fullcurrentprefix, originalsource and exactpre-post outcomes; finalbuild/testpass.",
+      "production_impact": "Non-Follow programme domain replaces first-only scope; original Follow and complete physical reproof preserved. Phase observer only.",
+      "deleted_code": [
+        "Non-Follow worker index0-only domain scope",
+        "Duplicate remaining-programme construction"
+      ],
+      "revisit_condition": "New time-dependent coverage theorem, concrete coverage/worker/phase evidence; never relax original physical/time/identity guards."
     }
   ]
 }

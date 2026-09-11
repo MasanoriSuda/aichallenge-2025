@@ -30,8 +30,10 @@ const char * to_string(
 }
 
 BoundedSingleJobExecutor::BoundedSingleJobExecutor()
-: thread_([this]() {run();})
 {
+  // Start only after every member has been initialized. The thread observes
+  // stop_requested_ and ticket/statistics fields declared after thread_.
+  thread_ = std::thread([this]() {run();});
 }
 
 BoundedSingleJobExecutor::~BoundedSingleJobExecutor()

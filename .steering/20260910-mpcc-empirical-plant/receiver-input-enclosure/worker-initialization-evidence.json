@@ -1,0 +1,169 @@
+{
+  "baseline_commit": "bd9515ec6c4c844f2f5daf0912fcbf9864481382",
+  "production_change": true,
+  "scope": "Start BoundedSingleJobExecutor thread only after every member is initialized. No queue, retry, timing or ticket policy changes.",
+  "validation": {
+    "real_witness": "test90 ReportsJobFailureAndInvalidTicket times out; same failure appears as CTest timeout and missing result",
+    "test90_scoped_records": 2578,
+    "r383_original_lost": 12,
+    "r383_fixed_completed": 12,
+    "r383_note": "5ms diagnostic-only pause between thread startup and later member initialization; no production sleep",
+    "r384_tests": 5,
+    "reconstruction_iterations": 500,
+    "build104_packages": 26,
+    "test91_records": 2582,
+    "ctest_groups": 66,
+    "combined_validation_note": "Build104/test91 also contain the pending relative-domain work; standalone executor source is independently compiled in r384."
+  },
+  "integrated_race_acceptance": false,
+  "files": [
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/driver.cpp",
+      "sha256": "e34694fbaba9792bebe099dcf00e5e9de17be151ac92235f5a902e72b59f6e66"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "4c3528ee297c80198a2ee79f25f10ebdd4ddc6be2ac18da3f0d8d4b441343771"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/original_start_before_state",
+      "sha256": "7970554217a0da190da38cef37e7ac7144494772911afabe257b5b884736a8f0"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/original_start_before_state-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/original_start_before_state-compile.json",
+      "sha256": "fad7091375d79d297f7f4b138b2dba8e952fb8dc7309be7d391914c6a228289a"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/original_start_before_state.cpp",
+      "sha256": "a6a5712ae344a37faa58c2ca6ef90a5b25d2a90ac360f705fb0085a5929f8327"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/original_start_before_state.log",
+      "sha256": "b95ee2541b523bdf141d22e63b7d7501b249c8568aaf671828c5a83e5f80f1b9"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/results.json",
+      "sha256": "84f8b3190b9c8e729daad5e98f95a69dd991d1029522849611a8fd8152b637f3"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/runner.py",
+      "sha256": "65e95e6c576ac3223481f4ee16f0d5b63794ad16f9b3fd393fefe932f49486cc"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/start_after_all_members",
+      "sha256": "7fb91d462d53c0b992f42e0c66ea31ef053b004263fbd2be31ae8d51910bcbc1"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/start_after_all_members-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/start_after_all_members-compile.json",
+      "sha256": "e407dd94b5a1a1e4736d15371e844c27a8dd1ec99d058a5d90f739636ec31621"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/start_after_all_members.cpp",
+      "sha256": "c4a86008968d0ae9d2cc5015de0fd67ca92c54e371a52454cc05774e6e167ee9"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r383/start_after_all_members.log",
+      "sha256": "f01f7eaa156abedeed958f7c3e1cfa093cad39e72190b65e03ab5c8b366493e8"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/bounded_single_job_executor.cpp",
+      "sha256": "dbe9d1cb4089c7ec9f8cd77d85fadc14eb811e0803ecf94820c68eea20480106"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/compile-command.json",
+      "sha256": "a462fb1894209d1c4cd0e2a36565c6dc5d1b8f8b7a2e2f6c3de97d93f53a7d23"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/generator.py",
+      "sha256": "488a5815caaf9ff21eddd939bd17a6d362687636bc4f82fc4f67ce1068ac3baa"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/native",
+      "sha256": "0109404b8b0db27f9755afb00bc5c915bcca3c0fc0131b1d1d28da9555974c8e"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/results.xml",
+      "sha256": "6b9a14441c85db3e3b9c6209c8bfa4170ad84a985304d3b269fce2e35ea2f3ba"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/run-command.json",
+      "sha256": "d7b9bd2755204e3ac926416496b73db58b492805ba4e4f398d33fae46bd8f600"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/run.log",
+      "sha256": "aa2ceaf27a89c1e1f007eecd779515983fab476ecaf1a8b647d05dfda7859117"
+    },
+    {
+      "path": "output/20260912-nine-state-revalidation-tool-r384/test_bounded_single_job_executor.cpp",
+      "sha256": "e313d60d152dc091ac1a9952b3f815d3c3c47a5b838231ce01aa5b735b5d601d"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/mpcc-executor-ctor-r383.log",
+      "sha256": "15335080863188fecd7c45108ce28d6e189aab47ac33aef4a1dedb7b5781f220"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/mpcc-executor-native-r384.log",
+      "sha256": "ed29fb861434ea2a9a9a9a6c54a1d525aecdbea425e290005715ea2e92758091"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/mpcc-nine-state-build-r104.log",
+      "sha256": "aca9654c8c46025a95d177c6f54ac9c1d9ed7a2b24d435a06f4b4f572ea90d7a"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/mpcc-nine-state-tests-r90-scoped-results.log",
+      "sha256": "dab3725df84101904f48a5f48193a228b0c6990decae76236d7e7a5bc6686ee3"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/mpcc-nine-state-tests-r90.log",
+      "sha256": "c5455652af124904d0953bc20fa116509481e5fbc3410e1607fd744a143626eb"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/mpcc-nine-state-tests-r91.log",
+      "sha256": "2f9d8034451ea1b2e6d2111b89c7ad072d7f03230255b4fb1eb1ff9df19d4769"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/mpcc_executor_ctor_r383.py",
+      "sha256": "65e95e6c576ac3223481f4ee16f0d5b63794ad16f9b3fd393fefe932f49486cc"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/mpcc_executor_native_r384.py",
+      "sha256": "488a5815caaf9ff21eddd939bd17a6d362687636bc4f82fc4f67ce1068ac3baa"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/source/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "994779bfa1d00f20514b91beb9efaff5425ffd369514487605a1ca86b5e56a95"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/source/include/multi_purpose_mpc_ros/latest_only_worker.hpp",
+      "sha256": "39f4f298180d8f68d94795961498b46546def7309ac1f2b3b85be33fd6097e35"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/source/src/bounded_single_job_executor.cpp",
+      "sha256": "dbe9d1cb4089c7ec9f8cd77d85fadc14eb811e0803ecf94820c68eea20480106"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/source/test/test_bounded_single_job_executor.cpp",
+      "sha256": "e313d60d152dc091ac1a9952b3f815d3c3c47a5b838231ce01aa5b735b5d601d"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/source.patch",
+      "sha256": "b835f795f9c672bde11590c20890227ea27bb5d691efa5c7923d59f7e065d123"
+    },
+    {
+      "path": "output/20260912-nine-state-worker-initialization/quality.log",
+      "sha256": "bd4dc0f7e042ea2b2a59976ff3c077ba1ab69f7ad862a0f6d49101f69966b94e"
+    }
+  ]
+}

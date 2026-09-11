@@ -73,6 +73,27 @@ TEST(BoundedSingleJobExecutor, ReportsJobFailureAndInvalidTicket)
   EXPECT_EQ(executor.stats().failed, 1U);
 }
 
+TEST(BoundedSingleJobExecutor, ReconstructedStoppedStorageAlwaysStartsANewWorker)
+{
+  std::optional<Executor> executor;
+  for (int iteration = 0; iteration < 500; ++iteration) {
+    SCOPED_TRACE(iteration);
+    executor.emplace();  // Reuses the bytes whose previous stop flag was true.
+    const bool fail = iteration % 3 == 0;
+    const auto submitted = executor->submit([fail]() {
+        if (fail) {throw std::runtime_error("expected job failure");}
+      });
+    ASSERT_TRUE(submitted.accepted());
+    EXPECT_EQ(submitted.ticket.value, 1U);
+    EXPECT_EQ(executor->wait(submitted.ticket),
+      fail ? Executor::WaitReason::JobFailed : Executor::WaitReason::Completed);
+    EXPECT_EQ(executor->stats().completed, 1U);
+    EXPECT_EQ(executor->stats().failed, fail ? 1U : 0U);
+    executor->stop();
+    executor.reset();
+  }
+}
+
 TEST(BoundedSingleJobExecutor, RejectsSubmissionAfterStop)
 {
   Executor executor;

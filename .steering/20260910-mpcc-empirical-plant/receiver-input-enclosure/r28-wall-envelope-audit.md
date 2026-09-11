@@ -1,7 +1,9 @@
 # R28 wall envelope audit
 
-2026-09-11 JST. Baseline/rollback `50486fcf`. No production changes after that
-commit. M4–M6 remain open. Same-world materialization reuse is locally verified
+2026-09-11 JST. Historical diagnostic checkpoint at baseline `50486fcf`;
+its root-cause uncertainty below is superseded by the
+[publication-window investigation](publication-window-design.md). No production
+changes were made during the envelope experiments recorded here. M4–M6 remain open. Same-world materialization reuse is locally verified
 and observed live; it does not establish integrated acceptance.
 
 Dev2-r28 first moving failure is D1 decision919, 1.17m/s, WP30, wall time

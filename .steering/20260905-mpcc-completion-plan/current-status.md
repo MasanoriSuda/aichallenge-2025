@@ -1,23 +1,28 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。最新commit50486fcfのdev2-r28は、D1decision919、1.17m/sで壁の認証を失った。**
+**全体は未完。dev2-r28の公開時刻の欠陥を修正し、build・回帰・保存データ再生まで検証した。**
 
-同じ判断内の停止計画格納では、不変certificateを明示的に渡して数値計算を再利用する。
-元の全計算との区間bit一致、buildr56=26package、testsr46=2453記録/62group・失敗0を確認。
-実走の最初の失敗前にもD1で17回、D2で69回再利用した。初回の長い停止証明、実送信時刻との
-整合、連続deadline超過は未解決。単発超過は元の完遂条件どおり計測・帰属する。
+実公開918/source137の名目時刻9.919999778と実履歴9.934999777の差により、
+加速が残る期間が旧証明から漏れていた。元918状態で公開列だけ15ms遅らせると壁拒否となり、
+919状態で最後の履歴時刻だけ名目値に戻す診断では壁が通る。後者は反実仮想で本番へ使わない。
+公開列に既存25ms周期の時刻範囲を束縛し、履歴・250ms受信profile・物理条件は維持した。
+公開直前・直後と判断開始の生時刻を照合し、時刻逆行も拒否する。範囲逸脱の事後検出は
+遡及的な認可ではなく、実走の不合格として記録する。
 
-最新失敗では、実公開元918/source137と検査対象131を区別し、どちらの現在状態再検証でも
-全入力応答の壁拒否を再現した。前回認証した停止列も現在観測では同じ壁セルと分離しない。
-座標を追加する方法、速度区間の4/8分割、停止操舵列の候補比較はいずれも解決せず未採用。
-相関付き包絡、位置分割、速度×タイヤ角/ヨーレート分割も全認証は回復せず、未採用。
-入力内の反例探索は各5,533経路、最小分離3.3/3.9mmで接触なしだが、全入力の安全証明ではない。
-同じrunのMCAPではIMUの50ms周期を確認した。時刻差の原因性は未確定で、観測再構成も変更しない。
-全r162–178と失敗setupを台帳へ保存し、壁認証と実送信時刻の成立を引き続き修正する。
+Buildr60は26package成功、testsr49は2459記録/62group・エラー/失敗/skip0。
+新ABIのnative15ケースでは12ケースの判定・格納・joinが維持された。
+r24D2判断990、r19D2判断1070/1071は公開遅延を含めると他車の証明で拒否する。
+これらは過去の合格を置き換えず記録した。r18の実履歴欠損は引き続きreason5で拒否する。
+r185の本番証明は問題の918加速指令を公開前に拒否する。元918状態の即時ブレーキ入力列は
+物理検査を通るが、新しい公称解や実走の認可ではない。実走で早期減速・停止を確認する。
 
-[最新の壁包絡監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r28-wall-envelope-audit.md)、
-[再利用の修正と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r27-stop-timing-audit.md)、
+初回の長い停止証明と連続40Hzdeadline超過は未解決。r179のAVX2診断は全区間bit一致で
+約101→71msに短縮したが、deadlineを満たさず移植性確認も未完のため未採用。
+単発超過は元の完遂条件どおり計測・帰属する。次は修正をローカルcommitしdev2-r29。
+
+[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-design.md)、
+[検証結果](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
 dev3/dev4六周、gate1–3、同一tar/image/eval、文書・ローカルcommitまで継続する。

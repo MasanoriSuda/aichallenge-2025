@@ -26,6 +26,7 @@ struct Request {
   /// Existing numerical actuator tolerance, not a new physical margin.
   double actuator_tolerance{};
   std::vector<Sample> nominal_stop_samples;
+  double maximum_publication_delay_sec{};
 };
 
 struct Prepared {

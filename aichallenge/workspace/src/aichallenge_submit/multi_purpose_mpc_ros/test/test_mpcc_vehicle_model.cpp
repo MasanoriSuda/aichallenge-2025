@@ -972,3 +972,160 @@ TEST(MpccVehicleModel, OrientedCellSupportRetainsRotatedContactAndInvalidGeometr
     }
   }
 }
+
+
+TEST(MpccAppliedInput, PublicationWindowCoversDelayedValuesWithoutChangingHistoricalEpochs)
+{
+  const auto observation = applied_observation();
+  const auto history = observation.commands;
+  const auto profile = applied_profile();
+  vehicle::PublishedInputProgram exact{.025,
+    {{1.45, 2, .125}, {1.45 + .025, -3, 0}}, true};
+  auto window = exact;
+  window.maximum_publication_delay_sec = window.publication_interval_sec;
+  const auto before = vehicle::applied_input_bounds(history, exact, profile, 1.715, 1.72);
+  const auto delayed = vehicle::applied_input_bounds(history, window, profile, 1.715, 1.72);
+  ASSERT_TRUE(before); ASSERT_TRUE(delayed);
+  EXPECT_DOUBLE_EQ(before->acceleration_mps2.upper, -3);
+  EXPECT_DOUBLE_EQ(delayed->acceleration_mps2.upper, 2);
+  const auto steering_before = vehicle::applied_input_bounds(history, exact, profile, 1.81, 1.815);
+  const auto steering_delayed = vehicle::applied_input_bounds(history, window, profile, 1.81, 1.815);
+  ASSERT_TRUE(steering_before); ASSERT_TRUE(steering_delayed);
+  EXPECT_DOUBLE_EQ(steering_before->wire_steering_rad.upper, 0);
+  EXPECT_DOUBLE_EQ(steering_delayed->wire_steering_rad.upper, .125);
+  const auto not_yet_steering = vehicle::applied_input_bounds(history, window, profile, 1.53, 1.535);
+  ASSERT_TRUE(not_yet_steering);
+  EXPECT_DOUBLE_EQ(not_yet_steering->wire_steering_rad.upper, 0);
+  ASSERT_EQ(observation.commands.size(), history.size());
+  for (std::size_t i = 0; i < history.size(); ++i) {
+    EXPECT_DOUBLE_EQ(history[i].published_sec, observation.commands[i].published_sec);
+    EXPECT_DOUBLE_EQ(history[i].wire_acceleration_mps2, observation.commands[i].wire_acceleration_mps2);
+    EXPECT_DOUBLE_EQ(history[i].wire_steering_rad, observation.commands[i].wire_steering_rad);
+  }
+}
+
+TEST(MpccAppliedInput, LatestPublicationCannotFillAnEarlierCoverageGap)
+{
+  const auto profile = applied_profile();
+  const std::vector<vehicle::PublishedCommand> history{{0, 1, 0}, {1.2, 1, 0}};
+  auto program = stop_program(1.45);
+  ASSERT_TRUE(vehicle::applied_input_bounds(history, program, profile, 1.45, 1.455));
+  program.maximum_publication_delay_sec = program.publication_interval_sec;
+  EXPECT_FALSE(vehicle::applied_input_bounds(history, program, profile, 1.45, 1.455));
+  auto continuous_history = history;
+  continuous_history.push_back({1.44, 1, 0});
+  EXPECT_TRUE(vehicle::applied_input_bounds(continuous_history, program, profile, 1.45, 1.455));
+  auto insufficient = profile;
+  insufficient.acceleration_age_sec = program.publication_interval_sec;
+  EXPECT_FALSE(vehicle::applied_input_bounds(continuous_history, program, insufficient, 1.45, 1.455));
+}
+
+TEST(MpccAppliedInput, FirstPublicationWindowIsExactAndBoundIntoTheInputContext)
+{
+  const auto observation = applied_observation();
+  const auto profile = applied_profile();
+  const auto model = vehicle_model();
+  auto program = stop_program(observation.now_sec);
+  const auto legacy = vehicle::applied_input_context_fingerprint(observation, program, profile, model);
+  ASSERT_NE(legacy, 0U);
+  EXPECT_TRUE(vehicle::first_publication_time_admitted(program, observation.now_sec));
+  EXPECT_FALSE(vehicle::first_publication_time_admitted(program, observation.now_sec + .015));
+  program.maximum_publication_delay_sec = program.publication_interval_sec;
+  const auto current = vehicle::applied_input_context_fingerprint(observation, program, profile, model);
+  EXPECT_NE(current, 0U); EXPECT_NE(current, legacy);
+  const double latest = observation.now_sec + program.maximum_publication_delay_sec;
+  EXPECT_TRUE(vehicle::first_publication_time_admitted(program, observation.now_sec + .015));
+  EXPECT_TRUE(vehicle::first_publication_time_admitted(program, latest));
+  EXPECT_FALSE(vehicle::first_publication_time_admitted(program, std::nextafter(latest, INFINITY)));
+  EXPECT_FALSE(vehicle::first_publication_time_admitted(program, std::nextafter(observation.now_sec, -INFINITY)));
+  EXPECT_FALSE(vehicle::first_publication_time_admitted(program, NAN));
+  for (const double invalid : std::array<double, 4>{-1., NAN, INFINITY, .026}) {
+    auto changed = program; changed.maximum_publication_delay_sec = invalid;
+    EXPECT_FALSE(vehicle::valid(changed, observation.now_sec));
+    EXPECT_FALSE(vehicle::first_publication_time_admitted(changed, observation.now_sec));
+    EXPECT_EQ(vehicle::applied_input_context_fingerprint(observation, changed, profile, model), 0U);
+  }
+  program.maximum_publication_delay_sec = 0;
+  EXPECT_EQ(vehicle::applied_input_context_fingerprint(observation, program, profile, model), legacy);
+}
+
+TEST(MpccAppliedInput, IndependentPacketPublicationTimesRemainEnclosedThroughRest)
+{
+  const auto observation = applied_observation();
+  const auto profile = applied_profile();
+  const auto model = vehicle_model();
+  const vehicle::PublishedInputProgram program{.025,
+    {{1.45, 1, .125}, {1.45 + .025, -3, -.125}, {1.45 + 2*.025, -3, 0}}, true, .025};
+  const auto prediction = vehicle::predict_applied_inputs_to_rest(observation, program, profile, model);
+  ASSERT_TRUE(prediction.tube);
+  EXPECT_GT(prediction.tube->rest_sec, program.commands.front().published_sec +
+    program.maximum_publication_delay_sec + profile.acceleration_age_sec);
+  namespace num = vehicle::numerical;
+  for (std::size_t arm = 0; arm < 18; ++arm) {
+    auto packets = observation.commands;
+    for (std::size_t i = 0; i < 160; ++i) {
+      auto packet = program.commands[std::min(i, program.commands.size() - 1)];
+      const double phase = arm < 6 ? double(arm % 3) / 2 : double((i + arm) % 3) / 2;
+      const double nominal = observation.now_sec + i * program.publication_interval_sec;
+      packet.published_sec = nominal + phase * program.maximum_publication_delay_sec;
+      // Adjacent closed windows can overlap by one representable timestamp.
+      // Select a nondecreasing actual epoch inside the same certified window;
+      // keep both values at equal epochs and keep the exact boundary checks.
+      packet.published_sec = std::max(packet.published_sec, packets.back().published_sec);
+      ASSERT_GE(packet.published_sec, nominal);
+      ASSERT_LE(packet.published_sec, nominal + program.maximum_publication_delay_sec);
+      packets.push_back(packet);
+    }
+    ASSERT_TRUE(std::is_sorted(packets.begin(), packets.end(), [](const auto &a, const auto &b) {
+      return a.published_sec < b.published_sec;
+    }));
+    auto state = observation.initial.state;
+    state.x_m = state.y_m = state.yaw_rad = 0;
+    for (const auto & sample : prediction.tube->source_to_rest) {
+      const auto select = [&](const bool steering) -> std::optional<double> {
+        const double clock = sample.begin_sec - (steering ? profile.steering_mechanical_delay_sec : 0);
+        const double age = steering ? profile.steering_receipt_age_sec : profile.acceleration_age_sec;
+        std::optional<double> value;
+        for (const auto & packet : packets) {
+          if (packet.published_sec < clock - age || packet.published_sec > clock) continue;
+          value = steering ? packet.wire_steering_rad : packet.wire_acceleration_mps2;
+          if ((arm / 3 + static_cast<std::size_t>(steering)) % 2 == 0) break;
+        }
+        return value;
+      };
+      const auto acceleration = select(false), steering = select(true);
+      ASSERT_TRUE(acceleration); ASSERT_TRUE(steering);
+      state.desired_steering_rad = *steering / model.steering_wire_gain;
+      const auto advanced = vehicle::advance(state, {*acceleration, 0}, model, sample.duration_sec);
+      ASSERT_TRUE(advanced); state = advanced->state;
+      const auto values = num::values(state);
+      for (std::size_t i = 0; i < values.size(); ++i) {
+        EXPECT_GE(values[i], sample.endpoint_body[i].lower) << arm << '/' << i;
+        EXPECT_LE(values[i], sample.endpoint_body[i].upper) << arm << '/' << i;
+      }
+    }
+    EXPECT_EQ(state.forward_velocity_mps, 0);
+    EXPECT_EQ(state.lateral_velocity_mps, 0);
+    EXPECT_EQ(state.yaw_rate_radps, 0);
+  }
+}
+
+
+TEST(MpccAppliedInput, CausalObservationFloorCannotHideAPublicationClockReset)
+{
+  auto program = stop_program(1);
+  program.maximum_publication_delay_sec = .025;
+  EXPECT_TRUE(vehicle::first_publication_bracket_admitted(program, 1, 1.01, 1.02));
+  EXPECT_TRUE(vehicle::first_publication_bracket_admitted(program, 1, 1.02, 1.025));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, 1, 1.02, 1.03));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, 1, .9, .91));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, 1, 1.01, .9));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, 1.01, 1.01, 1.02));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, NAN, 1.01, 1.02));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, 1, NAN, 1.02));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, 1, 1.01, NAN));
+  // A received pose can lead the independent /clock cache. Preserve the causal
+  // floor while checking the unmodified raw clock sequence for regression.
+  EXPECT_TRUE(vehicle::first_publication_bracket_admitted(program, .995, .995, .999));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, .995, .995, .99));
+}

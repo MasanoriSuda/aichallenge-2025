@@ -4538,3 +4538,18 @@ Stop1275の壁側の証明を失った。事前に固定した250msの経験的�
 数値範囲の診断で同じ式を実行する。抽出前の実装との比較、package検証、元worldの再生は
 [共有化の記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-kernel-design.md)を参照。
 これは受信不確かさを本番認証へ採用したことを意味しない。
+
+### 公開時刻範囲の修正（2026-09-11、検証中）
+
+同じfloat指令でも、認証の公開時刻9.919999778と実履歴9.934999777の差で、
+加速入力が残る期間が変わる。dev2-r28の918/919再生で、従来の最終guardが
+nominal message stampだけを照合していた欠陥を確認した。
+[公開範囲の設計と検証条件](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-design.md)
+に従い、common input programmeへ既存publisher period以内の公開時刻範囲を束縛し、
+過去の実公開履歴・受信profile・物理条件を維持して完全停止まで証明する。
+内部provenanceはwindow付きv3を追加し、windowゼロのv1/v2の読み取りとfingerprintを維持する。
+最終公開の前後時刻を照合・記録する。公開後の範囲逸脱検出は遡及的な認可を意味しない。
+Buildr60（26package）、testsr49（2459記録、失敗0）、保存データ再生の結果を
+[検証記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-evidence.json)
+に残す。公開遅延を含めたことで旧r19/r24の一部は他車の検査で拒否する。
+本項はローカル検証済みで、統合受入れやdeadline達成を示さない。

@@ -299,6 +299,7 @@ Result certify_terminal_stop(const retained::Request &request,
                          execution.maximum_abs_steering_rate_radps,
                          execution.physical_global_tolerance,
                          nominal.terminal_stop_actuation_samples};
+  input.maximum_publication_delay_sec = execution.publication_interval_sec;
   const auto prepared = program::prepare(input);
   result.program_reason = prepared.reason;
   if (!prepared.prepared) {

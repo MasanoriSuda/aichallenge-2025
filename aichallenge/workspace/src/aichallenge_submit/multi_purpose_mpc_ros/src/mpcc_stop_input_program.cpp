@@ -22,7 +22,9 @@ Result prepare(const Request &r) noexcept {
   const double now = r.first_packet.published_sec;
   const double period = r.publication_interval_sec;
   if (!finite(now) || now < 0 || !finite(r.nominal_control_origin_sec) ||
-      r.nominal_control_origin_sec < now || !finite(period) || period <= 0)
+      r.nominal_control_origin_sec < now || !finite(period) || period <= 0 ||
+      !finite(r.maximum_publication_delay_sec) || r.maximum_publication_delay_sec < 0 ||
+      r.maximum_publication_delay_sec > period)
     return {R::InvalidTiming, {}};
   if (!finite(r.steering_wire_gain) || r.steering_wire_gain <= 0 ||
       !finite(r.minimum_acceleration_mps2) ||
@@ -60,7 +62,7 @@ Result prepare(const Request &r) noexcept {
   Prepared out{r.source,
                r.decision_id,
                r.nominal_control_origin_sec,
-               {period, {}, true},
+               {period, {}, true, r.maximum_publication_delay_sec},
                false};
   const auto command_count = static_cast<std::size_t>(
       std::ceil((previous - kClockTolerance) / period));
@@ -158,7 +160,7 @@ remaining_program(const vehicle::PublishedInputProgram &source,
   const std::size_t index =
       static_cast<std::size_t>(upper - source.commands.begin() - 1);
   vehicle::PublishedInputProgram result{
-      source.publication_interval_sec, {}, true};
+      source.publication_interval_sec, {}, true, source.maximum_publication_delay_sec};
   result.commands.reserve(source.commands.size() - index);
   for (std::size_t i = index; i < source.commands.size(); ++i) {
     auto packet = source.commands[i];

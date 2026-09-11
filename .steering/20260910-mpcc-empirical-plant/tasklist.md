@@ -28,7 +28,8 @@
 - [x] Remove exactly authenticated synchronous materialization recomputation; bitwise native equality, buildr56/testsr46 (2453), native157/159–161.
 - [x] Capture r28 actual918/source137 versus inspected131, full-wall failure, same-world architecture and failed coordinate/partition/Stop-family hypotheses.
 - [x] Preserve r162–178 correlated/partition/Stop-family failures and native input search; same-run IMU/command chronology and registry. No production promotion.
-- [ ] Repair r28 current-world full-input wall proof failure with a proven producer change, preserving original inputs and physical checks.
+- [x] Establish r28 missing publication timing via r180; bind existing25ms window to common programme/provenance/final raw-clock bracket; buildr60/testsr49 (2459), native182–185. Old r19/r24 positives now peer-rejected are preserved.
+- [ ] Validate repaired publication population and earlier braking in live dev2-r29; physical-only brake witness is not normal authority.
 - [ ] Repair remaining initial long-program proof cost and actual publication timing after r27.
 - [ ] Validate integrated applied-program behavior and25ms timing in fresh runs.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.

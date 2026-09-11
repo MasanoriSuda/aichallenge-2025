@@ -997,6 +997,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r28-wall-envelope-evidence.json",
       "replay_ready": true,
       "reason": "Actual publication918/source137 and inspected131 remain distinct; current919 complete applied wall failure and original profiles. All rejected isolated trials preserved."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-publication-window-r28",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-evidence.json",
+      "replay_ready": true,
+      "reason": "Authenticated918/137nominal versus actual publication epoch; original919history and original empirical profile retained. Current production and legacy-zero physical comparisons sealed."
     }
   ],
   "experiments": [
@@ -11396,6 +11402,90 @@
       "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
       "deleted_code": [],
       "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-window-r28-r179-simd",
+      "baseline_commit": "91d798b7c143ecc436944715a41d9f609d4d6ab5",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-window-r28"
+      ],
+      "hypothesis": "Vectorized interval derivatives alone close the initial proof deadline",
+      "changed_dimension": "Isolated numerical arithmetic vectorization",
+      "result": "rejected",
+      "reason": "Complete1071samples bit-identical;100.988670→70.938267ms, still exceeds25ms. Hardware-specific AVX2 is not promoted.",
+      "production_impact": "Diagnostic only; no authority or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only for changed implementation, new causal evidence or recorded unverified live/timing condition. Preserve all negative cases."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-window-r28-r180-causal",
+      "baseline_commit": "91d798b7c143ecc436944715a41d9f609d4d6ab5",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-window-r28"
+      ],
+      "hypothesis": "Actual publication epoch is missing from prior certified input population",
+      "changed_dimension": "Measured input-time factorization; counterfactuals labeled",
+      "result": "accepted",
+      "reason": "Authenticated918/137packet publishes14.999999mslate. Shift-only prior programme rejects−.018548189m; single919last-history epoch counterfactual restores wall clearance. Old input bounds wrongly exclude positive acceleration over10.174999778..10.184999778.",
+      "production_impact": "Diagnostic only; no authority or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only for changed implementation, new causal evidence or recorded unverified live/timing condition. Preserve all negative cases."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-window-r28-r181-window",
+      "baseline_commit": "91d798b7c143ecc436944715a41d9f609d4d6ab5",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-window-r28"
+      ],
+      "hypothesis": "Existing publisher period can represent missing publication population",
+      "changed_dimension": "Isolated future-publication timing set",
+      "result": "accepted",
+      "reason": "Original25mswindow rejects old normal word beforepublication; samepriorstate immediatebrake physicalword clears. No nominal solve or authority.",
+      "production_impact": "Diagnostic only; no authority or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only for changed implementation, new causal evidence or recorded unverified live/timing condition. Preserve all negative cases."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-window-r28-r185-production",
+      "baseline_commit": "91d798b7c143ecc436944715a41d9f609d4d6ab5",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-window-r28"
+      ],
+      "hypothesis": "Canonical certificate and final publisher bind one publication window",
+      "changed_dimension": "Common programme, certification and publisher epoch binding",
+      "result": "accepted",
+      "reason": "Original causal results reproduced; previous918/source137 is now rejected by production appliedwall. Zero-window hashes preservelegacy; newcanonical window/provenancev3 and rawclockbracket tested.",
+      "production_impact": "Replace nominal-only final guard with firstpacket/source/clockbracket guard. Fullproof/materialization/async identities preserved; integrated acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only for changed implementation, new causal evidence or recorded unverified live/timing condition. Preserve all negative cases."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-window-r28-native15",
+      "baseline_commit": "91d798b7c143ecc436944715a41d9f609d4d6ab5",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-window-r28"
+      ],
+      "hypothesis": "All old positive replays remain acceptable under complete publication timing",
+      "changed_dimension": "Fresh native production replay with explicit old/new comparison",
+      "result": "inconclusive",
+      "reason": "12of15case classifications/joins unchanged, r18historygap remainsreject5. R24D2current990 andr19D2previous1070/current1071 change accepted→peerreject. Larger input population legitimately requires new live trajectories; old positives are retained as rejected.",
+      "production_impact": "Diagnostic only; no authority or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only for changed implementation, new causal evidence or recorded unverified live/timing condition. Preserve all negative cases."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-window-r28-build-package",
+      "baseline_commit": "91d798b7c143ecc436944715a41d9f609d4d6ab5",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-window-r28"
+      ],
+      "hypothesis": "Window, legacy schema/hash and native inclusion regressions are valid",
+      "changed_dimension": "Behavior tests and required build",
+      "result": "accepted",
+      "reason": "Buildr60 26packages; testsr49 2459records/62groups,0errors/fails/skips; initialr47oracle generation failure retained and corrected without relaxed window/numerical checks.",
+      "production_impact": "Diagnostic only; no authority or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only for changed implementation, new causal evidence or recorded unverified live/timing condition. Preserve all negative cases."
     }
   ]
 }

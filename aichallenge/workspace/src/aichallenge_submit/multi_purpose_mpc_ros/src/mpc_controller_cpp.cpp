@@ -9710,8 +9710,10 @@ struct MPC
   }
 
   bool applied_program_matches_final_packet(
-    const std::uint64_t decision_id, const double now_sec,
-    const double acceleration_mps2, const double wire_steering_rad) const
+    const std::uint64_t decision_id, const double nominal_sec,
+    const double decision_clock_sec, const double before_clock_sec, const double after_clock_sec,
+    const double acceleration_mps2, const double wire_steering_rad,
+    double * publication_deadline_sec = nullptr) const
   {
     if (!pending_canonical_normal_actuation_ || !pending_canonical_normal_actuation_->applied_program)
       return false;
@@ -9719,11 +9721,16 @@ struct MPC
     const auto & proof = *pending.applied_program;
     const auto & program = proof.prepared();
     const auto & packet = program.program.commands.front();
+    if (publication_deadline_sec)
+      *publication_deadline_sec = packet.published_sec + program.program.maximum_publication_delay_sec;
     return decision_id == pending.decision_id && decision_id == program.decision_id &&
       program.source.sequence == pending.command.solution_id &&
       program.source.source_context.fingerprint == pending.command.problem_fingerprint &&
-      packet.published_sec == now_sec && packet.wire_acceleration_mps2 == acceleration_mps2 &&
-      packet.wire_steering_rad == wire_steering_rad && proof.tube().rest_sec > now_sec;
+      packet.published_sec == nominal_sec && packet.wire_acceleration_mps2 == acceleration_mps2 &&
+      packet.wire_steering_rad == wire_steering_rad &&
+      proof.tube().rest_sec > std::max(nominal_sec, after_clock_sec) &&
+      mpcc_vehicle_model::first_publication_bracket_admitted(program.program,
+        decision_clock_sec, before_clock_sec, after_clock_sec);
   }
 
   void record_canonical_normal_final_command(
@@ -54903,12 +54910,14 @@ private:
   }
 
   void record_published_vehicle_command(
-    const rclcpp::Time & stamp, const double acceleration, const double wire_steering)
+    const rclcpp::Time & stamp, const double acceleration, const double wire_steering,
+    rclcpp::Time * recorded_ros_clock = nullptr)
   {
     // Called immediately after the final ROS publication. The packet stamp is
     // the nominal decision epoch; it cannot backdate an already sent input.
     // A causal observation may be one tick ahead of the independent ROS clock.
     const auto publication_clock = now();
+    if (recorded_ros_clock) *recorded_ros_clock = publication_clock;
     const auto publication_time = publication_clock < stamp ? stamp : publication_clock;
     // Keep a predecessor for both channels before the oldest accepted state.
     const double retain_sec = mpc_cfg_.odom_timeout_sec +
@@ -55074,16 +55083,44 @@ private:
       publish_failsafe_command(stamp, "non-finite control command rejected");
       return std::nullopt;
     }
+    const auto publication_clock_before = now();
+    const auto publication_before = publication_clock_before < stamp ? stamp : publication_clock_before;
+    double publication_deadline_sec = std::numeric_limits<double>::quiet_NaN();
     if (canonical_execution && (!mpc_ || !mpc_->applied_program_matches_final_packet(
-        active_control_decision_id_, stamp.seconds(), final_command.longitudinal.acceleration,
-        final_command.lateral.steering_tire_angle))) {
-      publish_failsafe_command(stamp, "applied program does not match final serialized packet");
+        active_control_decision_id_, stamp.seconds(), active_control_callback_ros_clock_sec_,
+        publication_clock_before.seconds(), publication_clock_before.seconds(),
+        final_command.longitudinal.acceleration, final_command.lateral.steering_tire_angle,
+        &publication_deadline_sec))) {
+      publish_failsafe_command(stamp, "applied program does not cover final packet/publication time");
       return std::nullopt;
     }
     command_raw_pub_->publish(raw_command);
     command_pub_->publish(final_command);
+    auto publication_clock_after = publication_clock_before;
     record_published_vehicle_command(stamp, final_command.longitudinal.acceleration,
-      final_command.lateral.steering_tire_angle);
+      final_command.lateral.steering_tire_angle, &publication_clock_after);
+    if (canonical_execution) {
+      const double publication_after_sec = last_published_steering_control_time_ ?
+        last_published_steering_control_time_->seconds() : std::numeric_limits<double>::quiet_NaN();
+      // The recorded epoch brackets the publisher call from above. A crossing
+      // is a detected contract violation, never retroactive authorization.
+      if (!std::isfinite(publication_after_sec) ||
+          !mpc_->applied_program_matches_final_packet(active_control_decision_id_, stamp.seconds(),
+          active_control_callback_ros_clock_sec_, publication_clock_before.seconds(),
+          publication_clock_after.seconds(), final_command.longitudinal.acceleration,
+          final_command.lateral.steering_tire_angle)) {
+        RCLCPP_ERROR(get_logger(),
+          "MPCC publication window violated: decision=%lu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f",
+          static_cast<unsigned long>(active_control_decision_id_), stamp.seconds(),
+          publication_before.seconds(), publication_after_sec, publication_deadline_sec);
+        publish_failsafe_command(stamp, "publication crossed certified input window");
+        return std::nullopt;
+      }
+      RCLCPP_INFO(get_logger(),
+        "MPCC applied publication: decision=%lu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f",
+        static_cast<unsigned long>(active_control_decision_id_), stamp.seconds(),
+        publication_before.seconds(), publication_after_sec, publication_deadline_sec);
+    }
     last_published_physical_steering_rad_ =
       raw_command.lateral.steering_tire_angle;
     last_published_steering_steady_ = SteadyClock::now();
@@ -58718,6 +58755,7 @@ private:
     active_control_decision_id_ = ++control_decision_sequence_;
     callback_timing.decision_id = active_control_decision_id_;
     const auto ros_control_time = now();
+    active_control_callback_ros_clock_sec_ = ros_control_time.seconds();
     auto control_time = ros_control_time;
     if (state_prediction_active_) {
       const rclcpp::Time observation_time = odom_ ?
@@ -59296,6 +59334,7 @@ private:
   int loop_{0};
   std::uint64_t control_decision_sequence_{0U};
   std::uint64_t active_control_decision_id_{0U};
+  double active_control_callback_ros_clock_sec_{std::numeric_limits<double>::quiet_NaN()};
   overtake_orchestrator::ChangeAwareFinalControlTraceEmitter
   final_control_trace_emitter_;
   overtake_orchestrator::ChangeAwareWallHandoffTraceEmitter

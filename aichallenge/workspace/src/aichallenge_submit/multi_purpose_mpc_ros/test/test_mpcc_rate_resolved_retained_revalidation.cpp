@@ -2594,7 +2594,10 @@ TEST(MpccRateResolvedRetainedRevalidation, AppliedProvenanceVersionsBindAndValid
   const auto stop = stop_bundle::build_certified_terminal(request, result, 20004U);
   ASSERT_TRUE(stop.plan);
   const auto & execution = *stop.plan->execution_artifact;
-  const auto & provenance = *execution.applied_stop_program;
+  auto provenance = *execution.applied_stop_program;
+  // Exercise the retained v1/v2 wire format explicitly. Current live proofs
+  // have a nonzero publication window, covered separately by the v3 test.
+  provenance.program.maximum_publication_delay_sec = 0;
   YAML::Emitter encoded; encoded.SetDoublePrecision(17);
   encoded << vehicle::encode_applied_program_provenance(provenance);
   auto node = YAML::Load(encoded.c_str());
@@ -3143,4 +3146,44 @@ TEST(MpccAppliedProgram, CapturedObliqueWallSeparationPreservesTheEntireInputTub
     EXPECT_EQ(accepted.tube->source_to_rest.back().endpoint_body[i].lower, 0);
     EXPECT_EQ(accepted.tube->source_to_rest.back().endpoint_body[i].upper, 0);
   }
+}
+
+
+TEST(MpccRateResolvedRetainedRevalidation, PublicationWindowSurvivesStopMaterializationAndEvidence)
+{
+  auto request = source_horizon_request();
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof && result.proof->applied_program);
+  const auto & program = result.proof->applied_program->prepared().program;
+  EXPECT_DOUBLE_EQ(program.maximum_publication_delay_sec, program.publication_interval_sec);
+  const auto stop = stop_bundle::build_certified_terminal(request, result, 23001U);
+  ASSERT_TRUE(stop.plan && stop.plan->execution_artifact->applied_stop_program);
+  const auto & execution = *stop.plan->execution_artifact;
+  const auto & provenance = *execution.applied_stop_program;
+  const auto remaining = stop_program::remaining_program(provenance.program, request.now_sec + .015);
+  ASSERT_TRUE(remaining);
+  EXPECT_DOUBLE_EQ(remaining->maximum_publication_delay_sec, program.maximum_publication_delay_sec);
+  YAML::Emitter encoded; encoded.SetDoublePrecision(17);
+  encoded << vehicle::encode_applied_program_provenance(provenance);
+  auto node = YAML::Load(encoded.c_str());
+  EXPECT_EQ(node["schema"].as<std::string>(), "applied-stop-provenance-v3");
+  EXPECT_TRUE(node["has_forward_velocity_ceiling"].as<bool>());
+  const auto decoded = vehicle::decode_applied_program_provenance(node, execution.vehicle_model);
+  ASSERT_TRUE(decoded);
+  EXPECT_EQ(vehicle::applied_program_provenance_fingerprint(*decoded, execution.vehicle_model),
+    vehicle::applied_program_provenance_fingerprint(provenance, execution.vehicle_model));
+  node["program"]["maximum_publication_delay_sec"] = program.publication_interval_sec * 2;
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
+  node["program"]["maximum_publication_delay_sec"] = program.maximum_publication_delay_sec;
+  node.remove("forward_velocity_ceiling_mps");
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
+  node["forward_velocity_ceiling_mps"] = *provenance.forward_velocity_ceiling_mps;
+  node["has_forward_velocity_ceiling"] = false;
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
+  node["has_forward_velocity_ceiling"] = true;
+  node["schema"] = "applied-stop-provenance-v2";
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
+  node["schema"] = "applied-stop-provenance-v3";
+  node["program"].remove("maximum_publication_delay_sec");
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
 }

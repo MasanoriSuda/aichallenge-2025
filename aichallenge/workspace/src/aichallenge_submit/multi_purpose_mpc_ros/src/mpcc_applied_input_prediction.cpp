@@ -51,7 +51,12 @@ channel_bounds(const std::vector<PublishedCommand> &history,
   const double last = numerical::up(end - delay);
   std::optional<numerical::I> range;
   std::array<std::optional<numerical::I>, 3> sign_groups;
-  const double tail_start = program.commands.back().published_sec + delay;
+  const double window = program.maximum_publication_delay_sec;
+  // Values use the union of all allowed publication epochs. Guaranteed
+  // coverage instead starts at the latest publication and ends at the earliest
+  // packet expiry. Retain exact historical epochs and legacy zero-window math.
+  const double tail_start = window == 0 ? program.commands.back().published_sec + delay :
+    numerical::up(numerical::up(program.commands.back().published_sec + window) + delay);
   const bool tail_covers_begin = program.repeat_last_until_rest && tail_start <= begin;
   double covered_until = begin;
   bool coverage_started = false;
@@ -67,14 +72,20 @@ channel_bounds(const std::vector<PublishedCommand> &history,
   };
   for (const auto *packets : {&history, &program.commands}) {
     auto packet =
-        std::lower_bound(packets->begin(), packets->end(), first,
+        std::lower_bound(packets->begin(), packets->end(),
+          packets == &program.commands && window > 0 ? numerical::down(first - window) : first,
                          [](const PublishedCommand &value, const double stamp) {
                            return value.published_sec < stamp;
                          });
     for (; packet != packets->end() && packet->published_sec <= last; ++packet) {
       add(*packet);
-      const double available_from = packet->published_sec + delay;
-      const double available_until = available_from + age;
+      const bool uncertain_publication = packets == &program.commands && window > 0;
+      const double available_from = uncertain_publication ?
+        numerical::up(numerical::up(packet->published_sec + window) + delay) :
+        packet->published_sec + delay;
+      const double available_until = uncertain_publication ?
+        numerical::down(numerical::down(packet->published_sec + delay) + age) :
+        available_from + age;
       if (!tail_covers_begin && (!coverage_started || covered_until < end) &&
         available_until >= begin)
       {
@@ -125,8 +136,11 @@ bounds(const std::vector<PublishedCommand> &history,
 
 bool compatible(const InputApplicationProfile &profile,
                 const PublishedInputProgram &program) {
-  return profile.acceleration_age_sec >= program.publication_interval_sec &&
-         profile.steering_receipt_age_sec >= program.publication_interval_sec;
+  const double maximum_gap = program.publication_interval_sec +
+    program.maximum_publication_delay_sec;
+  return std::isfinite(maximum_gap) &&
+         profile.acceleration_age_sec >= maximum_gap &&
+         profile.steering_receipt_age_sec >= maximum_gap;
 }
 
 BodyRanges body_ranges(const numerical::Box &box) {
@@ -177,7 +191,10 @@ bool valid(const PublishedInputProgram &program,
            const double publication) noexcept {
   if (!nonnegative(publication) ||
       !std::isfinite(program.publication_interval_sec) ||
-      program.publication_interval_sec <= 0 || program.commands.empty() ||
+      program.publication_interval_sec <= 0 ||
+      !nonnegative(program.maximum_publication_delay_sec) ||
+      program.maximum_publication_delay_sec > program.publication_interval_sec ||
+      program.commands.empty() ||
       program.commands.size() > 10000 ||
       program.commands.front().published_sec != publication) {
     return false;
@@ -193,6 +210,27 @@ bool valid(const PublishedInputProgram &program,
   }
   return !program.repeat_last_until_rest ||
          program.commands.back().wire_acceleration_mps2 <= 0;
+}
+
+bool first_publication_time_admitted(const PublishedInputProgram &program,
+                                     const double actual) noexcept {
+  if (program.commands.empty() || !nonnegative(actual) ||
+      !valid(program, program.commands.front().published_sec)) return false;
+  const double first = program.commands.front().published_sec;
+  const double latest = first + program.maximum_publication_delay_sec;
+  return std::isfinite(latest) && actual >= first && actual <= latest;
+}
+
+bool first_publication_bracket_admitted(const PublishedInputProgram &program,
+                                        const double decision_clock,
+                                        const double before_clock,
+                                        const double after_clock) noexcept {
+  if (program.commands.empty() || !nonnegative(decision_clock) ||
+      !nonnegative(before_clock) || !nonnegative(after_clock) ||
+      decision_clock > program.commands.front().published_sec ||
+      before_clock < decision_clock || after_clock < before_clock) return false;
+  return first_publication_time_admitted(program,
+    std::max(program.commands.front().published_sec, after_clock));
 }
 
 std::uint64_t
@@ -224,6 +262,12 @@ applied_input_context_fingerprint(const ObservationProvenance &observation,
   hash.number(program.publication_interval_sec);
   hash.commands(program.commands);
   hash.integer(program.repeat_last_until_rest);
+  // Preserve old exact-epoch fingerprints. A nonzero window is a different
+  // admitted input population and cannot authenticate as the legacy context.
+  if (program.maximum_publication_delay_sec > 0) {
+    hash.string("publication-completion-window-v1");
+    hash.number(program.maximum_publication_delay_sec);
+  }
   return hash.value == 0 ? 1 : hash.value;
 }
 
@@ -349,12 +393,17 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
     // even if the body is already stationary before that interval ends.
     double rest_not_before = observation.now_sec +
       program.commands.size() * program.publication_interval_sec;
+    if (program.maximum_publication_delay_sec > 0)
+      rest_not_before = numerical::up(rest_not_before + program.maximum_publication_delay_sec);
     for (const auto *packets : {&observation.commands, &program.commands}) {
       for (const auto &packet : *packets) {
         if (packet.wire_acceleration_mps2 > 0) {
+          const double expiry = packets == &program.commands && program.maximum_publication_delay_sec > 0 ?
+            numerical::up(numerical::up(packet.published_sec + program.maximum_publication_delay_sec) +
+              profile.acceleration_age_sec) : packet.published_sec + profile.acceleration_age_sec;
           rest_not_before =
               std::max(rest_not_before,
-                       packet.published_sec + profile.acceleration_age_sec);
+                       expiry);
         }
       }
     }

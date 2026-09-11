@@ -27,9 +27,9 @@ run_kind = 'application-' if application_diagnostic else ''
 root = Path('output/20260910-nine-state-'+run_kind+mode+'-'+attempt)
 host_duration_sec = 120 if application_diagnostic else 840
 assert not subprocess.check_output(['docker', 'ps', '-q']).strip(), 'Other containers running'
-test_log = Path('/tmp/mpcc-nine-state-tests-r46.log')
-build_log = Path('/tmp/mpcc-nine-state-build-r56.log')
-assert 'Summary: 2453 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
+test_log = Path('/tmp/mpcc-nine-state-tests-r49.log')
+build_log = Path('/tmp/mpcc-nine-state-build-r60.log')
+assert 'Summary: 2459 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
 assert 'Summary: 26 packages finished' in build_log.read_text()
 original_dll = Path('aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll')
 assert hashlib.sha256(original_dll.read_bytes()).hexdigest() == '703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172'
@@ -173,6 +173,9 @@ try:
             launch_errors = [line for line in lines if '[ERROR] [launch]' in line]
             summary[domain]['body_prediction_samples'] = sum('MPCC body prediction:' in line for line in lines)
             summary[domain]['causal_input_failsafes'] = sum('missing causal body/tire/input observation' in line for line in lines)
+            publication_violations = [line for line in lines if 'MPCC publication window violated:' in line]
+            summary[domain]['publication_window_violations'] = publication_violations
+            summary[domain]['certified_publications'] = sum('MPCC applied publication:' in line for line in lines)
             if launch_errors:
                 summary[domain]['launch_errors'] = launch_errors
             tactical_rejoins = [line for line in phases if 'Pass -> Recovery,' in line and
@@ -180,7 +183,7 @@ try:
             unexpected_recovery = [line for line in phases if ' -> Recovery,' in line and line not in tactical_rejoins]
             summary[domain]['tactical_rejoin_transitions'] = tactical_rejoins
             summary[domain]['unexpected_recovery_transitions'] = unexpected_recovery
-            failed |= bool(launch_errors) or first_override is not None or bool(unexpected_recovery)
+            failed |= bool(launch_errors) or first_override is not None or bool(unexpected_recovery) or bool(publication_violations)
             if timing_diagnostic and vehicle_state in ('ready', 'start'):
                 raw = [(int(i), float(ms)) for line in lines if 'Control callback samples:' in line
                        for i, ms in re.findall(r'(\d+):([\d.]+)', line.split('decision_elapsed_ms=', 1)[1])]
@@ -211,7 +214,7 @@ try:
         if failed:
             termination = ('launch failure; controller acceptance not evaluated' if
                 any('launch_errors' in row for row in summary.values()) else
-                'first active moving Emergency/Recovery; preserve earliest failure')
+                'first authority/publication-window failure; preserve earliest failure')
             time.sleep(2)
             break
         if timing_diagnostic and any(row.get('adjacent_callback_overruns') for row in summary.values()):

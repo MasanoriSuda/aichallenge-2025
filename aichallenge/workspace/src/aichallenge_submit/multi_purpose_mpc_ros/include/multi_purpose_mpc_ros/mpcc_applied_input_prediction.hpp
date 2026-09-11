@@ -31,6 +31,10 @@ struct PublishedInputProgram {
   double publication_interval_sec{};
   std::vector<PublishedCommand> commands;
   bool repeat_last_until_rest{};
+  /// Each future packet may publish anywhere in its closed nominal-to-latest
+  /// window. Actual history keeps exact recorded epochs. Zero is legacy exact
+  /// timing; canonical proof uses the existing publisher period as its deadline.
+  double maximum_publication_delay_sec{};
 };
 
 /// Bounded input provenance carried by a materialized Stop artifact. This
@@ -133,6 +137,17 @@ struct AppliedInputPrediction {
 bool valid(const InputApplicationProfile &profile) noexcept;
 bool valid(const PublishedInputProgram &program,
            double publication_sec) noexcept;
+/// First-packet timing only; source/decision/float identity and full physical
+/// authority remain the caller's responsibility. No grace outside this window.
+bool first_publication_time_admitted(const PublishedInputProgram &program,
+                                     double actual_publication_sec) noexcept;
+/// Raw ROS clocks must not regress from callback entry through publication.
+/// A received observation may be ahead of /clock; its nominal epoch remains
+/// the causal floor, but it must not hide a reset of the underlying clock.
+bool first_publication_bracket_admitted(const PublishedInputProgram &program,
+                                        double decision_clock_sec,
+                                        double before_clock_sec,
+                                        double after_clock_sec) noexcept;
 std::uint64_t
 applied_input_context_fingerprint(const ObservationProvenance &observation,
                                   const PublishedInputProgram &program,

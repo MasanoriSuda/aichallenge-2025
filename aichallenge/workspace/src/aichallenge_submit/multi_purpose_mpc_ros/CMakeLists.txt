@@ -902,6 +902,7 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_retained_revalidation
       ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+      ${PROJECT_NAME}_mpcc_architecture_snapshot
       ${PROJECT_NAME}_mpcc_rate_resolved_production_adapter
       ${PROJECT_NAME}_mpcc_rate_resolved_stop_successor_bundle
     )

@@ -10,6 +10,10 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp"
 
 #include <gtest/gtest.h>
+#include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
+#include <chrono>
+#include <fstream>
+#include <thread>
 
 #include <algorithm>
 #include <cmath>
@@ -3211,4 +3215,125 @@ TEST(MpccRateResolvedRetainedRevalidation, PublicationWindowSurvivesStopMaterial
   node["schema"] = "applied-stop-provenance-v3";
   node["program"].remove("maximum_publication_delay_sec");
   EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
+}
+
+TEST(MpccAppliedProgram, FinalPublicationObservationPreservesImmutableRequestAndDrainsFirstEvents)
+{
+  namespace capture = multi_purpose_mpc_ros::mpcc_architecture_snapshot;
+  const auto request = source_horizon_request();
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof && result.proof->applied_program);
+  const auto certificate = result.proof->applied_program;
+  ASSERT_TRUE(certificate->observation_request());
+  const auto & exact = *certificate->observation_request();
+  ASSERT_EQ(exact.decision_id, request.decision_id);
+  const auto & program = certificate->prepared().program;
+  const auto & first = program.commands.front();
+  const auto directory = std::filesystem::temp_directory_path() /
+    ("mpcc-publication-observation-" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  const auto parent_thread = std::this_thread::get_id();
+  std::vector<capture::RecordResult> records;
+  bool callback_on_worker = true;
+  capture::FirstPublicationFailureRecorder recorder(
+    [&](const auto &, const auto & record) {
+      callback_on_worker &= std::this_thread::get_id() != parent_thread;
+      records.push_back(record);
+    });
+  capture::PublicationFailureObservation observation;
+  observation.certificate = certificate;
+  observation.decision_id = exact.decision_id;
+  observation.nominal_sec = first.published_sec;
+  observation.decision_clock_sec = exact.now_sec;
+  observation.wire_acceleration_mps2 = first.wire_acceleration_mps2;
+  observation.wire_steering_rad = first.wire_steering_rad;
+  observation.output_root = directory;
+  for (bool moving : {false, true}) {
+    for (bool post : {false, true}) {
+      observation.moving = moving;
+      observation.after_publication = post;
+      observation.before_clock_sec = first.published_sec +
+        program.maximum_publication_delay_sec + (post ? -.001 : .005);
+      observation.after_clock_sec = first.published_sec + program.maximum_publication_delay_sec + .005;
+      EXPECT_EQ(recorder.submit(observation), capture::ObservationAdmission::Queued);
+      auto later = observation;
+      later.decision_id += 1000;
+      later.wire_acceleration_mps2 = 123;
+      EXPECT_EQ(recorder.submit(later), capture::ObservationAdmission::Duplicate);
+    }
+  }
+  recorder.stop();
+  ASSERT_EQ(records.size(), 4U);
+  EXPECT_TRUE(callback_on_worker);
+  EXPECT_EQ(recorder.submit(observation), capture::ObservationAdmission::Stopped);
+  for (const auto & record : records) {
+    ASSERT_EQ(record.status, capture::RecordStatus::Written) << record.detail;
+    const auto document = YAML::LoadFile(record.snapshot_file.string());
+    EXPECT_EQ(document["schema"].as<std::string>(), "mpcc-final-publication-failure/v1");
+    EXPECT_FALSE(document["authority"].as<bool>());
+    const auto boundary = document["boundary"];
+    EXPECT_EQ(boundary["decision_id"].as<std::uint64_t>(), exact.decision_id);
+    EXPECT_DOUBLE_EQ(boundary["wire_acceleration_mps2"].as<double>(), first.wire_acceleration_mps2);
+    EXPECT_DOUBLE_EQ(boundary["wire_steering_rad"].as<double>(), first.wire_steering_rad);
+    EXPECT_TRUE(boundary["final_packet_matches"].as<bool>());
+    EXPECT_FALSE(boundary["publication_bracket_admitted"].as<bool>());
+    EXPECT_DOUBLE_EQ(boundary["decision_clock_sec"].as<double>(), exact.now_sec);
+    EXPECT_DOUBLE_EQ(boundary["after_clock_sec"].as<double>(), observation.after_clock_sec);
+    EXPECT_DOUBLE_EQ(document["rest_sec"].as<double>(), certificate->tube().rest_sec);
+    const auto evidence = document["revalidation_evidence"];
+    EXPECT_EQ(evidence["status"].as<std::string>(), "present");
+    EXPECT_EQ(evidence["request"]["decision_id"].as<std::uint64_t>(), exact.decision_id);
+    EXPECT_DOUBLE_EQ(evidence["request"]["now_sec"].as<double>(), exact.now_sec);
+    EXPECT_DOUBLE_EQ(evidence["request"]["control_origin_sec"].as<double>(), exact.control_origin_sec);
+    const auto encoded = vehicle::decode_input_program(document["applied_program"]);
+    ASSERT_TRUE(encoded);
+    EXPECT_EQ(encoded->commands.size(), program.commands.size());
+    EXPECT_DOUBLE_EQ(encoded->maximum_publication_delay_sec, program.maximum_publication_delay_sec);
+    for (size_t i = 0; i < program.commands.size(); ++i) {
+      EXPECT_DOUBLE_EQ(encoded->commands[i].published_sec, program.commands[i].published_sec);
+      EXPECT_DOUBLE_EQ(encoded->commands[i].wire_acceleration_mps2, program.commands[i].wire_acceleration_mps2);
+      EXPECT_DOUBLE_EQ(encoded->commands[i].wire_steering_rad, program.commands[i].wire_steering_rad);
+    }
+    if (exact.current_wall_grid) {
+      const auto path = record.snapshot_file.parent_path() / "revalidation-wall-grid.bin";
+      std::ifstream file(path, std::ios::binary);
+      const std::string bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+      ASSERT_EQ(bytes.size(), exact.current_wall_grid->cells.size());
+      for (size_t i = 0; i < bytes.size(); ++i) {
+        EXPECT_EQ(static_cast<std::int8_t>(bytes[i]), static_cast<std::int8_t>(exact.current_wall_grid->cells[i]));
+      }
+    }
+  }
+  EXPECT_TRUE(certificate->matches(exact));
+  std::filesystem::remove_all(directory);
+}
+
+TEST(MpccAppliedProgram, FinalPublicationObservationReportsMissingOrMismatchedEvidence)
+{
+  namespace capture = multi_purpose_mpc_ros::mpcc_architecture_snapshot;
+  const auto directory = std::filesystem::temp_directory_path() /
+    ("mpcc-publication-missing-" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  capture::PublicationFailureObservation observation;
+  observation.output_root = directory;
+  EXPECT_EQ(capture::record_publication_failure(observation).status, capture::RecordStatus::InvalidInput);
+  observation.decision_id = 100001;
+  auto recorded = capture::record_publication_failure(observation);
+  ASSERT_EQ(recorded.status, capture::RecordStatus::Written);
+  auto document = YAML::LoadFile(recorded.snapshot_file.string());
+  EXPECT_EQ(document["certificate_status"].as<std::string>(), "missing");
+  EXPECT_EQ(document["revalidation_evidence"]["status"].as<std::string>(), "missing");
+  const auto request = source_horizon_request();
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof && result.proof->applied_program);
+  observation.certificate = result.proof->applied_program;
+  ++observation.decision_id;
+  recorded = capture::record_publication_failure(observation);
+  ASSERT_EQ(recorded.status, capture::RecordStatus::Written);
+  document = YAML::LoadFile(recorded.snapshot_file.string());
+  EXPECT_EQ(document["revalidation_evidence"]["status"].as<std::string>(), "invalid");
+  EXPECT_EQ(document["revalidation_evidence"]["request"]["decision_id"].as<std::uint64_t>(), request.decision_id);
+  EXPECT_FALSE(document["boundary"]["final_packet_matches"].as<bool>());
+  EXPECT_EQ(capture::record_publication_failure(observation).status, capture::RecordStatus::Duplicate);
+  std::filesystem::remove_all(directory);
 }

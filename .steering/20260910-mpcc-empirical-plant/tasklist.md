@@ -43,4 +43,6 @@
 - [x] R193–194paired prefix/suffix membership comparisons rejected; no cache promoted.
 - [x] R195–202analytic wheel-force Jacobian, independent100digit and full native validation.
 - [x] Production same-step coefficients; buildr62/testsr51/rebuiltr203–206passed.
-- [ ] Fixed committed dev2-r30: actual publication deadline and moving authority; then M4–M6.
+- [x] Dev2-r30on7c283cc7fails beforeReady: D1645/D2662postpublicationwindow; preserved, not accepted.
+- [x] Final-publication immutableinput observer, bounded fourbuckets, buildr63/testsr52passed.
+- [ ] Fixed committed dev2-r31, exact finalguardrequest replay and causal deadline repair; then M4–M6.

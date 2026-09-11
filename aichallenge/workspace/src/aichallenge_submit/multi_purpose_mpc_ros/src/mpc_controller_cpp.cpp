@@ -8249,6 +8249,17 @@ struct MPC
         std::make_unique<LatestOnlyWorker>();
       rate_resolved_return_execution_shadow_worker_ =
         std::make_unique<LatestOnlyWorker>();
+      publication_failure_recorder_ =
+        std::make_unique<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(
+        [](const mpcc_architecture_snapshot::PublicationFailureObservation & observation,
+          const mpcc_architecture_snapshot::RecordResult & recorded) {
+          RCLCPP_WARN(rclcpp::get_logger("mpc_controller"),
+            "MPCC final publication observation: decision=%lu, post=%d, moving=%d, status=%s, file=%s, detail=%s, authority=observation-only",
+            static_cast<unsigned long>(observation.decision_id),
+            observation.after_publication ? 1 : 0, observation.moving ? 1 : 0,
+            mpcc_architecture_snapshot::to_string(recorded.status),
+            recorded.snapshot_file.string().c_str(), recorded.detail.c_str());
+        });
       rate_resolved_terminal_failure_snapshot_worker_ =
         std::make_unique<mpcc_architecture_snapshot::FirstAuthorityFailureRecorder>(
         [](const mpcc_architecture_snapshot::AuthorityFailureObservation & observation,
@@ -9731,6 +9742,20 @@ struct MPC
       proof.tube().rest_sec > std::max(nominal_sec, after_clock_sec) &&
       mpcc_vehicle_model::first_publication_bracket_admitted(program.program,
         decision_clock_sec, before_clock_sec, after_clock_sec);
+  }
+
+  std::shared_ptr<const mpcc_rate_resolved_applied_program::Certificate>
+  applied_publication_observation() const noexcept
+  {
+    return pending_canonical_normal_actuation_ ?
+      pending_canonical_normal_actuation_->applied_program : nullptr;
+  }
+
+  void record_applied_publication_failure(
+    mpcc_architecture_snapshot::PublicationFailureObservation observation)
+  {
+    if (!publication_failure_recorder_) return;
+    static_cast<void>(publication_failure_recorder_->submit(std::move(observation)));
   }
 
   void record_canonical_normal_final_command(
@@ -31659,6 +31684,8 @@ struct MPC
   rate_resolved_return_execution_shadow_worker_;
   std::unique_ptr<mpcc_architecture_snapshot::FirstAuthorityFailureRecorder>
   rate_resolved_terminal_failure_snapshot_worker_;
+  std::unique_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>
+  publication_failure_recorder_;
   std::optional<RateResolvedTerminalViabilityBoundarySample>
   rate_resolved_last_accepted_terminal_viability_boundary_;
   std::uint64_t rate_resolved_preentry_execution_shadow_next_sequence_{1U};
@@ -55091,7 +55118,14 @@ private:
         publication_clock_before.seconds(), publication_clock_before.seconds(),
         final_command.longitudinal.acceleration, final_command.lateral.steering_tire_angle,
         &publication_deadline_sec))) {
+      mpcc_architecture_snapshot::PublicationFailureObservation observation{
+        mpc_ ? mpc_->applied_publication_observation() : nullptr,
+        active_control_decision_id_, stamp.seconds(), active_control_callback_ros_clock_sec_,
+        publication_clock_before.seconds(), publication_clock_before.seconds(),
+        final_command.longitudinal.acceleration, final_command.lateral.steering_tire_angle,
+        false, odom_ && std::abs(odom_->twist.twist.linear.x) > 0.1};
       publish_failsafe_command(stamp, "applied program does not cover final packet/publication time");
+      if (mpc_) mpc_->record_applied_publication_failure(std::move(observation));
       return std::nullopt;
     }
     command_raw_pub_->publish(raw_command);
@@ -55113,7 +55147,14 @@ private:
           "MPCC publication window violated: decision=%lu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f",
           static_cast<unsigned long>(active_control_decision_id_), stamp.seconds(),
           publication_before.seconds(), publication_after_sec, publication_deadline_sec);
+        mpcc_architecture_snapshot::PublicationFailureObservation observation{
+          mpc_->applied_publication_observation(), active_control_decision_id_, stamp.seconds(),
+          active_control_callback_ros_clock_sec_, publication_clock_before.seconds(),
+          publication_clock_after.seconds(), final_command.longitudinal.acceleration,
+          final_command.lateral.steering_tire_angle,
+          true, odom_ && std::abs(odom_->twist.twist.linear.x) > 0.1};
         publish_failsafe_command(stamp, "publication crossed certified input window");
+        mpc_->record_applied_publication_failure(std::move(observation));
         return std::nullopt;
       }
       RCLCPP_INFO(get_logger(),

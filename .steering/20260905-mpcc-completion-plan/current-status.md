@@ -1,21 +1,21 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。公開時刻修正f3b444f2のdev2-r29は計算時間超過で不合格。**
+**全体は未完。7c283cc7のdev2-r30も最終公開期限で不合格。**
 
-今回、車輪力の区間微分を同一積分内で共用する実装を追加した。
-状態値・物理model・250ms受信profile・25ms公開期限・壁/他車余裕は維持する。
-100桁の独立kernel照合と危険な入力の拒否を検証した。過去15ケースのうち、
-旧合格をすべて維持し、r24D2判断990は精度改善により約56msの拒否から約16msの合格へ変化。
-再ビルドした本体と試作の非時間結果は全件一致。Buildr62は26package、testsr51は
-2462記録/63group・エラー/失敗/skip0。r50の旧粗区間依存の失敗も証拠へ残す。
+車輪力の区間微分改善は高精度・native検証済み。実走ではReady前のD1判断645、
+D2判断662で25msの証明範囲に対して約30msの公開を検出した。D1判断645は
+steady callback27.3ms、判断680は22.2msでもROS公開時刻は約30ms進んだ。
+主判定・公開前処理・独立して更新されるROS時刻を分けて原因を調べる。
 
-以前の証明を再利用するr193–194は状態/車体頂点の包含が成立せず不採用。
-r27の長い拒否計算は約70ms残り、実走期限は未合格。次は固定commitのdev2-r30。
-r29の最終公開guard失敗は時刻ログ/MCAPがあり、正確なproof snapshotは欠落している。
+正確な最終guard失敗入力の保存不足を修正した。既存Certificateの不変Request、
+指令列とfloat指令、判断/公開前/後の生時刻を、既存failsafeの実行後に非同期保存する。
+公開前/後×静止/走行の最初の4イベントを保持し、終了時に書き込みを完了する。
+Buildr63は26package、testsr52は2464記録/63group・エラー/失敗/skip0。
+次は固定commitのdev2-r31で実入力を保存・再生し、公開期限の原因修正へ進む。
 
-[現在の設計・検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-force-design.md)、
-[時間監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r29-publication-timing-audit.md)、
+[最終公開の観測設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-observation-design.md)、
+[区間微分の検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-force-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
 dev3/dev4六周、gate1–3、同一tar/image/eval、文書・ローカルcommitまで継続する。

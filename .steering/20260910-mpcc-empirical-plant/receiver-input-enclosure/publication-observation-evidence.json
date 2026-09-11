@@ -1,0 +1,330 @@
+{
+  "baseline_commit": "7c283cc701a13bf92dc4b4c49b3a76c1d7f9f5cf",
+  "production_change": "Final publisher failure observation only. No model, margins, callback rate, clock, deadline or authority changes.",
+  "integrated_acceptance": false,
+  "run_manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r30-manifest.json",
+  "summary": {
+    "d1": {
+      "ready_wall_sec": 1789097856.0541885,
+      "first_moving_failure": null,
+      "first_post_publication_violation": {
+        "decision": 645,
+        "nominal": 2.529999943,
+        "before": 2.554999942,
+        "after": 2.559999942,
+        "deadline": 2.554999943,
+        "wall": 1789097851.0390732,
+        "phase": "startup",
+        "publication_delay_ms": 29.999999000000166
+      },
+      "by_phase": {
+        "startup": {
+          "certified_publications": 245,
+          "post_publication_violations": 2,
+          "pre_publication_rejections": 36,
+          "accepted_publication_delay_ms": {
+            "count": 245,
+            "mean": 18.204081265306108,
+            "p95": 24.999999999999467,
+            "p99": 25.000000000000355,
+            "maximum": 25.000000000000355
+          }
+        },
+        "before_or_first_failure": {
+          "certified_publications": 0,
+          "post_publication_violations": 0,
+          "pre_publication_rejections": 1,
+          "accepted_publication_delay_ms": {
+            "count": 0
+          }
+        },
+        "postfailure": {
+          "certified_publications": 0,
+          "post_publication_violations": 0,
+          "pre_publication_rejections": 0,
+          "accepted_publication_delay_ms": {
+            "count": 0
+          }
+        }
+      },
+      "all_run_callback_ms": {
+        "count": 1005,
+        "mean": 6.218509435820896,
+        "p95": 23.04193,
+        "p99": 28.662487,
+        "maximum": 156.901382
+      },
+      "all_run_adjacent_overrun_pairs": 10,
+      "notes": [
+        "Callback aggregates include startup/postfailure/teardown; not acceptance. Published timestamps are nine-decimal telemetry; exact double guard checks ran in the node.",
+        "No exact guard-failure architecture snapshot was captured. Generic final fail-safe telemetry preserves decision, nominal source identity and speed."
+      ]
+    },
+    "d2": {
+      "ready_wall_sec": 1789097856.0527325,
+      "first_moving_failure": null,
+      "first_post_publication_violation": {
+        "decision": 662,
+        "nominal": 3.519999921,
+        "before": 3.54499992,
+        "after": 3.54999992,
+        "deadline": 3.544999921,
+        "wall": 1789097852.026565,
+        "phase": "startup",
+        "publication_delay_ms": 29.999998999999722
+      },
+      "by_phase": {
+        "startup": {
+          "certified_publications": 220,
+          "post_publication_violations": 3,
+          "pre_publication_rejections": 37,
+          "accepted_publication_delay_ms": {
+            "count": 220,
+            "mean": 17.181817763636364,
+            "p95": 24.999999000000273,
+            "p99": 25.000000000000355,
+            "maximum": 25.000000000000355
+          }
+        },
+        "before_or_first_failure": {
+          "certified_publications": 0,
+          "post_publication_violations": 0,
+          "pre_publication_rejections": 0,
+          "accepted_publication_delay_ms": {
+            "count": 0
+          }
+        },
+        "postfailure": {
+          "certified_publications": 0,
+          "post_publication_violations": 0,
+          "pre_publication_rejections": 0,
+          "accepted_publication_delay_ms": {
+            "count": 0
+          }
+        }
+      },
+      "all_run_callback_ms": {
+        "count": 972,
+        "mean": 6.264011596707819,
+        "p95": 25.468229,
+        "p99": 30.222131,
+        "maximum": 57.619927
+      },
+      "all_run_adjacent_overrun_pairs": 22,
+      "notes": [
+        "Callback aggregates include startup/postfailure/teardown; not acceptance. Published timestamps are nine-decimal telemetry; exact double guard checks ran in the node.",
+        "No exact guard-failure architecture snapshot was captured. Generic final fail-safe telemetry preserves decision, nominal source identity and speed."
+      ]
+    }
+  },
+  "build_log": "output/20260911-nine-state-r30-timing-evidence/mpcc-nine-state-build-r63.log",
+  "test_log": "output/20260911-nine-state-r30-timing-evidence/mpcc-nine-state-tests-r52.log",
+  "limitations": [
+    "R30first postwindowfailure occurs beforeReady, with no exact final-boundary proof input. Other startup/teardown architecture snapshots are not substituted.",
+    "D1callback64527.305793ms and68022.163763ms both span about30msROSpublication time. Steady andROSclocks are not interchangeable.",
+    "Recorder validation uses original accepted certificate requests, full packet/clock/grid serialization, missing/mismatched identity negatives, fourfirstevent buckets and shutdown drain. Live captured-input replay is next.",
+    "R197numerical improvement is retained but has no live race acceptance; long proof cost, all M4-M6 and repeated sameHEAD/submission remain open."
+  ],
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r30/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/autoware.log",
+      "sha256": "15e1278b8e966b928e28feadb1e922f8b64e0077804b6c9b6c2c1236c34938c3"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000024-078c589da1249658-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "sha256": "11ea04b55164d24f8855fdd7c8330a870b9660787d381911877817ea2f69490d"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000024-078c589da1249658-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000148-d43794ed84eeb449-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "e7697e867a5529e61c82c3b8a2407366d2dddac99abb65bc94759c3990a581ef"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000148-d43794ed84eeb449-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000555-b6b7b036da9b850a-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "7d6dde11c87184f3ed7ea8ad073cb4716a69588a8a53fe53139ff14004d4c00a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000555-b6b7b036da9b850a-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000847-ba0408e0e774bdca-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000847-ba0408e0e774bdca-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000847-ba0408e0e774bdca-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000847-ba0408e0e774bdca-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000847-ba0408e0e774bdca-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000847-ba0408e0e774bdca-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml",
+      "sha256": "e65bdd48594952f871a4d0f140b8eca19fdfbd8b82b01dc723a50514fd34ad3b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000847-ba0408e0e774bdca-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000853-9c9f78d6a0992f70-cruise-side-neutral-physical-proof-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000853-9c9f78d6a0992f70-cruise-side-neutral-physical-proof-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000853-9c9f78d6a0992f70-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000853-9c9f78d6a0992f70-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "8552c7404111fe881ccbeedee23b90687fee92e60eb8e31d5c50f86ae5d82794"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/mpcc_architecture_snapshots/000000000853-9c9f78d6a0992f70-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/rosbag2_autoware/metadata.yaml",
+      "sha256": "46ff0813a2c04b915fd6c9330fd1e31d7068fb47b48df2f82c95c9fc074eb156"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "1350a11e52b3d91bcb27f9430e50e157193075df77dd746bbf799b869152d01c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d2/autoware.log",
+      "sha256": "e868553d57e3d0cc559c680414349944a561e95baf5eb5a1212f1bcfc7dd5861"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d2/mpcc_architecture_snapshots/000000000020-e26314f36da2fd31-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "sha256": "2fe8aed1da14533a950741f16ea7ab12c646493dbb9f1f858afe3097aa8cabc9"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d2/mpcc_architecture_snapshots/000000000020-e26314f36da2fd31-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d2/mpcc_architecture_snapshots/000000000532-32983dd075f8c36e-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "11ae6d38bdd03009b6502984f4f7b15a4374448e0788c012dceb818560f7dc1f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d2/mpcc_architecture_snapshots/000000000532-32983dd075f8c36e-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d2/rosbag2_autoware/metadata.yaml",
+      "sha256": "8aade9ef46fd2526ac904b59808d7bfef6d5c363e65fb58a2b05f1fc3da94ee1"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/d2/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "6758f1aeb1f7abdf89543d1384e450812d27b78ce95808bc40c982551a19bcab"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/down.log",
+      "sha256": "35e5c6b4c1e49e171ec645d7071b8f18f6745f257a41d01612d3e7ed4ec6e355"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/launch.log",
+      "sha256": "a4d9fe1d2e3fe0b14b00d14895b76497720ef4387af8f2859645e1708dc53f8c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/manifest.json",
+      "sha256": "2dfb1c52fee06354728bbfa85a0d8e2e59b0bacc832ac2cd339e68417a4ce3f2"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/monitor-summary.json",
+      "sha256": "96d6022ea4b57e21d1c21c36df2b3582581bdae387a07a49238b0ffb6ee3268c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r30/mpcc-source.patch",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/d1-publication-events.json",
+      "sha256": "b9c088ff10eaf6b5e0b7b72b83423815efcdd076c10696a9fdb76a12a550665e"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/d2-publication-events.json",
+      "sha256": "9c9331b4e31e009f7461c638ac0b3c8b6b6bdf3ccf0c1fc766fff77af1bd19f7"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/mpcc-nine-state-build-r63.log",
+      "sha256": "42e42f7011848b0c7aa5c85706228bdb1b26003ee33404cc476e98c44357b9b4"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/mpcc-nine-state-dev2-r30.log",
+      "sha256": "9b06c27b88aeafb7ff1f2c7ed4620d519eeaeb84ddfcd6b77cdf7a35ae32c5d3"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/mpcc-nine-state-tests-r52.log",
+      "sha256": "36e99698d55c8847bdec95f2ed4776a98cb4cbf26906c11728e27d328517abdc"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/mpcc_publication_observation_impl.txt",
+      "sha256": "3419a5c36b853df6bcf920e3cd383deb3652b633c4f6381fb9dba1de1d7283c6"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/mpcc_publication_observation_tests.txt",
+      "sha256": "45acd0a3f31616e7b5e95916272dba77755e70a67cb866e57da06a8333023efe"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/mpcc_r30_publication_report.py",
+      "sha256": "36d538095e05a8fa262e490fae56f6966b842f047afc87a3d9eaf5979ac1baa5"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/mpcc_record_publication_observation.py",
+      "sha256": "f4e142c37bd14161e29e7b87951af36cae79a9cb1fd5d6834052392fd30b00d1"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/observation-source/CMakeLists.txt",
+      "sha256": "a0a35f1f2ec768873a9aa7b099e97e6a3d6282d72de407f28eef1fec5f5de9a8"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/observation-source/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "sha256": "6391f301f8a1a4141034a1887829833410d4b7e25048a9fc71342eb8f91a9db3"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/observation-source/include/multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp",
+      "sha256": "4130a6e1bea4338585bb6ff22ec33e6a99965474981996ad4dc504d698f18ce0"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/observation-source/src/mpc_controller_cpp.cpp",
+      "sha256": "75dfd767146d93e61053b05558b40025aec196e6bd3b92d199e313f46ae7a9ce"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/observation-source/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "a2884a167b91711432985136b77a4d77ada2a113421528d02b957d5637f7ce02"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/observation-source/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "a01364561775c9b76ffb72486fc93142fb1c868239eaa5c8729fc756e5704356"
+    },
+    {
+      "path": "output/20260911-nine-state-r30-timing-evidence/summary.json",
+      "sha256": "4a8ec297e1ac637d26ff84ef4f2dea956f123143b619d8ab4cb4ce81bd6dbb79"
+    }
+  ]
+}

@@ -22,6 +22,11 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan
 struct CertifiedPlan;
 }
 
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_applied_program
+{
+class Certificate;
+}
+
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot
 {
 
@@ -146,6 +151,43 @@ enum class ObservationAdmission
   Duplicate,
   Invalid,
   Stopped,
+};
+
+/// Exact late publisher boundary, separate from an earlier solver-source world.
+/// The certificate is immutable evidence only; the final guard already failed.
+struct PublicationFailureObservation
+{
+  std::shared_ptr<const mpcc_rate_resolved_applied_program::Certificate> certificate;
+  std::uint64_t decision_id{};
+  double nominal_sec{};
+  double decision_clock_sec{};
+  double before_clock_sec{};
+  double after_clock_sec{};
+  double wire_acceleration_mps2{};
+  double wire_steering_rad{};
+  bool after_publication{false};
+  bool moving{false};
+  std::filesystem::path output_root{"mpcc_architecture_snapshots"};
+};
+
+RecordResult record_publication_failure(const PublicationFailureObservation &) noexcept;
+
+/// Four fixed buckets: first stationary/moving x pre/post publication failure.
+/// Later events never replace admitted evidence. Shutdown drains the queue.
+class FirstPublicationFailureRecorder
+{
+public:
+  using Completion = std::function<void(
+      const PublicationFailureObservation &, const RecordResult &)>;
+  explicit FirstPublicationFailureRecorder(Completion completion = {});
+  ~FirstPublicationFailureRecorder();
+  FirstPublicationFailureRecorder(const FirstPublicationFailureRecorder &) = delete;
+  FirstPublicationFailureRecorder & operator=(const FirstPublicationFailureRecorder &) = delete;
+  ObservationAdmission submit(PublicationFailureObservation observation);
+  void stop() noexcept;
+private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 /// Preserve the first observation in each fixed intent/side/boundary bucket.

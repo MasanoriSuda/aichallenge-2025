@@ -1015,6 +1015,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-force-evidence.json",
       "replay_ready": true,
       "reason": "Sealed historical inputs, original/isolated/rebuilt code and libraries, exact comparison commands. These do not reconstruct the missing r29 final-guard proof input."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-final-publication-observation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-observation-evidence.json",
+      "replay_ready": false,
+      "reason": "R30has final bracket logs andsame-runMCAP, but noexactfinalguardinput. New observation producer is validated by permanent tests; live input collection is next."
     }
   ],
   "experiments": [
@@ -11750,6 +11756,34 @@
       "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
       "deleted_code": [],
       "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-final-publication-observation-r30-live",
+      "baseline_commit": "7c283cc701a13bf92dc4b4c49b3a76c1d7f9f5cf",
+      "snapshot_ids": [
+        "20260911-nine-state-final-publication-observation"
+      ],
+      "hypothesis": "Same-step wheel Jacobian improvement closes finalpublicationdeadline",
+      "changed_dimension": "7c283cc7live timing / finalfailure observation producer",
+      "result": "rejected",
+      "reason": "D1645nominal2.529999943→after2.559999942; D2662nominal3.519999921→after3.549999920, beforeReady. R30not accepted.",
+      "production_impact": "Observation only. Fail-safe guard remains unchanged; no first-publication backdating or window increase.",
+      "deleted_code": [],
+      "revisit_condition": "Collect exact committed final-boundary inputs and compare timing/clock contributions. Do not repeat unchangedr30 or substitute unrelated startup snapshots."
+    },
+    {
+      "experiment_id": "20260911-nine-state-final-publication-observation-observation",
+      "baseline_commit": "7c283cc701a13bf92dc4b4c49b3a76c1d7f9f5cf",
+      "snapshot_ids": [
+        "20260911-nine-state-final-publication-observation"
+      ],
+      "hypothesis": "Immutable certificate request closes finalguardcapturegap",
+      "changed_dimension": "7c283cc7live timing / finalfailure observation producer",
+      "result": "accepted",
+      "reason": "Four bounded stationary/moving×pre/post buckets; originalrequest/certificate/floatpacket/rawclocks retained afterfailsafe, privateworkerI/O/drain. Testsverifyroundtrip, firstevent preservation, missing/mismatchedassociationand noauthority; livevalidationpending.",
+      "production_impact": "Observation only. Fail-safe guard remains unchanged; no first-publication backdating or window increase.",
+      "deleted_code": [],
+      "revisit_condition": "Collect exact committed final-boundary inputs and compare timing/clock contributions. Do not repeat unchangedr30 or substitute unrelated startup snapshots."
     }
   ]
 }

@@ -1,4 +1,5 @@
 #include "multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp"
 #include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
@@ -2788,6 +2789,166 @@ RecordResult record_published_execution(
   } catch (...) {
     return {RecordStatus::IoFailure, {}, "unknown execution evidence exception"};
   }
+}
+
+RecordResult record_publication_failure(const PublicationFailureObservation & observation) noexcept
+{
+  RecordResult result;
+  try {
+    if (observation.decision_id == 0U || observation.output_root.empty()) {
+      result.detail = "missing publication decision or output root";
+      return result;
+    }
+    const auto & o = observation;
+    YAML::Node root;
+    root["schema"] = "mpcc-final-publication-failure/v1";
+    root["authority"] = false;
+    root["meaning"] = "Exact final-guard observation; inspected solver source is historical, current request is separate. No publication authority.";
+    auto boundary = root["boundary"];
+    boundary["decision_id"] = o.decision_id;
+    boundary["nominal_sec"] = o.nominal_sec;
+    boundary["decision_clock_sec"] = o.decision_clock_sec;
+    boundary["before_clock_sec"] = o.before_clock_sec;
+    boundary["after_clock_sec"] = o.after_clock_sec;
+    boundary["wire_acceleration_mps2"] = o.wire_acceleration_mps2;
+    boundary["wire_steering_rad"] = o.wire_steering_rad;
+    boundary["after_publication"] = o.after_publication;
+    boundary["moving"] = o.moving;
+    const recovery_footprint::OccupancyGrid * inspected_grid = nullptr;
+    const recovery_footprint::OccupancyGrid * observed_grid = nullptr;
+    const recovery_footprint::OccupancyGrid * certified_grid = nullptr;
+    const auto * request = o.certificate ? o.certificate->observation_request().get() : nullptr;
+    bool association = false;
+    if (o.certificate) {
+      const auto & certificate = *o.certificate;
+      const auto & prepared = certificate.prepared();
+      const auto & program = prepared.program;
+      root["certificate_status"] = "present";
+      root["applied_program"] = mpcc_vehicle_model::encode_input_program(program);
+      root["rest_sec"] = certificate.tube().rest_sec;
+      root["minimum_peer_clearance_m"] = certificate.minimum_peer_clearance_m();
+      root["checked_samples"] = certificate.checked_samples();
+      association = request && request->decision_id == o.decision_id &&
+        prepared.decision_id == o.decision_id && request->plan && request->plan->execution_artifact &&
+        prepared.nominal_control_origin_sec == request->control_origin_sec &&
+        mpcc_rate_resolved_execution_artifact::same_identity(
+          prepared.source, request->plan->execution_artifact->identity);
+      boundary["publication_bracket_admitted"] =
+        mpcc_vehicle_model::first_publication_bracket_admitted(program,
+          o.decision_clock_sec, o.before_clock_sec, o.after_clock_sec);
+      if (!program.commands.empty()) {
+        const auto & first = program.commands.front();
+        boundary["deadline_sec"] = first.published_sec + program.maximum_publication_delay_sec;
+        boundary["final_packet_matches"] = first.published_sec == o.nominal_sec &&
+          first.wire_acceleration_mps2 == o.wire_acceleration_mps2 &&
+          first.wire_steering_rad == o.wire_steering_rad;
+      }
+    } else {
+      root["certificate_status"] = "missing";
+    }
+    root["revalidation_evidence"] = revalidation_evidence_node(request, association, "",
+      inspected_grid, observed_grid, certified_grid);
+    std::ostringstream name;
+    name << "publication-" << std::setw(12) << std::setfill('0') << o.decision_id
+         << (o.after_publication ? "-post" : "-pre") << (o.moving ? "-moving" : "-stationary");
+    const auto final_directory = o.output_root / name.str();
+    const auto temporary_directory = o.output_root / (name.str() + ".tmp");
+    // All callers use a private worker. The shared mutex also makes direct
+    // diagnostic calls atomic with other architecture writers in this process.
+    std::lock_guard<std::mutex> lock(record_mutex);
+    if (std::filesystem::exists(final_directory)) {
+      result.status = RecordStatus::Duplicate;
+      result.snapshot_file = final_directory / "snapshot.yaml";
+      return result;
+    }
+    std::filesystem::create_directories(temporary_directory);
+    const auto write_grid = [&](const recovery_footprint::OccupancyGrid * grid, const char * file) {
+      if (!grid) return;
+      std::ofstream stream(temporary_directory / file, std::ios::binary | std::ios::trunc);
+      for (const auto cell : grid->cells) {
+        const auto byte = static_cast<std::int8_t>(cell);
+        stream.write(reinterpret_cast<const char *>(&byte), sizeof(byte));
+      }
+      stream.close();
+      if (!stream) throw std::runtime_error("cannot write publication observation grid");
+    };
+    write_grid(inspected_grid, "inspected-wall-grid.bin");
+    write_grid(observed_grid, "revalidation-wall-grid.bin");
+    write_grid(certified_grid, "inspected-certified-wall-grid.bin");
+    YAML::Emitter emitter;
+    emitter.SetDoublePrecision(std::numeric_limits<double>::max_digits10);
+    emitter << root;
+    if (!emitter.good()) throw std::runtime_error("cannot serialize publication observation");
+    std::ofstream stream(temporary_directory / "snapshot.yaml", std::ios::trunc);
+    stream << emitter.c_str() << '\n';
+    stream.close();
+    if (!stream) throw std::runtime_error("cannot write publication observation");
+    std::filesystem::rename(temporary_directory, final_directory);
+    result.status = RecordStatus::Written;
+    result.snapshot_file = final_directory / "snapshot.yaml";
+    result.detail = "exact final guard observation; no authority";
+  } catch (const std::exception & error) {
+    result.status = RecordStatus::IoFailure;
+    result.detail = error.what();
+  } catch (...) {
+    result.status = RecordStatus::IoFailure;
+    result.detail = "unknown publication observation failure";
+  }
+  return result;
+}
+
+struct FirstPublicationFailureRecorder::Impl
+{
+  explicit Impl(Completion callback) : completion(std::move(callback)), worker([this]() {run();}) {}
+  void run() noexcept
+  {
+    while (true) {
+      PublicationFailureObservation observation;
+      {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [this]() {return stopping || !pending.empty();});
+        if (pending.empty()) return;
+        observation = std::move(pending.front());
+        pending.pop_front();
+      }
+      const auto result = record_publication_failure(observation);
+      if (completion) {
+        try {completion(observation, result);} catch (...) {}
+      }
+    }
+  }
+  Completion completion;
+  std::mutex mutex;
+  std::condition_variable condition;
+  std::deque<PublicationFailureObservation> pending;
+  std::array<bool, 4> admitted{};
+  bool stopping{false};
+  std::thread worker;
+};
+
+FirstPublicationFailureRecorder::FirstPublicationFailureRecorder(Completion completion)
+: impl_(std::make_unique<Impl>(std::move(completion))) {}
+FirstPublicationFailureRecorder::~FirstPublicationFailureRecorder() {stop();}
+ObservationAdmission FirstPublicationFailureRecorder::submit(PublicationFailureObservation observation)
+{
+  if (!observation.decision_id || observation.output_root.empty()) return ObservationAdmission::Invalid;
+  const auto bucket = (observation.moving ? 2U : 0U) + (observation.after_publication ? 1U : 0U);
+  std::lock_guard<std::mutex> lock(impl_->mutex);
+  if (impl_->stopping) return ObservationAdmission::Stopped;
+  if (impl_->admitted[bucket]) return ObservationAdmission::Duplicate;
+  impl_->pending.push_back(std::move(observation));
+  impl_->admitted[bucket] = true;
+  impl_->condition.notify_one();
+  return ObservationAdmission::Queued;
+}
+void FirstPublicationFailureRecorder::stop() noexcept
+{
+  {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    impl_->stopping = true;
+  }
+  impl_->condition.notify_one();
+  if (impl_->worker.joinable()) impl_->worker.join();
 }
 
 const char * to_string(const AuthorityFailureBoundary boundary) noexcept

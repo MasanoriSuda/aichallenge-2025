@@ -31,6 +31,10 @@ public:
   double minimum_follow_gap_m() const noexcept { return minimum_follow_gap_m_; }
   std::size_t checked_samples() const noexcept { return checked_samples_; }
   bool reused_numerical_tube() const noexcept { return reused_numerical_tube_; }
+  /// Immutable observed input for diagnostics. This accessor grants no authority.
+  const std::shared_ptr<const retained::Request> &observation_request() const noexcept {
+    return request_;
+  }
   bool matches(const retained::Request &request) const noexcept;
   bool matches(const retained::Proof &proof) const noexcept;
 

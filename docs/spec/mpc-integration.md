@@ -4563,3 +4563,11 @@ MPCCの区間微分は、タイヤ角を固定した車輪力の線形係数と�
 100桁の独立微分照合を含む回帰テストを維持する。精度改善による旧拒否ケースの
 合格と実走期限の合格は区別する。
 [設計・検証記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-force-design.md)。
+
+
+最終公開guardでの失敗は、既存Certificateが保持する不変Requestと実際の指令・生時刻を
+専用の非同期recorderへ渡す。`mpcc-final-publication-failure/v1`は内部診断用で、
+過去のsolver sourceと現在の入力を分けて保存する。公開前/後×静止/走行の4枠は
+最初のイベントを保持し、終了時に書き込みを完了する。既存failsafeを実行してから
+queueへ渡し、ファイルI/Oは制御callback外で行う。保存結果は公開認可には使わない。
+[最終公開観測の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-observation-design.md)。

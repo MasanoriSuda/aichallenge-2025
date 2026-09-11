@@ -48,7 +48,7 @@ the experiment registry. Then run fresh committed dev2-r30 and continue M4–M6.
 - [x] Independent high-precision and native input/corner checks.
 - [x] Production implementation and permanent meaningful regressions.
 - [x] Buildr62, package testsr51 and rebuilt-library replayr203–206.
-- [ ] Seal evidence, update specification/registry and local commit.
+- [x] Seal evidence, update specification/registry and local commit7c283cc7.
 - [ ] Fresh live acceptance; remaining M4–M6.
 
 
@@ -59,3 +59,9 @@ passes both separators with identical body/corner bounds; a concretely occupied
 initial footprint rejects both. Rebuilt productionr203–206 matches every
 non-timing field of the isolated15-case suite and retains126unsafe native contacts.
 See [sealed evidence](shared-force-evidence.json). Live deadline acceptance is open.
+
+
+Dev2-r30rejects beforeReady atD1645/D2662finalpublicationwindow. Numerical
+improvements remain validated but insufficient for integrated acceptance.
+[Next observation slice](publication-observation-design.md) captures the exact
+finalguardinput for causal repair; M4–M6remains open.

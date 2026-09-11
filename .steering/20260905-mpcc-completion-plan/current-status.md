@@ -1,24 +1,24 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。承認済みM1–M6を追加確認なしで自律実行中。必要分のローカルcommitのみ。
-**全体未完。現在観測からの独立完全証明を唯一のdispatcherへ接続し、次はdev2-r46。**
+2026-09-11 JST。M1–M6を追加確認なしで自律実行中。必要分のローカルcommitのみ。
+**全体未完。R46はReady以降の通常走行がなく不合格。現在はsource context選択を調査中。**
 
-旧C5接続は28a8a660。Dev2-r45はD1/D2で起動中20/25回だけ送信し、Ready以降0で失敗。
-元の一点静止予測に新しい位置観測が入らないことを保存再生し、任意の許容値ではなく
-元の指令列を現在観測から停止まで独立に再証明する方式を比較・実装した。
-旧strict membershipは同じPoseMismatchを返す。新しい物理母集団は別hashを持ち、
-原programme/jobと実送信prefix、全壁・他車・Follow/停止証明、元の公開窓を維持する。
+Daf40d09で現在観測からの独立完全証明を唯一のdispatcherへ接続。
+R293保存2件約6.9ms、R294全138native、buildr86全26package/testsr74全2530記録合格。
+R46では起動中にD1/D2で162/155回の認証送信と同じprogrammeの後続indexを実送信。
+しかしReadyでD1は新しいCruise計画のSemanticChanged、D2は予定sourceなしとなり静止。
+実走行・lap・moving Stop/rest/restartの受入れではない。保護成果物は復元済み。
 
-R293の保存2件は約6.9msで新しいdispatcher判定が通過し、期限外は拒否。
-R294全138native、buildr86全26package、testsr74全2530記録/64group合格。
-開始前とactive-sessionの保存枠を分離し、入力生成失敗も生観測とproducerを保存する。
-新たな動的受入れは未検証。r193/r194のcacheや観測の遡及書換えは採用していない。
+現在要求のdynamic side0と、左右を選んだsolver候補の符号付きcontextの対応が候補原因。
+R46最初のactive保存枠は旧Track/session失効を記録したため、同時点の新しい候補と
+現在要求の不一致は保存されなかった。独立したsemantic/geometry観測枠とworker元要求
+context保存を追加。制御判断を変えずbuildr87/testsr75合格、次はr47で正確な対を保存する。
 
-残るのは現在構成の実走行とfirst-failure因果修正、mission/geometry/sibling/Store、
-実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/eval。完了条件を維持して継続する。
+残りはsource選択の因果修正、全intent/mission/sibling/Store、実Stop/rest/restart、
+Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、
+同一tar/image/eval。受け入れ基準・物理bounds・時間窓・予算は維持する。
 
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/current-observation-contract-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-adoption-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

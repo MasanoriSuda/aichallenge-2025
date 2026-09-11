@@ -4634,3 +4634,11 @@ R293保存2件で約6.9ms、R294全138native、buildr86全26package、testsr74�
 64group合格。新しい実走行受入れは未検証、M4–M6は未完。
 [設計と制約](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-observation-contract-design.md)、
 [検証証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-observation-contract-evidence.json)。
+
+R46（daf40d09）は不合格。起動中D1/D2の162/155回に新しい物理証明と後続index送信を
+確認したが、Ready後D1はCruise sourceと現在context不一致、D2は予定sourceが得られず
+通常走行0。最初のactive観測は旧Track/session失効に使われたため、semantic/geometry
+不一致を別のbounded枠へ保存しworker元要求contextも保持する観測追加を実施。
+Buildr87全26package/testsr75全2530記録・64group合格。候補の符号付きsideと未選択side0
+の意味は現在調査中であり、照合条件を緩めていない。M4–M6は未完。
+[観測・次の因果確認](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-adoption-design.md)。

@@ -8288,6 +8288,7 @@ struct MPC
       scheduled_proof_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       scheduled_active_admission_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       scheduled_active_proof_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
+      scheduled_context_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       rate_resolved_track_cruise_shadow_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_normal_avoidance_negative_solver_context_ =
@@ -30699,6 +30700,7 @@ struct MPC
     if (!entry) return nullptr;
     auto capture=std::make_shared<mpcc_architecture_snapshot::ScheduledFailureCapture>();
     capture->original=entry->request; capture->certificate=entry->result.applied.certificate;
+    capture->original_proposed_context=entry->proposed_context;
     capture->original_cursor=entry->cursor; capture->current=std::move(current);
     if (entry->cursor) capture->transactions=ledger.since(*entry->cursor);
     capture->suffix_index=entry->sent; capture->boundary=boundary;
@@ -30864,14 +30866,22 @@ struct MPC
         static_cast<unsigned long>(source.stage_geometry_id),static_cast<unsigned long>(context->stage_geometry_id),
         mpcc_contract::to_string(source.intent),mpcc_contract::to_string(intent),entry->elapsed_ms);
       if (!result.candidate) {
-        if (admission_recorder) {
+        // Ready's expected old-session revocation must not consume the first
+        // independent semantic/geometry failure observation in the new session.
+        const bool active_context_failure = v2x_race_session_active_ &&
+          (result.current.context == scheduled_control::ContextReason::SemanticChanged ||
+           result.current.context == scheduled_control::ContextReason::GeometryChanged);
+        const auto recorder = active_context_failure ? scheduled_context_recorder_ : admission_recorder;
+        if (recorder) {
           auto capture=scheduled_failure_capture(entry,ledger,std::make_shared<const rate_resolved_retained::Request>(*current),"current-evidence");
           capture->current_context=*context; capture->current_check=result.current;
           mpcc_architecture_snapshot::PublicationFailureObservation observation;
           observation.decision_id=active_control_decision_id_; observation.nominal_sec=packet.published_sec;
           observation.moving=current->current_speed_mps>0.1;
-          observation.output_root="mpcc_architecture_snapshots/scheduled-admission-"+phase; observation.scheduled_capture=std::move(capture);
-          static_cast<void>(admission_recorder->submit(std::move(observation)));
+          observation.output_root=active_context_failure ? "mpcc_architecture_snapshots/scheduled-context-active" :
+            "mpcc_architecture_snapshots/scheduled-admission-"+phase;
+          observation.scheduled_capture=std::move(capture);
+          static_cast<void>(recorder->submit(std::move(observation)));
         }
         return false;
       }
@@ -31262,6 +31272,7 @@ struct MPC
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_proof_recorder_;
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_active_admission_recorder_;
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_active_proof_recorder_;
+  std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_context_recorder_;
   mutable scheduled_control::ContextOwner normal_context_owner_;
   scheduled_control::ContextSnapshot captured_normal_context_generation_{};
   std::shared_ptr<MpccLiteAsyncMailbox> mpcc_lite_async_mailbox_;

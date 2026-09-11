@@ -2876,6 +2876,7 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
       node["current_request"]=revalidation_evidence_node(capture.current.get(),capture.current && capture.current->decision_id==o.decision_id,"",
         inspected_grid,observed_grid,certified_grid);
       node["current_context"]=problem_context_node(capture.current_context);
+      node["original_proposed_context"]=problem_context_node(capture.original_proposed_context);
       node["current_check"]=std::vector<int>{static_cast<int>(capture.current_check.reason),static_cast<int>(capture.current_check.context),
         static_cast<int>(capture.current_check.measurement.reason),static_cast<int>(capture.current_check.prefix),
         static_cast<int>(capture.current_check.world.reason),static_cast<int>(capture.current_check.world.physical_reason)};

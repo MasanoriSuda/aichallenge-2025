@@ -1099,6 +1099,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-observation-contract-evidence.json",
       "replay_ready": true,
       "reason": "Distinct current full physical proof of unchanged original unissued programme; live acceptance pending."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-context-observation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-observation-evidence.json",
+      "replay_ready": true,
+      "reason": "R46 failed availability; observation-only next slice captures missing same-frame semantic pair."
     }
   ],
   "experiments": [
@@ -13314,6 +13320,48 @@
         "Unconditional old-point membership as the only physical-population representation in prepare_dispatch; the strict API remains"
       ],
       "revisit_condition": "New causal input or a changed independently proved population; no repeated rejected cache, time shifting, tolerance or bound relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-context-observation-dev2-r46",
+      "baseline_commit": "daf40d09e6ec7de4e669b8264c903e4f1331e4b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-context-observation"
+      ],
+      "hypothesis": "Independent current physical proof supplies sustained post-Ready normal control",
+      "changed_dimension": "Bounded exact-context observation only for the next run; R46uses committed independent current proof",
+      "result": "rejected",
+      "reason": "D1/D2pre-Ready162/155sends, later indexed packets and distinct proof hashes. Ready normal0, no laps; D1SemanticChanged/D2no scheduled source. No physical/time criteria relaxed.",
+      "production_impact": "No authority or parameter change in observer slice.",
+      "deleted_code": [],
+      "revisit_condition": "New simultaneous source/current context payload or causal producer fix; do not retry the unchanged stopped run without added observation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-context-observation-r46-context",
+      "baseline_commit": "daf40d09e6ec7de4e669b8264c903e4f1331e4b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-context-observation"
+      ],
+      "hypothesis": "Unselected current dynamic-side context conflicts with signed solved candidates",
+      "changed_dimension": "Bounded exact-context observation only for the next run; R46uses committed independent current proof",
+      "result": "inconclusive",
+      "reason": "Recorded base side0 and signed source sides are from different epochs. First active snapshot captures old-session revocation, not persistent new Cruise context conflict. Freeze exact pair in r47 before repair.",
+      "production_impact": "No authority or parameter change in observer slice.",
+      "deleted_code": [],
+      "revisit_condition": "New simultaneous source/current context payload or causal producer fix; do not retry the unchanged stopped run without added observation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-context-observation-observer-r87-r75",
+      "baseline_commit": "daf40d09e6ec7de4e669b8264c903e4f1331e4b1",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-context-observation"
+      ],
+      "hypothesis": "Independent bounded semantic capture preserves original/current proposed context without changing control",
+      "changed_dimension": "Bounded exact-context observation only for the next run; R46uses committed independent current proof",
+      "result": "accepted",
+      "reason": "Buildr87passes26packages; testsr75passes2530records/64groups; source104pass. Runtime capture still to be verified.",
+      "production_impact": "No authority or parameter change in observer slice.",
+      "deleted_code": [],
+      "revisit_condition": "New simultaneous source/current context payload or causal producer fix; do not retry the unchanged stopped run without added observation."
     }
   ]
 }

@@ -185,6 +185,13 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Separate PendingInputTube/current physical identity and exact original remaining programme; connect sole dispatcher.
 - [x] Separate startup/active observation slots and preserve unavailable producer inputs.
 - [x] R293 captured replay and R294 native138; buildr86全26package/testsr74全2530記録/64group合格。
-- [ ] Fresh committed dev2-r46 acceptance.
-- [ ] Source review/evidence seal/registry/specification and necessary local commit.
+- [x] Fresh committed dev2-r46 completed as failed: pre-Ready indexed sends work, Ready has no normal dispatch.
+- [ ] Repair new source context/candidate selection after sealing an exact active conflict.
+- [x] Current physical proof source review/evidence seal/registry/specification committed as daf40d09.
 - [ ] Remaining M4–M6: full Stop/rest/restart, all intents/Recovery/Rejoin/async, repeated races, gates, same submission/eval.
+
+
+2026-09-11 scheduled context observation (baseline daf40d09):
+- [x] R46first active snapshot shows old-session invalidation; later D1fresh Cruise SemanticChanged is not captured in that slot.
+- [x] Preserve worker-proposed context and separately capture first active semantic/geometry mismatch; no authority change.
+- [ ] Buildr87/testsr75 and fresh diagnostic dev2-r47; seal same-frame conflict before producer fix.

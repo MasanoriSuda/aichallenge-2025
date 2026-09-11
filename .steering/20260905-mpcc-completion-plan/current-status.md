@@ -1,26 +1,22 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分のローカルcommitのみ。
-**全体未完。標準r54は期限不合格。独立した開始範囲の診断比較を実装段階へ進める。**
+**全体未完。開始範囲の数値API検証完了。次は非同期worker/dispatcherの認証接続。**
 
-本番dbbe5fe6はRecoveryの不要経路計算を除去。Build r92全26package、tests r80全2547/65、
-source105合格。R54で通常の省略周期Recovery平均D1/D2=0.067/0.071msを確認。
-D1decision1157では現在全証明16.208mswall/11.252msCPU後、送信処理中に元期限超過。
-最初のpost違反はteardown前。後続D1post1584、D2pre1466はteardown中として別記。無周回。
+CurrentInputPrefix/StartingDomainTubeを別の数値データ型として実装。短いprefixと全範囲/
+全時刻からの完全停止計算を区別し、元入力/履歴/モデル/範囲/座標/offsetのhashを持つ。
+R320六回帰test、R321保存3例の全prefix一致/厳密包含/全停止/現在worldが合格。
+既存の元/現在full tubeもbit一致。Build r93全26package、tests r81全2554/66、source105合格。
+現在側は単独診断でprefix0.08–0.22msとworld0.45–0.58ms。実worker availabilityは未検証。
 
-R316本番ライブラリ/直接コンパイル比較は全範囲bit/約6.8–6.9msが一致し、結合原因を反証。
-R317–319で独立した開始状態/時刻集合から全応答を新規計算する方式を比較。元sourceの
-観測から元期限までの範囲を候補にし、直接座標変換と現在prefix全体の厳密包含を課すと、
-保存3例の全25ms開始窓・全停止・現在worldが成立。現在側の単独prefix+worldは0.56–0.79ms。
-型/API/hash・負例・worker availability・実走は未検証。CurrentPhysicalProofは本番で維持。
+本番nodeの権限と経路はdbbe5fe6のまま。標準r54はD1decision1157で送信後期限超過し失敗。
+新しい数値データだけでは指令権限を与えない。次は元source/generation/台帳/実送信窓を
+保ち、immutable worker evidenceと全current prefix/worldを単一dispatcherへ接続する。
+範囲外・未知の場合に未認証指令や猶予を追加しない。全intent/Mission/sibling/Store、
+実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、
+dev3/dev4六周、gate1–3、同一tar/image/evalは未完。個別試験を全体完了にしない。
 
-次: 別型StartingDomainTube/現在short-prefix、厳密な状態/時刻/入力/全world検証を実装し、
-単一通常dispatcherへ接続してfresh標準走行。元窓/受信profile/モデル/安全条件は維持。
-その後、全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
-同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval。
-個別診断や停止runを全体完了にしない。
-
-[開始範囲の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

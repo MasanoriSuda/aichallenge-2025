@@ -82,3 +82,29 @@ invalid values/frames, time boundaries, input coverage/positive expiry, changed
 programme/model/ledger/context, outside-state membership, full rest, wall/peer/
 Follow failures and native scalar/corner enclosure. Then build/package tests,
 exact first-failure replay and fresh standard runtime.
+
+Numerical API slice in progress (baseline9ecd4f5c):
+- New CurrentInputPrefix and StartingDomainRequest/Tube are explicitly numerical
+  data, not immutable command authority. Source observation, original programme,
+  profile/model, fixed coordinate frame, complete starting box, time interval and
+  footprint offsets own separate fingerprints. No prior future tube is relabeled.
+- Short-prefix prediction preserves every actual historical packet and the same
+  variable native prefix grid, stops at actual observation.now_sec, and cannot
+  masquerade as full-rest evidence. New full-domain propagation computes every
+  body/corner/input sample through rest, using outward absolute input-time ranges.
+- Geometric membership compares all8components and original offsets with strict
+  closed time bounds, composing frames directly. It deliberately grants no
+  history/context/world/command permission. Yaw branch discontinuities may reject;
+  no periodic-frame tolerance is introduced.
+- R320 six native tests pass: exact short/full prefix at five durations; scalar
+  native responses at three start times and four input/state arms through rest;
+  original time/input/model/frame/footprint identity; all-component/time/footprint
+  negatives; stable thin-frame enclosure; invalid/uncovered/no-rest result rejection.
+- R321 actual new APIs reproduce all3captured cases, exact short prefix, full
+  original-window rest and current-world checks. Independent numerical calculation
+  about6.1–6.3ms, prefix0.08–0.22ms and world-only0.45–0.58ms isolated. No live claim.
+Build r93 passes26packages; package tests r81 pass2554records/66groups, zero
+errors/failures/skips. Source105pass. [API evidence](starting-domain-api-evidence.json).
+No controller worker/dispatcher/authority change
+in this numerical slice. Next required slice authenticates immutable worker
+results and current prefix/world before the sole dispatcher can use them.

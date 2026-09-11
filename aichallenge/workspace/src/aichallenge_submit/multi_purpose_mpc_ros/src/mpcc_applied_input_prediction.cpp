@@ -441,6 +441,12 @@ std::uint64_t scheduled_input_context_fingerprint(
   return input_context_fingerprint(observation, program, profile, parameters, true);
 }
 
+std::uint64_t pending_input_context_fingerprint(
+    const ObservationProvenance &observation, const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters) noexcept {
+  return input_context_fingerprint(observation, program, profile, parameters, false, true);
+}
+
 std::uint64_t applied_program_provenance_fingerprint(
     const AppliedProgramProvenance & provenance, const Parameters & parameters) noexcept {
   const auto input = applied_input_context_fingerprint(provenance.observation,

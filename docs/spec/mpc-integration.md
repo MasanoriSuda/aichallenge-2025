@@ -4718,3 +4718,13 @@ R317–319は独立した開始状態/時刻範囲からの全停止計算を診
 型・fingerprint・非同期接続と負例検証は未実装で、本番は従来の独立CurrentPhysicalProof
 を維持する。単独診断の現在側0.56–0.79msは実走期限の合格ではない。
 [独立した開始範囲の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-design.md)。
+
+開始範囲の非実行用数値APIを追加。`CurrentInputPrefix`は元観測/実履歴から現在までの
+短い計算、`StartingDomainTube`は指定した全開始状態/時刻から全停止までの新規計算を
+表す。モデル・元入力列/履歴・座標・全状態範囲・時刻範囲・四隅offsetを別hashへ結合する。
+短いprefixや包含判定だけに実行権限を与えない。現在prefixの全成分・時刻・footprintを
+厳密照合し、範囲外/無効/履歴不足は許可しない。R320の6testとR321保存3例が合格し、
+既存の元/現在全tubeはbit一致。Build r93全26package、tests r81全2554記録/66group合格。
+現在world・元source/context/台帳・最終送信の照合と非同期接続は次段階であり、
+本番nodeのCurrentPhysicalProofと公開条件は維持する。
+[数値APIの検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-api-evidence.json)。

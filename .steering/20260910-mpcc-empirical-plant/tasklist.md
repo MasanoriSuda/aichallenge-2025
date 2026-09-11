@@ -258,3 +258,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [ ] Implement and test separate starting-domain/short-prefix immutable types, strict membership, hash/prefix/context/clock/current-world negatives.
 - [ ] Connect worker numerical proof/current-world dispatcher within one normal authority; preserve all original guards and validate fresh runtime.
 - [ ] All remaining M4-M6 including Mission/sibling/Store, Stop/rest/restart, Recovery/Rejoin/Boost/async, repeated races/gates and same submission/eval.
+
+
+2026-09-12 starting-domain numerical API (baseline9ecd4f5c):
+- [x] Separate numerical CurrentInputPrefix and StartingDomainRequest/Tube plus exact source/model/programme/frame/box/time/offset fingerprints. No runtime authority change.
+- [x] R320 six native tests; R321 all3exact short/full comparisons, causal membership, independent full-window/rest/current-world checks. Existing original/current complete tubes remain bit-identical.
+- [x] Build r93 all26packages; tests r81 all2554records/66groups; source105pass.
+- [ ] Authenticate immutable worker domain evidence and current prefix/world inside sole dispatcher; preserve every original prefix/context/actual-window check, then fresh live timing.
+- [ ] All M4-M6 acceptance and final same submission/eval remain.

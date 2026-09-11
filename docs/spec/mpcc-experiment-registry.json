@@ -1153,6 +1153,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-evidence.json",
       "replay_ready": true,
       "reason": "Standard r54 retained full-proof timing failure; exact current prefix and separately propagated starting-domain comparisons."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-starting-domain-api",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-api-evidence.json",
+      "replay_ready": true,
+      "reason": "Typed numerical short-prefix/independent full starting-domain implementation, no authority connection yet."
     }
   ],
   "experiments": [
@@ -13902,6 +13908,34 @@
       "production_impact": "None after dbbe5fe6; current full proof and original final guards remain.",
       "deleted_code": [],
       "revisit_condition": "New typed implementation, negative test or live evidence. No old point-proof reuse, arbitrary sensor tolerance, unchanged linkage/micro-optimization repeat or timing relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-api-r320",
+      "baseline_commit": "9ecd4f5ced07aa51a0c475af59192012ddf50fca",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-api"
+      ],
+      "hypothesis": "Typed numerical domain preserves native/state/time/input enclosure and strict membership",
+      "changed_dimension": "Separate nonexecuting numerical API/types with independent fingerprints; original production paths unchanged",
+      "result": "accepted",
+      "reason": "Six tests pass, including native scalar/corners through rest, all-component/time/offset negatives, input gaps and no partial results.",
+      "production_impact": "Numerical library only, no new controller authority. Worker/dispatcher/current-world authentication and live timing are next.",
+      "deleted_code": [],
+      "revisit_condition": "New authenticated integration, negative case or live evidence; do not promote numerical data alone or relax bounds/windows."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-api-r321-r93-r81",
+      "baseline_commit": "9ecd4f5ced07aa51a0c475af59192012ddf50fca",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-api"
+      ],
+      "hypothesis": "Actual API reproduces all3frozen domain cases without changing old physical predictions",
+      "changed_dimension": "Separate nonexecuting numerical API/types with independent fingerprints; original production paths unchanged",
+      "result": "accepted",
+      "reason": "All3prefix exact, whole-prefix membership, new full-domain/rest/current-world pass; old original/current tubes bit-identical; build26/tests2554/66/source105pass.",
+      "production_impact": "Numerical library only, no new controller authority. Worker/dispatcher/current-world authentication and live timing are next.",
+      "deleted_code": [],
+      "revisit_condition": "New authenticated integration, negative case or live evidence; do not promote numerical data alone or relax bounds/windows."
     }
   ]
 }

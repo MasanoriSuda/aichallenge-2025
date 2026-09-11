@@ -259,6 +259,12 @@ std::uint64_t scheduled_input_context_fingerprint(
   const ObservationProvenance &observation, const PublishedInputProgram &program,
   const InputApplicationProfile &profile, const Parameters &parameters) noexcept;
 
+/// Independent current observation for an unchanged unissued original suffix.
+/// This identity is numerical provenance only, never execution authority.
+std::uint64_t pending_input_context_fingerprint(
+  const ObservationProvenance &observation, const PublishedInputProgram &program,
+  const InputApplicationProfile &profile, const Parameters &parameters) noexcept;
+
 /// Enclose the values of all causal packets admissible over a native substep.
 /// Equal historical epochs retain every value. Missing history rejects.
 std::optional<AppliedInputBounds>

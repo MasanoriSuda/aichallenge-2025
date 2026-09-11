@@ -35,6 +35,7 @@
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>boost</test_depend>
   <test_depend>python3-pandas</test_depend>
 
   <export>

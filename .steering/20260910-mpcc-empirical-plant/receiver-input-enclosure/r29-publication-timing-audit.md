@@ -78,3 +78,49 @@ original source/binaries and protected-result restoration. No new production
 optimization is promoted. Further work must change the proof scheduling/
 reuse architecture with exact state/input membership and full current-world
 checks; age-only reuse or membership in an uncorrelated joined box is insufficient.
+
+
+Next bounded r193audits necessary conditions for reusing an actually earlier
+certified programme slice. Capture the unchanged numerical predictor's individual
+body partitions and paired corner boxes near the new observation source epoch.
+Express the new exact observed state and rigid vertices in the prior origin with
+outward arithmetic; require both fit one paired partition. A joined box alone
+is insufficient. Then compare every remaining channel/sign-group interval and
+complete-rest clock under a constant native-time alignment. Compare the existing
+full-window rebase with a diagnostic residual window that consumes the prior
+packet's elapsed phase (W minus phase), preserving its original latest deadline.
+Neither branch grants nominal/current-world proof or adoption. Originalr23long,
+r24peer andr26wall pairs are selected before collection; preserve all failed
+membership/input checks. A positive diagnostic alone does not establish suitability for production;
+the current authorized task still requires full validation.
+
+
+R193has no paired state/corner membership in any of the three original pairs.
+Consuming the old publication phase does fix the future input subset inr23/r24,
+but membership still fails; r26actual prior firstpacket was35mslate and its input
+subset correctly remains rejected. R194then propagates a fresh current prefix
+up to the existing250msreceiver interval. Even excluding the desired-command
+coordinate that is overwritten from newly checked channel bounds at every step,
+none of the three pairs has full paired partition containment. It is not promoted.
+No current-world proof/authority is inferred; negative membership suffices to
+reject the proposed shortcut without claiming physical infeasibility.
+
+R195tests a different numerical implementation of the same map. Wheel forces
+are affine in body u/v/r and total drive+rolling for a fixed tire angle. Assemble
+interval force partials with respect to u,v,r,tire and totaldrive once per wheel,
+then chain those five partials to the original seven input derivatives. Preserve
+original clamp/reverse/rolling derivatives and every native mode. All value
+intervals still run the original shared kernel verbatim. This changes interval
+Jacobian evaluation only; no physical model, inputs, step size or margins. It is
+a diagnostic hypothesis. Any candidate needs an independent high-precision
+Jacobian oracle, full native state/corner inclusion, all negative fixtures and
+current-world proofs, build/tests and committed live acceptance before promotion.
+
+
+R196–198 high-precision checks andr199–202native regressions support promoting
+only the same-step force coefficient implementation. R193–194reuse remains
+rejected. Rebuilt productionr203–206matches the candidate; build/package checks
+pass with a meaningful correction to an obsolete coarse-tube expectation.
+[Design and validation](shared-force-design.md) retain all negative fixtures,
+original input populations and deadlines. Dev2-r30is the next live check; the
+remaining long rejection cost is not closed by offline results.

@@ -667,6 +667,12 @@ if(BUILD_TESTING)
     ${PROJECT_NAME}_mpcc_vehicle_model
     ${PROJECT_NAME}_recovery_footprint
   )
+  find_package(Boost REQUIRED)
+  ament_add_gtest(test_mpcc_vehicle_jacobian test/test_mpcc_vehicle_jacobian.cpp)
+  target_include_directories(test_mpcc_vehicle_jacobian PRIVATE ${Boost_INCLUDE_DIRS})
+  target_link_libraries(test_mpcc_vehicle_jacobian
+    ${PROJECT_NAME}_mpcc_vehicle_model
+  )
   find_package(ament_cmake_pytest REQUIRED)
 
   ament_add_gtest(test_mpcc_steering_state_contract

@@ -3074,7 +3074,7 @@ TEST(MpccAppliedProgram, CapturedObliqueWallSeparationPreservesTheEntireInputTub
   const auto observation = fixture::oriented_wall_observation();
   const auto program = fixture::oriented_wall_program();
   const auto model = fixture::vehicle_model();
-  const auto grid = fixture::wall_packet_grid();
+  auto grid = fixture::wall_packet_grid();
   const auto footprint = physical::resolve_clearance_footprint({1.615, .51, .768, .768, .05}, .2);
   ASSERT_TRUE(footprint);
   const auto &o = observation.initial.state;
@@ -3119,21 +3119,31 @@ TEST(MpccAppliedProgram, CapturedObliqueWallSeparationPreservesTheEntireInputTub
     ++checked; return true;
   };
   const vm::InputApplicationProfile profile{"awsim-2025-empirical-receiver-age-250ms-v1", .25, .25, .1};
-  const auto rejected = vm::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &context);
-  EXPECT_EQ(rejected.reason, vm::AppliedInputRejectReason::ValidationRejected);
-  EXPECT_FALSE(rejected.tube);
+  // The frozen coarse checkpoint above still needs the oriented separator.
+  // The current force Jacobian tightens the whole tube enough for either
+  // separator. This must preserve the same input programme and complete rest.
+  const auto axis_aligned = vm::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &context);
+  ASSERT_EQ(axis_aligned.reason, vm::AppliedInputRejectReason::None);
+  ASSERT_TRUE(axis_aligned.tube);
   directional = true; checked = 0;
   const auto accepted = vm::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &context);
   ASSERT_TRUE(accepted.tube) << static_cast<int>(accepted.reason);
   EXPECT_GT(checked, 150U);
   EXPECT_NEAR(accepted.tube->rest_sec, 10.764999778, 1e-12);
+  const auto wall_validator = context.validate;
   context.validate = [](const auto &, const auto &, double, double) {return true;};
   const auto original = vm::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &context);
   ASSERT_TRUE(original.tube);
   ASSERT_EQ(accepted.tube->source_to_rest.size(), original.tube->source_to_rest.size());
+  ASSERT_EQ(axis_aligned.tube->source_to_rest.size(), original.tube->source_to_rest.size());
   for (size_t j = 0; j < accepted.tube->source_to_rest.size(); ++j) {
     const auto &a = accepted.tube->source_to_rest[j], &b = original.tube->source_to_rest[j];
+    const auto &axis = axis_aligned.tube->source_to_rest[j];
     for (size_t i = 0; i < 8; ++i) {
+      EXPECT_DOUBLE_EQ(axis.swept_body[i].lower, b.swept_body[i].lower);
+      EXPECT_DOUBLE_EQ(axis.swept_body[i].upper, b.swept_body[i].upper);
+      EXPECT_DOUBLE_EQ((*axis.swept_footprint)[i].lower, (*b.swept_footprint)[i].lower);
+      EXPECT_DOUBLE_EQ((*axis.swept_footprint)[i].upper, (*b.swept_footprint)[i].upper);
       EXPECT_DOUBLE_EQ(a.swept_body[i].lower, b.swept_body[i].lower);
       EXPECT_DOUBLE_EQ(a.swept_body[i].upper, b.swept_body[i].upper);
       EXPECT_DOUBLE_EQ(a.endpoint_body[i].lower, b.endpoint_body[i].lower);
@@ -3146,6 +3156,21 @@ TEST(MpccAppliedProgram, CapturedObliqueWallSeparationPreservesTheEntireInputTub
     EXPECT_EQ(accepted.tube->source_to_rest.back().endpoint_body[i].lower, 0);
     EXPECT_EQ(accepted.tube->source_to_rest.back().endpoint_body[i].upper, 0);
   }
+  // A concrete occupied initial footprint remains a hard rejection with both
+  // separators. Precision improvements must never bypass the wall callback.
+  std::fill(grid.cells.begin(), grid.cells.end(), recovery::CellState::Occupied);
+  const auto contact = recovery::sample_footprint(grid, *footprint, origin);
+  ASSERT_TRUE(contact.valid);
+  ASSERT_FALSE(contact.contact_cells.empty());
+  context.validate = wall_validator;
+  for (bool use_directional : {false, true}) {
+    directional = use_directional;
+    const auto rejected = vm::predict_applied_inputs_to_rest(
+      observation, program, profile, model, {}, &context);
+    EXPECT_EQ(rejected.reason, vm::AppliedInputRejectReason::ValidationRejected);
+    EXPECT_FALSE(rejected.tube);
+  }
+
 }
 
 

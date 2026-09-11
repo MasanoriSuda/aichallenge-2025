@@ -1,26 +1,21 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。公開時刻修正f3b444f2のdev2-r29は、残存する計算時間超過で不合格。**
+**全体は未完。公開時刻修正f3b444f2のdev2-r29は計算時間超過で不合格。**
 
-公開列は既存25ms周期の範囲を証明し、実履歴・250ms受信profile・物理条件を維持する。
-最終公開の前後と判断開始の生時刻を照合する。Buildr60は26package成功、testsr49は
-2459記録/62group・エラー/失敗/skip0。保存データでr28の15ms欠落と修正効果を確認した。
+今回、車輪力の区間微分を同一積分内で共用する実装を追加した。
+状態値・物理model・250ms受信profile・25ms公開期限・壁/他車余裕は維持する。
+100桁の独立kernel照合と危険な入力の拒否を検証した。過去15ケースのうち、
+旧合格をすべて維持し、r24D2判断990は精度改善により約56msの拒否から約16msの合格へ変化。
+再ビルドした本体と試作の非時間結果は全件一致。Buildr62は26package、testsr51は
+2462記録/63group・エラー/失敗/skip0。r50の旧粗区間依存の失敗も証拠へ残す。
 
-新しい実走ではD1判断831（Ready前）、名目7.394999834に対して公開後7.424999834となり、
-25msの範囲逸脱を検出した。走行中の最初の公開前拒否はD1判断931、0.14m/s。
-D2は判断1078、0.16m/sで同じ拒否。終了までのD1事後逸脱は6件で、合格には数えない。
-既存のproof自体は通った後でpublisherが拒否するため、失敗入力のarchitecture snapshotは
-このrunでは生成されなかった。ログとMCAPを保存し、この観測不足を明記する。
+以前の証明を再利用するr193–194は状態/車体頂点の包含が成立せず不採用。
+r27の長い拒否計算は約70ms残り、実走期限は未合格。次は固定commitのdev2-r30。
+r29の最終公開guard失敗は時刻ログ/MCAPがあり、正確なproof snapshotは欠落している。
 
-r186–192で算術・コンパイラ・区間微分方式を比較した。小最適化は時間短縮が不十分か悪化し、
-微分数の削減や広い領域での共用は旧合格ケースの精度を失った。すべて未採用。
-判定を保った比較のbit一致、拒否・失敗・計算時間を台帳へ残した。
-次は状態と入力の厳密な包含、全現在world検査を維持する証明の実行・再利用方式を調べる。
-単なるageや結合boxの包含を認可に使わず、25ms期限や250msprofileを広げない。
-
-[現在の時間監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r29-publication-timing-audit.md)、
-[公開範囲の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-design.md)、
+[現在の設計・検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-force-design.md)、
+[時間監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r29-publication-timing-audit.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
 dev3/dev4六周、gate1–3、同一tar/image/eval、文書・ローカルcommitまで継続する。

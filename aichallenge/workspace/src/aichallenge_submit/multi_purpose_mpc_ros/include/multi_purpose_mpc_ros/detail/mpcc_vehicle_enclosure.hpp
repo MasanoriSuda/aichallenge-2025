@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <optional>
+#include <type_traits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -194,7 +196,8 @@ struct CornerPopulation {
   Box swept;
 };
 // Only nonsmooth scalar/set arithmetic differs. All wheel, body and tire
-// equations below come from the same kernel as the production native model.
+// value equations below come from the production native model kernel. Force
+// derivative coefficients are independently checked against that kernel.
 template <class T> struct Arithmetic {
   bool *discontinuous{};
   T sin(const T &a) const { return numerical::sin(a); }
@@ -216,6 +219,121 @@ template <class T> struct Arithmetic {
     return clamp(-u / interval, -limit, limit);
   }
 };
+// The wheel force is affine in [forward, left, yaw rate, drive + rolling]
+// at a fixed tire angle. These interval matrices and their angle partials use
+// outward arithmetic. Values still come from kernel::derivative verbatim.
+// Keep the high-precision shared-kernel regression when changing either side.
+struct ForceCoefficients {
+  // Owned by one map call; never retained across steps or requests.
+  std::array<I, 4> x{}, y{}, moment{}, angle_x{}, angle_y{}, angle_moment{};
+  I tire;
+  const model::Parameters *parameters{};
+};
+inline ForceCoefficients force_coefficients(I tire,
+                                            const model::Parameters &p) {
+  ForceCoefficients out;
+  out.tire = tire;
+  out.parameters = &p;
+  for (const auto &w : p.wheels) {
+    const I theta = w.steerable ? tire : I(0), c = cosine(theta),
+            sn = sine(theta);
+    const I K(w.cornering_per_sec), T(w.traction_fraction), x(w.com_forward_m),
+        y(w.com_left_m);
+    const I arm = sn * y + c * x;
+    const std::array<I, 4> ax{-K * sn * sn, K * sn * c, K * sn * arm, c * T};
+    const std::array<I, 4> ay{K * c * sn, -K * c * c, -K * c * arm, sn * T};
+    std::array<I, 4> dx{}, dy{};
+    if (w.steerable) {
+      const I twice = I(2) * sn * c, difference = c * c - sn * sn;
+      dx = {-K * twice, K * difference, K * (twice * y + difference * x),
+            -T * sn};
+      dy = {K * difference, K * twice, -K * (difference * y - twice * x),
+            T * c};
+    }
+    for (size_t i = 0; i < 4; ++i) {
+      out.x[i] = out.x[i] + ax[i];
+      out.y[i] = out.y[i] + ay[i];
+      out.moment[i] = out.moment[i] + x * ay[i] - y * ax[i];
+      out.angle_x[i] = out.angle_x[i] + dx[i];
+      out.angle_y[i] = out.angle_y[i] + dy[i];
+      out.angle_moment[i] = out.angle_moment[i] + x * dy[i] - y * dx[i];
+    }
+  }
+  return out;
+}
+template <class T>
+inline model::kernel::BodyRates<T>
+derivative_map(const model::kernel::StateValues<T> &s, const T &wire,
+               const model::Parameters &p, double force_interval,
+               const Arithmetic<T> &arithmetic, const ForceCoefficients *) {
+  return model::kernel::derivative(s, wire, p, force_interval, arithmetic);
+}
+inline model::kernel::BodyRates<J>
+derivative_map(const JS &s, const J &wire, const model::Parameters &p,
+               double force_interval, const Arithmetic<J> &arithmetic,
+               const ForceCoefficients *coefficients) {
+  namespace k = model::kernel;
+  if (!coefficients || coefficients->parameters != &p ||
+      coefficients->tire.lo != s[k::Tire].v.lo ||
+      coefficients->tire.hi != s[k::Tire].v.hi)
+    throw std::runtime_error("force coefficient context mismatch");
+  const auto &q = *coefficients;
+  const auto &u = s[k::Forward];
+  const auto &v = s[k::Left];
+  const auto &r = s[k::YawRate];
+  const double interval =
+      std::max(force_interval, p.minimum_force_interval_sec);
+  J acceleration = arithmetic.clamp(wire, -p.maximum_wire_deceleration_mps2,
+                                    p.maximum_wire_acceleration_mps2);
+  acceleration = arithmetic.reverse_correction(u, acceleration, interval);
+  acceleration =
+      arithmetic.clamp(acceleration, -p.maximum_wire_deceleration_mps2,
+                       p.maximum_wire_acceleration_mps2);
+  const J total =
+      acceleration + arithmetic.rolling(u, interval, p.rolling_mps2);
+  const std::array<I, 4> value{u.v, v.v, r.v, total.v};
+  I angle_x, angle_y, angle_moment;
+  for (size_t i = 0; i < 4; ++i) {
+    angle_x = angle_x + q.angle_x[i] * value[i];
+    angle_y = angle_y + q.angle_y[i] * value[i];
+    angle_moment = angle_moment + q.angle_moment[i] * value[i];
+  }
+  model::kernel::BodyRates<J> result;
+  const J reference_forward = u + r * J(p.com_left_m),
+          reference_left = v - r * J(p.com_forward_m);
+  const J c = cos(s[k::Yaw]), sn = sin(s[k::Yaw]);
+  result[0] = c * reference_forward - sn * reference_left;
+  result[1] = sn * reference_forward + c * reference_left;
+  result[2] = r;
+  for (size_t j = 0; j < N; ++j) {
+    const std::array<I, 4> ds{u.d[j], v.d[j], r.d[j], total.d[j]};
+    I dx, dy, dm;
+    for (size_t i = 0; i < 4; ++i) {
+      dx = dx + q.x[i] * ds[i];
+      dy = dy + q.y[i] * ds[i];
+      dm = dm + q.moment[i] * ds[i];
+    }
+    dx = dx + angle_x * s[k::Tire].d[j];
+    dy = dy + angle_y * s[k::Tire].d[j];
+    dm = dm + angle_moment * s[k::Tire].d[j];
+    result[3].d[j] =
+        dx - I(p.drag_per_sec) * u.d[j] + (r.d[j] * v.v + r.v * v.d[j]);
+    result[4].d[j] =
+        dy - I(p.drag_per_sec) * v.d[j] - (r.d[j] * u.v + r.v * u.d[j]);
+    result[5].d[j] = dm * I(p.mass_kg) / p.yaw_inertia_kgm2 -
+                     I(p.angular_drag_per_sec) * r.d[j];
+  }
+  // Preserve the natural interval extension and hybrid branch observations.
+  k::StateValues<I> values;
+  for (size_t i = 0; i < 8; ++i)
+    values[i] = s[i].v;
+  const auto original = k::derivative(values, wire.v, p, force_interval,
+                                      Arithmetic<I>{arithmetic.discontinuous});
+  for (size_t i = 0; i < result.size(); ++i)
+    result[i].v = original[i];
+  return result;
+}
+
 inline I tire_bounds(I desired, I tire, const model::Parameters &p, double dt) {
   // alpha=dt/(lag+dt) is in[0,1]. With positive gain/grip, the shared
   // clipped/slew-limited tire response is monotone in both input angles:
@@ -247,23 +365,35 @@ inline std::array<T, 8> map(std::array<T, 8> s, T a, const model::Parameters &p,
     s[5] = T(0);
     return s;
   }
-  const auto d1 = model::kernel::derivative(s, a, p, dt, arithmetic);
+  // body_increment changes only coordinates X..YawRate. Both midpoint stages
+  // therefore share exactly the updated tire interval and immutable model.
+  std::optional<ForceCoefficients> coefficients;
+  if constexpr (std::is_same_v<T, J>) {
+    coefficients = force_coefficients(bounds(s[7]), p);
+  }
+  const auto d1 = derivative_map(s, a, p, dt, arithmetic,
+                                 coefficients ? &*coefficients : nullptr);
   const auto mid = model::kernel::body_increment(s, d1, .5 * dt);
-  const auto rates = model::kernel::derivative(mid, a, p, dt, arithmetic);
-  if (yaw_increment) *yaw_increment = rates[model::kernel::Yaw] * T(dt);
+  const auto rates = derivative_map(mid, a, p, dt, arithmetic,
+                                    coefficients ? &*coefficients : nullptr);
+  if (yaw_increment)
+    *yaw_increment = rates[model::kernel::Yaw] * T(dt);
   return model::kernel::body_increment(s, rates, dt);
 }
 
-inline CornerImage advance_corners(
-    const CornerProbe &probe, const Box &previous, const JS &range,
-    const Box &point, const JS &inputs, const Box &center,
-    const std::array<I, N> &offsets, const J &delta, I point_delta,
-    bool discontinuous) {
+inline CornerImage
+advance_corners(const CornerProbe &probe, const Box &previous, const JS &range,
+                const Box &point, const JS &inputs, const Box &center,
+                const std::array<I, N> &offsets, const J &delta, I point_delta,
+                bool discontinuous) {
   const auto enclose = [&](const J &value, I midpoint) {
     I image = midpoint;
-    for (size_t j = 0; j < N; ++j) image = image + value.d[j] * offsets[j];
-    if (discontinuous) image = value.v;
-    else intersect(image, value.v);
+    for (size_t j = 0; j < N; ++j)
+      image = image + value.d[j] * offsets[j];
+    if (discontinuous)
+      image = value.v;
+    else
+      intersect(image, value.v);
     return image;
   };
   const I co = cosine(I(probe.origin_yaw)), so = sine(I(probe.origin_yaw));

@@ -1009,6 +1009,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r29-publication-timing-evidence.json",
       "replay_ready": false,
       "reason": "Live final publisher time failure has brackets and same-run MCAP but no exact architecture snapshot. Numerical comparisons reuse sealedr27/r26/r24inputs and current publication window."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-shared-force-jacobian",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-force-evidence.json",
+      "replay_ready": true,
+      "reason": "Sealed historical inputs, original/isolated/rebuilt code and libraries, exact comparison commands. These do not reconstruct the missing r29 final-guard proof input."
     }
   ],
   "experiments": [
@@ -11604,6 +11610,146 @@
       "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
       "deleted_code": [],
       "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r193",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Exact earlier partition membership permits suffix reuse",
+      "changed_dimension": "Current point and future input subset",
+      "result": "rejected",
+      "reason": "All three current point/corner pairs fail individual paired partition containment. Residual publication phase can fix some input subsets but cannot create state membership.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r194",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Fresh receiver-length prefix enters earlier paired partition",
+      "changed_dimension": "Fresh native prefix versus old endpoint partitions",
+      "result": "rejected",
+      "reason": "All three cases fail full paired body/corner containment within original250msreceiver interval. No old certificate reuse.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r195",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Affine wheel-force partials reduce interval AD duplication",
+      "changed_dimension": "Interval force partial expression",
+      "result": "accepted",
+      "reason": "Isolated numerical comparison lowers costs and retains native map. Superseded by once-per-map r197coefficients; no separate production path.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r196",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Independent100digit original kernel encloses analytic map",
+      "changed_dimension": "Independent numerical oracle",
+      "result": "accepted",
+      "reason": "400boxes/4800points/38400values/260736smooth derivatives pass;12discontinuous boxes values-only. Sampled regression plus algebraic enclosure argument.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r197",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Same-step wheel coefficient sharing improves cost and precision",
+      "changed_dimension": "Seven-component Jacobian coefficient assembly",
+      "result": "accepted",
+      "reason": "R26current14.57→10.93ms; r24current55.94msrejection→16.12msaccepted,rest12.844999737,peer+.0004877070832474m. R27long still70.36msrejection; no runtime acceptance.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r198",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Refined shared coefficients preserve original kernel enclosure",
+      "changed_dimension": "High precision shared-force oracle",
+      "result": "accepted",
+      "reason": "Same independent100digit oracle passes. Original physical values remain verbatim.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r199",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Unsafe fixed r28programme remains rejected with native inclusion",
+      "changed_dimension": "Full programme negative/native inclusion",
+      "result": "accepted",
+      "reason": "Six programmes all body/corner samples enclosed; fixed old normal word has38support rejections and126native contacts. Different candidate Stop words never conflated with first packet.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r200-202",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Full native suite retains physical and identity gates",
+      "changed_dimension": "Isolated native suite",
+      "result": "accepted",
+      "reason": "15cases checked; original positives retained, r24current990nowpositive, historygapr18reason5negative retained. Materialization and join retained.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-r203-206",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Rebuilt production reproduces isolated numerical candidate",
+      "changed_dimension": "Production library replay",
+      "result": "accepted",
+      "reason": "All15case non-timing fields exactly equal; r28native inclusion and126contact negative repeated against rebuilt production.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
+    },
+    {
+      "experiment_id": "20260911-nine-state-shared-force-jacobian-build-tests",
+      "baseline_commit": "05f4847e92dcab744bc4b0d8385928aaa5fe36b8",
+      "snapshot_ids": [
+        "20260911-nine-state-shared-force-jacobian"
+      ],
+      "hypothesis": "Permanent original-kernel and physical regressions pass",
+      "changed_dimension": "Build and meaningful package regression",
+      "result": "accepted",
+      "reason": "Buildr61/r62all26packages; r50obsolete coarse-current rejection expectations fail explicitly; revised test preserves frozen coarse negative and concrete occupied footprint negative; r51all2462records/63groups pass.",
+      "production_impact": "Only r197same-step analytic interval derivative implementation promoted for live validation; no physical/profile/publication/authority relaxation and no integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Rejected suffix reuse requires new paired-state/input evidence. Further optimization requires observed timing/precision cause; maintain original margins,250msreceiver profile,25mspublication window and native negative fixtures."
     }
   ]
 }

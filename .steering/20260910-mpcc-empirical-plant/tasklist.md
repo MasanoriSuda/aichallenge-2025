@@ -39,3 +39,8 @@
 - [ ] All intents, actual multi-tick Stop/rest/restart, Recovery/Rejoin and async.
 - [ ] Same-HEAD repeated single/dev2, dev3/dev4, gate1/2/3.
 - [ ] Same submitted tar/image/eval; specs, evidence, registry and local commits.
+
+- [x] R193–194paired prefix/suffix membership comparisons rejected; no cache promoted.
+- [x] R195–202analytic wheel-force Jacobian, independent100digit and full native validation.
+- [x] Production same-step coefficients; buildr62/testsr51/rebuiltr203–206passed.
+- [ ] Fixed committed dev2-r30: actual publication deadline and moving authority; then M4–M6.

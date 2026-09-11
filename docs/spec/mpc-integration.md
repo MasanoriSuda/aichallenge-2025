@@ -4553,3 +4553,13 @@ Buildr60（26package）、testsr49（2459記録、失敗0）、保存データ�
 [検証記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-evidence.json)
 に残す。公開遅延を含めたことで旧r19/r24の一部は他車の検査で拒否する。
 本項はローカル検証済みで、統合受入れやdeadline達成を示さない。
+
+
+MPCCの区間微分は、タイヤ角を固定した車輪力の線形係数と操舵角偏微分を
+外向き丸めで組み立て、同じ中点積分の2段階内だけで共用する。モデル参照と
+タイヤ角区間の両端一致を検査し、積分ステップや判断をまたぐキャッシュにはしない。
+状態値は従来の共有kernelをそのまま評価し、逆走補正、rolling、clamp、停止分岐、
+入力範囲、完全停止、壁・他車余裕、最終公開期限は維持する。kernel変更時は
+100桁の独立微分照合を含む回帰テストを維持する。精度改善による旧拒否ケースの
+合格と実走期限の合格は区別する。
+[設計・検証記録](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/shared-force-design.md)。

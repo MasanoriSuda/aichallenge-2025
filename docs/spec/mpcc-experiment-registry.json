@@ -1123,6 +1123,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-appointment-evidence.json",
       "replay_ready": true,
       "reason": "R49exact early first moving failure, source comparison, correctly reconstructed actual prefix and real ROS appointment tests."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-publication-phase-observation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-phase-observation-evidence.json",
+      "replay_ready": true,
+      "reason": "R50current independent proof passes but original before-send deadline fails; close same-decision phase timing gap."
     }
   ],
   "experiments": [
@@ -13588,6 +13594,48 @@
         "Private duplicate worker-only next-appointment calculation"
       ],
       "revisit_condition": "New exact failure, changed diagnosed producer or newly applicable alternative source architecture; no unchanged race rerun or grace/tolerance promotion."
+    },
+    {
+      "experiment_id": "20260912-nine-state-publication-phase-observation-dev2-r50",
+      "baseline_commit": "8d85234bf9ee38e20c047e40545ec234703d2326",
+      "snapshot_ids": [
+        "20260912-nine-state-publication-phase-observation"
+      ],
+      "hypothesis": "Original ROS appointment alone closes integrated publication timing",
+      "changed_dimension": "Observation-only current-request/current-proof CPU/wall and same-decision callback phases/ROS clocks",
+      "result": "rejected",
+      "reason": "Zero early rejects;10/7late pre-send rejects, including movingD1874at0.17m/s. No post violations or race acceptance.",
+      "production_impact": "Existing single scheduled normal authority, original ROS alarm, physical checks and final guards unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New measured exact first failure or causally justified producer change; no repeat unchanged race, grace or timing-parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-publication-phase-observation-r305",
+      "baseline_commit": "8d85234bf9ee38e20c047e40545ec234703d2326",
+      "snapshot_ids": [
+        "20260912-nine-state-publication-phase-observation"
+      ],
+      "hypothesis": "The exact current physical proof and final late rejection are reproducible",
+      "changed_dimension": "Observation-only current-request/current-proof CPU/wall and same-decision callback phases/ROS clocks",
+      "result": "accepted",
+      "reason": "Original input hash and current independent proof reproduce; captured before is late and rejects; in-window clock passes. No actual positive send is fabricated.",
+      "production_impact": "Existing single scheduled normal authority, original ROS alarm, physical checks and final guards unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New measured exact first failure or causally justified producer change; no repeat unchanged race, grace or timing-parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-publication-phase-observation-r91-r79",
+      "baseline_commit": "8d85234bf9ee38e20c047e40545ec234703d2326",
+      "snapshot_ids": [
+        "20260912-nine-state-publication-phase-observation"
+      ],
+      "hypothesis": "Phase observation preserves the unchanged authority contracts",
+      "changed_dimension": "Observation-only current-request/current-proof CPU/wall and same-decision callback phases/ROS clocks",
+      "result": "accepted",
+      "reason": "Build26packages; tests2545records/65groups; source105pass; no errors/failures/skips. R51live attribution remains next.",
+      "production_impact": "Existing single scheduled normal authority, original ROS alarm, physical checks and final guards unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New measured exact first failure or causally justified producer change; no repeat unchanged race, grace or timing-parameter relaxation."
     }
   ]
 }

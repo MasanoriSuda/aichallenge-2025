@@ -1,24 +1,20 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。追加確認なしでM1–M6を自律実行。必要分のローカルcommitのみ。
-**全体未完。公開予定に合わせるROS alarmを実装・検証し、次はdev2-r50。**
+2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分のローカルcommitのみ。
+**全体未完。R50の遅い送信失敗を再現し、r51でcallback区間の時間を測る。**
 
-R49はD1decision1021で0.54m/s時に公開窓より67ns早く送ろうとして失敗。
-元source/currentと8件の実送信をr302で再生し、保持期間0.63sを正しく合わせると
-物理/実prefixは合格、早い時刻は拒否、元の開始時刻は合格した。R301のAは元Cruise
-sourceを解けるがB/C/Dは対象外で結論不可。solverの失敗や物理的な不可能とはしていない。
+8d85234bのROS alarmで公開開始前の拒否は0。一方、R50はD1/D2で10/7件の期限超過。
+D1moving874は0.17m/s、wall19.308064msでROS時刻が25ms進み、原期限を約5ms超えた。
+R305で元のinput fingerprint・現在全物理証明・遅い送信の拒否を再現。
+新しい観測は25mswall未満の公開失敗にも区間詳細を残し、現在要求/証明のwall/CPUと
+MPC/Recovery前後のROS時刻を分ける。権限・物理条件・元窓・周期・送信順は維持する。
+Buildr91全26package/testsr79全2545記録/65group、source105合格。次はdev2-r51。
 
-Workerとcallbackの次回公開予定生成を共通化。元の予定ROS時刻に達して一度だけ起動する。
-25msの名目列/窓と全物理/送信前後guardを維持し、遅い起動に新期限を与えない。
-壁時計25msは時計逆行/既存odomtimeoutを使うEmergency監視のみ。通常出力の権限は一つ。
-R304実rclcpp/時計監視11test、source105、buildr90全26package、testsr78全2545記録/
-65group合格。実走行の時計・40Hz・Stop/rest/restartはr50で検証する。
+残り: 時間を消費するproducerの修復、全intent/Mission/sibling/Store、実Stop/rest/restart、
+Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、
+同一tar/image/eval。個別の修正や停止した試行を全体完了として扱わない。
 
-残り: first-failure因果修正、全intent/Mission/sibling/Store、Recovery/Rejoin/Boost/async、
-同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval。
-R48の遅い送信失敗は既存guardで引き続き拒否。すべての動的受入れが済むまで完了にしない。
-
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-appointment-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-phase-observation-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

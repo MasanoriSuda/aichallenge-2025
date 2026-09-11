@@ -4673,3 +4673,11 @@ ROS時刻12.164999728が67ns早く、最終guardが拒否。R302は元source/cur
 R304実rclcpp/時計監視11test、source105、buildr90全26package、testsr78全2545記録/
 65group合格。R50動的受入れと全M4–M6は未完。
 [共有公開予定の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-appointment-design.md)。
+
+R50（8d85234b）は公開開始前の拒否0となったが、D1/D2で10/7件の送信前期限超過が
+あり不合格。D1decision874のcallbackは19.308064msで、ROS9.644999784→9.669999783
+の間に原期限9.664999803を超えた。元の現在全物理証明と遅い送信の拒否はr305で再現。
+Wall25ms未満の公開失敗にも既存の区間別ログを出し、現在要求/物理証明のwall/CPUと
+MPC/Recovery前後のROS時刻を記録する。権限・予定・全物理条件・送信順は維持する。
+Buildr91全26package/testsr79全2545記録/65group合格、r51で実測する。
+[区間観測の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-phase-observation-design.md)。

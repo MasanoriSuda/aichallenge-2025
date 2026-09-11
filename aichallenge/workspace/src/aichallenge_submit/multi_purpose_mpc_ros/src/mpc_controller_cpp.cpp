@@ -1,3 +1,4 @@
+#include <ctime>
 #include "multi_purpose_mpc_ros/mpcc_publication_appointment.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
@@ -8090,8 +8091,23 @@ struct NormalJoinTimingObservation
   double primary_continuation_ms{};
 };
 
+double observed_thread_cpu_sec() noexcept
+{
+  timespec value{};
+  if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &value) != 0)
+    return std::numeric_limits<double>::quiet_NaN();
+  return static_cast<double>(value.tv_sec) + static_cast<double>(value.tv_nsec) / 1e9;
+}
+
 struct ControlCallbackTimingObservation
 {
+  bool publication_failed{false};
+  double thread_cpu_start_sec{};
+  double entry_ros_sec{};
+  double mpc_begin_ros_sec{};
+  double mpc_end_ros_sec{};
+  double recovery_begin_ros_sec{};
+  double recovery_end_ros_sec{};
   std::uint64_t decision_id{};
   double pre_mpc_ms{};
   double mpc_ms{};
@@ -30829,6 +30845,7 @@ struct MPC
       packet.published_sec = vehicle_observation_provenance_->now_sec;
       auto anchor = scheduled_follow_anchor(problem);
       if (!anchor || anchor->target_id != source.target_id) anchor = entry->follow_anchor;
+      const auto current_request_started = SteadyClock::now();
       std::string observation_failure;
       auto current = build_scheduled_observed_request(problem,certificate->nominal()->observed().plan,
         *vehicle_observation_provenance_,source.intent,anchor,packet,&observation_failure);
@@ -30874,16 +30891,24 @@ struct MPC
         *context = mpcc_contract::seal_problem_context(*context);
       }
       if (!context) return false;
+      const auto current_proof_started = SteadyClock::now();
+      const double current_cpu_started = observed_thread_cpu_sec();
       const auto result = scheduled_control::prepare_dispatch(certificate,*current,*context,
         current_normal_context_generation(),ledger,*entry->cursor,{},entry->sent);
+      const double current_cpu_ms = 1000.0 * (observed_thread_cpu_sec() - current_cpu_started);
+      const double current_proof_ms = std::chrono::duration<double,std::milli>(
+        SteadyClock::now() - current_proof_started).count();
+      const double current_request_ms = std::chrono::duration<double,std::milli>(
+        current_proof_started - current_request_started).count();
       RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
-        "MPCC scheduled admission: dispatch=%lu, job=%lu, source=%lu, index=%zu, reason=%d/current:%d/context:%d/measurement:%d/prefix:%d/world:%d/physical:%d, source_geometry=%lu, current_geometry=%lu, source_intent=%s, proposed=%s, worker_ms=%.3f",
+        "MPCC scheduled admission: dispatch=%lu, job=%lu, source=%lu, index=%zu, reason=%d/current:%d/context:%d/measurement:%d/prefix:%d/world:%d/physical:%d, source_geometry=%lu, current_geometry=%lu, source_intent=%s, proposed=%s, worker_ms=%.3f, request_ms=%.6f, current_ms=%.6f, current_cpu_ms=%.6f",
         static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(certificate->suffix().decision_id),
         static_cast<unsigned long>(certificate->suffix().source.sequence),entry->sent,static_cast<int>(result.reason),
         static_cast<int>(result.current.reason),static_cast<int>(result.current.context),static_cast<int>(result.current.measurement.reason),
         static_cast<int>(result.current.prefix),static_cast<int>(result.current.world.reason),static_cast<int>(result.current.world.physical_reason),
         static_cast<unsigned long>(source.stage_geometry_id),static_cast<unsigned long>(context->stage_geometry_id),
-        mpcc_contract::to_string(source.intent),mpcc_contract::to_string(intent),entry->elapsed_ms);
+        mpcc_contract::to_string(source.intent),mpcc_contract::to_string(intent),entry->elapsed_ms,
+        current_request_ms,current_proof_ms,current_cpu_ms);
       if (!result.candidate) {
         // Ready's expected old-session revocation must not consume the first
         // independent semantic/geometry failure observation in the new session.
@@ -58808,17 +58833,20 @@ private:
     control_callback_recovery_total_ms_ += timing.recovery_ms;
     control_callback_recovery_maximum_ms_ = std::max(
       control_callback_recovery_maximum_ms_, timing.recovery_ms);
-    if (elapsed_ms > period_ms) {
+    if (elapsed_ms > period_ms || timing.publication_failed) {
       RCLCPP_WARN(
         get_logger(),
-        "Control callback overrun detail: decision=%lu, total=%.3fms/budget=%.3fms, "
+        "%s decision=%lu, total=%.3fms/budget=%.3fms, "
         "regions=pre_mpc:%.3f/mpc:%.3f/post_mpc:%.3f/recovery:%.3f/"
         "publish:%.3f/unattributed:%.3fms, checkpoint=%s, "
         "nested=problem_initialization:%.3f/publication_successor:%.3f/"
         "prediction_marker:%.3fms/points:%zu, "
         "normal_join=primary:%.3f/stop_lattice:%.3f/stop_successor:%.3f/"
         "output:%.3f/snapshots:%.3fms, "
-        "primary_proof=applied:%.3f/continuation:%.3fms, observation_only=1",
+        "primary_proof=applied:%.3f/continuation:%.3fms, "
+        "thread_cpu_ms=%.6f, publication_failed=%d, "
+        "ros=entry:%.9f/mpc_begin:%.9f/mpc_end:%.9f/recovery_begin:%.9f/recovery_end:%.9f, observation_only=1",
+        elapsed_ms > period_ms ? "Control callback overrun detail:" : "Control callback publication failure detail:",
         static_cast<unsigned long>(timing.decision_id), elapsed_ms, period_ms,
         timing.pre_mpc_ms, timing.mpc_ms, timing.post_mpc_ms,
         timing.recovery_ms, timing.publish_ms, unattributed_ms,
@@ -58827,7 +58855,10 @@ private:
         timing.prediction_marker_points, timing.normal_join.primary_ms,
         timing.normal_join.stop_lattice_ms, timing.normal_join.stop_successor_ms,
         timing.normal_join.output_ms, timing.normal_join.snapshots_ms,
-        timing.normal_join.primary_applied_ms, timing.normal_join.primary_continuation_ms);
+        timing.normal_join.primary_applied_ms, timing.normal_join.primary_continuation_ms,
+        1000.0 * (observed_thread_cpu_sec() - timing.thread_cpu_start_sec),timing.publication_failed ? 1 : 0,
+        timing.entry_ros_sec,timing.mpc_begin_ros_sec,timing.mpc_end_ros_sec,
+        timing.recovery_begin_ros_sec,timing.recovery_end_ros_sec);
     }
 
     if (!last_control_callback_telemetry_steady_.has_value()) {
@@ -58927,6 +58958,7 @@ private:
   {
     const auto steady_now = SteadyClock::now();
     ControlCallbackTimingObservation callback_timing;
+    callback_timing.thread_cpu_start_sec = observed_thread_cpu_sec();
     [[maybe_unused]] const auto callback_duration_guard = make_scope_exit(
       [this, steady_now, &callback_timing]() {
         record_control_callback_duration(steady_now, callback_timing);
@@ -58939,6 +58971,7 @@ private:
     callback_timing.decision_id = active_control_decision_id_;
     const auto ros_control_time = now();
     active_control_callback_ros_clock_sec_ = ros_control_time.seconds();
+    callback_timing.entry_ros_sec = ros_control_time.seconds();
     auto control_time = ros_control_time;
     if (state_prediction_active_) {
       const rclcpp::Time observation_time = odom_ ?
@@ -59217,6 +59250,7 @@ private:
     reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), effective_v_max));
 
     const auto mpc_start = SteadyClock::now();
+    callback_timing.mpc_begin_ros_sec = now().seconds();
     callback_timing.pre_mpc_ms = std::chrono::duration<double, std::milli>(
       mpc_start - steady_now).count();
     callback_timing.checkpoint = "pre-mpc-complete";
@@ -59224,6 +59258,7 @@ private:
     const auto mpc_cycle = mpc_->get_control(
       current_time.seconds(), active_control_decision_id_);
     const auto post_mpc_start = SteadyClock::now();
+    callback_timing.mpc_end_ros_sec = now().seconds();
     callback_timing.mpc_ms = std::chrono::duration<double, std::milli>(
       post_mpc_start - mpc_start).count();
     callback_timing.problem_initialization_ms = mpc_->last_problem_initialization_ms;
@@ -59289,6 +59324,7 @@ private:
       u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
     }
     const auto recovery_start = SteadyClock::now();
+    callback_timing.recovery_begin_ros_sec = now().seconds();
     callback_timing.post_mpc_ms = std::chrono::duration<double, std::milli>(
       recovery_start - post_mpc_start).count();
     callback_timing.checkpoint = "post-mpc-complete";
@@ -59302,6 +59338,7 @@ private:
       u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
     }
     const auto publish_start = SteadyClock::now();
+    callback_timing.recovery_end_ros_sec = now().seconds();
     callback_timing.recovery_ms = std::chrono::duration<double, std::milli>(
       publish_start - recovery_start).count();
     callback_timing.checkpoint = "recovery-complete";
@@ -59345,6 +59382,10 @@ private:
     const auto published_steering = publish_control_command(
       current_time, u, acc, canonical_normal_execution_active && !recovery_command_active);
     if (!published_steering.has_value()) {
+      callback_timing.publication_failed = true;
+      callback_timing.publish_ms = std::chrono::duration<double,std::milli>(
+        SteadyClock::now() - publish_start).count();
+      callback_timing.checkpoint = "publication-failed";
       return;
     }
     if (canonical_normal_execution_active && !recovery_command_active)

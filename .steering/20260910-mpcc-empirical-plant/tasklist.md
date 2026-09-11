@@ -217,3 +217,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Shared next-appointment producer, ROS alarm, wall-only forced Emergency; r30411native/source105pass.
 - [x] Buildr90all26packages/testsr78all2545records/65groupspass; source review and evidence seal.
 - [ ] Dev2-r50dynamic clock/publish/Stop/rest/restart, remaining allM4–M6and submission/eval.
+
+
+2026-09-12 callback phase observation (baseline8d85234b):
+- [x] R50failed:10/7late pre-send rejects, zero early or post-send violations. D1moving874wall19.308064ms/ROS25ms misses original deadline.
+- [x] Current-proof wall/CPU and callback phase/ROS observation added; no authority or timing parameter changes.
+- [x] R305exact current proof/late rejection, buildr91/testsr79(2545/65), source105passed.
+- [ ] Committed r51first failure attribution and causal repair; all remainingM4-M6.

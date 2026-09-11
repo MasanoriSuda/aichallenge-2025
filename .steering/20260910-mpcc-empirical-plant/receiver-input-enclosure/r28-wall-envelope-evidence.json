@@ -1,0 +1,2426 @@
+{
+  "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+  "production_changes": false,
+  "integrated_acceptance": false,
+  "run_manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r28-manifest.json",
+  "association": {
+    "previous_decision": 918,
+    "previous_source": 137,
+    "previous_capture_tag": "invalid: inspected source association; retained unchanged",
+    "actual_publication_decision": 918,
+    "actual_publication_source": 137,
+    "current_decision": 919,
+    "inspected_source": 131,
+    "current_now_sec": 9.949999777,
+    "previous_now_sec": 9.919999778
+  },
+  "first_failure": {
+    "domain": 1,
+    "decision": 919,
+    "speed_mps": 1.17,
+    "waypoint": 30,
+    "wall_sec": 1789085739.6855268,
+    "callback_ms": 219.650944,
+    "classification": "Applied wall cannot separate current-world complete input population; all-method physical infeasibility remains Unknown"
+  },
+  "reuse_observed_before_failure": {
+    "d1": 17,
+    "d2": 69,
+    "numerical_tube_reused": 1
+  },
+  "diagnostics": {
+    "r162": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r162/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017761815326070355,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1044480,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.02954149460245992,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1069056,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r163": [],
+    "r164": [],
+    "r165": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r165/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.012201602079610964,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1914880,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.017978922220817543,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1959936,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r166": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r166/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.011150150340675681,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1914880,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.01688890110399033,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1959936,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r167": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r167/bins2/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017761815326070355,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1044480,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.02954149460245992,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1069056,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      },
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r167/bins4/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.664999777,
+            "first_support_rejection": 10.659999777,
+            "support_rejections": 26,
+            "minimum_support_gap": -0.014911732386021727,
+            "first_wall": 10.659999777,
+            "contact_steps": 26,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1044480,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.609999777,
+            "first_support_rejection": 10.604999777,
+            "support_rejections": 41,
+            "minimum_support_gap": -0.025824229074323583,
+            "first_wall": 10.604999777,
+            "contact_steps": 41,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1069056,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.659999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.659999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.514999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      },
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r167/bins8/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.669999777000001,
+            "first_support_rejection": 10.664999777,
+            "support_rejections": 24,
+            "minimum_support_gap": -0.013170536364110587,
+            "first_wall": 10.664999777,
+            "contact_steps": 24,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1038336,
+            "rest_sec": 10.784999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.614999777000001,
+            "first_support_rejection": 10.609999777,
+            "support_rejections": 40,
+            "minimum_support_gap": -0.02345908393996288,
+            "first_wall": 10.609999777,
+            "contact_steps": 40,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1069056,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.664999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.664999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.784999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.519999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 86528,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r168": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r168/r28d1.yaml",
+        "rows": {},
+        "candidates": [
+          {
+            "target": 0.083742319291477,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.809999777,
+              "first_wall_sec": 10.489999777000001,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.7530230193647374
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.604999777,
+              "first_support_rejection": 10.599999777,
+              "support_rejections": 42,
+              "minimum_support_gap": -0.02954149460245992,
+              "first_wall": 10.599999777,
+              "contact_steps": 42,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1069056,
+              "rest_sec": 10.809999777
+            },
+            "error": null
+          },
+          {
+            "target": 0,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.814999777,
+              "first_wall_sec": 10.459999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.73854153474721
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.584999777,
+              "first_support_rejection": 10.579999777000001,
+              "support_rejections": 47,
+              "minimum_support_gap": -0.033801770295311735,
+              "first_wall": 10.579999777000001,
+              "contact_steps": 47,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1075200,
+              "rest_sec": 10.814999777
+            },
+            "error": null
+          },
+          {
+            "target": -0.1,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.824999777,
+              "first_wall_sec": 10.439999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.7071848923516024
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.559999777,
+              "first_support_rejection": 10.554999777,
+              "support_rejections": 54,
+              "minimum_support_gap": -0.06901709813561176,
+              "first_wall": 10.554999777,
+              "contact_steps": 54,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1087488,
+              "rest_sec": 10.824999777
+            },
+            "error": null
+          },
+          {
+            "target": -0.2,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.839999777000001,
+              "first_wall_sec": 10.434999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.6765699492362058
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.549999777,
+              "first_support_rejection": 10.544999777000001,
+              "support_rejections": 217,
+              "minimum_support_gap": -0.08917054276411697,
+              "first_wall": 10.544999777000001,
+              "contact_steps": 59,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1105920,
+              "rest_sec": 10.839999777000001
+            },
+            "error": null
+          },
+          {
+            "target": -0.3665191429188092,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.859999777,
+              "first_wall_sec": 10.434999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.642671954495754
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.549999777,
+              "first_support_rejection": 10.544999777000001,
+              "support_rejections": 287,
+              "minimum_support_gap": -0.10958652567915995,
+              "first_wall": 10.544999777000001,
+              "contact_steps": 63,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1130496,
+              "rest_sec": 10.859999777
+            },
+            "error": null
+          },
+          {
+            "target": 0.2,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.824999777,
+              "first_wall_sec": 10.439999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.6912043947710802
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.554999777,
+              "first_native_arm": 3,
+              "first_native_part": 2,
+              "first_support_rejection": 10.549999777,
+              "support_rejections": 236,
+              "minimum_support_gap": -0.07504932422991174,
+              "first_wall": 10.549999777,
+              "contact_steps": 55,
+              "native_first": 10.629999777,
+              "native_contacts": 9809,
+              "enclosed_native_values": 1087488,
+              "rest_sec": 10.824999777
+            },
+            "error": null
+          },
+          {
+            "target": 0.3665191429188092,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.874999777000001,
+              "first_wall_sec": 10.424999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.5855191024599717
+            },
+            "corners": {
+              "first_unproved_cell": 477828,
+              "first_unproved_end_sec": 10.484999777,
+              "first_native_arm": 3,
+              "first_native_part": 3,
+              "first_support_rejection": 10.479999777,
+              "support_rejections": 713,
+              "minimum_support_gap": -0.16487499149823306,
+              "first_wall": 10.469999777,
+              "contact_steps": 81,
+              "native_first": 10.624999777000001,
+              "native_contacts": 14352,
+              "enclosed_native_values": 1148928,
+              "rest_sec": 10.874999777000001
+            },
+            "error": null
+          }
+        ]
+      }
+    ],
+    "r169": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r169/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "affine_prediction_ms": 33.532219,
+            "affine_generator_limit": 32,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017761815326070355,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8181760,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "affine_prediction_ms": 32.04961,
+            "affine_generator_limit": 32,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.02954149460245992,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8374272,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r170": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r170/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "affine_prediction_ms": 35.38156,
+            "affine_generator_limit": 32,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017761815326070355,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8181760,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "affine_prediction_ms": 33.639373,
+            "affine_generator_limit": 32,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.02954149460245992,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8374272,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r171": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r171/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "affine_prediction_ms": 49.624597,
+            "affine_generator_limit": 32,
+            "conditioning_attempts": 1461,
+            "conditioned_steps": 1184,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017761815326070355,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8181760,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "affine_prediction_ms": 48.476129,
+            "affine_generator_limit": 32,
+            "conditioning_attempts": 2941,
+            "conditioned_steps": 2386,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.02954149460245992,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8374272,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r172": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r172/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "affine_prediction_ms": 49.185413,
+            "affine_generator_limit": 32,
+            "conditioning_attempts": 1461,
+            "conditioned_steps": 1184,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017761815326070355,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8181760,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "affine_prediction_ms": 47.903744,
+            "affine_generator_limit": 32,
+            "conditioning_attempts": 2941,
+            "conditioned_steps": 2386,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.02954149460245992,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8374272,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r173": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r173/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "affine_prediction_ms": 18.378595,
+            "fixed_coordinate_dimension": 8,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017761815326070355,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8181760,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "affine_prediction_ms": 18.128177,
+            "fixed_coordinate_dimension": 8,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.02954149460245992,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8374272,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r174": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r174/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "affine_prediction_ms": 18.945354,
+            "fixed_coordinate_dimension": 8,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017761815326070355,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8181760,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "affine_prediction_ms": 18.609365,
+            "fixed_coordinate_dimension": 8,
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.02954149460245992,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 8374272,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r175": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r175/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "best_gap_m": 0.0032978010367946675,
+            "verified_gap_m": 0.0032978010367946675,
+            "native_evaluations": 5533,
+            "elapsed_ms": 345.423818,
+            "cell": 476325,
+            "authority": false
+          },
+          "constant_first_corners": {
+            "best_gap_m": 0.003853942836760771,
+            "verified_gap_m": 0.003853942836760771,
+            "native_evaluations": 5533,
+            "elapsed_ms": 356.464358,
+            "cell": 476325,
+            "authority": false
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r176": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r176/positions32/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017458449160515425,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1044480,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.0294855558065017,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1069056,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      },
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r176/positions8/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.654999777,
+            "first_support_rejection": 10.649999777,
+            "support_rejections": 28,
+            "minimum_support_gap": -0.017693281752976023,
+            "first_wall": 10.649999777,
+            "contact_steps": 28,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1044480,
+            "rest_sec": 10.789999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.604999777,
+            "first_support_rejection": 10.599999777,
+            "support_rejections": 42,
+            "minimum_support_gap": -0.029521057171280066,
+            "first_wall": 10.599999777,
+            "contact_steps": 42,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1069056,
+            "rest_sec": 10.809999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.649999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.649999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.789999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.509999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 87040,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ],
+    "r177": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r177/r28d1.yaml",
+        "rows": {},
+        "candidates": [
+          {
+            "target": 0.083742319291477,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.789999777,
+              "first_wall_sec": 10.499999777000001,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.751679690161035
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.644999777,
+              "first_support_rejection": 10.639999777,
+              "support_rejections": 30,
+              "minimum_support_gap": -0.02098363129631409,
+              "first_wall": 10.639999777,
+              "contact_steps": 30,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1044480,
+              "rest_sec": 10.789999777
+            },
+            "error": null
+          },
+          {
+            "target": 0,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.794999777000001,
+              "first_wall_sec": 10.469999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.7371689565207411
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.619999777,
+              "first_support_rejection": 10.614999777000001,
+              "support_rejections": 36,
+              "minimum_support_gap": -0.030146391947728283,
+              "first_wall": 10.614999777000001,
+              "contact_steps": 36,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1050624,
+              "rest_sec": 10.794999777000001
+            },
+            "error": null
+          },
+          {
+            "target": -0.1,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.804999777,
+              "first_wall_sec": 10.444999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.707822303932153
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.589999777000001,
+              "first_support_rejection": 10.584999777,
+              "support_rejections": 44,
+              "minimum_support_gap": -0.04753504745880877,
+              "first_wall": 10.584999777,
+              "contact_steps": 44,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1062912,
+              "rest_sec": 10.804999777
+            },
+            "error": null
+          },
+          {
+            "target": -0.2,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.819999777,
+              "first_wall_sec": 10.439999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.6791261448844197
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.574999777,
+              "first_support_rejection": 10.569999777,
+              "support_rejections": 180,
+              "minimum_support_gap": -0.06603977635535997,
+              "first_wall": 10.569999777,
+              "contact_steps": 50,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1081344,
+              "rest_sec": 10.819999777
+            },
+            "error": null
+          },
+          {
+            "target": -0.3665191429188092,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.839999777000001,
+              "first_wall_sec": 10.439999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.6496588073263938
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.569999777,
+              "first_support_rejection": 10.564999777,
+              "support_rejections": 224,
+              "minimum_support_gap": -0.08327374950370593,
+              "first_wall": 10.564999777,
+              "contact_steps": 55,
+              "native_first": null,
+              "native_contacts": 0,
+              "enclosed_native_values": 1105920,
+              "rest_sec": 10.839999777000001
+            },
+            "error": null
+          },
+          {
+            "target": 0.2,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.804999777,
+              "first_wall_sec": 10.449999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.6939690584625751
+            },
+            "corners": {
+              "first_unproved_cell": 476325,
+              "first_unproved_end_sec": 10.579999777000001,
+              "first_native_arm": 3,
+              "first_native_part": 2,
+              "first_support_rejection": 10.574999777,
+              "support_rejections": 194,
+              "minimum_support_gap": -0.052821522829300534,
+              "first_wall": 10.559999777,
+              "contact_steps": 49,
+              "native_first": 10.704999777000001,
+              "native_contacts": 839,
+              "enclosed_native_values": 1062912,
+              "rest_sec": 10.804999777
+            },
+            "error": null
+          },
+          {
+            "target": 0.3665191429188092,
+            "body": {
+              "prediction_reason": 0,
+              "rest_sec": 10.854999777,
+              "first_wall_sec": 10.429999777,
+              "first_peer_sec": null,
+              "state_clear": true,
+              "minimum_peer_m": 0.59606610934987
+            },
+            "corners": {
+              "first_unproved_cell": 477828,
+              "first_unproved_end_sec": 10.489999777000001,
+              "first_native_arm": 3,
+              "first_native_part": 2,
+              "first_support_rejection": 10.484999777,
+              "support_rejections": 614,
+              "minimum_support_gap": -0.14522847373098793,
+              "first_wall": 10.469999777,
+              "contact_steps": 77,
+              "native_first": 10.699999777,
+              "native_contacts": 5159,
+              "enclosed_native_values": 1124352,
+              "rest_sec": 10.854999777
+            },
+            "error": null
+          }
+        ]
+      }
+    ],
+    "r178": [
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate5/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.684999777,
+            "first_support_rejection": 10.679999777,
+            "support_rejections": 21,
+            "minimum_support_gap": -0.010435136039858241,
+            "first_wall": 10.679999777,
+            "contact_steps": 21,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1038336,
+            "rest_sec": 10.784999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.619999777,
+            "first_support_rejection": 10.614999777000001,
+            "support_rejections": 38,
+            "minimum_support_gap": -0.01768520830288223,
+            "first_wall": 10.614999777000001,
+            "contact_steps": 38,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1062912,
+            "rest_sec": 10.804999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.679999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.679999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.784999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.524999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 86528,
+            "all_native_at_rest": true
+          }
+        }
+      },
+      {
+        "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate7/r28d1.yaml",
+        "rows": {
+          "prior_programme_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.694999777,
+            "first_support_rejection": 10.689999777,
+            "support_rejections": 19,
+            "minimum_support_gap": -0.008261995727118167,
+            "first_wall": 10.689999777,
+            "contact_steps": 19,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1038336,
+            "rest_sec": 10.784999777
+          },
+          "constant_first_corners": {
+            "first_unproved_cell": 476325,
+            "first_unproved_end_sec": 10.629999777,
+            "first_support_rejection": 10.624999777000001,
+            "support_rejections": 36,
+            "minimum_support_gap": -0.013990653314016612,
+            "first_wall": 10.624999777000001,
+            "contact_steps": 36,
+            "native_first": null,
+            "native_contacts": 0,
+            "enclosed_native_values": 1062912,
+            "rest_sec": 10.804999777
+          },
+          "current_world_programme": {
+            "decision": 919,
+            "source": 100918,
+            "actual_reason": "applied-program-unavailable",
+            "actual_applied_reason": 6,
+            "actual_rejected_sec": 10.689999777,
+            "nominal_reason": "accepted",
+            "actual_reference_attempts": 0,
+            "direct_applied_reason": 6,
+            "direct_rejected_sec": 10.689999777,
+            "prepare_reason": 0,
+            "prediction_reason": 0,
+            "rest_sec": 10.784999777,
+            "now_sec": 9.949999777,
+            "native_hull_clear_at_first_wall": true,
+            "first_wall_sec": 10.534999777,
+            "native_first_wall_sec": null,
+            "native_contact_segments": 0,
+            "native_scalar_checks": 86528,
+            "all_native_at_rest": true
+          }
+        }
+      }
+    ]
+  },
+  "observation_report": "output/20260911-nine-state-r28-wall-audit-evidence/observation-report.json",
+  "limitations": [
+    "Original physical margins, profile, input sets, candidate budgets and final authority preserved.",
+    "R169-174 correlated representations are diagnostic only; no native inclusion sample establishes interval proof soundness or live authority.",
+    "R173 original manifest text incorrectly says affine generators; actual archived source is fixed invertible eight-coordinate intervals. R174 names its fixed-coordinate meaning correctly.",
+    "R175 bounded adversarial searches cover5533native trajectories per programme. Positive3.297801/3.853943mm SAT gaps do not prove all admitted inputs clear.",
+    "R176/r178 partitions retain original input/hybrid coverage but are diagnostic only and fail complete wall proof.",
+    "R168/r177 steering candidates are directly generated input words, with no nominal MPCC/identity/materialized/production promotion.",
+    "IMU9.949 occurs after initialpose9.944; bag receipt cannot establish controller availability. No changed observation reconstruction is promoted.",
+    "Actual publication-clock proof, initial long-program cost, consecutive40Hzoverruns, M4-M6 and submission remain open."
+  ],
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r28/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/autoware.log",
+      "sha256": "5897f095e85f81e45e58f3e163364f9ceccc54405e914db470264e904f24a8e2"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000834-a88d128b4d850dc4-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000834-a88d128b4d850dc4-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000834-a88d128b4d850dc4-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000834-a88d128b4d850dc4-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000834-a88d128b4d850dc4-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000834-a88d128b4d850dc4-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml",
+      "sha256": "0d268c08600592d0382dcf3383b53d5192e78422e78ea73add39a986134f8d54"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000834-a88d128b4d850dc4-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "c297deff5724c51a4e2c054e5791bab5099a267559597c559cad6b13496d855a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/rosbag2_autoware/metadata.yaml",
+      "sha256": "361378291c584862fcd0130056e5525c749df1a2c053b16cd1748e58623d0ea7"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "ecfb1991b599bc962e6373b2d042e9fcece336b38eef348a5a923363e9b13a38"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d2/autoware.log",
+      "sha256": "bd885a35d35737b39be2b0f301bda6a8ccf53013c40335b571b130f21dea2f54"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d2/rosbag2_autoware/metadata.yaml",
+      "sha256": "4f00f093c9e5aeaf75c8c1ca481d9eb3e466d30d3df9270fb85db7a79664167b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/d2/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "5c2d6cbbbb2441d2de1a5d375803d63bf5ee65fd277ab6ef0731a1da5843246a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/launch.log",
+      "sha256": "7e4737aa71335dd9c4d2a35c2459e8c0895fd0575511612a7d8dcae991557a82"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/manifest.json",
+      "sha256": "61ab515b9a7d03eea4c3389ca4695776f8eeaea0bd6d05f948ddb047017cf73f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/monitor-summary.json",
+      "sha256": "8ab92ce9bdf088c5cf4a9fc0c826a801d205ed5971caa971aa170fc8753ac3d0"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r28/mpcc-source.patch",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r162/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r162/driver.cpp",
+      "sha256": "dd0d6b7d6f5292dbb482220726b9188db05ab78878173105875a1bd5b7bc4c98"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r162/generator.py",
+      "sha256": "85a10ce63cbfa60dde1e80363e7c63d29b64eb4fa15d26cef6928d64ba204ed7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r162/manifest.json",
+      "sha256": "3af839f25d9593ff1753551a58ccb753f408a0025a86eb32d6dabbe900503726"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r162/r28d1.yaml",
+      "sha256": "1ec2d65cd2b808e827d32c39c0e414a46409530202f9803395854a5aa6dccc23"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r162/replay",
+      "sha256": "5f1356e09119b08eb30acbbffc8a54ffae5f59c5b0bda15524efca64ffd6ec38"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r162/run-manifest.json",
+      "sha256": "08398cc15a6cbfdffd36b7e427dfc680602881357e4750824011b41aaeb28846"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r162/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r163/generator.py",
+      "sha256": "dfa81c472820a75a0f4aee7fd7fb9635906d0bde49b48e2aa52f14e66b421abb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r163/setup-failure.log",
+      "sha256": "d68ceedaf0238a78dbc82cb1900bd01221d291a1efcd9a284d38e3ed9a1791f2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r164/generator.py",
+      "sha256": "a982d169ecec853124b56350b5ce8f90180103d0a6af95bb373fae2985a47daa"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r164/setup-failure.log",
+      "sha256": "ad254adc03e60980d83b1c4f91ecf112de1cbd66a3bc21e397b94b6fc4bd01f7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/driver.cpp",
+      "sha256": "74b70413c3bbc94d831fb7336251bb53e04953eed875b46bea71b7f3826fa65e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/generator.py",
+      "sha256": "80e003c35428a50cdb2b49a29e66da6123cb6d467742650f50f073c43137138d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/manifest.json",
+      "sha256": "a60e8c8501f9fb5a6539acf877df675ed127b17b70143577b268c9b5081933f6"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/prediction.cpp",
+      "sha256": "034510fd6627c4c0b7632260eb9a2978338285b67893040c71c801a671c72daa"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/r28d1.yaml",
+      "sha256": "41fcd36d35689dc65b7f8b098e704fe1d595c0eb17b54d749f295c7c28defc89"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/replay",
+      "sha256": "ce5ddfa28bd007e788865a878c3654330efc3a0a26adff569d7dbf9ea960b483"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/run-manifest.json",
+      "sha256": "c9be10233102c385f49fcf926b6c9de2ade31a7e97e8c6270af8df045215a7e9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r165/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/driver.cpp",
+      "sha256": "a2d5d73f1819827f4492839094a5e6775f195d7ab0a7f532114df49e5aaf7aba"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/generator.py",
+      "sha256": "8a14b277a582ffd9ee3347a860aa82a47ea82957e70936fffdae2f9f2dbac85c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/manifest.json",
+      "sha256": "d7f837955394863b6715c08f068d8f138034c9d94c4bae26ebe01ef47372df13"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/prediction.cpp",
+      "sha256": "60906d2c781fe01365ca4b5d4b6454970dc998e5fa3ecce58e3be18f207bc673"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/r28d1.yaml",
+      "sha256": "f44d56681422c6c731ef3b1034cff907366e406aab1836f84770a99b97c0b203"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/replay",
+      "sha256": "b97c01813491f54d11b15226927b0feff997242a1b328d66bf8a1f7f886181bf"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/run-manifest.json",
+      "sha256": "8c2aedbfa4f304c5954c5b5a9e3f4b8c5f12b284aca45b9d89d42c2019fcd72f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r166/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins2/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins2/include/diagnostic_vehicle_enclosure.hpp",
+      "sha256": "35c3bebbbf5b5cfe968dfedeee9815c2a594200e9a302c6202aa7af95d82712d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins2/manifest.json",
+      "sha256": "3297dd97406916137c94f4b664f3767d8416e65028761dcff5345eb905165d25"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins2/prediction.cpp",
+      "sha256": "22d3b0a508a6cb5d3c520ed9e87d2ed418b914f2cef4be60c991892458929704"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins2/r28d1.yaml",
+      "sha256": "1ec2d65cd2b808e827d32c39c0e414a46409530202f9803395854a5aa6dccc23"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins2/replay",
+      "sha256": "42440b5f87c57b4f95b9447b1cbacbdaf41b379bb344757d4a55f13ec8623f03"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins2/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins4/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins4/include/diagnostic_vehicle_enclosure.hpp",
+      "sha256": "5f32b31c8d2e57af38b99f520350b33cce6aeb826e26a46e925bb174b950547b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins4/manifest.json",
+      "sha256": "0f1d1567bbde48ac42de96bba40a82425c35a94251003dea0f94a8ac5dd44baa"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins4/prediction.cpp",
+      "sha256": "22d3b0a508a6cb5d3c520ed9e87d2ed418b914f2cef4be60c991892458929704"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins4/r28d1.yaml",
+      "sha256": "b98b134e5172b02a9b0b4e05b60595621c6b39e83497de547193ef964f62fa24"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins4/replay",
+      "sha256": "ef79c64da4dbb88b56e26457bd7388ee287108cb6696a92f62b687a6efd42916"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins4/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins8/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins8/include/diagnostic_vehicle_enclosure.hpp",
+      "sha256": "cb01a9441129982db7c5c16985c2366005a487b8313c43139742818e14fe808d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins8/manifest.json",
+      "sha256": "16fc6953ff7e742d1c0160ac2765bb82182c5a89de3b4b5c04ae87155a8ec251"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins8/prediction.cpp",
+      "sha256": "22d3b0a508a6cb5d3c520ed9e87d2ed418b914f2cef4be60c991892458929704"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins8/r28d1.yaml",
+      "sha256": "6de3a44bbe32b3b2c33d945d4d216a4b35cb2dff9991caf4907d6c80bae26e6b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins8/replay",
+      "sha256": "dad9e748d063372451e62462dd4fe91cae2856209d3321726c45a6cfa8488bea"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/bins8/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/commands.json",
+      "sha256": "99cfac0f95ed4a727a103839244bef499620a9e6f48144f1dac4970194234e9d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/driver.cpp",
+      "sha256": "dd0d6b7d6f5292dbb482220726b9188db05ab78878173105875a1bd5b7bc4c98"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r167/generator.py",
+      "sha256": "6d3332cb0ef2063fac95b2f5bea958b121e71e961271421f9b0f8d9277b6f360"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r168/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r168/driver.cpp",
+      "sha256": "5dc8578c68bad1fe4dc431c01df653238eb9665477e5ac4b24f9fadb8a8e5ced"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r168/generator.py",
+      "sha256": "8e11237b6d68d62bc070dc4994561feb764223f5b37b62cfc1e02294dbbe223a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r168/manifest.json",
+      "sha256": "18e9e523a9e37ded29f353df799e606dba7f605787926e25ca64e89ed23182fb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r168/r28d1.yaml",
+      "sha256": "c05e3705680abf57da186cc1a3f4222b4785b19bf820498a650b95358ea68e0e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r168/replay",
+      "sha256": "ce126e83004cd28b8e87d3b3db8d6d6ac2dd225d6bbb438fd16ce870762d516a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r168/run-manifest.json",
+      "sha256": "3564a13ed4da186ecc0baed7b7aa78bb8c444c418f9d2bf51981739fa9f14ba2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r168/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/affine.hpp",
+      "sha256": "11e8a3c06c38cd8e4864133604b88faa2ad3efc4b07d153cc52ea60dd6ab77fb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/driver.cpp",
+      "sha256": "b25f30ec1c21731dc16ce5a489fb51b1991e700db2762252f6aaca34ed0dbba8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/generator.py",
+      "sha256": "0566d97827e06665019797f32ccc1206b5636d9a731a402ecbddbbbaccb82648"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/manifest.json",
+      "sha256": "30e611a06404785ee4adb6283d8bd3def277628c16fc773672799db9ebb0e5b1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/r28d1.yaml",
+      "sha256": "65d30845851ca54d52c9ba76c1ceb411faa11d2666d084b7b3fcb6895025bb72"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/replay",
+      "sha256": "58ab58501dca9bcefc6ebbbdfc8f215b47d802b1ac40d8b9b2a1774e2a714aba"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/run-manifest.json",
+      "sha256": "47f09dd0231e6dacc6b0161b731c68c363af0b43c568b2124158ad0fb101c32c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r169/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/affine.hpp",
+      "sha256": "da7c942d4ef4782f49a33729c96fda9ea5dfd3f3f279032665a035ff94b25726"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/driver.cpp",
+      "sha256": "11ab1ce4905b276375442670bc09ad2a8145826cc26e258dc3183558d1285ec7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/generator.py",
+      "sha256": "3b650620f9c34475cb979dcd87b7a98c6416129378172e5226e9df16b04fd53d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/manifest.json",
+      "sha256": "0a278a89698a0dd086146adc7cd52e3b6cf3d4dc456e168baa2da3ac2413cb92"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/r28d1.yaml",
+      "sha256": "33e5601c283329bcf4e34733a295cf50c2af6ac28d30fb8f840d0c143a8689fd"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/replay",
+      "sha256": "fc1fcbcfd47d8631a6f4842f8e1d0865c7cf5165e1acdbb6d2c17c4cb8920d54"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/run-manifest.json",
+      "sha256": "c58d6efbef8e284090fe26f295a4e82db8c95b1cbecc5721f7e0ca4ce0c0be4a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r170/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/affine.hpp",
+      "sha256": "2ad42065d3b44249968dcdcf0b83f0a5cb34771732f9d5e8dde458c9e861f7a3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/driver.cpp",
+      "sha256": "d9f618711c28f9f5f4cf612137fbd04add2c985f0c7629a0b659850dd081735b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/generator.py",
+      "sha256": "7f7999767a87f1fb9f39a5ebe29cc5e990debc31f427f87356380b553c5c7bdd"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/manifest.json",
+      "sha256": "35652ff23c6e1214044fa2e5c0260da46aa9f226825c11a27a0717933e0bc058"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/r28d1.yaml",
+      "sha256": "e9b44d132fc0acc6bf0b2e936332d20187c0297d08f9aa25ae6b8d6baaf99bfb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/replay",
+      "sha256": "f6484df0a461f147a0907774ae7f04eee8bff24e5d723063b3eb83e174ec6297"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/run-manifest.json",
+      "sha256": "ee5550d97d8da847b1f3cfaf1bb056ea3028f9127c4ad5e2a010b540e8495fe1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r171/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/affine.hpp",
+      "sha256": "2ad42065d3b44249968dcdcf0b83f0a5cb34771732f9d5e8dde458c9e861f7a3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/driver.cpp",
+      "sha256": "d671003257e3c04a2cc012f87045d6d00e177e0950c2bb416cd56327261ae320"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/generator.py",
+      "sha256": "51352c371bc3e152696c5205980320cd6b018047bf5af8e0221675e446c8838c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/manifest.json",
+      "sha256": "7a5d4aa6e87063b149b0e1d40f07a11bd29c88d94fb2d5587c5302091a511a1e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/r28d1.yaml",
+      "sha256": "8c01310b618553bd968c94ca23dafe5103bffe80babb6374fba33baf7e988980"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/replay",
+      "sha256": "9ddd2899e563a993ee7225864c7fadedef1eb15a68ad435be45b26767354580f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/run-manifest.json",
+      "sha256": "132a4656568492a4ee76c88170f8197a34108ecfd1677cbd9aeb1076edf4a67e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r172/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/affine.hpp",
+      "sha256": "42cea25a01f2733d1471379edec64756b5e9eae7460a4e604cb1d265afd3ee49"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/driver.cpp",
+      "sha256": "32a980f9795b98221026e105e62e93debdcf6736353aebafed9d5e237ec766b6"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/generator.py",
+      "sha256": "28d906c598578434341ff528f35a1f3bb61f405a7eef3d27a90e4ed71ba5fea3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/manifest.json",
+      "sha256": "91fdc5789de4ed66d5bf3890d82b15602d3e98722e1cd31a467c8f6e5ca1ec69"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/r28d1.yaml",
+      "sha256": "3608a189e91ab39c322e8a812139e2bf5ddb681a9a818ca39575d895c31bc772"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/replay",
+      "sha256": "683dcbead55a359cc694b15547dbe9069342b0b7588f8126170f64c560656615"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/run-manifest.json",
+      "sha256": "0012d9a0619a3c1ff8f17803f8cfcfe33420110b327b6048999b3fd6f94a008d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r173/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/affine.hpp",
+      "sha256": "42cea25a01f2733d1471379edec64756b5e9eae7460a4e604cb1d265afd3ee49"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/driver.cpp",
+      "sha256": "341a9f07f21a21bbeeed5d7cedfef74528afd3b5aa86a402d627d7e2c1275d92"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/generator.py",
+      "sha256": "4ee2d408723382f3f7f887809f78beab4ff1ec4d24d398e543642f18c6852389"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/manifest.json",
+      "sha256": "afdf7d481bcf465702c3428ef2e548f07a655ae502d5154541a75f2e3d83bfd0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/r28d1.yaml",
+      "sha256": "2419ed7379c2613a1d5b3226d99a398700c2c8a3adcbda2b143a7755ba6c7b0d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/replay",
+      "sha256": "488c087f70adc12a0510eba413509fa5c02af08f6cdcbf13fe6b82ee929096cc"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/run-manifest.json",
+      "sha256": "6e381026e379e2faac493b22a0d871e632d8a2287ee99b8b54f9d55b98b673fa"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r174/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/adversarial.hpp",
+      "sha256": "724f1395e3a2e75a3d32a8fd0f40a29c6fc6c5c958c39eeeb7e3d4ed737395a7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/driver.cpp",
+      "sha256": "068dffdc50b2c5a3033aa0ea87bade7b7d8ca7ccf2605b517e697473c07bfbc7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/generator.py",
+      "sha256": "8f9fda70147a8b4cdd9bffc991f17fb2c8c386f2868cd6793da0b6d74f29cf1a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/manifest.json",
+      "sha256": "26f6a7b742052dc3306b78612d9aa48125fc5f4d14af5a9c94a9de9b89c519c3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/r28d1.yaml",
+      "sha256": "d7cf5edee8fcd0cf91fe400caf6fbde08c851a736848942e2a4dcdd649563464"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/replay",
+      "sha256": "98e2cefb16b1cef8189a9d3b3c0404b88eee8d95a1278a3431e2299d64454d6d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/run-manifest.json",
+      "sha256": "b13a048c10b3995b3ca49d19c97b739a09ce341ca482a02ae89a507aa5acab4f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r175/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/commands.json",
+      "sha256": "8def878dc2460ac5bacb5947d383651a3f6af26ac5b6271f504d4410e4b79339"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/driver.cpp",
+      "sha256": "dd0d6b7d6f5292dbb482220726b9188db05ab78878173105875a1bd5b7bc4c98"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/generator.py",
+      "sha256": "090356cd531e589f3512092de46decef36312c82e9ecf2113961e477573720c4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions32/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions32/include/diagnostic_vehicle_enclosure.hpp",
+      "sha256": "41954cfc489b12aa2c869843d86fc174e16dadc9026ad57b44a9b29daea743e0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions32/manifest.json",
+      "sha256": "acf271b4cc7a25c95e55b594407b4c11fd94ed0d6cf1432c85839571a81f67da"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions32/prediction.cpp",
+      "sha256": "22d3b0a508a6cb5d3c520ed9e87d2ed418b914f2cef4be60c991892458929704"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions32/r28d1.yaml",
+      "sha256": "296012dd67dc03f44cf2b2324989c769cd95761f91187b571e6dfdaa164821e7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions32/replay",
+      "sha256": "6e973ab923cce083bb259aa965297e48f00096dc3d0088a710c4f14633433f57"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions32/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions8/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions8/include/diagnostic_vehicle_enclosure.hpp",
+      "sha256": "58d5f67c09269d63fde5f940b9cde0666af739f8b7a5804edd96a95eed5cfbbf"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions8/manifest.json",
+      "sha256": "eb2b27e959dc1a8e3c6109ec00cfe87d34a514e8ed049330a6430937dfe3e5a1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions8/prediction.cpp",
+      "sha256": "22d3b0a508a6cb5d3c520ed9e87d2ed418b914f2cef4be60c991892458929704"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions8/r28d1.yaml",
+      "sha256": "c2ed34e0fd6c16d73ddff03e988c0246e8b6d4e38bdf3b71db1b8cd3f8a5c6a4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions8/replay",
+      "sha256": "d2385ee16e43f06ddf727f0bda395c646a24e33934e169b029aba135ad2d94c0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r176/positions8/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r177/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r177/driver.cpp",
+      "sha256": "da709891b14dbcf7975686d8cb16db2d049278f645e91ddf67bc0f3c76b1cba2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r177/generator.py",
+      "sha256": "b9be5c5923c4ba9313d05ea06943431e759b7cf1e3dc84a52a9a2f71c71b53ab"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r177/manifest.json",
+      "sha256": "48f9c23cd053b8d8d83b4ad4993fa4f557ebb69d844cd0841c7de54e89097c5f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r177/r28d1.yaml",
+      "sha256": "270ee1bf3c9f9ea09594a64b436324409e9d9f0f8264f1130bf8f62fa6cc1e5b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r177/replay",
+      "sha256": "496df4d32d76b1099401186c4673c93d4ebd65d8c3728580be223df6c69a1220"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r177/run-manifest.json",
+      "sha256": "e4d8cad464e0582b9f5e991f379e8361ead9d228acabb8d32d4b5c9de7554fd1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r177/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/commands.json",
+      "sha256": "571ea633747a1756f7ec97941c62d8804249298a52042e1d855b60f0c8d80a8d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate5/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate5/include/diagnostic_vehicle_enclosure.hpp",
+      "sha256": "8839c488cf4628f9becb250b4d2757b42cdbf481d4ca9ac2b35c9c17fc4d15d5"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate5/manifest.json",
+      "sha256": "c13b50f6444cfebfbbe906c43f84fc6d61a26a176201134a252276b274e2d041"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate5/prediction.cpp",
+      "sha256": "22d3b0a508a6cb5d3c520ed9e87d2ed418b914f2cef4be60c991892458929704"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate5/r28d1.yaml",
+      "sha256": "87c72a665c1214e766ed77cc86a19cad2651a81323a8c7d968808540d3eec465"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate5/replay",
+      "sha256": "736b69a2e6c98c20f8b5929247a6fe7625903d07f32a56956805c4f0bea1cd5e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate5/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate7/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate7/include/diagnostic_vehicle_enclosure.hpp",
+      "sha256": "ca846718ff52c74b873a21ac4151dd6a3e3648312ac28feaec8e1e30e3e0894d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate7/manifest.json",
+      "sha256": "17dd77c970550c970185e4c6fae8b74a4d4cfab5dd7543bc4bd9b172338a2bab"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate7/prediction.cpp",
+      "sha256": "22d3b0a508a6cb5d3c520ed9e87d2ed418b914f2cef4be60c991892458929704"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate7/r28d1.yaml",
+      "sha256": "75ecb365dcb8fa53b75a39f71f5089d83dff10e405d6e921ee1b25b462616aba"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate7/replay",
+      "sha256": "05a0def412dd25673c9b2efec972d05e7975458194aaa479b08b9b3338175ce4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/coordinate7/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/driver.cpp",
+      "sha256": "dd0d6b7d6f5292dbb482220726b9188db05ab78878173105875a1bd5b7bc4c98"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r178/generator.py",
+      "sha256": "4dd5af33d661cdab0b0678ed0d83da7972d2d7c12f4d4df78336c41a9ebc70d7"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/actual-published.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/actual-published.yaml",
+      "sha256": "5c5efde55964fe54bd54114aac14dc85afea4d1ef68da735e4eb346056d7f68d"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/architecture.log",
+      "sha256": "f1715b9179e2d0cd98a325deff5793309f52b5c9b98183603f4357aef74ccc11"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/complete-rest.log",
+      "sha256": "93618c1ce10a4fc67cacead7ec38271e8a17bf5e61cd9b2ad0a9271dcc623c4d"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/early-slow.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/early-slow.yaml",
+      "sha256": "1d3c39464834bed65d35acc6c0c19c9e6a969281718f3804a51803662d6c85d4"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/early-slow.yaml.fresh.bin",
+      "sha256": "bdc4b4bd2c9048fa2d10cb80649be469deed1ecb3b1413e46c1894708bf2fe59"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/early-slow.yaml.reuse.bin",
+      "sha256": "bdc4b4bd2c9048fa2d10cb80649be469deed1ecb3b1413e46c1894708bf2fe59"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/exact-pair.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/exact-pair.yaml",
+      "sha256": "b53296c0d7548fbc7f198baafa9f45a72a11d2b52d4f76922315ac41367a1548"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/generator.py",
+      "sha256": "07eceba126f639929f0d3065d1d134095a9a6a090b6ba7158eb6baac19abab75"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/manifest.json",
+      "sha256": "1cb112ed67081ace2cfdb2980b2ae676c43489f7321d8151bb8f2ba87506a360"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/metrics/d1-callback-samples.json",
+      "sha256": "016b07804d2451c249d724b864770016eb765ae81dd9e9278c94af277f43bfb4"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/metrics/d1-command-clock-anomalies.json",
+      "sha256": "8656a59503f8bc05056a8e4743476d335fe47af3ff87d341e7282dd06fa28de5"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/metrics/d1-prediction-samples.json",
+      "sha256": "8f82c2973a0750554fc9376207439928a4a1d03c9b62e125ef623ada1da14ac7"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/metrics/d2-callback-samples.json",
+      "sha256": "49047c92d3f6132207af9f4a2a158ca4eb5a0ff2c2db36e1f07097e56ee59786"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/metrics/d2-command-clock-anomalies.json",
+      "sha256": "2c92c3a413f303f0d6d81849f9d43df9728dcaffab639c69c5c5aef49dbe29de"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/metrics/d2-prediction-samples.json",
+      "sha256": "c6a3f7d7f7d94f0ce045f6c58f07dc69fd98cc48e3c1e4f57cd0d8058815ec7b"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/metrics/report.json",
+      "sha256": "db1a9d0439b86791928a0a84faab5224a830e225427e66a069b661a366b7232d"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/metrics.log",
+      "sha256": "d435a6e622b8cd70979027d4f867f922293ebbcf644d41eedab03595619775f9"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r28/mpcc_architecture_compare",
+      "sha256": "555775c40db5ada9f1787fd686feff1b998d5504f826282368d834a7f4d4a742"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-observation-r1/d1-public-interval.json",
+      "sha256": "097d4b5344141cd4c5333dc6cae4c10d8e551b5a2257fffe9a03fb667472dc7e"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-observation-r1/extract.py",
+      "sha256": "2bf5a066a6ecc4384329fedbd0f12f60cee68db2b8e6eb80a52833d630af1b2a"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-observation-r1/manifest.json",
+      "sha256": "a2e10d301cddc8ea8462aafbfb68799ffd50c6fdb53ab1efd04c7efcbc70cc09"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/diagnostic-summary.json",
+      "sha256": "5e9d13b8775376c696a6dcc8f0eb1cefedfd82cc018c704f7792cc171de7ff60"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-active-partition-r1.log",
+      "sha256": "7c279eb4c1caf05d4c0a2027ea40e1a7263f95c75a2568a48456e95224017a6a"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-adversarial-r1.log",
+      "sha256": "d85e303ef7f8d2f5c54e16645b284ab86712dbdf2fe98c10704d6317bf080474"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-affine-metrics-r1.log",
+      "sha256": "29cfbb6fb23c11a31f1b1155da02856ae6857a13d12ca7c23e1fa28d31b75e38"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-affine-r1.log",
+      "sha256": "12d316f8205491e37cc61545dc71700ff4a333ae7189e08a93dd0cdb6fe02077"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-affine-r2.log",
+      "sha256": "fad8af83277ebb8ca7abd632abca394f36119fcc556df99812c111d119051f92"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-affine-r3.log",
+      "sha256": "586a173d1a2964db2093a786fc749810e9f61810888aba8fd7edfb2956cddba0"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-causal-r1.log",
+      "sha256": "ff2c915d8e6e5b2bb2781248ba0972d2b92b7be04e231ea258f434e05f5ba3f0"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-corner-r1.log",
+      "sha256": "b95b97f6509f09dfb48069ccc7f88160d8c75966976091dc300da285f985ef09"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-diagonal-r1.log",
+      "sha256": "c8ac0a3e75551bd4470eb2dab0f43a4f52d732a7083d883674b0419ac3efed2d"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-fixed-metrics-r1.log",
+      "sha256": "394f016bac74c4fe83dbe3d2fbcef9971322a55420f508cbb42f7516a5215236"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-fixed-template-r1.log",
+      "sha256": "4f9895d547fdbdc03be4a013786d64f5c6cbca8562f286bc189d6a8db0ff1143"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-frame-r1.log",
+      "sha256": "d68ceedaf0238a78dbc82cb1900bd01221d291a1efcd9a284d38e3ed9a1791f2"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-frame-r2.log",
+      "sha256": "ad254adc03e60980d83b1c4f91ecf112de1cbd66a3bc21e397b94b6fc4bd01f7"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-frame-r3.log",
+      "sha256": "e0b76fbef33efc2f77ab6961396c6afdf06a43c8126a86263a92b2e971c13e2c"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-immediate-stop-family-r1.log",
+      "sha256": "2fbaa3aa4870efa13930249a36aad581a95f2f3d85f85f9c50a7bfe944205724"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-observation-extract-r1.log",
+      "sha256": "6395c6ba20a6681c6922d126f7a938090dc5e7fd726c046330fcfd7015d3f917"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-partition-r1.log",
+      "sha256": "27f54bfd5391fa4e15b03272fa8306c4d5d6f6ae8a90b9cc63acb896022417cc"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-position-partition-r1.log",
+      "sha256": "993028d1a1fb7c3a8938175d5869010fac31053be5227b85bea29f75e868cbf5"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-record-audit-r1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc-r28-stop-family-r1.log",
+      "sha256": "bf029def22fde7440f983d4eb3308d97b7e911086bc4cf35d49493935667d45c"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_adversarial_audit.hpp",
+      "sha256": "724f1395e3a2e75a3d32a8fd0f40a29c6fc6c5c958c39eeeb7e3d4ed737395a7"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_affine_audit.hpp",
+      "sha256": "11e8a3c06c38cd8e4864133604b88faa2ad3efc4b07d153cc52ea60dd6ab77fb"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_affine_audit_v2.hpp",
+      "sha256": "da7c942d4ef4782f49a33729c96fda9ea5dfd3f3f279032665a035ff94b25726"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_affine_audit_v3.hpp",
+      "sha256": "2ad42065d3b44249968dcdcf0b83f0a5cb34771732f9d5e8dde458c9e861f7a3"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_affine_condition.hpp",
+      "sha256": "a4e85931215334e005b6f9e2f93e947512b4df97ba4d0dc6cced59bda269e1a6"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_fixed_template_audit.hpp",
+      "sha256": "42cea25a01f2733d1471379edec64756b5e9eae7460a4e604cb1d265afd3ee49"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_active_partition.py",
+      "sha256": "4dd5af33d661cdab0b0678ed0d83da7972d2d7c12f4d4df78336c41a9ebc70d7"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_adversarial.py",
+      "sha256": "8f9fda70147a8b4cdd9bffc991f17fb2c8c386f2868cd6793da0b6d74f29cf1a"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_affine_diagnostic.py",
+      "sha256": "0566d97827e06665019797f32ccc1206b5636d9a731a402ecbddbbbaccb82648"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_affine_diagnostic_r2.py",
+      "sha256": "3b650620f9c34475cb979dcd87b7a98c6416129378172e5226e9df16b04fd53d"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_affine_diagnostic_r3.py",
+      "sha256": "7f7999767a87f1fb9f39a5ebe29cc5e990debc31f427f87356380b553c5c7bdd"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_affine_metrics.py",
+      "sha256": "51352c371bc3e152696c5205980320cd6b018047bf5af8e0221675e446c8838c"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_causal.py",
+      "sha256": "07eceba126f639929f0d3065d1d134095a9a6a090b6ba7158eb6baac19abab75"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_corner_diagnostic.py",
+      "sha256": "85a10ce63cbfa60dde1e80363e7c63d29b64eb4fa15d26cef6928d64ba204ed7"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_diagonal_diagnostic.py",
+      "sha256": "8a14b277a582ffd9ee3347a860aa82a47ea82957e70936fffdae2f9f2dbac85c"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_fixed_metrics.py",
+      "sha256": "4ee2d408723382f3f7f887809f78beab4ff1ec4d24d398e543642f18c6852389"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_fixed_template.py",
+      "sha256": "28d906c598578434341ff528f35a1f3bb61f405a7eef3d27a90e4ed71ba5fea3"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_frame_diagnostic.py",
+      "sha256": "dfa81c472820a75a0f4aee7fd7fb9635906d0bde49b48e2aa52f14e66b421abb"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_frame_diagnostic_r2.py",
+      "sha256": "a982d169ecec853124b56350b5ce8f90180103d0a6af95bb373fae2985a47daa"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_frame_diagnostic_r3.py",
+      "sha256": "80e003c35428a50cdb2b49a29e66da6123cb6d467742650f50f073c43137138d"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_immediate_stop_family.py",
+      "sha256": "b9be5c5923c4ba9313d05ea06943431e759b7cf1e3dc84a52a9a2f71c71b53ab"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_observation_extract.py",
+      "sha256": "2bf5a066a6ecc4384329fedbd0f12f60cee68db2b8e6eb80a52833d630af1b2a"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_partition_diagnostic.py",
+      "sha256": "6d3332cb0ef2063fac95b2f5bea958b121e71e961271421f9b0f8d9277b6f360"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_position_partition.py",
+      "sha256": "090356cd531e589f3512092de46decef36312c82e9ecf2113961e477573720c4"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_progress.py",
+      "sha256": "542e134a4383cf16fd8b1147eb230967c8dff4c374050dbd55d515455871307d"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_r28_stop_family.py",
+      "sha256": "8e11237b6d68d62bc070dc4994561feb764223f5b37b62cfc1e02294dbbe223a"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/mpcc_record_r28_audit.py",
+      "sha256": "debb9cdc6a005a963cc11d6062eb786e4c67d10a662c1e7df26c9b544fe7eb41"
+    },
+    {
+      "path": "output/20260911-nine-state-r28-wall-audit-evidence/observation-report.json",
+      "sha256": "bde32642e883c95e0fbb15d0296c7ae94f6a80eaed4820a4ca4c82b6f1b352b2"
+    }
+  ]
+}

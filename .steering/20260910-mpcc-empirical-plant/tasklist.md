@@ -26,6 +26,9 @@
 - [x] Diagnose r26unused wall rectangle corners; whole-population directional support, buildr54/testsr44/native146-148.
 - [x] Capture r27slow842/source121, reproduce fullproof and315msactualhistory gap at843; current audit ongoing.
 - [x] Remove exactly authenticated synchronous materialization recomputation; bitwise native equality, buildr56/testsr46 (2453), native157/159–161.
+- [x] Capture r28 actual918/source137 versus inspected131, full-wall failure, same-world architecture and failed coordinate/partition/Stop-family hypotheses.
+- [x] Preserve r162–178 correlated/partition/Stop-family failures and native input search; same-run IMU/command chronology and registry. No production promotion.
+- [ ] Repair r28 current-world full-input wall proof failure with a proven producer change, preserving original inputs and physical checks.
 - [ ] Repair remaining initial long-program proof cost and actual publication timing after r27.
 - [ ] Validate integrated applied-program behavior and25ms timing in fresh runs.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.

@@ -991,6 +991,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/same-world-stop-evidence.json",
       "replay_ready": true,
       "reason": "Exact842/source121 slow Stop; actual839/source120 and materialized128 remain distinct.843 reconstruction proves original315ms history gap."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-wall-envelope-r28",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r28-wall-envelope-evidence.json",
+      "replay_ready": true,
+      "reason": "Actual publication918/source137 and inspected131 remain distinct; current919 complete applied wall failure and original profiles. All rejected isolated trials preserved."
     }
   ],
   "experiments": [
@@ -10970,6 +10976,426 @@
         "Unconditional duplicate numerical prediction in an exactly authenticated synchronous materialization"
       ],
       "revisit_condition": "New representation/compiler/causal evidence required before repeating rejected unchanged arms. No profile/margin/horizon/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-live",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Synchronous materialization reuse closes integrated MPCC acceptance",
+      "changed_dimension": "Same-build dev2 on50486fcf",
+      "result": "rejected",
+      "reason": "D1first919/1.17mps/WP30 appliedwall. Reuse occurred17/69times beforefailure but834firstproof170ms and919callback219.651ms remain.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-persistent-a-1",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility persistent-a",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=persistent-a stage=solver-rejected candidate=14150874215443113435 solver=solve-rejected solve_ms=115.978 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0156492, dua_res=4.20668, failed_iterate_row=252, value=1.2142, bounds=[-3.7114,1.18008], violation=0.0341166, tolerance=0.0022142, normalized=15.4081, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000919-c462011fd8b8a5db-cruise-side-neutral-initial-solve-rejected/snapshot.yaml; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-stateless-left-b-2",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility stateless-left-b",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=stateless-left-b stage=solver-rejected candidate=11161990650417316690 solver=solve-rejected solve_ms=115.92 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0166507, dua_res=8.94466, failed_iterate_row=252, value=1.21638, bounds=[-3.7114,1.18008], violation=0.0363, tolerance=0.00221638, normalized=16.378, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000919-9ae75b5b985b0352-cruise-side-positive-initial-solve-rejected/snapshot.yaml; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-stateless-right-b-3",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility stateless-right-b",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=stateless-right-b stage=solver-rejected candidate=14473232194029557192 solver=solve-rejected solve_ms=114.656 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00998236, dua_res=3.79341, failed_iterate_row=252, value=1.20185, bounds=[-3.7114,1.18008], violation=0.0217624, tolerance=0.00220185, normalized=9.8837, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000919-c8db3fff7ce115c8-cruise-side-negative-initial-solve-rejected/snapshot.yaml; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-rough-left-c-4",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility rough-left-c",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=rough-left-c stage=solver-rejected candidate=4715200334627216935 solver=solve-rejected solve_ms=43.8206 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0121822, dua_res=4.00201, failed_iterate_row=252, value=1.20664, bounds=[-3.7114,1.18008], violation=0.0265581, tolerance=0.00220664, normalized=12.0355, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1]; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-rough-right-c-5",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility rough-right-c",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=rough-right-c stage=solver-rejected candidate=12556184476068313838 solver=solve-rejected solve_ms=44.6641 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00362632, dua_res=7.77751, failed_iterate_row=252, value=1.18799, bounds=[-3.7114,1.18008], violation=0.00790569, tolerance=0.00218799, normalized=3.61322, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1]; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-offline-left-d-6",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility offline-left-d",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=offline-left-d stage=solver-rejected candidate=4715200334627216935 solver=solve-rejected solve_ms=43.1892 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0121822, dua_res=4.00201, failed_iterate_row=252, value=1.20664, bounds=[-3.7114,1.18008], violation=0.0265581, tolerance=0.00220664, normalized=12.0355, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1]; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-offline-right-d-7",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility offline-right-d",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=offline-right-d stage=solver-rejected candidate=12556184476068313838 solver=solve-rejected solve_ms=42.9095 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00362632, dua_res=7.77751, failed_iterate_row=252, value=1.18799, bounds=[-3.7114,1.18008], violation=0.00790569, tolerance=0.00218799, normalized=3.61322, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1]; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-production-left-g-8",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility production-left-g",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=production-left-g stage=solver-rejected candidate=11161990650417316690 solver=solve-rejected solve_ms=43.2683 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0166507, dua_res=8.94466, failed_iterate_row=252, value=1.21638, bounds=[-3.7114,1.18008], violation=0.0363, tolerance=0.00221638, normalized=16.378, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1]; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-architecture-production-right-g-9",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility production-right-g",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=production-right-g stage=solver-rejected candidate=14473232194029557192 solver=solve-rejected solve_ms=42.8613 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00998236, dua_res=3.79341, failed_iterate_row=252, value=1.20185, bounds=[-3.7114,1.18008], violation=0.0217624, tolerance=0.00220185, normalized=9.8837, row_semantic=state-box/stage=7/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1]; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility current-world-complete-rest-y",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=11884933583347625197 solver=solve-rejected solve_ms=112.913 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.188991, dua_res=0.0428186, failed_iterate_row=369, value=1.5921, bounds=[-3.7114,1.18008], violation=0.412016, tolerance=0.0025921, normalized=158.951, row_semantic=state-box/stage=20/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000919-a4efc41ffe8baced-cruise-side-neutral-initial-solve-rejected/snapshot.yaml; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-complete-rest-current-world-complete-rest-y-2",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Same-world feasibility current-world-complete-rest-y",
+      "changed_dimension": "Candidate/solver architecture; original world/physical conditions",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=wall-proof-rejected candidate=13090366941028345899 solver=solved solve_ms=34.7371 terminal_progress=10.9755 terminal_velocity=0 lateral_reserve=0.26008 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=646, wp=39, distance=12.915m, lateral=0.632m, lag=-2.784m, bounds=[-3.711,1.180]m, reserve=0.548m, heading_offset=0.111rad, progress=38.264/42.697m, progress_delta=-4.433m, pose=(89626.756,43133.375,2.214), out_of_map=0, contacts=1; No all-method infeasibility certificate and no production authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r162",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Extra directional wall axes alone close the envelope",
+      "changed_dimension": "Additional diagnostic support",
+      "result": "rejected",
+      "reason": "128directions plus original axes still reject; prior/constant worst−.017761815/−.029541495m; native0contacts.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r163",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Initial heading coordinate support",
+      "changed_dimension": "Diagnostic generation",
+      "result": "inconclusive",
+      "reason": "Generator assertion beforecompile; multiline declaration mismatch.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r164",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Initial heading coordinate support",
+      "changed_dimension": "Diagnostic generation",
+      "result": "inconclusive",
+      "reason": "Generator assertion beforecompile; overload count mismatch.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r165",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Initial heading corner coordinates suffice",
+      "changed_dimension": "Additional corner coordinate",
+      "result": "rejected",
+      "reason": "Original body bits same; gaps−.012201602/−.017978922m; nativeinclusionpass.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r166",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "World diagonal corner coordinates suffice",
+      "changed_dimension": "Additional corner coordinate",
+      "result": "rejected",
+      "reason": "Originalbodybits same; gaps−.011150150/−.016888901m; nativeinclusionpass.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r167",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Forward velocity refinement alone suffices",
+      "changed_dimension": "Closed numerical speed subdivisions",
+      "result": "rejected",
+      "reason": "2/4/8bins all reject; prior−.017761815/−.014911732/−.013170536m; constant−.029541495/−.025824229/−.023459084m.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r168",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Future steering-target Stop words suffice with captured first packet",
+      "changed_dimension": "Future steering words under original acceleration/slew limits",
+      "result": "rejected",
+      "reason": "Seven targets all fail fullpopulation; +.2/+max also admit nativecontact witnesses.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r169",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Affine enclosure recovers enough state dependence",
+      "changed_dimension": "SharedJacobian affine forms/branch unions",
+      "result": "rejected",
+      "reason": "Nativeinclusionpass but no wall improvement;33.532219/32.049610ms additional prediction.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r170",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Stable affine noise IDs/outward radii suffice",
+      "changed_dimension": "Affine identity/rounding corrections",
+      "result": "rejected",
+      "reason": "Nativeinclusionpass but no wall improvement;35.381560/33.639373ms.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r171",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Affine forward-speed conditioning suffices",
+      "changed_dimension": "Conservative generator elimination",
+      "result": "rejected",
+      "reason": "1184/1461conditionings in firstword; no wall improvement;49.624597/48.476129ms.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r172",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Affine union/error growth explains failed refinement",
+      "changed_dimension": "Instrumentation only",
+      "result": "accepted",
+      "reason": "Stopped X independenterrorwidth4.054359m versus physicalX.395502m; yaw.522015 versus.057211rad. Supports weaker thanoriginal.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r173",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Fixed invertible coordinate union avoids enough excess",
+      "changed_dimension": "Eight common transformed coordinate intervals",
+      "result": "rejected",
+      "reason": "Full native inclusion but unchanged oldgaps;18.378595/18.128177ms. Actualsourcefixedcoordinates, despite copied affine manifest wording.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r174",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Measure fixed-coordinate residual uncertainty",
+      "changed_dimension": "Fixed-coordinate width/support instrumentation",
+      "result": "accepted",
+      "reason": "Stationary firstX.323033..718475; yaw−kappaX−.029388..008448; wall support−.011002762m versusoriginal−.000431336 atfirst.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r175",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "An admitted native adversarial contact explains the exact word rejection",
+      "changed_dimension": "Bounded coordinate search in original input unions",
+      "result": "inconclusive",
+      "reason": "12seeds/5533native evaluations perword; bestSAT gaps+.003297801/+.003853943m. Allseeds reachsame extreme inputs. No contact found; full clearance unproved.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r176",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Position partitions recover enough stopped-state dependence",
+      "changed_dimension": "ClosedX×originalspeed bins; independently intersected corners",
+      "result": "rejected",
+      "reason": "X8/32bothfail; prior−.017693282/−.017458449m; constant−.029521057/−.029485556m.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r177",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Immediate braking with alternative future steering closes currentworld",
+      "changed_dimension": "Immediatebrake candidate family",
+      "result": "rejected",
+      "reason": "Allsevenwordsfail fullwall; +.2/+max also nativecontacts839/5159. Original minaccel and unchangedfirststeering; no nominal authority.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-r178",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Active feedback state subdivisions suffice",
+      "changed_dimension": "Closednumericalspeed/tire or yawrate partitions",
+      "result": "rejected",
+      "reason": "Speed8×tire8:prior−.008261996/constant−.013990653m; speed8×yawrate8:−.010435136/−.017685208m. Bothfulljoinsreject; nativeinclusionpass.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
+    },
+    {
+      "experiment_id": "20260911-nine-state-wall-envelope-r28-observation",
+      "baseline_commit": "50486fcfa65719529f1aba528178e24f458fc803",
+      "snapshot_ids": [
+        "20260911-nine-state-wall-envelope-r28"
+      ],
+      "hypothesis": "Held IMU age explains current wall refusal",
+      "changed_dimension": "Read-only same-run MCAP chronology",
+      "result": "inconclusive",
+      "reason": "50msIMUsourceperiod withoutmissingmessages over9.3..10.35; heldr.16232653 versusnext.16393277. Not sufficient causalproof. Bagcontrolsource9.949 receipt213msaftermatchingIMU; actual controlleravailability/application not reconstructed.",
+      "production_impact": "None. All experiments in this checkpoint are read-only or isolated diagnostic builds; no new normal authority, input/profile/margin/budget changes, or integrated acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat only with a recorded new causal input or numerical/architecture hypothesis. Failed unchanged refinements and steering families must not be retried for a pass."
     }
   ]
 }

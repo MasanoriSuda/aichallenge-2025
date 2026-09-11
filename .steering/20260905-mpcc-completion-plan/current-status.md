@@ -1,28 +1,26 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。壁判定修正4a4b4148のdev2-r27で、D1842の317ms処理後に843が認証喪失。**
-監視が検出した移動中のEmergencyは848、.11m/s、WP29。
+**全体は未完。最新commit50486fcfのdev2-r28は、D1decision919、1.17m/sで壁の認証を失った。**
 
-直前のStop121は元入力で完全認証するが、191packet・1071区間の停止証明に約101ms、
-格納後の再検証にも約100ms必要だった。実送信間隔が315msに開き、元の250ms履歴条件を
-超えた。元842からStop128を再構成し、843のHistoryUnavailableも再現できた。
-同じ判断内の停止計画格納では、元の不変証明を明示的に渡し、数値計算を重複しないよう
-修正した。新計画の公称証明と全物理検査は維持。ノードと同じ送信前予測を組み直した
-元842入力で、再検証は15.123690ms、独立した全計算は101.293818ms、全区間がbit一致。
-初回の101ms処理と、実送信時刻と認証時刻の整合は依然として未解決。
+同じ判断内の停止計画格納では、不変certificateを明示的に渡して数値計算を再利用する。
+元の全計算との区間bit一致、buildr56=26package、testsr46=2453記録/62group・失敗0を確認。
+実走の最初の失敗前にもD1で17回、D2で69回再利用した。初回の長い停止証明、実送信時刻との
+整合、連続deadline超過は未解決。単発超過は元の完遂条件どおり計測・帰属する。
 
-- 最新ローカル検証: buildr56は26package、testsr46は2453記録/62group、失敗0。
-- 元r27/r26/r23で全計算と再利用の全区間一致・指令/認証一致。過去の実履歴欠落や壁・他車の負例も維持。
-- testsr45の関数名契約失敗を記録し、既存判定・テストは変えず、新関数を役割に合わせて改名。
-- 微分の疎化・単純区間・関数展開の診断は25msを解決せず、本番へ未採用。
-- 次は必要分をローカルcommitし、同一buildでdev2-r28。25msと統合走行の受入れは未完。
+最新失敗では、実公開元918/source137と検査対象131を区別し、どちらの現在状態再検証でも
+全入力応答の壁拒否を再現した。前回認証した停止列も現在観測では同じ壁セルと分離しない。
+座標を追加する方法、速度区間の4/8分割、停止操舵列の候補比較はいずれも解決せず未採用。
+相関付き包絡、位置分割、速度×タイヤ角/ヨーレート分割も全認証は回復せず、未採用。
+入力内の反例探索は各5,533経路、最小分離3.3/3.9mmで接触なしだが、全入力の安全証明ではない。
+同じrunのMCAPではIMUの50ms周期を確認した。時刻差の原因性は未確定で、観測再構成も変更しない。
+全r162–178と失敗setupを台帳へ保存し、壁認証と実送信時刻の成立を引き続き修正する。
 
-[最新の遅延監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r27-stop-timing-audit.md)、
-[完了した壁修正](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r26-wall-direction-audit.md)、
+[最新の壁包絡監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r28-wall-envelope-audit.md)、
+[再利用の修正と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r27-stop-timing-audit.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
+dev3/dev4六周、gate1–3、同一tar/image/eval、文書・ローカルcommitまで継続する。
 
 ## Superseded checkpoint and historical evidence
 

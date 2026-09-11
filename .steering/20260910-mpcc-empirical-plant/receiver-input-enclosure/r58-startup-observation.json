@@ -1,0 +1,31 @@
+{
+  "run_id": "20260910-nine-state-dev2-r58",
+  "commit": "3ac41a0e",
+  "classification": "startup inconclusive; no normal controller acceptance",
+  "observed": "initial GNSS and odometry recovered at wall 1789154621; subsequent clock stall; zero normal certified publication in both domains",
+  "readonly_probe": "six seconds: clock, GNSS, state zero; awsim_d1 publishers discovered",
+  "simulator_thread_observation": "main Unity thread and UnityGfxDeviceW in futex_wait_queue; snapshot does not establish root cause",
+  "next": "one unchanged clean standard restart r59; if repeated, inspect native thread stacks before teardown",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r58/Player-startup.log",
+      "sha256": "0a7b5de01e1c0eacb58bf09fa3004f59ed3ff5ea069ed12acfdf7505fca88951"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r58/startup-topics.json",
+      "sha256": "7fa3220392652f2f175afd07721e0667042467fbfe708a8b3d5411a7faf6ea72"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r58/external-stop-reason.json",
+      "sha256": "8db8020df001d676200e2da770c178654ce59eda97b8be72fe8240861b502745"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r58/monitor-summary.json",
+      "sha256": "c7deec69f6135728c40579f77733f4000e4f450a937b95fbee425699e99365e4"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r58/artifact-restoration.json",
+      "sha256": "22bd281877aa68c9a82264a65157e520ff26a418aa62b1a08751173934bed886"
+    }
+  ]
+}

@@ -1189,6 +1189,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/terminal-window-evidence.json",
       "replay_ready": true,
       "reason": "R57first pre and partial terminalwindow failure, exactR342/R346, failingnative regression, finalbuild/tests and prior regressions."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-wire-reachability",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/wire-reachability-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen r58/r59 startup and guard evidence, exact r347, five unchanged and two newly certified actual-library inputs."
     }
   ],
   "experiments": [
@@ -14303,6 +14309,86 @@
         "Instant-only rest coverage at candidate generation"
       ],
       "revisit_condition": "New independently complete terminal continuation or concrete timing/coverage evidence; never round rest timestamps or relax original windows."
+    },
+    {
+      "experiment_id": "20260912-nine-state-wire-reachability-r58",
+      "baseline_commit": "3ac41a0eba20123dbee8f635704eae9ff1def635",
+      "snapshot_ids": [
+        "20260912-nine-state-wire-reachability"
+      ],
+      "hypothesis": "Real-valued reachable endpoints can round outside the final float32 wire constraint; representation must be selected before certification.",
+      "changed_dimension": "C5 source representable steering selection, original exact predecessor and limits; old final guard unchanged.",
+      "result": "inconclusive",
+      "reason": "AWSIM stopped advancing before normal control; clean same-input r59 progressed.",
+      "production_impact": "New source/proof identity when wire changes; no post-proof adjustment, fallback or rate/tolerance change.",
+      "deleted_code": [
+        "Scheduled acceptance of double-only reachable endpoint before wire encoding"
+      ],
+      "revisit_condition": "Concrete new representation, clock or proof-coverage failure. Domain/scheduling alternatives require separately sealed causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-wire-reachability-r59",
+      "baseline_commit": "3ac41a0eba20123dbee8f635704eae9ff1def635",
+      "snapshot_ids": [
+        "20260912-nine-state-wire-reachability"
+      ],
+      "hypothesis": "Real-valued reachable endpoints can round outside the final float32 wire constraint; representation must be selected before certification.",
+      "changed_dimension": "C5 source representable steering selection, original exact predecessor and limits; old final guard unchanged.",
+      "result": "rejected",
+      "reason": "First nominal wire slew rounding excess; independent later preemption and velocity-domain miss. No laps.",
+      "production_impact": "New source/proof identity when wire changes; no post-proof adjustment, fallback or rate/tolerance change.",
+      "deleted_code": [
+        "Scheduled acceptance of double-only reachable endpoint before wire encoding"
+      ],
+      "revisit_condition": "Concrete new representation, clock or proof-coverage failure. Domain/scheduling alternatives require separately sealed causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-wire-reachability-r347",
+      "baseline_commit": "3ac41a0eba20123dbee8f635704eae9ff1def635",
+      "snapshot_ids": [
+        "20260912-nine-state-wire-reachability"
+      ],
+      "hypothesis": "Real-valued reachable endpoints can round outside the final float32 wire constraint; representation must be selected before certification.",
+      "changed_dimension": "C5 source representable steering selection, original exact predecessor and limits; old final guard unchanged.",
+      "result": "accepted",
+      "reason": "Exact four prefix/hash/guard cases and independent domain comparisons. Pose symmetry insufficient for velocity-domain miss.",
+      "production_impact": "New source/proof identity when wire changes; no post-proof adjustment, fallback or rate/tolerance change.",
+      "deleted_code": [
+        "Scheduled acceptance of double-only reachable endpoint before wire encoding"
+      ],
+      "revisit_condition": "Concrete new representation, clock or proof-coverage failure. Domain/scheduling alternatives require separately sealed causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-wire-reachability-r348-r349",
+      "baseline_commit": "3ac41a0eba20123dbee8f635704eae9ff1def635",
+      "snapshot_ids": [
+        "20260912-nine-state-wire-reachability"
+      ],
+      "hypothesis": "Real-valued reachable endpoints can round outside the final float32 wire constraint; representation must be selected before certification.",
+      "changed_dimension": "C5 source representable steering selection, original exact predecessor and limits; old final guard unchanged.",
+      "result": "accepted",
+      "reason": "Initial empty-set fixture incorrectly representable; adjacent-float witness corrects it, all five boundary tests pass without threshold changes.",
+      "production_impact": "New source/proof identity when wire changes; no post-proof adjustment, fallback or rate/tolerance change.",
+      "deleted_code": [
+        "Scheduled acceptance of double-only reachable endpoint before wire encoding"
+      ],
+      "revisit_condition": "Concrete new representation, clock or proof-coverage failure. Domain/scheduling alternatives require separately sealed causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-wire-reachability-r350-r351-r353",
+      "baseline_commit": "3ac41a0eba20123dbee8f635704eae9ff1def635",
+      "snapshot_ids": [
+        "20260912-nine-state-wire-reachability"
+      ],
+      "hypothesis": "Real-valued reachable endpoints can round outside the final float32 wire constraint; representation must be selected before certification.",
+      "changed_dimension": "C5 source representable steering selection, original exact predecessor and limits; old final guard unchanged.",
+      "result": "accepted",
+      "reason": "R59 new certified wire passes unchanged final predicate; five unchanged sources retain outcomes; r51 new certified wire retains actual late rejection.",
+      "production_impact": "New source/proof identity when wire changes; no post-proof adjustment, fallback or rate/tolerance change.",
+      "deleted_code": [
+        "Scheduled acceptance of double-only reachable endpoint before wire encoding"
+      ],
+      "revisit_condition": "Concrete new representation, clock or proof-coverage failure. Domain/scheduling alternatives require separately sealed causal evidence."
     }
   ]
 }

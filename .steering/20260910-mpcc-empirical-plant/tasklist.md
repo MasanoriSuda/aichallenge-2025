@@ -299,7 +299,7 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Current short prefix uses exact remainingprogramme and actualhistory; independent future retains entireoriginal delayedinput memory. Private proof index/finaloriginal25mswindow/rest bound.
 - [x] R339Follow Cartesian-product regression rejected; preserve original Followdomain and assertions. R3388numeric, R341148native; buildr96all26, testsr84all2564, R340six exact-library replays pass.
 - [x] Fixed phase counters observe unknown MPC/off-CPU interval, never used for control.
-- [ ] Standarddev2-r57: real worker availability, current coverage, original deadlines, callbackphases, laps/hz.
+- [x] Executed (failed) Standarddev2-r57: real worker availability, current coverage, original deadlines, callbackphases, laps/hz.
 - [ ] LateFollow domain, source/independent proof duplication, unknownoff-CPU and all M4-M6 remain open.
 
 
@@ -308,5 +308,14 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] StoptriggerD1post1541/index14 is inside25mswindow but crosses originalrest26.864999408. R342exactsource/currenthashes andallthreeguard outcomes reproduced.
 - [x] R343red native regression: partial terminalwindow incorrectly yields candidate. Producer now requires whole indexedwindow inside original and selected current proof horizons; restvalues/actualguards unchanged.
 - [x] R344149native; buildr97all26; testsr85all2565/66 inclsource105; R3456prior and R3463current exact-library replays pass intended outcomes.
-- [ ] Standarddev2-r58: normal availability, currentprefixcoverage, preemption/burstyclocks, fullstop/restart and movingrace.
+- [x] Executed (startup inconclusive) Standarddev2-r58: normal availability, currentprefixcoverage, preemption/burstyclocks, fullstop/restart and movingrace.
 - [ ] Worker duplicate future work, lateFollow and all remaining M4-M6. No new scheduling policy promoted.
+
+2026-09-12 pre-certification float32 reachability (baseline3ac41a0e):
+- [x] R58 startup-inconclusive saved/restored; same-input clean r59 reaches normal control but fails.
+- [x] R347 exact r59 firstD2pre948: wire rounding exceeds unchanged slew bound by4.9e-9rad. Separate r59D1logger preemption and D2velocity-domain miss remain. R57pose miss also exported exactly.
+- [x] Full pose symmetry covers r57pose miss but not r59velocity miss; no domain widening promoted.
+- [x] Select representable steering before new full proof; preserve valid old values, old API and final guards.
+- [x] R349 five native boundary tests; r99build all26/r86tests all2570/66; R350new r59, R351five unchanged, R353new r51 with old late rejection.
+- [ ] Standarddev2-r60, then causal scheduling/coverage work if still failing.
+- [ ] All M4–M6 runtime/mission/sibling/Store/Stop-rest-restart/race/gate/submission acceptance remains open.

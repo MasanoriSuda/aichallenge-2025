@@ -4787,3 +4787,12 @@ R343修正前の失敗、R344native149、buildr97、testsr85全2565、R345/R346�
 r57の先行するD1/D2送信前遅延は別件で、proof区間の非自発的切替と範囲外を観測した。
 原因の主体・対策、通常指令の継続可用性と統合受入れは未確定。
 [送信窓と証明期間](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/terminal-window-design.md)。
+
+標準r59のD2送信前948では、元25ms窓内でも、二段のfloat32操舵変換が変化率境界を
+約4.9e-9rad越えた。C5の新規指令生成で、前の正確なwire値に対して元の変化率・
+絶対値制限を満たす表現可能な操舵値を、物理予測・証明より前に選択する。
+既に有効な値は保持し、値を変更する場合は完全な元時刻・現在状態の証明と新しい
+入力fingerprintを作る。送信直前の補正、許容値・窓の緩和は行わない。表現可能な
+値がなければ候補を拒否する。全26build、2570tests、旧・新指令の再生で確認した。
+起動停止r58は制御未評価、r59の別件の遅延・証明範囲不足と統合受入れは未解決。
+[送信形式の到達可能性](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/wire-reachability-design.md)。

@@ -576,7 +576,8 @@ const char * to_string(const DynamicObstacleProofScope scope) noexcept
 
 static std::optional<std::pair<artifact::Cursor, artifact::Actuation>>
 select_publication_actuation(
-  const Request & request, const artifact::Cursor & source_cursor, Result & result)
+  const Request & request, const artifact::Cursor & source_cursor, Result & result,
+  std::optional<double> previous_wire_steering = std::nullopt)
 {
   const auto & execution = *request.plan->execution_artifact;
   auto command_cursor = source_cursor;
@@ -678,11 +679,18 @@ select_publication_actuation(
   }
   auto selected = actuation.actuation.value();
   selected.steering_rad = continuation_initial_steering_rad;
+  if (previous_wire_steering) {
+    const auto representable = mpcc_wire_command::reachable_steering(
+      selected.steering_rad, *previous_wire_steering, execution.vehicle_model.steering_wire_gain,
+      execution.maximum_abs_steering_rad, maximum_steering_step_rad);
+    if (!representable) { result.reason = Reason::SteeringUnreachable; return std::nullopt; }
+    selected.steering_rad = *representable;
+  }
   return std::make_pair(command_cursor, selected);
 }
 
-std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
-  const Request & request) noexcept
+static std::optional<mpcc_vehicle_model::PublishedCommand> prospective_packet_with_predecessor(
+  const Request & request, std::optional<double> previous_wire_steering) noexcept
 {
   if (!request.plan || !request.plan->execution_artifact ||
     !std::isfinite(request.previous_published_steering_rad) ||
@@ -693,7 +701,7 @@ std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
     execution, request.control_origin_sec, request.execution_clock);
   if (!cursor.available) return std::nullopt;
   Result diagnostic;
-  const auto selected = select_publication_actuation(request, cursor, diagnostic);
+  const auto selected = select_publication_actuation(request, cursor, diagnostic, previous_wire_steering);
   if (!selected) return std::nullopt;
   return mpcc_vehicle_model::PublishedCommand{
     request.now_sec,
@@ -701,8 +709,15 @@ std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
     mpcc_wire_command::steering(selected->second.steering_rad, execution.vehicle_model.steering_wire_gain)};
 }
 
+std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
+  const Request & request) noexcept
+{
+  return prospective_packet_with_predecessor(request, std::nullopt);
+}
+
 struct ScheduledNominalContext {
   const mpcc_vehicle_model::ScheduledPublicationPrediction &forecast;
+  double previous_wire_steering;
   std::function<bool(const Proof &)> certify;
 };
 
@@ -1148,7 +1163,8 @@ static Result evaluate_with_stop_profile(
   // next sealed stage and prove that command from the same fresh physical
   // state.  This is a stateless Bundle; skipped source time is never claimed
   // as executed artifact history.
-  const auto selected_publication = select_publication_actuation(request, source_cursor, result);
+  const auto selected_publication = select_publication_actuation(request, source_cursor, result,
+    scheduled ? std::optional<double>{scheduled->previous_wire_steering} : std::nullopt);
   if (!selected_publication) return result;
   const auto & command_cursor = selected_publication->first;
   const auto & selected_actuation = selected_publication->second;
@@ -2365,13 +2381,13 @@ Result evaluate(const Request &request) {
     return true;
   };
   if (!bind()) return result;
-  const auto packet = retained::prospective_artifact_packet(view);
+  const auto packet = retained::prospective_packet_with_predecessor(view, predecessor.wire_steering_rad);
   if (!packet || packet->published_sec != *first) return result;
   draft->commands.back() = *packet;
   forecast = vehicle::predict_scheduled_publication(observation, *draft, count,
     request.planned_control_origin_sec, execution.vehicle_model);
   if (!forecast || !bind()) return result;
-  retained::ScheduledNominalContext context{*forecast, [&](const retained::Proof &proof) {
+  retained::ScheduledNominalContext context{*forecast, predecessor.wire_steering_rad, [&](const retained::Proof &proof) {
     auto nominal = std::shared_ptr<NominalProof>(new NominalProof);
     nominal->observed_ = observed;
     nominal->source_context_ = observed.plan->solver_source_snapshot ?

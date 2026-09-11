@@ -4662,3 +4662,14 @@ input fingerprintと現在全物理証明を再現し、送信前合格・送信
 最終guard/raw topic/最終指令publishの間へROS/steady時刻観測を追加。判定・送信順・
 台帳・周期・期限・物理条件は維持する。Buildr89/testsr77合格、責任区間はr49で確認。
 [時刻観測の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-call-timing-design.md)。
+
+R49（3a96af57）のD1decision1021は0.54m/s時、元の次回公開12.164999795より
+ROS時刻12.164999728が67ns早く、最終guardが拒否。R302は元source/currentと8件の
+実送信、設定由来0.63s履歴保持を再現し、早期拒否・元の開始時刻合格・期限+1ns拒否を確認。
+次回公開programme/indexの生成をworkerと制御側で共用し、ROS時刻が元の予定に達して
+から一度だけcontrolを起こす。後続の名目25ms列と窓、現在全物理証明、実prefix、
+送信前後guardは維持。期限を過ぎた起動に新しい窓を与えない。壁時計の旧25msタイマーは
+時計逆行・既存odom_timeout_secを超える停止時のEmergency専用とし、通常制御を起こさない。
+R304実rclcpp/時計監視11test、source105、buildr90全26package、testsr78全2545記録/
+65group合格。R50動的受入れと全M4–M6は未完。
+[共有公開予定の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-appointment-design.md)。

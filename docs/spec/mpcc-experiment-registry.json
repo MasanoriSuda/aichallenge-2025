@@ -1117,6 +1117,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-call-timing-evidence.json",
       "replay_ready": true,
       "reason": "Exact r48post-send failure, independent current proof and split call observation; live attribution pending."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-publication-appointment",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-appointment-evidence.json",
+      "replay_ready": true,
+      "reason": "R49exact early first moving failure, source comparison, correctly reconstructed actual prefix and real ROS appointment tests."
     }
   ],
   "experiments": [
@@ -13480,6 +13486,108 @@
       "production_impact": "Existing sole normal dispatcher and actual ledger unchanged.",
       "deleted_code": [],
       "revisit_condition": "New exact measured first-failure boundary or a causally justified producer repair; do not rerun unchanged failed races."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-appointment-dev2-r49",
+      "baseline_commit": "3a96af574f85d481b0c0d7e6e5f2b16da1d3c838",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-appointment"
+      ],
+      "hypothesis": "Unconditional wall callbacks satisfy the immutable ROS publication calendar",
+      "changed_dimension": "Same next original publication appointment shared by worker and one-shot ROS callback; strict authority/physical bounds/rates/windows unchanged",
+      "result": "rejected",
+      "reason": "D1dispatch1021at0.54m/s is67ns before original index8opening. R49has zero post-window violations but no race acceptance.",
+      "production_impact": "Retire unconditional wall-driven normal callback; retain wall observer only for forced existing Emergency. No second normal authority.",
+      "deleted_code": [
+        "Unconditional wall timer invocation of normal control",
+        "Private duplicate worker-only next-appointment calculation"
+      ],
+      "revisit_condition": "New exact failure, changed diagnosed producer or newly applicable alternative source architecture; no unchanged race rerun or grace/tolerance promotion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-appointment-r300",
+      "baseline_commit": "3a96af574f85d481b0c0d7e6e5f2b16da1d3c838",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-appointment"
+      ],
+      "hypothesis": "The initial prefix reconstruction can replay the current dispatcher",
+      "changed_dimension": "Same next original publication appointment shared by worker and one-shot ROS callback; strict authority/physical bounds/rates/windows unchanged",
+      "result": "inconclusive",
+      "reason": "Diagnostic used2s retention instead of captured0.63s; current history mismatches, no dispatch. Its exit0is not an accepted reproduction.",
+      "production_impact": "Retire unconditional wall-driven normal callback; retain wall observer only for forced existing Emergency. No second normal authority.",
+      "deleted_code": [
+        "Unconditional wall timer invocation of normal control",
+        "Private duplicate worker-only next-appointment calculation"
+      ],
+      "revisit_condition": "New exact failure, changed diagnosed producer or newly applicable alternative source architecture; no unchanged race rerun or grace/tolerance promotion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-appointment-r301",
+      "baseline_commit": "3a96af574f85d481b0c0d7e6e5f2b16da1d3c838",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-appointment"
+      ],
+      "hypothesis": "A/B/C/D source architectures explain the final early publication failure",
+      "changed_dimension": "Same next original publication appointment shared by worker and one-shot ROS callback; strict authority/physical bounds/rates/windows unchanged",
+      "result": "inconclusive",
+      "reason": "Exact A accepts134.726ms; B/C/D are restricted to Overtake and cannot compare Cruise. No infeasibility or alternative-architecture win inferred.",
+      "production_impact": "Retire unconditional wall-driven normal callback; retain wall observer only for forced existing Emergency. No second normal authority.",
+      "deleted_code": [
+        "Unconditional wall timer invocation of normal control",
+        "Private duplicate worker-only next-appointment calculation"
+      ],
+      "revisit_condition": "New exact failure, changed diagnosed producer or newly applicable alternative source architecture; no unchanged race rerun or grace/tolerance promotion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-appointment-r302",
+      "baseline_commit": "3a96af574f85d481b0c0d7e6e5f2b16da1d3c838",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-appointment"
+      ],
+      "hypothesis": "Waking at the original opening preserves physical/prefix/clock requirements",
+      "changed_dimension": "Same next original publication appointment shared by worker and one-shot ROS callback; strict authority/physical bounds/rates/windows unchanged",
+      "result": "accepted",
+      "reason": "Correct captured0.63s gives27history entries,8actual sends and original hash. Current proof accepts0.447289ms; original early clock rejects, original opening accepts, deadline+1ns rejects.",
+      "production_impact": "Retire unconditional wall-driven normal callback; retain wall observer only for forced existing Emergency. No second normal authority.",
+      "deleted_code": [
+        "Unconditional wall timer invocation of normal control",
+        "Private duplicate worker-only next-appointment calculation"
+      ],
+      "revisit_condition": "New exact failure, changed diagnosed producer or newly applicable alternative source architecture; no unchanged race rerun or grace/tolerance promotion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-appointment-r303-r304",
+      "baseline_commit": "3a96af574f85d481b0c0d7e6e5f2b16da1d3c838",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-appointment"
+      ],
+      "hypothesis": "An immutable ROS alarm and existing steady watchdog preserve scheduling boundaries",
+      "changed_dimension": "Same next original publication appointment shared by worker and one-shot ROS callback; strict authority/physical bounds/rates/windows unchanged",
+      "result": "accepted",
+      "reason": "Eight real timer tests and three watchdog tests pass. Initial six source signature lookup failures retained; anchors updated, original body assertions and new wall-only Emergency contract pass105tests.",
+      "production_impact": "Retire unconditional wall-driven normal callback; retain wall observer only for forced existing Emergency. No second normal authority.",
+      "deleted_code": [
+        "Unconditional wall timer invocation of normal control",
+        "Private duplicate worker-only next-appointment calculation"
+      ],
+      "revisit_condition": "New exact failure, changed diagnosed producer or newly applicable alternative source architecture; no unchanged race rerun or grace/tolerance promotion."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-appointment-r90-r78",
+      "baseline_commit": "3a96af574f85d481b0c0d7e6e5f2b16da1d3c838",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-appointment"
+      ],
+      "hypothesis": "Shared appointment scheduling builds and preserves package contracts",
+      "changed_dimension": "Same next original publication appointment shared by worker and one-shot ROS callback; strict authority/physical bounds/rates/windows unchanged",
+      "result": "accepted",
+      "reason": "Build26packages; tests2545records/65groups; errors/failures/skips0. Dynamic r50pending.",
+      "production_impact": "Retire unconditional wall-driven normal callback; retain wall observer only for forced existing Emergency. No second normal authority.",
+      "deleted_code": [
+        "Unconditional wall timer invocation of normal control",
+        "Private duplicate worker-only next-appointment calculation"
+      ],
+      "revisit_condition": "New exact failure, changed diagnosed producer or newly applicable alternative source architecture; no unchanged race rerun or grace/tolerance promotion."
     }
   ]
 }

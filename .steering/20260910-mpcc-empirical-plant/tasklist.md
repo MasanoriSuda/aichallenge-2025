@@ -208,3 +208,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Dev2-r48 first D1dispatch1156 post-send window violation saved; Ready dispatch works, full race fails.
 - [x] R299 original fingerprint and before-pass/after-fail reproduced; call observer buildr89/testsr77passed.
 - [ ] Dev2-r49 measured first boundary, causal repair, all M4–M6 acceptance and local commits.
+
+
+2026-09-11 shared publication appointment (baseline3a96af57):
+- [x] R49first moving early boundary67ns saved, split raw/final call metrics and completed-run analysis retained.
+- [x] R300diagnostic retention mismatch preserved; r302exact0.63s/prefix/currentproof and original clock guard reproduced.
+- [x] R301sealed A/B/C/D: Aaccepts, B/C/Dunsupported Cruise/inconclusive.
+- [x] Shared next-appointment producer, ROS alarm, wall-only forced Emergency; r30411native/source105pass.
+- [x] Buildr90all26packages/testsr78all2545records/65groupspass; source review and evidence seal.
+- [ ] Dev2-r50dynamic clock/publish/Stop/rest/restart, remaining allM4–M6and submission/eval.

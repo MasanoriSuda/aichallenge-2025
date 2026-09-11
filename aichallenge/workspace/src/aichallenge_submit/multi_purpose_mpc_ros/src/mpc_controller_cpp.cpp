@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_publication_appointment.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_observation.hpp"
@@ -30710,6 +30711,31 @@ struct MPC
   std::shared_ptr<const scheduled_control::DispatchCandidate> scheduled_dispatch_candidate() const
   { return pending_scheduled_dispatch_; }
 
+  std::optional<std::pair<mpcc_vehicle_model::PublishedInputProgram, std::size_t>>
+  next_scheduled_publication(const mpcc_vehicle_model::PublishedInputLedger &ledger) const
+  {
+    const auto *last = ledger.latest_transaction();
+    if (!last) return std::nullopt;
+    mpcc_vehicle_model::PublishedInputProgram prior;
+    std::size_t next_index{};
+    if (scheduled_active_ && scheduled_active_->result.applied.certificate && last->source &&
+        last->source->decision_id == scheduled_active_->result.applied.certificate->suffix().decision_id &&
+        last->source->input_context_fingerprint == scheduled_active_->result.applied.certificate->tube().context_fingerprint) {
+      prior = scheduled_active_->result.applied.certificate->suffix().program;
+      next_index = scheduled_active_->sent;
+    } else {
+      // Bootstrap is anchored to the actual preceding Emergency packet, never
+      // to completion time. No unissued positive input enters this prefix.
+      prior.publication_interval_sec = 1.0/cfg.control_rate;
+      prior.maximum_publication_delay_sec = prior.publication_interval_sec;
+      prior.commands = {last->nominal}; prior.repeat_last_until_rest = true;
+      prior.nanosecond_clock = mpcc_vehicle_model::publication_nanosecond_clock(
+        last->nominal.published_sec,prior.publication_interval_sec,prior.maximum_publication_delay_sec);
+      next_index = 1;
+    }
+    return std::pair{std::move(prior), next_index};
+  }
+
   void submit_scheduled_post_publication(
     const mpcc_vehicle_model::PublishedPrediction &actual,
     const mpcc_vehicle_model::PublishedInputLedger &ledger)
@@ -30745,23 +30771,10 @@ struct MPC
     add(rate_resolved_track_cruise_certified_plan_store_->published_bundle_source_snapshot().plan);
     add(rate_resolved_track_cruise_certified_plan_store_->executed_snapshot().plan);
     if (plans.empty()) return;
-    mpcc_vehicle_model::PublishedInputProgram prior;
-    std::size_t next_index{};
-    if (scheduled_active_ && scheduled_active_->result.applied.certificate && last->source &&
-        last->source->decision_id == scheduled_active_->result.applied.certificate->suffix().decision_id &&
-        last->source->input_context_fingerprint == scheduled_active_->result.applied.certificate->tube().context_fingerprint) {
-      prior = scheduled_active_->result.applied.certificate->suffix().program;
-      next_index = scheduled_active_->sent;
-    } else {
-      // Bootstrap is anchored to the actual preceding Emergency packet, never
-      // to completion time. No unissued positive input enters this prefix.
-      prior.publication_interval_sec = 1.0/cfg.control_rate;
-      prior.maximum_publication_delay_sec = prior.publication_interval_sec;
-      prior.commands = {last->nominal}; prior.repeat_last_until_rest = true;
-      prior.nanosecond_clock = mpcc_vehicle_model::publication_nanosecond_clock(
-        last->nominal.published_sec,prior.publication_interval_sec,prior.maximum_publication_delay_sec);
-      next_index = 1;
-    }
+    const auto next = next_scheduled_publication(ledger);
+    if (!next) return;
+    const auto &prior = next->first;
+    const auto next_index = next->second;
     const auto appointment = mpcc_vehicle_model::publication_epoch(prior,next_index);
     const auto control_origin=scheduled_control::publication_control_origin(
       prior,next_index,execution_prediction_delay_sec_);
@@ -53291,8 +53304,26 @@ public:
     using namespace std::literals::chrono_literals;
     const auto control_period = std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::duration<double>(1.0 / std::max(1.0, mpc_cfg_.control_rate)));
-    control_timer_ = create_wall_timer(
-      control_period, std::bind(&MPCControllerCpp::control, this));
+    control_period_ns_ = control_period.count();
+    control_appointment_ = std::make_unique<mpcc_publication_appointment::Alarm>(
+      get_node_base_interface(), get_node_timers_interface(), get_clock(),
+      [this](std::int64_t) {
+        control();
+        arm_next_control_appointment();
+      });
+    control_clock_watchdog_.emplace(now().nanoseconds(), SteadyClock::now());
+    arm_next_control_appointment();
+    control_timer_ = create_wall_timer(control_period, [this]() {
+      const auto status = control_clock_watchdog_->observe(now().nanoseconds(),
+        SteadyClock::now(), std::chrono::duration<double>{mpc_cfg_.odom_timeout_sec});
+      if (status != mpcc_publication_appointment::ClockStatus::Current) {
+        // Preserve wall-clock Emergency coverage when ROS appointments cannot
+        // fire. This observer must never become a second normal dispatcher.
+        control(status == mpcc_publication_appointment::ClockStatus::Regressed ?
+          "control clock regressed" : "control clock stalled");
+        arm_next_control_appointment();
+      }
+    });
     ref_vel_marker_timer_ = create_wall_timer(10ms, [this]() {
       if (ref_vel_marker_pub_) {
         ref_vel_marker_pub_->publish(MarkerArray{});
@@ -58870,7 +58901,29 @@ private:
     last_control_callback_telemetry_steady_ = finished;
   }
 
-  void control()
+  void arm_next_control_appointment()
+  {
+    if (!control_appointment_) return;
+    const auto current_ns = now().nanoseconds();
+    std::optional<std::int64_t> appointment_ns;
+    if (mpc_) {
+      const auto next = mpc_->next_scheduled_publication(published_input_ledger_);
+      const auto epoch = next ? mpcc_vehicle_model::publication_epoch(next->first, next->second) : std::nullopt;
+      if (epoch) appointment_ns = mpcc_vehicle_model::publication_nanoseconds(*epoch);
+    }
+    if (!appointment_ns) {
+      // No recorded input yet: request the first observation after one period.
+      // This bootstrap has no certificate or normal publication permission.
+      if (current_ns < 0 || current_ns > std::numeric_limits<std::int64_t>::max() - control_period_ns_) {
+        control_appointment_->cancel();
+        return;
+      }
+      appointment_ns = current_ns + control_period_ns_;
+    }
+    control_appointment_->arm(*appointment_ns);
+  }
+
+  void control(const char *forced_failsafe = nullptr)
   {
     const auto steady_now = SteadyClock::now();
     ControlCallbackTimingObservation callback_timing;
@@ -58913,6 +58966,10 @@ private:
         // the common decision, prediction, proof and publication time.
         control_time = observation_time;
       }
+    }
+    if (forced_failsafe) {
+      publish_failsafe_command(control_time, forced_failsafe);
+      return;
     }
     const bool missing_odometry = !odom_ || !last_odom_receipt_steady_.has_value();
     const double odometry_age_sec = missing_odometry ?
@@ -59624,6 +59681,9 @@ private:
   rclcpp::Subscription<BorderCells>::SharedPtr border_cells_sub_;
   rclcpp::Subscription<V2XVehiclePositionArray>::SharedPtr v2x_sub_;
   rclcpp::TimerBase::SharedPtr control_timer_;
+  std::unique_ptr<mpcc_publication_appointment::Alarm> control_appointment_;
+  std::int64_t control_period_ns_{};
+  std::optional<mpcc_publication_appointment::ClockWatchdog> control_clock_watchdog_;
   rclcpp::TimerBase::SharedPtr ref_vel_marker_timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
   Odometry::SharedPtr odom_;

@@ -572,7 +572,7 @@ def test_rate_resolved_successor_is_bound_only_after_exact_publication() -> None
         reset_start:reset_end
     ]
 
-    control_start = SOURCE.index("void control()")
+    control_start = SOURCE.index("void control(const char *forced_failsafe")
     control_end = SOURCE.index("void publish_zero_command()", control_start)
     control = SOURCE[control_start:control_end]
     publish = control.index("const auto published_steering = publish_control_command(")
@@ -1011,7 +1011,7 @@ def test_last_published_intent_is_a_publication_ledger() -> None:
     record = _cpp_function("void record_scheduled_final_command(")
     assert record.index("matches_after_publication(") < record.index("last_published_canonical_intent_=")
     assert record.index("publication_identity(") < record.index("last_committed_canonical_publication_decision_id_=")
-    control = _cpp_function("void control()")
+    control = _cpp_function("void control(const char *forced_failsafe")
     assert control.index("publish_control_command(") < control.index("record_scheduled_final_command(")
     assert control.index("record_scheduled_final_command(") < control.index("record_final_published_authority(")
 
@@ -1027,7 +1027,7 @@ def test_certified_terminal_contingency_publishes_stop_not_normal_evidence() -> 
     commit = _cpp_function("void record_scheduled_final_command(")
     assert "record_published_bundle_source(" in commit
     assert "mark_executed(" not in commit
-    control = _cpp_function("void control()")
+    control = _cpp_function("void control(const char *forced_failsafe")
     assert "mpc_cycle.published_authority_intent != mpcc_contract::ControlIntent::Stop" in control
 
 
@@ -3022,7 +3022,7 @@ def test_certified_candidate_becomes_retained_only_after_exact_publication() -> 
     assert commit.index("matches_after_publication(") < commit.index("record_published_bundle_source(")
     assert "mark_executed(" not in commit
     assert "++entry->sent; scheduled_active_=entry" in commit
-    control = _cpp_function("void control()")
+    control = _cpp_function("void control(const char *forced_failsafe")
     assert control.index("publish_control_command(") < control.index("record_scheduled_final_command(")
     assert "!recovery_command_active" in control[:control.index("record_scheduled_final_command(")]
 
@@ -3190,7 +3190,7 @@ def test_control_callback_overrun_trace_is_observation_only() -> None:
     """Timing attribution may diagnose a callback but cannot influence it."""
 
     record_start = SOURCE.index("void record_control_callback_duration(")
-    control_start = SOURCE.index("void control()", record_start)
+    control_start = SOURCE.index("void control(const char *forced_failsafe", record_start)
     record = SOURCE[record_start:control_start]
     assert "Control callback overrun detail:" in record
     for region in (
@@ -3281,7 +3281,7 @@ def test_latency_wall_proof_reuses_the_canonical_state_prediction_trajectory() -
     assert "canonical_current_control_path_" in build
     assert "predict_constant_turn_rate(" not in build
 
-    control_start = SOURCE.index("void control()")
+    control_start = SOURCE.index("void control(const char *forced_failsafe")
     control_end = SOURCE.index("void publish_zero_command()", control_start)
     control = SOURCE[control_start:control_end]
     assert "predict_observed_vehicle(" in control
@@ -3755,3 +3755,15 @@ def _cpp_function(signature: str) -> str:
         if depth == 0:
             return SOURCE[start:start + index + 1]
     raise AssertionError(f"unterminated function: {signature}")
+
+
+def test_wall_clock_watchdog_cannot_enter_normal_control():
+    start = SOURCE.index("control_timer_ = create_wall_timer(control_period")
+    end = SOURCE.index("ref_vel_marker_timer_", start)
+    watchdog = SOURCE[start:end]
+    assert "control();" not in watchdog
+    assert '"control clock regressed" : "control clock stalled"' in watchdog
+    control = _cpp_function("void control(const char *forced_failsafe")
+    forced = control[control.index("if (forced_failsafe)"):control.index("const bool missing_odometry")]
+    assert "publish_failsafe_command(control_time, forced_failsafe);" in forced
+    assert "return;" in forced

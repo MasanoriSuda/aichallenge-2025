@@ -1555,3 +1555,84 @@ std::shared_ptr<const retained::contract::PublishedScheduledIdentity> DispatchCa
     new retained::contract::PublishedScheduledIdentity(canonical_command()));
 }
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+std::shared_ptr<const SourceReservation> SourceReservation::build(
+    std::shared_ptr<const applied::ScheduledCertificate> active, const ContextSnapshot &generation,
+    const vehicle::PublishedInputLedger &ledger, std::size_t next_index,
+    std::size_t preceding_packet_count, double observed_now_sec, double prediction_delay_sec) {
+  if (!active || !active->nominal() || !active->nominal()->source_context().same_generation(generation) ||
+      !std::isfinite(observed_now_sec) || !std::isfinite(prediction_delay_sec) || prediction_delay_sec < 0 ||
+      next_index == 0 || next_index > 10000 || preceding_packet_count == 0 ||
+      preceding_packet_count > 10000 - next_index) return {};
+  const auto cursor = ledger.snapshot();
+  const auto *last = ledger.latest_transaction();
+  const auto predecessor = scheduled_program_source(*active, next_index - 1);
+  const auto &program = active->suffix().program;
+  const auto next = vehicle::publication_epoch(program, next_index);
+  const auto first = vehicle::publication_epoch(program, next_index + preceding_packet_count);
+  const auto deadline = vehicle::publication_epoch(program, next_index + preceding_packet_count, true);
+  const auto origin = publication_control_origin(program, next_index + preceding_packet_count, prediction_delay_sec);
+  const auto remaining = remaining_programme(*active, next_index);
+  if (!cursor || !last || !last->source || !predecessor || !next || !first || !deadline || !origin || !remaining ||
+      !same_dispatch_source(*last->source, *predecessor) ||
+      observed_now_sec < last->published.published_sec || *next < observed_now_sec ||
+      last->after_clock_sec > active->tube().rest_sec ||
+      !vehicle::scheduled_publication_bracket_admitted(program, next_index - 1,
+        active->nominal()->observed().now_sec, last->before_clock_sec, last->after_clock_sec)) return {};
+  const auto previous_epoch = vehicle::publication_epoch(program, next_index - 1);
+  const auto &previous_packet = program.commands[std::min(next_index - 1, program.commands.size() - 1)];
+  if (!previous_epoch || last->nominal.published_sec != *previous_epoch ||
+      !same_dispatch_wire(last->nominal.wire_acceleration_mps2, previous_packet.wire_acceleration_mps2) ||
+      !same_dispatch_wire(last->nominal.wire_steering_rad, previous_packet.wire_steering_rad)) return {};
+  std::vector<std::optional<vehicle::PublishedProgramSource>> sources;
+  sources.reserve(preceding_packet_count);
+  for (std::size_t i = 0; i < preceding_packet_count; ++i) {
+    const auto source = scheduled_program_source(*active, next_index + i);
+    const auto end = vehicle::publication_epoch(program, next_index + i, true);
+    if (!source || !end || *end > active->tube().rest_sec) return {};
+    sources.push_back(source);
+  }
+  auto result = std::shared_ptr<SourceReservation>(new SourceReservation);
+  result->active_ = std::move(active); result->generation_ = generation; result->cursor_ = *cursor;
+  result->remaining_prior_ = *remaining; result->prior_sources_ = std::move(sources);
+  result->prior_index_ = next_index; result->observed_sec_ = observed_now_sec;
+  result->first_publication_sec_ = *first; result->publication_deadline_sec_ = *deadline;
+  result->control_origin_sec_ = *origin;
+  return result;
+}
+
+ReservationStatus SourceReservation::status(const vehicle::PublishedInputLedger &ledger,
+    const ContextSnapshot &generation, double now_sec) const {
+  if (!cursor_ || !active_ || !generation_.same_generation(generation) ||
+      !std::isfinite(now_sec) || now_sec < observed_sec_ || now_sec > publication_deadline_sec_)
+    return ReservationStatus::Invalid;
+  const auto actual = ledger.since(*cursor_);
+  if (!actual || actual->size() > prior_sources_.size()) return ReservationStatus::Invalid;
+  const std::vector<std::optional<vehicle::PublishedProgramSource>> sent(
+    prior_sources_.begin(), prior_sources_.begin() + actual->size());
+  if (!ledger.matches_prefix(*cursor_, remaining_prior_, sent)) return ReservationStatus::Invalid;
+  if (actual->size() != prior_sources_.size()) {
+    const auto next_deadline = vehicle::publication_epoch(remaining_prior_, actual->size(), true);
+    return next_deadline && now_sec <= *next_deadline ? ReservationStatus::Waiting : ReservationStatus::Invalid;
+  }
+  return now_sec < first_publication_sec_ ? ReservationStatus::Waiting : ReservationStatus::Ready;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+retained::contract::ControlIntent programme_publication_intent(
+    const applied::ScheduledCertificate &certificate, std::size_t suffix_index) noexcept {
+  const auto &proof = certificate.nominal()->proof();
+  const auto &program = certificate.suffix().program;
+  // The source-horizon builder holds the first word through its solved source
+  // horizon, then appends one braking word. Preparation trims only identical
+  // trailing words; the retained last word therefore starts its brake tail.
+  if (suffix_index == 0 || (proof.terminal_stop_source_horizon_program &&
+      program.commands.size() > 1 && suffix_index < program.commands.size() - 1))
+    return certificate.suffix().source.source_context.intent;
+  return retained::contract::ControlIntent::Stop;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

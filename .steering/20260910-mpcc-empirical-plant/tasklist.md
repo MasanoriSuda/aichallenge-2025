@@ -336,3 +336,9 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R361153native, build100all26/tests87all2574/66 inclsource105. R36212 source/domain arms, two current composite receipts; R363five old source/hash/prefix/deadline outcomes unchanged.
 - [ ] Runtime causal source reservation, waiting-job adoption, expected-prior capture and long-programme intent integration; standarddev2-r62 after integration.
 - [ ] All remaining M4–M6 and same submission/eval; current prerequisite is not overall completion.
+
+2026-09-12 runtime causal source reservation (baseline4b1920ee):
+- [x] Freeze expected prior IDs from already published source before worker submission; check actual partial history and original future appointment.
+- [x] One in-flight/waiting job; source-horizon preference only for reserved programmes; original normal prefix vs brake-tail intent; snapshot exact expected IDs.
+- [x] Native367158, build102all26, tests89all2579/66 inclsource105. R368six source arms and R369five historical identity/prefix/guard checks pass; intermediate failures retained.
+- [ ] Standarddev2-r62 actual reservation/adoption, source availability and original timing guards; M4–M6 remain open.

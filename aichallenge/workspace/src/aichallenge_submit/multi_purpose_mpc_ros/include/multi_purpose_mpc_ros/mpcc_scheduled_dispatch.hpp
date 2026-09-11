@@ -7,6 +7,42 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
 
 struct DispatchResult;
 
+
+/// A causal planning reservation, never permission to send. Expected prior IDs
+/// come from the already published immutable source, before the new job starts.
+/// Intent of this already proved programme phase; grants no send permission.
+retained::contract::ControlIntent programme_publication_intent(
+  const applied::ScheduledCertificate &certificate, std::size_t suffix_index) noexcept;
+
+enum class ReservationStatus { Waiting, Ready, Invalid };
+class SourceReservation {
+public:
+  static std::shared_ptr<const SourceReservation> build(
+    std::shared_ptr<const applied::ScheduledCertificate> active, const ContextSnapshot &generation,
+    const vehicle::PublishedInputLedger &ledger, std::size_t next_index,
+    std::size_t preceding_packet_count, double observed_now_sec, double prediction_delay_sec);
+  ReservationStatus status(const vehicle::PublishedInputLedger &ledger,
+    const ContextSnapshot &generation, double now_sec) const;
+  const vehicle::PublishedInputLedger::Snapshot &cursor() const noexcept { return *cursor_; }
+  const vehicle::PublishedInputProgram &prior_program() const noexcept { return active_->suffix().program; }
+  const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources() const noexcept { return prior_sources_; }
+  std::size_t prior_index() const noexcept { return prior_index_; }
+  double first_publication_sec() const noexcept { return first_publication_sec_; }
+  double control_origin_sec() const noexcept { return control_origin_sec_; }
+private:
+  SourceReservation() = default;
+  std::shared_ptr<const applied::ScheduledCertificate> active_;
+  ContextSnapshot generation_;
+  std::optional<vehicle::PublishedInputLedger::Snapshot> cursor_;
+  vehicle::PublishedInputProgram remaining_prior_;
+  std::vector<std::optional<vehicle::PublishedProgramSource>> prior_sources_;
+  std::size_t prior_index_{};
+  double observed_sec_{};
+  double first_publication_sec_{};
+  double publication_deadline_sec_{};
+  double control_origin_sec_{};
+};
+
 /// Worker numerical evidence bound to this exact immutable source certificate.
 /// It has no current-world or publication authority. A pending-prior source
 /// uses the complete original composite programme, including delayed prior

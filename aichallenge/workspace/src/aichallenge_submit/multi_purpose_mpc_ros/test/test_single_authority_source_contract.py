@@ -919,11 +919,13 @@ def test_live_overtake_identity_does_not_depend_on_legacy_stage_corridor() -> No
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     """A proposal cannot relabel the actual published programme's intent."""
     dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
-    assert "!consider(ready) && !consider(scheduled_active_)" in dispatch
+    assert "!consider(due) && !consider(scheduled_active_)" in dispatch
     assert "context = entry->committed_context" in dispatch
     assert "if (entry->sent > 0)" in dispatch
     assert "scheduled_control::prepare_dispatch(" in dispatch
-    assert "current_normal_context_generation(),ledger,*entry->cursor,{},entry->sent" in dispatch
+    assert "current_normal_context_generation(),ledger,*entry->cursor,entry->prior_sources,entry->sent" in dispatch
+    assert dispatch.index("ReservationStatus::Ready") < dispatch.index("due = std::move(scheduled_waiting_)")
+    assert dispatch.index("due = std::move(scheduled_waiting_)") < dispatch.index("!consider(due)")
     assert "anchor = entry->follow_anchor" in dispatch
     follow = _cpp_function("  build_current_follow_target_observation(")
     assert "build_physical_origin_follow_target_observation(" in follow
@@ -1019,11 +1021,15 @@ def test_last_published_intent_is_a_publication_ledger() -> None:
 
 
 def test_certified_terminal_contingency_publishes_stop_not_normal_evidence() -> None:
-    """Continued stopping packets retain source identity and publish the Stop role."""
+    """The certified brake phase owns Stop; a reserved normal prefix keeps its intent."""
     dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
     assert "output.canonical_normal_command=command" in dispatch
-    assert "output.published_authority_intent=(pending_scheduled_entry_->sent > 0" in dispatch
-    assert "ControlIntent::Stop : source.intent" in dispatch
+    # Native MpccSourceReservation tests exercise the actual phase boundary.
+    # The node must delegate that role while retaining explicit Stop/Hold policy.
+    assert "scheduled_control::programme_publication_intent(" in dispatch
+    assert "certificate, pending_scheduled_entry_->sent" in dispatch
+    assert "intent == mpcc_contract::ControlIntent::Stop || intent == mpcc_contract::ControlIntent::Hold" in dispatch
+    assert "output.published_authority_intent=(pending_scheduled_entry_->sent > 0" not in dispatch
     commit = _cpp_function("void record_scheduled_final_command(")
     assert "record_published_bundle_source(" in commit
     assert "mark_executed(" not in commit
@@ -2782,7 +2788,7 @@ def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
     assert "submit_rate_resolved_track_cruise_shadow(" not in owner
     dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
     assert "scheduled_control::prepare_dispatch(" in dispatch
-    assert "!consider(ready) && !consider(scheduled_active_)" in dispatch
+    assert "!consider(due) && !consider(scheduled_active_)" in dispatch
 
 
 
@@ -3693,9 +3699,10 @@ def test_terminal_failure_pairs_last_accepted_same_source_before_overwrite() -> 
     dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
     assert "scheduled_failure_capture(ready,ledger,nullptr" in dispatch
     assert "scheduled_failure_capture(entry,ledger" in dispatch
-    assert "!consider(ready) && !consider(scheduled_active_)" in dispatch
+    assert "!consider(due) && !consider(scheduled_active_)" in dispatch
     capture = _cpp_function("std::shared_ptr<mpcc_architecture_snapshot::ScheduledFailureCapture> scheduled_failure_capture(")
     assert "capture->original_cursor=entry->cursor" in capture
+    assert "capture->prior_sources=entry->prior_sources" in capture
     assert "capture->certificate=entry->result.applied.certificate" in capture
     assert "capture->suffix_index=entry->sent" in capture
 

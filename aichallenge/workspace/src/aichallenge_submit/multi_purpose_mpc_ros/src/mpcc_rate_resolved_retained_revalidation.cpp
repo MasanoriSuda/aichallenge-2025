@@ -1915,7 +1915,13 @@ static Result evaluate_stop_candidates(
     request.input_application_profile)
   {
     const bool horizon_available = source_horizon_velocity_ceiling(request).has_value();
-    const bool horizon_first = horizon_available && rear_peer_prefers_source_horizon(request, scheduled);
+    // Reserved prior packets provide time to calculate a longer programme.
+    // Zero-prior bootstrap jobs must retain their original candidate order:
+    // any intervening actual send invalidates those jobs, so extra long-proof
+    // work would make it harder to obtain the first published normal source.
+    const bool reserved_source = scheduled && scheduled->forecast.nominal_prefix.commands.size() > 1;
+    const bool horizon_first = horizon_available &&
+      (reserved_source || rear_peer_prefers_source_horizon(request, scheduled));
     common = evaluate_with_stop_profile(request, nullptr, true, horizon_first, materialized_from, scheduled);
     if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
     if (horizon_available) {

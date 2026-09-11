@@ -1,5 +1,6 @@
 #include "multi_purpose_mpc_ros/mpcc_scheduled_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
+#include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
@@ -5119,4 +5120,157 @@ TEST(MpccScheduledCompositeDomain, FutureSteeringUsesLatestPermittedPriorSend)
       previous.wire_steering_rad) / model.steering_wire_gain;
     EXPECT_LE(exact_step, request.observed.plan->execution_artifact->physical_global_tolerance);
   }
+}
+
+
+TEST(MpccSourceReservation, FreezesExpectedIdsBeforeAnyPriorSendAndWaitsForItsOriginalAppointment)
+{
+  ScheduledDispatchFixture f;
+  const auto current = f.prepare(); ASSERT_TRUE(current.candidate);
+  const auto &packet = current.candidate->packet();
+  ASSERT_TRUE(f.ledger.record(packet, 1.1, 1.1, 2, current.candidate->source()));
+  const auto reservation = scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 1, 2, 1.1, .04);
+  ASSERT_TRUE(reservation);
+  ASSERT_EQ(reservation->prior_sources().size(), 2U);
+  EXPECT_EQ(reservation->cursor().sequence(), f.ledger.sequence());
+  EXPECT_EQ(reservation->first_publication_sec(), 1.175);
+  EXPECT_EQ(reservation->control_origin_sec(), 1.215);
+  EXPECT_EQ(reservation->prior_index(), 1U);
+  EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), 1.1), scheduled::ReservationStatus::Waiting);
+  for (std::size_t i = 0; i < 2; ++i) {
+    const auto expected = scheduled::scheduled_program_source(*f.certificate, i + 1);
+    ASSERT_TRUE(expected); ASSERT_TRUE(reservation->prior_sources()[i]);
+    const auto &frozen = *reservation->prior_sources()[i];
+    EXPECT_EQ(frozen.decision_id, expected->decision_id);
+    EXPECT_EQ(frozen.solution_id, expected->solution_id);
+    EXPECT_EQ(frozen.problem_fingerprint, expected->problem_fingerprint);
+    EXPECT_EQ(frozen.input_context_fingerprint, expected->input_context_fingerprint);
+    EXPECT_EQ(frozen.packet_index, expected->packet_index);
+    const auto &planned = reservation->prior_program().commands;
+    auto prior = planned[std::min(i + 1, planned.size() - 1)];
+    prior.published_sec = *vehicle::publication_epoch(reservation->prior_program(), i + 1);
+    ASSERT_TRUE(f.ledger.record(prior, prior.published_sec, prior.published_sec, 2, frozen));
+    EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), prior.published_sec), scheduled::ReservationStatus::Waiting);
+  }
+  EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), 1.175), scheduled::ReservationStatus::Ready);
+  EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), 1.2), scheduled::ReservationStatus::Ready);
+  EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), 1.200000001), scheduled::ReservationStatus::Invalid);
+  f.owner.invalidate();
+  EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), 1.175), scheduled::ReservationStatus::Invalid);
+}
+
+TEST(MpccSourceReservation, RejectsDifferentSourceSkippedLateResetAndExtraActualPrefix)
+{
+  for (int variant = 0; variant < 6; ++variant) {
+    SCOPED_TRACE(variant);
+    ScheduledDispatchFixture f;
+    const auto current = f.prepare(); ASSERT_TRUE(current.candidate);
+    ASSERT_TRUE(f.ledger.record(current.candidate->packet(), 1.1, 1.1, 2, current.candidate->source()));
+    const auto reservation = scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 1, 2, 1.1, .04);
+    ASSERT_TRUE(reservation);
+    if (variant == 0) {
+      EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), 1.150000001), scheduled::ReservationStatus::Invalid);
+      continue;
+    }
+    if (variant == 1) {
+      f.ledger.reset();
+      EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), 1.125), scheduled::ReservationStatus::Invalid);
+      continue;
+    }
+    const std::size_t count = variant == 5 ? 3 : 1;
+    for (std::size_t i = 0; i < count; ++i) {
+      const std::size_t index = i + (variant == 2 ? 2 : 1);
+      const auto &planned = reservation->prior_program().commands;
+      auto prior = planned[std::min(index, planned.size() - 1)];
+      prior.published_sec = *vehicle::publication_epoch(reservation->prior_program(), index);
+      auto source = *scheduled::scheduled_program_source(*f.certificate, index);
+      if (variant == 3) source.solution_id++;
+      const double after = prior.published_sec + (variant == 4 ? .025000001 : 0);
+      ASSERT_TRUE(f.ledger.record(prior, prior.published_sec, after, 2, source));
+    }
+    EXPECT_EQ(reservation->status(f.ledger, f.owner.capture(), 1.175), scheduled::ReservationStatus::Invalid);
+  }
+}
+
+TEST(MpccSourceReservation, RequiresPublishedSourceAndOriginalPriorProofCoverage)
+{
+  ScheduledDispatchFixture f;
+  EXPECT_FALSE(scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 1, 2, 1.1, .04));
+  const auto current = f.prepare(); ASSERT_TRUE(current.candidate);
+  ASSERT_TRUE(f.ledger.record(current.candidate->packet(), 1.1, 1.1, 2, current.candidate->source()));
+  for (std::size_t count : {0U, 10000U})
+    EXPECT_FALSE(scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 1, count, 1.1, .04));
+  EXPECT_FALSE(scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 2, 2, 1.1, .04));
+  EXPECT_FALSE(scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 1, 2, 1.125000001, .04));
+  EXPECT_FALSE(scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 1, 100, 1.1, .04));
+  EXPECT_FALSE(scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 1, 2, 1.1, -.01));
+  f.owner.invalidate();
+  EXPECT_FALSE(scheduled::SourceReservation::build(f.certificate, f.owner.capture(), f.ledger, 1, 2, 1.1, .04));
+}
+
+
+TEST(MpccSourceReservation, SourceHorizonRetainsNormalIntentUntilItsCertifiedBrakeTail)
+{
+  auto request = scheduled_request(contract::ControlIntent::Cruise);
+  attach_velocity_source(request.observed, 4);
+  const auto result = scheduled::evaluate(request);
+  ASSERT_TRUE(result.applied.certificate) << retained::to_string(result.reason);
+  const auto &certificate = *result.applied.certificate;
+  ASSERT_TRUE(certificate.nominal()->proof().terminal_stop_source_horizon_program);
+  const auto &program = certificate.suffix().program;
+  ASSERT_GT(program.commands.size(), 2U);
+  EXPECT_GT(program.commands.front().wire_acceleration_mps2, 0);
+  for (std::size_t index = 0; index + 1 < program.commands.size(); ++index) {
+    EXPECT_EQ(program.commands[index].wire_acceleration_mps2, program.commands.front().wire_acceleration_mps2);
+    EXPECT_EQ(scheduled::programme_publication_intent(certificate, index), contract::ControlIntent::Cruise);
+  }
+  EXPECT_LT(program.commands.back().wire_acceleration_mps2, 0);
+  EXPECT_EQ(scheduled::programme_publication_intent(certificate, program.commands.size() - 1), contract::ControlIntent::Stop);
+  EXPECT_EQ(scheduled::programme_publication_intent(certificate, program.commands.size() + 5), contract::ControlIntent::Stop);
+  auto bootstrap_request = request;
+  bootstrap_request.prior_index += bootstrap_request.preceding_packet_count;
+  bootstrap_request.preceding_packet_count = 0;
+  const auto bootstrap = scheduled::evaluate(bootstrap_request); ASSERT_TRUE(bootstrap.applied.certificate);
+  EXPECT_FALSE(bootstrap.applied.certificate->nominal()->proof().terminal_stop_source_horizon_program);
+  const auto ordinary = scheduled::evaluate(scheduled_request()); ASSERT_TRUE(ordinary.applied.certificate);
+  EXPECT_EQ(scheduled::programme_publication_intent(*ordinary.applied.certificate, 0), contract::ControlIntent::Track);
+  EXPECT_EQ(scheduled::programme_publication_intent(*ordinary.applied.certificate, 1), contract::ControlIntent::Stop);
+}
+
+
+TEST(MpccSourceReservation, SnapshotPreservesDeclaredPriorIdsSeparatelyFromActualTransactions)
+{
+  namespace capture = multi_purpose_mpc_ros::mpcc_architecture_snapshot;
+  ScheduledDispatchFixture f;
+  auto evidence = std::make_shared<capture::ScheduledFailureCapture>();
+  evidence->original = f.request;
+  evidence->certificate = f.certificate;
+  const std::vector<std::uint64_t> expected{19, 23, 18446744073709551612ULL, 9223372036854775811ULL, 7};
+  evidence->prior_sources = {vehicle::PublishedProgramSource{
+    expected[0], expected[1], expected[2], expected[3], expected[4]}, std::nullopt};
+  const vehicle::PublishedProgramSource actual{29, 31, 37, 41, 11};
+  const vehicle::PublishedCommand packet{1.05, -3, 0};
+  evidence->transactions = std::vector<vehicle::PublicationTransaction>{{1, packet, packet, 1.05, 1.05, actual}};
+  const auto directory = std::filesystem::temp_directory_path() / ("mpcc-reservation-snapshot-" +
+    std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  capture::PublicationFailureObservation observation;
+  observation.decision_id = 100003; observation.output_root = directory;
+  observation.scheduled_capture = evidence;
+  auto recorded = capture::record_publication_failure(observation);
+  ASSERT_EQ(recorded.status, capture::RecordStatus::Written) << recorded.detail;
+  auto document = YAML::LoadFile(recorded.snapshot_file.string());
+  EXPECT_FALSE(document["authority"].as<bool>());
+  const auto declared = document["scheduled"]["expected_prior_sources"];
+  ASSERT_EQ(declared.size(), 2U);
+  EXPECT_EQ(declared[0].as<std::vector<std::uint64_t>>(), expected);
+  EXPECT_TRUE(declared[1].IsNull());
+  EXPECT_EQ(document["scheduled"]["transactions"][0]["source_job_solution_problem_input_index"].as<std::vector<std::uint64_t>>(),
+    (std::vector<std::uint64_t>{29,31,37,41,11}));
+  evidence->prior_sources.clear(); evidence->original.preceding_packet_count = 0;
+  ++observation.decision_id;
+  recorded = capture::record_publication_failure(observation);
+  ASSERT_EQ(recorded.status, capture::RecordStatus::Written);
+  document = YAML::LoadFile(recorded.snapshot_file.string());
+  EXPECT_EQ(document["scheduled"]["expected_prior_sources"].size(), 0U);
+  std::filesystem::remove_all(directory);
 }

@@ -2888,6 +2888,7 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         data["rest_sec"]=domain.rest_sec;
         data["scope"]=domain_evidence->first_window_only() ? "first-publication-window" : "original-programme-through-original-rest";
         data["original_rest_sec"]=domain_evidence->original_rest_sec();
+        data["includes_pending_prior"]=domain_evidence->includes_pending_prior();
         data["sample_count"]=domain.source_to_rest.size();
         data["source_observation"]=mpcc_vehicle_model::encode_observation_provenance(domain.request.source_observation);
         data["program"]=mpcc_vehicle_model::encode_input_program(domain.request.program);
@@ -2913,6 +2914,13 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
       }
       node["prior_index"]=capture.original.prior_index;
       node["preceding_packet_count"]=capture.original.preceding_packet_count;
+      node["expected_prior_sources"]=YAML::Node(YAML::NodeType::Sequence);
+      for (const auto &source : capture.prior_sources) {
+        if (source) node["expected_prior_sources"].push_back(std::vector<std::uint64_t>{
+          source->decision_id, source->solution_id, source->problem_fingerprint,
+          source->input_context_fingerprint, source->packet_index});
+        else node["expected_prior_sources"].push_back(YAML::Node(YAML::NodeType::Null));
+      }
       node["planned_control_origin_sec"]=capture.original.planned_control_origin_sec;
       node["progress_frame_xy_yaw_progress"]=std::vector<double>{capture.original.progress_frame.pose.x_m,
         capture.original.progress_frame.pose.y_m,capture.original.progress_frame.pose.yaw_rad,capture.original.progress_frame.progress_m};

@@ -10,6 +10,7 @@ struct ScheduledFailureCapture {
   mpcc_execution_contract::MpccProblemContext original_proposed_context;
   mpcc_rate_resolved_scheduled::CurrentCheck current_check;
   std::optional<mpcc_vehicle_model::PublishedInputLedger::Snapshot> original_cursor;
+  std::vector<std::optional<mpcc_vehicle_model::PublishedProgramSource>> prior_sources;
   std::optional<std::vector<mpcc_vehicle_model::PublicationTransaction>> transactions;
   std::size_t suffix_index{};
   std::optional<mpcc_vehicle_model::ObservationProvenance> raw_observation;

@@ -8311,6 +8311,8 @@ struct ScheduledProductionOutcome
   std::shared_ptr<const scheduled_control::StartingDomainEvidence> starting_domain;
   double starting_domain_ms{};
   std::optional<mpcc_vehicle_model::PublishedInputLedger::Snapshot> cursor;
+  std::shared_ptr<const scheduled_control::SourceReservation> reservation;
+  std::vector<std::optional<mpcc_vehicle_model::PublishedProgramSource>> prior_sources;
   mpcc_contract::MpccProblemContext proposed_context;
   std::optional<mpcc_contract::MpccProblemContext> committed_context;
   std::optional<scheduled_control::FollowCourseAnchor> follow_anchor;
@@ -8321,6 +8323,15 @@ struct ScheduledProductionMailbox
 {
   std::mutex mutex;
   std::shared_ptr<ScheduledProductionOutcome> latest;
+  bool in_flight{false};
+};
+struct ScheduledProductionCompletion
+{
+  std::shared_ptr<ScheduledProductionMailbox> mailbox;
+  ~ScheduledProductionCompletion() {
+    std::lock_guard<std::mutex> lock(mailbox->mutex);
+    mailbox->in_flight = false;
+  }
 };
 
 struct MPC
@@ -30761,7 +30772,8 @@ struct MPC
     auto capture=std::make_shared<mpcc_architecture_snapshot::ScheduledFailureCapture>();
     capture->original=entry->request; capture->certificate=entry->result.applied.certificate; capture->starting_domain=entry->starting_domain;
     capture->original_proposed_context=entry->proposed_context;
-    capture->original_cursor=entry->cursor; capture->current=std::move(current);
+    capture->original_cursor=entry->cursor; capture->prior_sources=entry->prior_sources;
+    capture->current=std::move(current);
     if (entry->cursor) capture->transactions=ledger.since(*entry->cursor);
     capture->suffix_index=entry->sent; capture->boundary=boundary;
     return capture;
@@ -30800,9 +30812,13 @@ struct MPC
     const mpcc_vehicle_model::PublishedInputLedger &ledger)
   {
     // Only the main callback reads the live world/ledger. The worker owns values.
-    if (!scheduled_worker_ || !pending_rate_resolved_publication_successor_ ||
+    if (!scheduled_worker_ || scheduled_waiting_ || !pending_rate_resolved_publication_successor_ ||
         !pending_rate_resolved_publication_successor_->normal_draft || !rate_resolved_track_cruise_certified_plan_store_)
       return;
+    {
+      std::lock_guard<std::mutex> lock(scheduled_mailbox_->mutex);
+      if (scheduled_mailbox_->in_flight || scheduled_mailbox_->latest) return;
+    }
     const auto cursor = ledger.snapshot(); const auto *last = ledger.latest_transaction();
     const auto frame = scheduled_progress_frame();
     if (!cursor || !last || !frame || actual.provenance.commands.size() != ledger.history().size()) return;
@@ -30834,27 +30850,45 @@ struct MPC
     if (!next) return;
     const auto &prior = next->first;
     const auto next_index = next->second;
-    const auto appointment = mpcc_vehicle_model::publication_epoch(prior,next_index);
+    // Plan across the two already certified appointments observed in r358.
+    // These remain ordinary, individually checked sends of the active source.
+    // A bootstrap or an exhausted prior cannot reserve unproved future inputs.
+    const auto reservation = scheduled_active_ ? scheduled_control::SourceReservation::build(
+      scheduled_active_->result.applied.certificate, current_normal_context_generation(), ledger,
+      next_index, 2, actual.provenance.now_sec, execution_prediction_delay_sec_) : nullptr;
+    const std::size_t prior_count = reservation ? reservation->prior_sources().size() : 0;
+    const auto appointment = mpcc_vehicle_model::publication_epoch(prior,next_index + prior_count);
     const auto control_origin=scheduled_control::publication_control_origin(
-      prior,next_index,execution_prediction_delay_sec_);
+      prior,next_index + prior_count,execution_prediction_delay_sec_);
     if (!appointment || !control_origin || *appointment < actual.provenance.now_sec) return;
     std::vector<scheduled_control::Request> requests;
     for (const auto &plan : plans) {
       auto observed = build_scheduled_observed_request(pending.source_problem,plan,actual.provenance,context.intent,anchor);
       if (!observed) continue;
       scheduled_control::Request request;
-      request.observed = std::move(*observed); request.prior_program = prior;
-      request.prior_index = next_index; request.preceding_packet_count = 0;
-      request.planned_control_origin_sec = *control_origin;
+      request.observed = std::move(*observed);
+      request.prior_program = reservation ? reservation->prior_program() : prior;
+      request.prior_index = reservation ? reservation->prior_index() : next_index;
+      request.preceding_packet_count = prior_count;
+      request.planned_control_origin_sec = reservation ? reservation->control_origin_sec() : *control_origin;
       request.progress_frame = *frame;
       requests.push_back(std::move(request));
     }
     if (requests.empty()) return;
     const auto mailbox = scheduled_mailbox_;
-    static_cast<void>(scheduled_worker_->submit_latest([requests=std::move(requests),cursor=*cursor,context,anchor,mailbox]() mutable {
+    {
+      std::lock_guard<std::mutex> lock(mailbox->mutex);
+      if (mailbox->in_flight || mailbox->latest) return;
+      mailbox->in_flight = true;
+    }
+    const auto job_cursor = reservation ? reservation->cursor() : *cursor;
+    const auto submitted = scheduled_worker_->submit_latest([requests=std::move(requests),cursor=job_cursor,context,anchor,mailbox,reservation]() mutable {
+      const ScheduledProductionCompletion completion{mailbox};
       const auto started = SteadyClock::now();
       auto outcome = std::make_shared<ScheduledProductionOutcome>();
-      outcome->cursor = cursor; outcome->proposed_context = context; outcome->follow_anchor = anchor;
+      outcome->cursor = cursor; outcome->reservation = reservation;
+      if (reservation) outcome->prior_sources = reservation->prior_sources();
+      outcome->proposed_context = context; outcome->follow_anchor = anchor;
       for (const auto &request : requests) {
         outcome->request = request;
         outcome->result = scheduled_control::evaluate(request);
@@ -30867,7 +30901,11 @@ struct MPC
       std::lock_guard<std::mutex> lock(mailbox->mutex);
       if (!mailbox->latest || mailbox->latest->request.observed.decision_id < context.decision_id)
         mailbox->latest = std::move(outcome);
-    }));
+    });
+    if (!submitted.accepted) {
+      std::lock_guard<std::mutex> lock(mailbox->mutex);
+      mailbox->in_flight = false;
+    }
   }
 
   MpcControlCycleResult scheduled_normal_control(
@@ -30945,7 +30983,7 @@ struct MPC
       const auto current_proof_started = SteadyClock::now();
       const double current_cpu_started = observed_thread_cpu_sec();
       const auto result = scheduled_control::prepare_dispatch(certificate,*current,*context,
-        current_normal_context_generation(),ledger,*entry->cursor,{},entry->sent,entry->starting_domain);
+        current_normal_context_generation(),ledger,*entry->cursor,entry->prior_sources,entry->sent,entry->starting_domain);
       const double current_cpu_ms = 1000.0 * (observed_thread_cpu_sec() - current_cpu_started);
       const double current_proof_ms = std::chrono::duration<double,std::milli>(
         SteadyClock::now() - current_proof_started).count();
@@ -31008,7 +31046,52 @@ struct MPC
         static_cast<int>(ready->result.applied.program_reason),static_cast<int>(ready->result.applied.prediction_reason),
         ready->result.applied.rejected_sec,ready->result.applied.rejected_peer_id.c_str(),ready->elapsed_ms);
     }
-    if (!consider(ready) && !consider(scheduled_active_)) {
+    if (ready && ready->result.applied.certificate) scheduled_waiting_ = std::move(ready);
+    std::shared_ptr<ScheduledProductionOutcome> due;
+    if (scheduled_waiting_ && vehicle_observation_provenance_) {
+      const auto &waiting = scheduled_waiting_;
+      const auto certificate = waiting->result.applied.certificate;
+      const double now = vehicle_observation_provenance_->now_sec;
+      const auto first = mpcc_vehicle_model::publication_epoch(certificate->suffix().program, 0);
+      const auto deadline = mpcc_vehicle_model::publication_epoch(certificate->suffix().program, 0, true);
+      auto status = scheduled_control::ReservationStatus::Invalid;
+      if (certificate->nominal()->source_context().same_generation(current_normal_context_generation()) && first && deadline) {
+        if (waiting->reservation) {
+          status = waiting->reservation->status(ledger, current_normal_context_generation(), now);
+        } else if (now >= waiting->request.observed.now_sec && now <= *deadline) {
+          const auto changes = waiting->cursor ? ledger.since(*waiting->cursor) : std::nullopt;
+          if (changes && changes->empty()) status = now < *first ?
+            scheduled_control::ReservationStatus::Waiting : scheduled_control::ReservationStatus::Ready;
+        }
+      }
+      if (status == scheduled_control::ReservationStatus::Ready) due = std::move(scheduled_waiting_);
+      else if (status == scheduled_control::ReservationStatus::Invalid) {
+        const auto prefix = waiting->cursor ? scheduled_control::check_actual_publication_prefix(
+          *certificate, ledger, *waiting->cursor, *vehicle_observation_provenance_, waiting->prior_sources, 0) :
+          scheduled_control::PrefixReason::OriginalHistoryMismatch;
+        if (admission_recorder) {
+          auto capture = scheduled_failure_capture(waiting, ledger, nullptr, "reservation-invalid");
+          capture->raw_observation = *vehicle_observation_provenance_;
+          capture->current_check.prefix = prefix;
+          if (proposed_context) capture->current_context = *proposed_context;
+          capture->detail = "Original reserved clock/generation/actual-prefix progress invalid";
+          mpcc_architecture_snapshot::PublicationFailureObservation observation;
+          observation.decision_id = active_control_decision_id_;
+          observation.nominal_sec = first.value_or(now);
+          observation.moving = vehicle_observation_provenance_->initial.state.forward_velocity_mps > 0.1;
+          observation.output_root = "mpcc_architecture_snapshots/scheduled-admission-" + phase;
+          observation.scheduled_capture = std::move(capture);
+          static_cast<void>(admission_recorder->submit(std::move(observation)));
+        }
+        RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
+          "MPCC scheduled reservation invalid: dispatch=%lu, job=%lu, prior=%zu, now=%.9f, first=%.9f, deadline=%.9f, prefix=%d, worker_ms=%.3f",
+          static_cast<unsigned long>(active_control_decision_id_),
+          static_cast<unsigned long>(waiting->request.observed.decision_id), waiting->prior_sources.size(),
+          now, first.value_or(NAN), deadline.value_or(NAN), static_cast<int>(prefix), waiting->elapsed_ms);
+        scheduled_waiting_.reset();
+      }
+    }
+    if (!consider(due) && !consider(scheduled_active_)) {
       scheduled_active_.reset();
       return canonical_normal_emergency_stop(problem,intent,"scheduled current evidence unavailable");
     }
@@ -31038,9 +31121,12 @@ struct MPC
     last_control_resolution_reason_="canonical-scheduled-program";
     MpcControlCycleResult output{Eigen::Vector2d(command.predicted_speed_mps,previous_steering),std::abs(previous_steering)};
     output.canonical_normal_command=command;
-    // Every subsequent suffix packet belongs to the proved stopping programme.
-    output.published_authority_intent=(pending_scheduled_entry_->sent > 0 ||
-      intent == mpcc_contract::ControlIntent::Stop || intent == mpcc_contract::ControlIntent::Hold) ? mpcc_contract::ControlIntent::Stop : source.intent;
+    // A proved source-horizon programme has a normal prefix before its brake
+    // tail. Its second accelerating packet must not be labelled as Stop.
+    output.published_authority_intent =
+      intent == mpcc_contract::ControlIntent::Stop || intent == mpcc_contract::ControlIntent::Hold ?
+      mpcc_contract::ControlIntent::Stop : scheduled_control::programme_publication_intent(
+        certificate, pending_scheduled_entry_->sent);
     return output;
   }
 
@@ -31365,6 +31451,7 @@ struct MPC
   std::shared_ptr<ScheduledProductionMailbox> scheduled_mailbox_{std::make_shared<ScheduledProductionMailbox>()};
   std::unique_ptr<LatestOnlyWorker> scheduled_worker_;
   std::shared_ptr<ScheduledProductionOutcome> scheduled_active_;
+  std::shared_ptr<ScheduledProductionOutcome> scheduled_waiting_;
   std::shared_ptr<ScheduledProductionOutcome> pending_scheduled_entry_;
   std::optional<mpcc_contract::MpccProblemContext> pending_scheduled_context_;
   std::shared_ptr<const scheduled_control::DispatchCandidate> pending_scheduled_dispatch_;

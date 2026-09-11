@@ -1207,6 +1207,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/composite-prior-proof-evidence.json",
       "replay_ready": true,
       "reason": "Native producer counterexamples and actual-library complete prior+suffix/current replays."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-source-reservation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-reservation-evidence.json",
+      "replay_ready": true,
+      "reason": "Native causal reservation lifecycle, complete source/core regression and final production frozen-input replays."
     }
   ],
   "experiments": [
@@ -14543,6 +14549,60 @@
         "C5 feedback physical failure masked by old raw steering rejection"
       ],
       "revisit_condition": "New composite source/history/world counterexample or causal source reservation integration; do not relax time, input or physical bounds."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-reservation-r364-r367",
+      "baseline_commit": "4b1920ee7901a7d2ed12a49a3ba3017150d5663d",
+      "snapshot_ids": [
+        "20260912-nine-state-source-reservation"
+      ],
+      "hypothesis": "Causally reserve two already certified prior inputs while calculating the next source, retaining a complete proved normal prefix and exact original schedule.",
+      "changed_dimension": "Runtime source reservation, waiting job and programme intent; no clocks/bounds/rates/authority changes.",
+      "result": "accepted",
+      "reason": "Causal IDs/partial history/clock/generation, long-prefix intent and exact snapshot IDs. Final158 pass; r365 new fixture error preserved.",
+      "production_impact": "Runtime implementation locally validated; standard dev2 and all integrated acceptance still pending.",
+      "deleted_code": [
+        "Always zero-prior next-slot assumption when a valid reservation exists",
+        "Replacing unadopted source work every publication",
+        "Blanket suffix index>0 Stop intent"
+      ],
+      "revisit_condition": "New causal reservation/history/time or full-run counterexample; preserve original authority and deadlines."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-reservation-build102-tests89",
+      "baseline_commit": "4b1920ee7901a7d2ed12a49a3ba3017150d5663d",
+      "snapshot_ids": [
+        "20260912-nine-state-source-reservation"
+      ],
+      "hypothesis": "Causally reserve two already certified prior inputs while calculating the next source, retaining a complete proved normal prefix and exact original schedule.",
+      "changed_dimension": "Runtime source reservation, waiting job and programme intent; no clocks/bounds/rates/authority changes.",
+      "result": "accepted",
+      "reason": "All26 packages and2579 records/66 groups pass. Intermediate blanket long ordering rejected; four old source assertions replaced by original-authority checks at the new due/expected-ID edge.",
+      "production_impact": "Runtime implementation locally validated; standard dev2 and all integrated acceptance still pending.",
+      "deleted_code": [
+        "Always zero-prior next-slot assumption when a valid reservation exists",
+        "Replacing unadopted source work every publication",
+        "Blanket suffix index>0 Stop intent"
+      ],
+      "revisit_condition": "New causal reservation/history/time or full-run counterexample; preserve original authority and deadlines."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-reservation-r368-r369",
+      "baseline_commit": "4b1920ee7901a7d2ed12a49a3ba3017150d5663d",
+      "snapshot_ids": [
+        "20260912-nine-state-source-reservation"
+      ],
+      "hypothesis": "Causally reserve two already certified prior inputs while calculating the next source, retaining a complete proved normal prefix and exact original schedule.",
+      "changed_dimension": "Runtime source reservation, waiting job and programme intent; no clocks/bounds/rates/authority changes.",
+      "result": "accepted",
+      "reason": "Six final producer arms, pending2 current private proof+original before guard with13 positive packets. Five old source/current identities and prefix/late rejection remain. Diagnostic expected IDs are not runtime evidence.",
+      "production_impact": "Runtime implementation locally validated; standard dev2 and all integrated acceptance still pending.",
+      "deleted_code": [
+        "Always zero-prior next-slot assumption when a valid reservation exists",
+        "Replacing unadopted source work every publication",
+        "Blanket suffix index>0 Stop intent"
+      ],
+      "revisit_condition": "New causal reservation/history/time or full-run counterexample; preserve original authority and deadlines."
     }
   ]
 }

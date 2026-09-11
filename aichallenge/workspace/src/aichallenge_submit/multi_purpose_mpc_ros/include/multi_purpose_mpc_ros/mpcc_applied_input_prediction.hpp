@@ -49,11 +49,37 @@ struct PublishedInputProgram {
 
 /// Conversion is fail-closed outside the uniquely representable range and for
 /// non-grid values. It never rounds a continuous timestamp into permission.
+std::optional<std::int64_t> publication_nanoseconds(double sec) noexcept;
 std::optional<PublicationNanosecondClock> publication_nanosecond_clock(
   double first_sec, double interval_sec, double maximum_delay_sec) noexcept;
 /// The common endpoint used by input coverage, rest proof and final guards.
 std::optional<double> publication_epoch(const PublishedInputProgram &program,
   std::size_t index, bool latest = false) noexcept;
+
+/// Nominal forecast under an explicit future prefix. Original observations and
+/// actual publications remain unchanged. Only packets through selected_index
+/// are used: the selected packet is held to its latency-compensated control
+/// origin, supplied explicitly by the caller. Integer future words require
+/// exact ns source/query/channel epochs and preserve native interval lengths.
+/// This matches the existing nominal first-packet hold convention. This finite
+/// prefix is neither an actual history nor an applied-input/rest certificate.
+struct ScheduledPublicationPrediction {
+  ObservationProvenance observation;
+  PublishedInputProgram nominal_prefix;
+  State observation_current;
+  State publication_state;
+  State control_origin;
+  double publication_sec{};
+  double control_origin_sec{};
+  std::vector<TimedState> observation_to_control;
+  std::vector<TimedState> publication_to_control;
+  std::uint64_t vehicle_model_fingerprint{};
+};
+
+std::optional<ScheduledPublicationPrediction> predict_scheduled_publication(
+  const ObservationProvenance &observation, const PublishedInputProgram &program,
+  std::size_t selected_index, double planned_control_origin_sec,
+  const Parameters &parameters) noexcept;
 
 /// Bounded input provenance carried by a materialized Stop artifact. This
 /// stores no parent plan pointer, so repeated Stop joins cannot retain an

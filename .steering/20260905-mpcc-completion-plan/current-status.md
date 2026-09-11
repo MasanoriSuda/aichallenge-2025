@@ -1,19 +1,20 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。承認済みの全M1–M6を自律実行中。必要分のローカルcommitのみ。
+2026-09-11 JST。承認済みM1–M6を自律実行中。必要分のローカルcommitのみ。
 **全体未完。同期証明の実公開期限とM4–M6は未解決。**
 
-予定公開の数値部品に続き、通常・Emergency・終了時の実送信を単一台帳へ統合した。
-旧historyの値/順序/floor/pruningを保ち、raw clock・source・reset・途中指令を照合する。
-この台帳は新しいnormal authorityを持たず、旧同期経路を維持する準備段階。
-Buildr70は26packages/4m13s、testsr58は2480記録/64group/32.0s、全合格。
-次は固定commit dev2-r42で実記録を確認し、予定nominal・旧certified prefix・現在sensor/
-world照合・非同期単一dispatchを接続する。旧同期authorityは接続sliceで退役する。
+固定56464c65のr42は起動時の観測停滞でinconclusive。r43では両車で実送信台帳を
+確認したが、D2decision683が公開期限を約5ms超過し不合格。両run停止・成果物復元済み。
+予定prefixと元の観測を分離する名目点予測を追加。将来の整数時刻区間で余分な機械
+積分stepを作らない。旧800入力の出力bit一致、独立比較57test合格。
+Buildr71は26packages/5m02s、testsr59は2483記録/64group、エラー/失敗/skip0。
+新しいnormal authorityへは未接続。次は予定nominal/full-rest証明・prefix連結・現在
+sensor/world照合・非同期単一dispatcherを接続し、旧同期authorityを同時に退役する。
 
-[送信台帳](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-ledger-design.md)、
+[予定点予測の設計と証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-nominal-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalは未完。R40/R41の実期限超過は未解消。
+dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
 
 ## Superseded checkpoint and historical evidence
 

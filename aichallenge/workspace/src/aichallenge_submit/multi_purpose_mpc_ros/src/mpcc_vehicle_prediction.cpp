@@ -1,5 +1,6 @@
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
+#include "multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -102,10 +103,18 @@ bool publication_packet_matches(
          steering_wire == static_cast<float>(packet.wire_steering_rad);
 }
 
-std::optional<PublishedPrediction> predict_published_history(
+namespace {
+struct SchedulePrediction {
+  State current;
+  State control_origin;
+  std::vector<TimedState> current_to_control;
+};
+
+std::optional<SchedulePrediction> predict_schedule(
   const TimedState & initial, const double now_sec, const double control_origin_sec,
   const std::vector<PublishedCommand> & commands, const Parameters & parameters,
-  const double acceleration_delay_sec, const double steering_delay_sec) noexcept
+  const double acceleration_delay_sec, const double steering_delay_sec,
+  const double last_publication_sec, const double split_sec, const bool integer_clock = false) noexcept
 {
   if (!valid(parameters) || !finite(initial.state) || commands.empty() ||
     !std::isfinite(initial.source_sec) || initial.source_sec < 0.0 ||
@@ -117,16 +126,27 @@ std::optional<PublishedPrediction> predict_published_history(
   {
     return std::nullopt;
   }
-  std::vector<double> boundaries{initial.source_sec, now_sec, control_origin_sec};
+  if (integer_clock) {
+    for (double stamp : {initial.source_sec, now_sec, control_origin_sec, split_sec,
+        acceleration_delay_sec, steering_delay_sec})
+      if (!publication_nanoseconds(stamp)) return std::nullopt;
+    for (const auto &command : commands)
+      if (!publication_nanoseconds(command.published_sec)) return std::nullopt;
+  }
+  const auto applied_epoch = [integer_clock](double publication, double delay) {
+    return integer_clock ? static_cast<double>(
+      *publication_nanoseconds(publication) + *publication_nanoseconds(delay)) / 1e9 : publication + delay;
+  };
+  std::vector<double> boundaries{initial.source_sec, now_sec, control_origin_sec, split_sec};
   double previous = -1.0;
   for (const auto & command : commands) {
     if (!std::isfinite(command.published_sec) || command.published_sec < 0.0 ||
-      command.published_sec < previous || command.published_sec > now_sec ||
+      command.published_sec < previous || command.published_sec > last_publication_sec ||
       !std::isfinite(command.wire_acceleration_mps2) ||
       !std::isfinite(command.wire_steering_rad)) return std::nullopt;
     previous = command.published_sec;
     for (const double delay : {acceleration_delay_sec, steering_delay_sec}) {
-      const double applied = command.published_sec + delay;
+      const double applied = applied_epoch(command.published_sec, delay);
       if (applied > initial.source_sec && applied < control_origin_sec) {
         boundaries.push_back(applied);
       }
@@ -134,16 +154,14 @@ std::optional<PublishedPrediction> predict_published_history(
   }
   // Both channels require a recorded predecessor at the observation epoch.
   // Assuming an unobserved zero command would manufacture input coverage.
-  if (commands.front().published_sec + acceleration_delay_sec > initial.source_sec ||
-    commands.front().published_sec + steering_delay_sec > initial.source_sec)
+  if (applied_epoch(commands.front().published_sec, acceleration_delay_sec) > initial.source_sec ||
+    applied_epoch(commands.front().published_sec, steering_delay_sec) > initial.source_sec)
   {
     return std::nullopt;
   }
   std::sort(boundaries.begin(), boundaries.end());
   boundaries.erase(std::unique(boundaries.begin(), boundaries.end()), boundaries.end());
-  PublishedPrediction result;
-  result.provenance = {initial, initial.source_sec, initial.source_sec, initial.source_sec,
-    now_sec, control_origin_sec, acceleration_delay_sec, steering_delay_sec, commands};
+  SchedulePrediction result;
   State state = initial.state;
   if (initial.source_sec == now_sec) {
     result.current = state;
@@ -154,16 +172,18 @@ std::optional<PublishedPrediction> predict_published_history(
     double acceleration = commands.front().wire_acceleration_mps2;
     double steering = commands.front().wire_steering_rad;
     for (const auto & command : commands) {
-      if (command.published_sec + acceleration_delay_sec <= begin) {
+      if (applied_epoch(command.published_sec, acceleration_delay_sec) <= begin) {
         acceleration = command.wire_acceleration_mps2;
       }
-      if (command.published_sec + steering_delay_sec <= begin) {
+      if (applied_epoch(command.published_sec, steering_delay_sec) <= begin) {
         steering = command.wire_steering_rad;
       }
     }
     state.desired_steering_rad = steering / parameters.steering_wire_gain;
-    const auto steps = integration_steps(end - begin, parameters.maximum_step_sec);
-    const double dt = (end - begin) / static_cast<double>(steps);
+    const double duration = integer_clock ? static_cast<double>(
+      *publication_nanoseconds(end) - *publication_nanoseconds(begin)) / 1e9 : end - begin;
+    const auto steps = integration_steps(duration, parameters.maximum_step_sec);
+    const double dt = duration / static_cast<double>(steps);
     for (std::size_t step = 0; step < steps; ++step) {
       const auto next = advance(state, {acceleration, 0.0}, parameters, dt);
       if (!next) return std::nullopt;
@@ -179,7 +199,63 @@ std::optional<PublishedPrediction> predict_published_history(
   }
   result.control_origin = state;
   return result.current_to_control.empty() ? std::nullopt :
-         std::optional<PublishedPrediction>{std::move(result)};
+         std::optional<SchedulePrediction>{std::move(result)};
+}
+} // namespace
+
+std::optional<PublishedPrediction> predict_published_history(
+  const TimedState &initial, const double now_sec, const double control_origin_sec,
+  const std::vector<PublishedCommand> &commands, const Parameters &parameters,
+  const double acceleration_delay_sec, const double steering_delay_sec) noexcept
+{
+  auto result = predict_schedule(initial, now_sec, control_origin_sec, commands,
+    parameters, acceleration_delay_sec, steering_delay_sec, now_sec, now_sec);
+  if (!result) return std::nullopt;
+  return PublishedPrediction{
+    {initial, initial.source_sec, initial.source_sec, initial.source_sec,
+      now_sec, control_origin_sec, acceleration_delay_sec, steering_delay_sec, commands},
+    result->current, result->control_origin, std::move(result->current_to_control)};
+}
+
+std::optional<ScheduledPublicationPrediction> predict_scheduled_publication(
+  const ObservationProvenance &observation, const PublishedInputProgram &program,
+  const std::size_t selected_index, const double origin, const Parameters &parameters) noexcept
+{
+  if (!valid(observation) || !valid(parameters) || program.commands.empty() ||
+    !valid(program, program.commands.front().published_sec) ||
+    program.commands.front().published_sec < observation.now_sec ||
+    selected_index >= program.commands.size()) return std::nullopt;
+  const double publication = program.commands[selected_index].published_sec;
+  // Preserve zero-lead prospective arithmetic exactly. Future integer words
+  // compute every application boundary and integration duration on that grid;
+  // subtracting absolute doubles can invent an extra mechanical tire update.
+  const bool integer_clock = program.nanosecond_clock.has_value() && publication > observation.now_sec;
+  if (!std::isfinite(origin) || origin < publication) return std::nullopt;
+  // Private numerical schedule only. The result retains the untouched actual
+  // history and a separately typed finite prefix; no synthetic provenance.
+  auto schedule = observation.commands;
+  schedule.insert(schedule.end(), program.commands.begin(), program.commands.begin() + selected_index + 1);
+  auto forecast = predict_schedule(observation.initial, observation.now_sec, origin,
+    schedule, parameters, observation.acceleration_delay_sec, observation.steering_delay_sec,
+    publication, publication, integer_clock);
+  if (!forecast) return std::nullopt;
+  const auto begin = std::find_if(forecast->current_to_control.begin(), forecast->current_to_control.end(),
+    [publication](const TimedState &state) { return state.source_sec == publication; });
+  if (begin == forecast->current_to_control.end()) return std::nullopt;
+  ScheduledPublicationPrediction result;
+  result.observation = observation;
+  result.nominal_prefix = program;
+  result.nominal_prefix.commands.resize(selected_index + 1);
+  result.nominal_prefix.repeat_last_until_rest = false;
+  result.observation_current = forecast->current;
+  result.publication_state = begin->state;
+  result.control_origin = forecast->control_origin;
+  result.publication_sec = publication;
+  result.control_origin_sec = origin;
+  result.publication_to_control.assign(begin, forecast->current_to_control.end());
+  result.observation_to_control = std::move(forecast->current_to_control);
+  result.vehicle_model_fingerprint = fingerprint(parameters);
+  return result;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_vehicle_model

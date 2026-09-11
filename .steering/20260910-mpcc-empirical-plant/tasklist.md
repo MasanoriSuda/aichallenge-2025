@@ -86,5 +86,15 @@
 - [x] 単一送信台帳、opaque snapshot、raw clock/reset/脱落/source/float/各windowのprefix照合。
 - [x] 通常・Emergency・終了時の全最終送信を記録。既存historyとauthorityは維持。
 - [x] Native r236/buildr70/testsr58合格、証拠保存。新しいnormal authorityは未接続。
-- [ ] 固定commit dev2-r42で実記録を検証。
+- [x] 固定commit r42は起動停滞、r43で実記録確認。実公開期限超過は未解決。
 - [ ] 予定nominal/明示旧prefix/current sensor-world/async単一dispatchを接続し、全M4–M6。
+
+
+2026-09-11 explicit scheduled nominal forecast（baseline56464c65）:
+- [x] R42の起動停滞・r43台帳記録/実期限失敗を保存。両run停止・保護成果物復元。
+- [x] 元の観測と予定prefixを型で分離する点予測。予定control originは明示引数。
+- [x] R237丸めによる余分な積分分割を再現。R238変換入口不備も保存し、R239全57test合格。
+- [x] 旧800入力の全出力bit一致、zero-lead一致、独立channel delay/旧Stop prefix比較。
+- [x] Buildr71/testsr59合格。新しいnormal authorityは未接続。
+- [ ] 予定nominal証明/全rest検査・prefix連結/current sensor-world/async単一dispatchを接続。
+- [ ] 旧同期authorityを接続時に退役し、同一finalHEADの全M4–M6受入れを完遂。

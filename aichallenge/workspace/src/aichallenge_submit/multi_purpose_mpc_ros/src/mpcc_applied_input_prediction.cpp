@@ -196,6 +196,10 @@ struct Hash {
 };
 } // namespace
 
+std::optional<std::int64_t> publication_nanoseconds(double sec) noexcept {
+  return exact_nanoseconds(sec);
+}
+
 std::optional<PublicationNanosecondClock> publication_nanosecond_clock(
     double first, double interval, double delay) noexcept {
   const auto a = exact_nanoseconds(first), b = exact_nanoseconds(interval),

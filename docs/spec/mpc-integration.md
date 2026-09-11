@@ -4607,3 +4607,10 @@ normal・Emergency・終了時のraw clock前後と意図したsourceを記録�
 reset・履歴脱落を不透明なsnapshotで照合する。意図したsourceだけでは公開後のauthorityを
 示さない。予定prefix照合は数値/物理/現在worldの検査を代替しない。
 [送信台帳の設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-ledger-design.md)。
+
+
+予定公開の名目点予測も実観測と分離する。`ScheduledPublicationPrediction`は元の
+観測・送信済み履歴を保持し、明示された予定prefixと将来control originを別に持つ。
+将来の整数wordはapplication境界と積分区間長も整数nsで求める。旧履歴APIとzero-lead
+の演算は維持する。予定点予測は既存normal Certificateの代替ではない。
+[設計と数値検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-nominal-design.md)。

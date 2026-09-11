@@ -46,3 +46,9 @@ C++warningなし、既存setuptools deprecationのみ。通常・failsafe・終�
 [27ファイルの保存証拠](publication-ledger-evidence.json)。
 固定commitのdev2-r42は次の確認。公開期限解消、予定normal authority、M4–M6完了は
 この結果から主張しない。次は型で区別した予定nominal生成と明示的な旧指令prefix。
+
+
+固定56464c65のr42は起動時の観測停滞でinconclusive。r43は両Domainで台帳の連番増加・
+256件上限・history pruning・通常のsourceと出典なしEmergencyを確認した。
+D2decision683で実公開期限を超過し、統合走行は不合格。
+[実記録と予定名目予測の証拠](scheduled-nominal-design.md)。

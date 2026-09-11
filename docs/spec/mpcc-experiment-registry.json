@@ -1051,6 +1051,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-ledger-evidence.json",
       "replay_ready": true,
       "reason": "Immutable actual publication transactions, native prefix/reset/clock regressions, build and package evidence. No scheduled normal authority."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-nominal",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-nominal-evidence.json",
+      "replay_ready": true,
+      "reason": "Fixed-ledger runtime observations/failure, separate future nominal forecast, integer mechanical substep correction and old-bit parity. No integrated acceptance."
     }
   ],
   "experiments": [
@@ -12359,6 +12365,118 @@
         "Replaced node-owned bare history vector; history arithmetic remains shared and unchanged."
       ],
       "revisit_condition": "Verify dev2-r42 ledger and integrate future nominal/current-world/prefix/async. This result cannot establish deadline or M4-M6 acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-nominal-r42-startup",
+      "baseline_commit": "56464c65317b06680e321bd7e16fa323734bf356",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-nominal"
+      ],
+      "hypothesis": "Startup reaches controller evaluation",
+      "changed_dimension": "Typed scheduled nominal forecast with original provenance and explicit planned query; separately fixed-ledger runtime",
+      "result": "inconclusive",
+      "reason": "No live control proof; both three-second probes received no clock/odom/vehicle reports. Startup origin unknown; interrupted and restored.",
+      "production_impact": "Shared prediction engine preserves old arithmetic. New point result has no normal authority; physical/rate/window/profile/solver bounds unchanged.",
+      "deleted_code": [
+        "Replaced duplicated provenance-owning integration body with private schedule engine and unchanged old wrapper. Synchronous normal authority must retire when scheduled dispatch is promoted."
+      ],
+      "revisit_condition": "Connect nominal/full-rest/prefix/fresh world/measurement/single dispatch before any authority claim. R42 restart allowed as startup infrastructure diagnosis; repeated timing failure cannot be accepted. M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-nominal-r43-ledger",
+      "baseline_commit": "56464c65317b06680e321bd7e16fa323734bf356",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-nominal"
+      ],
+      "hypothesis": "Final publications have bounded ordered source/clock records",
+      "changed_dimension": "Typed scheduled nominal forecast with original provenance and explicit planned query; separately fixed-ledger runtime",
+      "result": "accepted",
+      "reason": "Both domains show sequence/pruning/sourceNone Emergency and normal source;256transaction cap and zero observed discontinuities.",
+      "production_impact": "Shared prediction engine preserves old arithmetic. New point result has no normal authority; physical/rate/window/profile/solver bounds unchanged.",
+      "deleted_code": [
+        "Replaced duplicated provenance-owning integration body with private schedule engine and unchanged old wrapper. Synchronous normal authority must retire when scheduled dispatch is promoted."
+      ],
+      "revisit_condition": "Connect nominal/full-rest/prefix/fresh world/measurement/single dispatch before any authority claim. R42 restart allowed as startup infrastructure diagnosis; repeated timing failure cannot be accepted. M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-nominal-r43-timing",
+      "baseline_commit": "56464c65317b06680e321bd7e16fa323734bf356",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-nominal"
+      ],
+      "hypothesis": "Ledger integration resolves synchronous publication timing",
+      "changed_dimension": "Typed scheduled nominal forecast with original provenance and explicit planned query; separately fixed-ledger runtime",
+      "result": "rejected",
+      "reason": "It does not: D2decision683 after4.304999903>deadline4.299999904. No timing remedy claimed.",
+      "production_impact": "Shared prediction engine preserves old arithmetic. New point result has no normal authority; physical/rate/window/profile/solver bounds unchanged.",
+      "deleted_code": [
+        "Replaced duplicated provenance-owning integration body with private schedule engine and unchanged old wrapper. Synchronous normal authority must retire when scheduled dispatch is promoted."
+      ],
+      "revisit_condition": "Connect nominal/full-rest/prefix/fresh world/measurement/single dispatch before any authority claim. R42 restart allowed as startup infrastructure diagnosis; repeated timing failure cannot be accepted. M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-nominal-r237-native",
+      "baseline_commit": "56464c65317b06680e321bd7e16fa323734bf356",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-nominal"
+      ],
+      "hypothesis": "Explicit scheduled prefix matches independent native integration",
+      "changed_dimension": "Typed scheduled nominal forecast with original provenance and explicit planned query; separately fixed-ledger runtime",
+      "result": "rejected",
+      "reason": "Old800results/zero-lead identical, but absolute double interval subtraction made25ms into6mechanical updates. Independent yaw-rate difference0.000104851187806; no tolerance relaxation.",
+      "production_impact": "Shared prediction engine preserves old arithmetic. New point result has no normal authority; physical/rate/window/profile/solver bounds unchanged.",
+      "deleted_code": [
+        "Replaced duplicated provenance-owning integration body with private schedule engine and unchanged old wrapper. Synchronous normal authority must retire when scheduled dispatch is promoted."
+      ],
+      "revisit_condition": "Connect nominal/full-rest/prefix/fresh world/measurement/single dispatch before any authority claim. R42 restart allowed as startup infrastructure diagnosis; repeated timing failure cannot be accepted. M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-nominal-r238-conversion",
+      "baseline_commit": "56464c65317b06680e321bd7e16fa323734bf356",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-nominal"
+      ],
+      "hypothesis": "Use strict publication-clock builder for source/query conversion",
+      "changed_dimension": "Typed scheduled nominal forecast with original provenance and explicit planned query; separately fixed-ledger runtime",
+      "result": "rejected",
+      "reason": "Zero-window builder was invalid, so new future forecast rejected at entry. Replaced with direct shared exact-ns conversion.",
+      "production_impact": "Shared prediction engine preserves old arithmetic. New point result has no normal authority; physical/rate/window/profile/solver bounds unchanged.",
+      "deleted_code": [
+        "Replaced duplicated provenance-owning integration body with private schedule engine and unchanged old wrapper. Synchronous normal authority must retire when scheduled dispatch is promoted."
+      ],
+      "revisit_condition": "Connect nominal/full-rest/prefix/fresh world/measurement/single dispatch before any authority claim. R42 restart allowed as startup infrastructure diagnosis; repeated timing failure cannot be accepted. M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-nominal-r239-native",
+      "baseline_commit": "56464c65317b06680e321bd7e16fa323734bf356",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-nominal"
+      ],
+      "hypothesis": "Exact future ns durations preserve native delay dynamics and old behavior",
+      "changed_dimension": "Typed scheduled nominal forecast with original provenance and explicit planned query; separately fixed-ledger runtime",
+      "result": "accepted",
+      "reason": "57tests/239ms including old800bit-parity, zero-lead, independent five-ms channel integration and malformed/future histories. Point prediction only.",
+      "production_impact": "Shared prediction engine preserves old arithmetic. New point result has no normal authority; physical/rate/window/profile/solver bounds unchanged.",
+      "deleted_code": [
+        "Replaced duplicated provenance-owning integration body with private schedule engine and unchanged old wrapper. Synchronous normal authority must retire when scheduled dispatch is promoted."
+      ],
+      "revisit_condition": "Connect nominal/full-rest/prefix/fresh world/measurement/single dispatch before any authority claim. R42 restart allowed as startup infrastructure diagnosis; repeated timing failure cannot be accepted. M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-nominal-r71-r59",
+      "baseline_commit": "56464c65317b06680e321bd7e16fa323734bf356",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-nominal"
+      ],
+      "hypothesis": "Build and regress typed nominal forecast",
+      "changed_dimension": "Typed scheduled nominal forecast with original provenance and explicit planned query; separately fixed-ledger runtime",
+      "result": "accepted",
+      "reason": "26packages/5m02s;2483records/64groups,zeroerrors/failures/skips. C++warning absent; existing setuptools deprecation remains.",
+      "production_impact": "Shared prediction engine preserves old arithmetic. New point result has no normal authority; physical/rate/window/profile/solver bounds unchanged.",
+      "deleted_code": [
+        "Replaced duplicated provenance-owning integration body with private schedule engine and unchanged old wrapper. Synchronous normal authority must retire when scheduled dispatch is promoted."
+      ],
+      "revisit_condition": "Connect nominal/full-rest/prefix/fresh world/measurement/single dispatch before any authority claim. R42 restart allowed as startup infrastructure diagnosis; repeated timing failure cannot be accepted. M4-M6 remains open."
     }
   ]
 }

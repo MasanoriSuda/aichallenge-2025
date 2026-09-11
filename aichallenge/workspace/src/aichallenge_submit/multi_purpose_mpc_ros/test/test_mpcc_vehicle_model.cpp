@@ -1439,3 +1439,116 @@ TEST(MpccVehicleModel, PairedOutwardRoundingPreservesScalarBits)
     check(lower, upper);
   }
 }
+
+TEST(MpccScheduledNominal, ZeroLeadPreservesTheExistingProspectivePrediction)
+{
+  const auto p = vehicle_model();
+  auto observation = applied_observation();
+  const vehicle::PublishedCommand packet{observation.now_sec, 1, static_cast<float>(.2)};
+  vehicle::PublishedInputProgram program{.025, {packet}, false, .025};
+  program.nanosecond_clock = vehicle::publication_nanosecond_clock(observation.now_sec, .025, .025);
+  const auto old = vehicle::predict_prospective_publication(observation, packet, p);
+  const auto scheduled = vehicle::predict_scheduled_publication(observation, program, 0, observation.control_origin_sec, p);
+  ASSERT_TRUE(old); ASSERT_TRUE(scheduled);
+  EXPECT_EQ(scheduled->observation.now_sec, observation.now_sec);
+  EXPECT_EQ(scheduled->observation.control_origin_sec, observation.control_origin_sec);
+  EXPECT_EQ(scheduled->control_origin_sec, observation.control_origin_sec);
+  EXPECT_EQ(scheduled->observation.commands.size(), observation.commands.size());
+  EXPECT_EQ(scheduled->vehicle_model_fingerprint, old->vehicle_model_fingerprint);
+  ASSERT_EQ(scheduled->publication_to_control.size(), old->current_to_control.size());
+  for (std::size_t i = 0; i < old->current_to_control.size(); ++i) {
+    const auto &a = scheduled->publication_to_control[i]; const auto &b = old->current_to_control[i];
+    EXPECT_EQ(a.source_sec, b.source_sec);
+    EXPECT_EQ(a.state.x_m, b.state.x_m); EXPECT_EQ(a.state.y_m, b.state.y_m);
+    EXPECT_EQ(a.state.yaw_rad, b.state.yaw_rad);
+    EXPECT_EQ(a.state.forward_velocity_mps, b.state.forward_velocity_mps);
+    EXPECT_EQ(a.state.lateral_velocity_mps, b.state.lateral_velocity_mps);
+    EXPECT_EQ(a.state.yaw_rate_radps, b.state.yaw_rate_radps);
+    EXPECT_EQ(a.state.desired_steering_rad, b.state.desired_steering_rad);
+    EXPECT_EQ(a.state.tire_steering_rad, b.state.tire_steering_rad);
+  }
+}
+
+TEST(MpccScheduledNominal, ExplicitOldStopPrefixAndNewPacketUseIndependentChannelDelays)
+{
+  const auto p = vehicle_model();
+  const vehicle::ObservationProvenance observed{
+    {1, {0, 0, .2, 3, .02, .05, 0, 0}}, .99, .98, .97, 1, 1.18, .02, .1,
+    {{0, 1, 0}, {.9, 1, 0}}};
+  vehicle::PublishedInputProgram program{.025,
+    {{1.025, -3, .125}, {1.05, -3, .25}, {1.075, 1, -.125}, {1.1, -3, 0}}, true, .025};
+  program.nanosecond_clock = vehicle::publication_nanosecond_clock(1.025, .025, .025);
+  const auto forecast = vehicle::predict_scheduled_publication(observed, program, 2, 1.255, p);
+  ASSERT_TRUE(forecast);
+  EXPECT_EQ(forecast->observation.initial.source_sec, 1);
+  EXPECT_EQ(forecast->observation.velocity_source_sec, .99);
+  EXPECT_EQ(forecast->observation.yaw_rate_source_sec, .98);
+  EXPECT_EQ(forecast->observation.tire_source_sec, .97);
+  EXPECT_EQ(forecast->observation.now_sec, 1);
+  EXPECT_EQ(forecast->observation.control_origin_sec, 1.18);
+  ASSERT_EQ(forecast->observation.commands.size(), 2U);
+  EXPECT_EQ(forecast->observation.commands.back().published_sec, .9);
+  EXPECT_EQ(forecast->nominal_prefix.commands.size(), 3U);
+  EXPECT_FALSE(forecast->nominal_prefix.repeat_last_until_rest);
+  EXPECT_EQ(forecast->publication_sec, 1.075);
+  EXPECT_EQ(forecast->publication_to_control.front().source_sec, 1.075);
+  EXPECT_EQ(forecast->observation_to_control.front().source_sec, 1);
+  // Independent five-ms native stepping with integer channel-application
+  // events. The fourth packet belongs to the later full-rest proof and must
+  // not enter this first-packet nominal hold convention.
+  auto state = observed.initial.state;
+  for (std::int64_t ns = 1000000000; ns < 1255000000; ns += 5000000) {
+    const double acceleration = ns < 1045000000 ? 1 : ns < 1095000000 ? -3 : 1;
+    const double steering = ns < 1125000000 ? 0 : ns < 1150000000 ? .125 : ns < 1175000000 ? .25 : -.125;
+    state.desired_steering_rad = steering / p.steering_wire_gain;
+    const auto next = vehicle::advance(state, {acceleration, 0}, p, .005);
+    ASSERT_TRUE(next); state = next->state;
+  }
+  EXPECT_NEAR(forecast->control_origin.x_m, state.x_m, 1e-11);
+  EXPECT_NEAR(forecast->control_origin.y_m, state.y_m, 1e-11);
+  EXPECT_NEAR(forecast->control_origin.yaw_rad, state.yaw_rad, 1e-11);
+  EXPECT_NEAR(forecast->control_origin.forward_velocity_mps, state.forward_velocity_mps, 1e-11);
+  EXPECT_NEAR(forecast->control_origin.lateral_velocity_mps, state.lateral_velocity_mps, 1e-11);
+  EXPECT_NEAR(forecast->control_origin.yaw_rate_radps, state.yaw_rate_radps, 1e-11);
+  EXPECT_NEAR(forecast->control_origin.tire_steering_rad, state.tire_steering_rad, 1e-11);
+  auto missing_old_stop = program;
+  for (std::size_t i = 0; i < 2; ++i) missing_old_stop.commands[i].wire_acceleration_mps2 = 1;
+  const auto different = vehicle::predict_scheduled_publication(observed, missing_old_stop, 2, 1.255, p);
+  ASSERT_TRUE(different);
+  EXPECT_GT(different->control_origin.forward_velocity_mps, forecast->control_origin.forward_velocity_mps + .1);
+  auto brake = program; brake.commands[2].wire_acceleration_mps2 = -3;
+  const auto changed = vehicle::predict_scheduled_publication(observed, brake, 2, 1.255, p);
+  ASSERT_TRUE(changed);
+  EXPECT_EQ(changed->publication_state.forward_velocity_mps, forecast->publication_state.forward_velocity_mps);
+  EXPECT_LT(changed->control_origin.forward_velocity_mps, forecast->control_origin.forward_velocity_mps);
+}
+
+TEST(MpccScheduledNominal, FutureHistoryAndMalformedScheduleCannotBecomeAnObservation)
+{
+  const auto p = vehicle_model(); const auto observed = applied_observation();
+  vehicle::PublishedInputProgram program{.025, {{1.475, 1, 0}, {1.5, -3, 0}}, true, .025};
+  program.nanosecond_clock = vehicle::publication_nanosecond_clock(1.475, .025, .025);
+  ASSERT_TRUE(vehicle::predict_scheduled_publication(observed, program, 0, 1.605, p));
+  auto future_history = observed; future_history.commands.push_back(program.commands.front());
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(future_history, program, 0, 1.605, p));
+  EXPECT_FALSE(vehicle::predict_published_history(observed.initial, observed.now_sec,
+    observed.control_origin_sec, future_history.commands, p, 0, .1));
+  auto missing = observed; missing.commands.clear();
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(missing, program, 0, 1.605, p));
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(observed, program, 2, 1.255, p));
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(observed, program, 0, 1.605, {}));
+  auto invalid = program; invalid.commands.front().published_sec -= 1e-9;
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(observed, invalid, 0, 1.605, p));
+  invalid = program; invalid.commands.front().wire_steering_rad = .1;
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(observed, invalid, 0, 1.605, p));
+  invalid = program; invalid.commands.front().wire_acceleration_mps2 = NAN;
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(observed, invalid, 0, 1.605, p));
+  auto later = observed; later.now_sec = 1.48;
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(later, program, 0, 1.605, p));
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(observed, program, 0, 1.47, p));
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(observed, program, 0, NAN, p));
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(observed, program, 0, std::nextafter(1.605, INFINITY), p));
+  auto off_grid = observed; off_grid.steering_delay_sec = std::nextafter(.1, INFINITY);
+  EXPECT_FALSE(vehicle::predict_scheduled_publication(off_grid, program, 0, 1.605, p));
+  EXPECT_FALSE(vehicle::predict_prospective_publication(observed, program.commands.front(), p));
+}

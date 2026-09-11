@@ -1213,6 +1213,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-reservation-evidence.json",
       "replay_ready": true,
       "reason": "Native causal reservation lifecycle, complete source/core regression and final production frozen-input replays."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-r62-relative-comparison",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r62-relative-comparison-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen committed standardr62 and originalr60 inputs; exact runtime-reservation replay and independent domain architecture comparison."
     }
   ],
   "experiments": [
@@ -14603,6 +14609,62 @@
         "Blanket suffix index>0 Stop intent"
       ],
       "revisit_condition": "New causal reservation/history/time or full-run counterexample; preserve original authority and deadlines."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r62-relative-comparison-dev2-r62",
+      "baseline_commit": "fbc736c2be4403c6d5ada0440cac374a60e4ea8a",
+      "snapshot_ids": [
+        "20260912-nine-state-r62-relative-comparison"
+      ],
+      "hypothesis": "Separate independently propagated body/time population from current pose to avoid irrelevant global-pose Cartesian future without old point reuse.",
+      "changed_dimension": "Diagnostic architecture comparison only; production remains committed reservation implementation.",
+      "result": "rejected",
+      "reason": "Causal reservation adoption observed, but D1 first global-domain wall rejection requires expensive fullcurrentproof; D2 scheduling and D1 finalpublish also cross original windows. No completed laps.",
+      "production_impact": "None. Relative evidence unpromoted; original delays, windows, bounds, authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Kernel-level independent body/pose/corner containment and source/current/clock negatives; new timing evidence required for scheduling family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r62-relative-comparison-r372",
+      "baseline_commit": "fbc736c2be4403c6d5ada0440cac374a60e4ea8a",
+      "snapshot_ids": [
+        "20260912-nine-state-r62-relative-comparison"
+      ],
+      "hypothesis": "Separate independently propagated body/time population from current pose to avoid irrelevant global-pose Cartesian future without old point reuse.",
+      "changed_dimension": "Diagnostic architecture comparison only; production remains committed reservation implementation.",
+      "result": "accepted",
+      "reason": "Three exact source/current identities, declared runtime expected prior IDs, actual prefix and before/after guards reproduced. Post-before history excludes final event; r370/371 diagnostic failures preserved.",
+      "production_impact": "None. Relative evidence unpromoted; original delays, windows, bounds, authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Kernel-level independent body/pose/corner containment and source/current/clock negatives; new timing evidence required for scheduling family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r62-relative-comparison-r373-global",
+      "baseline_commit": "fbc736c2be4403c6d5ada0440cac374a60e4ea8a",
+      "snapshot_ids": [
+        "20260912-nine-state-r62-relative-comparison"
+      ],
+      "hypothesis": "Separate independently propagated body/time population from current pose to avoid irrelevant global-pose Cartesian future without old point reuse.",
+      "changed_dimension": "Diagnostic architecture comparison only; production remains committed reservation implementation.",
+      "result": "rejected",
+      "reason": "Original, full/symmetric and layered global domains cannot resolve both r62 future-world rejection and r60 pose membership failure.",
+      "production_impact": "None. Relative evidence unpromoted; original delays, windows, bounds, authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Kernel-level independent body/pose/corner containment and source/current/clock negatives; new timing evidence required for scheduling family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r62-relative-comparison-r373-relative",
+      "baseline_commit": "fbc736c2be4403c6d5ada0440cac374a60e4ea8a",
+      "snapshot_ids": [
+        "20260912-nine-state-r62-relative-comparison"
+      ],
+      "hypothesis": "Separate independently propagated body/time population from current pose to avoid irrelevant global-pose Cartesian future without old point reuse.",
+      "changed_dimension": "Diagnostic architecture comparison only; production remains committed reservation implementation.",
+      "result": "inconclusive",
+      "reason": "Independent normalized complete body/time proof and current whole-prefix pose composition pass both sealed worlds. Kernel/roundoff/swept-corner theorem and authority negatives still required before promotion.",
+      "production_impact": "None. Relative evidence unpromoted; original delays, windows, bounds, authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Kernel-level independent body/pose/corner containment and source/current/clock negatives; new timing evidence required for scheduling family."
     }
   ]
 }

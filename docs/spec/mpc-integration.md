@@ -4822,3 +4822,10 @@ r57の先行するD1/D2送信前遅延は別件で、proof区間の非自発的�
 個別25ms送信窓、受信250ms、予測原点130ms、操舵遅延100msと全物理制約を維持。
 全26build、2579tests、再生11条件を確認。標準dev2での実行時採用と統合完走は未検証。
 [予約と採用の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-reservation-design.md)。
+
+2026-09-12 標準dev2-r62: 事前予約の実採用とID照合を確認したが、統合完走は失敗。
+D1初回は事前集合の現在壁判定が不合格となり全再計算で期限超過。別途、実行待ちと
+最終送信呼び出し中の時計進行も期限超過を起こした。受入条件・期限は変更していない。
+位置/向きと車体の状態集合を分ける独立証明をr62/r60で比較し現在世界判定が通過したが、
+本番未採用。共有モデルの回転・移動と区間四隅の包含証明が次の昇格条件。
+[比較と証明義務](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/relative-domain-design.md)。

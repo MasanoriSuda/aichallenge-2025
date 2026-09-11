@@ -1,20 +1,21 @@
 # Current status and remaining completion work
 
-2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。事前予約・候補保持・採用を実装、build/test/replay合格。次は標準dev2-r62。**
+2026-09-12 JST。追加確認なしでM1–M6を自律実行。必要分をローカルcommit、pushなし。
+**全体未完。fbc736c2の標準dev2-r62は送信期限で失敗。原因別の証明方式比較を実施。**
 
-基点4b1920ee。元指令の2つの予定と全IDを計算前に固定し、実際の履歴進捗と元の
-開始時刻を満たす候補だけ従来のC5判定へ渡す。予約付き候補は長い証明済み指令列を
-優先し、加速区間と制動区間を識別。前段0の起動経路は元の生成順を維持。
-Native367全158、build102全26、tests89全2579/66（source105含む）合格。
-R368の同じCruise場面は前段2で13加速指令の候補を生成し、元の履歴・現在証明・
-送信前条件を通過。R369旧5場面のID・数値・期限拒否維持。再生の前段IDは既知の
-凍結履歴による診断であり、実行時の因果的予約の証拠は標準走行で確認する。
+予約処理は実行時採用まで確認。Native158/build102全26/tests89全2579/66合格。
+R62ではD1新規照合403中402、D2は286中285が通過したが、照合前の予約無効177/89件は
+別に存在する。ほぼ停止したままで完走なし。旧前段0の約95%prefix拒否との単純な成功率
+比較はしない。元の安全判定をすべて維持している。
 
-r60/r61の失敗は統合修復済みではない。CPU分離方針は不採用、元の期限・安全条件維持。
+最初のD1pre894は状態集合内だが将来の集合全体が現在の壁条件に不合格。全再計算
+27.13msで元の送信期限を超過。D2pre1104は別の実行待ち、D1post2306は最終publish
+3.05ms中にROS時計10ms進行し元25ms窓を越えた。R372で元ID・実履歴・前後判定を再現。
+R373は位置/向きと車体の運動を分離した独立証明を比較し、r62/r60の両場面で現在の
+世界判定を通過。未採用。次に共有モデルの数式と四隅の包含テストを検証してから接続する。
 全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
 単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-reservation-design.md)、
+[現在の比較・設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/relative-domain-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

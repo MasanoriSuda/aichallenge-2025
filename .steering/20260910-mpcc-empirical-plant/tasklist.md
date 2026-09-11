@@ -342,3 +342,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] One in-flight/waiting job; source-horizon preference only for reserved programmes; original normal prefix vs brake-tail intent; snapshot exact expected IDs.
 - [x] Native367158, build102all26, tests89all2579/66 inclsource105. R368six source arms and R369five historical identity/prefix/guard checks pass; intermediate failures retained.
 - [ ] Standarddev2-r62 actual reservation/adoption, source availability and original timing guards; M4–M6 remain open.
+
+2026-09-12 standarddev2-r62 / relative-domain comparison (fbc736c2):
+- [x] Actual pending2 reservation IDs and adoption observed; source/publication identities preserved. R372three exact source/current/clock outcomes; r370/371 diagnostic errors retained.
+- [x] R62 fails D1pre894 global-domain current wall proof, D2pre1104 scheduling delay, D1post2306 final publish interval. No laps; original guards maintained; cleanup/user artifacts restored.
+- [x] R373 global versus relative complete body/time proof: two sealed cases pass relative current world, global variants fail different original invariants. No production promotion.
+- [ ] Validate native relative-pose theorem and corner containment; integrate only after proof, then build103/test90/replays/committed standardr63. Remaining timing and positive-programme availability remain causal work.
+- [ ] All remaining M4–M6 and same-artifact submission/eval remain open.

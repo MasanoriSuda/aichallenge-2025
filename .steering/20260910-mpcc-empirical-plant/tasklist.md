@@ -49,4 +49,14 @@
 - [x] R32inconclusive startup sensor stall, r33startupCPU/wait attribution; no integrated acceptance.
 - [x] R209–r212same-input arithmetic/corner/index comparisons; full result parity.
 - [x] Exact runtime slice buildr64/testsr53 (2465), r213–215production21cases, sealed2214files/review/quality.
-- [ ] Commit exact-runtime slice and run fixed dev2-r34; then causal repair/M4–M6.
+- [x] Commitbb2d8843; dev2-r34still fails at movingD1941finalpublication30ms.
+- [x] R35same-input loaded CPU/library attribution; r216/r218–221diagnostics and architecture applicability recorded.
+- [ ] R36controller-only affinity comparison; then causal repair and M4–M6.
+
+
+2026-09-11 scheduling/clock checkpoint（baselinebb2d8843）:
+- [x] R34–R39、R216–R222を保存・登録。観測失敗r38も除外理由を保存。
+- [x] CPU資源競合とROSclockの進み方を切り分け。affinity/trig/constantdual/FTZは未採用。
+- [x] R39時計参照/更新の実値確認。短いwallcallbackでも25msROSを超える。
+- [ ] 新しい共有力計算でSIMDを再評価し、採用前にbit一致とportable dispatchを検証。
+- [ ] 正しい時計端点表現、長い証明、実走行の公開期限、全M4–M6を完遂。

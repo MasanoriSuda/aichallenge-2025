@@ -1027,6 +1027,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/exact-runtime-evidence.json",
       "replay_ready": true,
       "reason": "Six exact final-publication inputs, original/candidate numerical tubes, scheduler logs and current production replay. No live acceptance."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduling-clock",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-clock-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact final publication inputs, same-input loaded CPU comparisons, scheduling observations and controller clock get/set trace. No live acceptance."
     }
   ],
   "experiments": [
@@ -11943,6 +11949,174 @@
         "Scalar paired adjacency only replaced when compiler targets SSE2"
       ],
       "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r34-live",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Exact runtime work closes actual final publication",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "D1moving941callback24.683msadvances30msROS;94626.174ms. Four captured proofs Accepted offline.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r216-denormal",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Subnormal arithmetic accounts for the whole live gap",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "Unsafe FTZ/DAZ saves1.1-1.3ms only; changes enclosure semantics and cannot be promoted.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r217-r35-load",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Identical proof has unchanged CPU cost under full campaign load",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "Same binary/input/nativeFPU: independent proof rises fromabout9-10msCPUto12-14msCPU. All20Accepted. Both controllers loaded25workspacefiles match build.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r218-profile",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Attribute residual CPU work",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "accepted",
+      "reason": "500same-inputAccepted gprof repetitions; derivative/dual/corner maps dominate. Anonymousbounds attribution aggregates call sites; no false history-scan count.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r219-trig",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Exact trig origins close remaining runtime",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "Only0.2-0.6msgaincurrentcases; longproof remains57ms and rejected. Revisit justified by shared-force architecture and new subnormal evidence; unpromoted.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r220-architecture",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Compare A/B/C/D on original inspectedCruise source278",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "inconclusive",
+      "reason": "Aaccepted54.752ms;B2/C6/D6unsupported-intent because implementations targetOvertake. Original source930identity/time preserved, not rebound to guard941.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r221-constant-dual",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Typed constant dual products close remaining runtime",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "Six full tube binaries equal; only0.1-0.4msgaincurrentcases; longproof58.7msstillrejected. Unpromoted.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r36-main-affinity",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Pinning main controller threads closes deadline",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "D2657beforeReady advances35msROS. Other threads still compete; possible affinity inheritance not measured. Processes exited/restoration complete.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r37-partition",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Partition campaign cores closes final publication",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "D11006moving callback15.424msadvances30msROS;1031post18.829msadvances30ms. Other host processes untouched;18maskchangesexitedwith0cleanupfailures. No promotion.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r37-bag-clock",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Public clock receipt progresses uniformly at wall rate",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "Same-run5msclock messages arrive in bursts. MCAP arrival cannot identify controller arrival.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r222-r38-scope",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Globalpreloadis safe for ROS launch helper processes",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "Pythonlaunchsegfaultbeforecontroller. Stop/restoration complete. Use node-only environment; this is instrumentation failure, not controller evidence.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduling-clock-r222-r39-clock",
+      "baseline_commit": "bb2d8843391e99ff2a4ef7d79931a10e9fe73140",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduling-clock"
+      ],
+      "hypothesis": "Short callback publication failure is merely a stale clock read",
+      "changed_dimension": "Isolated numerical cost / scheduling / observational clock chronology",
+      "result": "rejected",
+      "reason": "Node-only trace records9743/9499events with0overflow; exactset/getvaluesmatch. D11004callback19.751msadvances30msROS;D21006callback18.632msadvances35msROS. Clock advances in bursts during real controller work. Source-vs-transport batching remains unknown.",
+      "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
     }
   ]
 }

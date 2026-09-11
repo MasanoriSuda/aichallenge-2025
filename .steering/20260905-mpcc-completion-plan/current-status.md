@@ -1,17 +1,16 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。3387e684のr31/r33は公開期限で不合格。**
+**全体は未完。bb2d8843の2台走行は公開期限で不合格。**
 
-r31の最終公開失敗6入力は保存・再生でき、物理証明は全件成立するが公開が遅い。
-r33の起動時CPU計測ではcallback18–24msCPUと実行待ちが併存する。r32は
-センサー停止で計測不成立。r33のReadyは停止開始後なので走行合格には使わない。
-入力生成や指令adapterの費用仮説を棄却し、同じ結果を保つ区間丸めの同時計算、
-四頂点の共通項計算、Recovery地図の既存索引準備を実装した。
 Buildr64は26package、testsr53は2465記録/63group・エラー/失敗/skip0。
-旧15入力の結果と、新しい6入力の物理証明を維持。次は固定commitのdev2-r34。
+同一入力の負荷中計測でCPU費用増を確認したが、CPU分離だけでは解消しない。
+r37では15.4mscallback中にROS時刻が30ms進む。r39の内部時計観測でも
+約19ms中に30–35ms進み、更新と参照値は一致する。時計配送のまとまりと
+演算費用を分けて扱う。r38は観測ライブラリの適用範囲による起動失敗で、
+制御評価から除外。診断設定は全て未採用、元の公開条件と物理条件を維持。
 
-[同値変換と計測の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/exact-runtime-design.md)、
+[計算費用・スケジューリング・時計の証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-cost-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 25msのnanosecond境界表現、長い初期証明、実Stop/rest/restart、全intent、
 Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、dev3/dev4六周、

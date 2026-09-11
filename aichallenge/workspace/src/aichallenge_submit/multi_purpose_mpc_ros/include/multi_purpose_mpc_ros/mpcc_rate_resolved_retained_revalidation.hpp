@@ -69,11 +69,28 @@ struct FollowTargetObservationBuildRequest
   bool current{false};
 };
 
+/// Offset-form forecast for a caller-defined course origin. Retained/applied
+/// consumers should use build_physical_origin_follow_target_observation().
 /// Build fresh Follow evidence from an intent-independent current-world
 /// target projection.  The resulting horizon has no solver authority; it is
 /// consumed only when revalidating an already published Follow artifact.
 std::optional<FollowTargetObservation> build_follow_target_observation(
   const FollowTargetObservationBuildRequest & request) noexcept;
+
+/// Retained/applied Follow consumers use the physical control-origin progress
+/// as their absolute anchor. Its target forecast must not include waypoint lag.
+struct PhysicalOriginFollowTargetBuildRequest {
+  std::string target_id;
+  std::uint64_t observation_generation{};
+  double observed_sec{};
+  double gap_from_control_origin_m{std::numeric_limits<double>::quiet_NaN()};
+  double hard_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> stage_duration_sec;
+  bool current{false};
+};
+std::optional<FollowTargetObservation> build_physical_origin_follow_target_observation(
+  const PhysicalOriginFollowTargetBuildRequest &request) noexcept;
 
 enum class ExecutionClockKind
 {
@@ -169,6 +186,10 @@ struct Request
 /// evaluate(), before predicting its packet-dependent control-origin state.
 std::optional<mpcc_vehicle_model::PublishedCommand> prospective_artifact_packet(
   const Request & request) noexcept;
+
+/// Match a required ordinary point prefix to its current request fields.
+/// This does not validate actual publication history or grant authority.
+bool current_publication_prefix_matches(const Request &request) noexcept;
 
 enum class Reason
 {

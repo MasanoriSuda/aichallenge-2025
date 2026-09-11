@@ -26822,13 +26822,14 @@ struct MPC
       // Keep the canonical peer projection on its original course branch.
       // Only the ego origin changes when the proposed packet changes its prefix.
       const double ego_shift = bound_ego->lag_m - follow.current_ego_progress_offset_m;
-      return rate_resolved_retained::build_follow_target_observation(
-        rate_resolved_retained::FollowTargetObservationBuildRequest{
+      // Only the gap shifts when the proposed packet changes the control pose.
+      // The forecast is anchored at its physical progress, not at the waypoint.
+      return rate_resolved_retained::build_physical_origin_follow_target_observation(
+        rate_resolved_retained::PhysicalOriginFollowTargetBuildRequest{
           follow.target_id,
           follow.target_observation_generation,
           current_world.obstacles.observed_sec,
           follow.current_target_gap_m - ego_shift,
-          bound_ego->lag_m,
           follow.hard_gap_m,
           follow.target_speed_mps,
           std::move(stage_duration_sec),
@@ -26906,33 +26907,15 @@ struct MPC
       return std::nullopt;
     }
 
-    const int origin_waypoint_id =
-      problem.progress_stage_geometry.tracking_waypoint;
-    if (
-      origin_waypoint_id < 0 ||
-      origin_waypoint_id >= model->reference_path->n_waypoints)
-    {
-      return std::nullopt;
-    }
-    const auto & origin_waypoint = model->reference_path->get_waypoint(
-      origin_waypoint_id);
-    const auto ego_frenet = mpcc_contract::project_planar_pose_to_frenet(
-      mpcc_contract::PlanarPose{
-        current_world.control_pose.x_m, current_world.control_pose.y_m,
-        current_world.control_pose.yaw_rad},
-      mpcc_contract::PlanarPose{
-        origin_waypoint.x, origin_waypoint.y, origin_waypoint.psi});
-    if (!ego_frenet.has_value()) {
-      return std::nullopt;
-    }
-
-    return rate_resolved_retained::build_follow_target_observation(
-      rate_resolved_retained::FollowTargetObservationBuildRequest{
+    // forward_distance_m is already measured from the physical control pose.
+    // The retained/applied consumers add that pose's physical progress, so a
+    // waypoint-relative ego lag here would count the same offset twice.
+    return rate_resolved_retained::build_physical_origin_follow_target_observation(
+      rate_resolved_retained::PhysicalOriginFollowTargetBuildRequest{
         target_id,
         current_world.obstacles.generation,
         current_world.obstacles.observed_sec,
         projection.forward_distance_m,
-        ego_frenet->lag_m,
         cfg.v2x_behavior.moving_follow_hard_distance,
         std::max(0.0, projection.along_track_speed_mps),
         std::move(stage_duration_sec),

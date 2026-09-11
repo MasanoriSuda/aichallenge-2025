@@ -3568,3 +3568,400 @@ TEST(MpccScheduledProgram, MissingSolvedStopReferencePreservesScheduledWorldCont
   EXPECT_EQ(result.applied.reason, applied::Reason::PeerRejected);
   EXPECT_EQ(result.applied.rejected_peer_id, "waiting-only");
 }
+
+
+vehicle::ObservationProvenance scheduled_fresh_observation(const applied::ScheduledCertificate &certificate)
+{
+  const auto &forecast = certificate.nominal()->forecast();
+  const auto state_at = [&](double time) {
+    const auto it = std::find_if(forecast.observation_to_control.begin(), forecast.observation_to_control.end(),
+      [time](const vehicle::TimedState &sample) { return sample.source_sec == time; });
+    if (it == forecast.observation_to_control.end()) throw std::runtime_error("fixture component epoch unavailable");
+    return it->state;
+  };
+  auto fresh = forecast.observation;
+  fresh.now_sec = 1.1; fresh.control_origin_sec = 1.14;
+  fresh.initial = {1.1, state_at(1.1)};
+  fresh.velocity_source_sec = 1.075;
+  fresh.initial.state.forward_velocity_mps = state_at(fresh.velocity_source_sec).forward_velocity_mps;
+  fresh.initial.state.lateral_velocity_mps = state_at(fresh.velocity_source_sec).lateral_velocity_mps;
+  fresh.yaw_rate_source_sec = 1.07;
+  fresh.initial.state.yaw_rate_radps = state_at(fresh.yaw_rate_source_sec).yaw_rate_radps;
+  fresh.tire_source_sec = 1.095;
+  fresh.initial.state.tire_steering_rad = state_at(fresh.tire_source_sec).tire_steering_rad;
+  // This is the physical angle issued before serialization, not an observation
+  // of which desired steering the receiver has applied.
+  fresh.initial.state.desired_steering_rad = forecast.observation.initial.state.desired_steering_rad;
+  fresh.commands.insert(fresh.commands.end(), forecast.nominal_prefix.commands.begin(), forecast.nominal_prefix.commands.begin() + 2);
+  return fresh;
+}
+
+TEST(MpccScheduledMeasurements, UsesEachSourceEpochWithoutReanchoringTheOriginalPopulation)
+{
+  const auto result = scheduled::evaluate(scheduled_request());
+  ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  const auto original_hash = certificate.tube().context_fingerprint;
+  const auto original_now = certificate.tube().observation.now_sec;
+  auto fresh = scheduled_fresh_observation(certificate);
+  ASSERT_TRUE(vehicle::valid(fresh));
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, fresh).reason, scheduled::MeasurementReason::Compatible);
+  // Braking changes velocity between the velocity sample and the later pose.
+  // Substituting the pose-time velocity must fail at the velocity source epoch.
+  fresh.initial.state.forward_velocity_mps = certificate.nominal()->forecast().publication_state.forward_velocity_mps;
+  const auto wrong_epoch = scheduled::check_measurement_consistency(certificate, fresh);
+  EXPECT_EQ(wrong_epoch.reason, scheduled::MeasurementReason::VelocityMismatch);
+  EXPECT_DOUBLE_EQ(wrong_epoch.rejected_source_sec, fresh.velocity_source_sec);
+  EXPECT_EQ(certificate.tube().context_fingerprint, original_hash);
+  EXPECT_DOUBLE_EQ(certificate.tube().observation.now_sec, original_now);
+}
+
+TEST(MpccScheduledMeasurements, RejectsInconsistentPublicComponentsAndIssuedSteering)
+{
+  const auto result = scheduled::evaluate(scheduled_request());
+  ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  const auto fresh = scheduled_fresh_observation(certificate);
+  auto bad = fresh; bad.initial.state.x_m += 10;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, bad).reason, scheduled::MeasurementReason::PoseMismatch);
+  bad = fresh; bad.initial.state.yaw_rad += 1;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, bad).reason, scheduled::MeasurementReason::PoseMismatch);
+  bad = fresh; bad.initial.state.lateral_velocity_mps += 10;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, bad).reason, scheduled::MeasurementReason::VelocityMismatch);
+  bad = fresh; bad.initial.state.yaw_rate_radps += 10;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, bad).reason, scheduled::MeasurementReason::YawRateMismatch);
+  bad = fresh; bad.initial.state.tire_steering_rad += 1;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, bad).reason, scheduled::MeasurementReason::TireMismatch);
+  bad = fresh; bad.initial.state.desired_steering_rad += .01;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, bad).reason, scheduled::MeasurementReason::IssuedSteeringMismatch);
+  bad = fresh; bad.steering_delay_sec += .01;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, bad).reason, scheduled::MeasurementReason::InputDelayMismatch);
+  bad = fresh; bad.now_sec = certificate.tube().rest_sec + .1; bad.control_origin_sec = bad.now_sec;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, bad).reason, scheduled::MeasurementReason::TimeOutsideProof);
+}
+
+TEST(MpccScheduledMeasurements, RepeatedOriginalSamplesRequireExactValuesAndNoClockRegression)
+{
+  auto request = scheduled_request();
+  // Original empirical reconstruction held these earlier component samples at
+  // the pose epoch. An unchanged sample retains that original provenance; a
+  // changed earlier sample cannot be verified by a tube starting at the pose.
+  request.observed.publication_prefix->observation.velocity_source_sec = 1.025;
+  request.observed.publication_prefix->observation.yaw_rate_source_sec = 1.02;
+  const auto result = scheduled::evaluate(request);
+  ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  auto fresh = certificate.tube().observation;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, fresh).reason, scheduled::MeasurementReason::Compatible);
+  auto changed = fresh; changed.initial.state.forward_velocity_mps = std::nextafter(changed.initial.state.forward_velocity_mps, INFINITY);
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, changed).reason, scheduled::MeasurementReason::VelocityMismatch);
+  changed = fresh; changed.velocity_source_sec = 1.015;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, changed).reason, scheduled::MeasurementReason::VelocityMismatch);
+  changed = fresh; changed.velocity_source_sec = 1.03;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, changed).reason, scheduled::MeasurementReason::VelocityMismatch);
+  changed = fresh; changed.yaw_rate_source_sec = 1.015;
+  EXPECT_EQ(scheduled::check_measurement_consistency(certificate, changed).reason, scheduled::MeasurementReason::YawRateMismatch);
+}
+
+
+TEST(MpccScheduledMeasurements, ChecksRotatedWorldCoordinatesAndWrappedYaw)
+{
+  for (double angle : {1.2, std::acos(-1.0) - .001}) {
+    SCOPED_TRACE(angle);
+    auto request = scheduled_request();
+    const auto rotate = [angle](const recovery::Pose2D &pose) {
+      return recovery::Pose2D{50 + std::cos(angle) * (pose.x_m - 50) - std::sin(angle) * pose.y_m,
+        std::sin(angle) * (pose.x_m - 50) + std::cos(angle) * pose.y_m, pose.yaw_rad + angle};
+    };
+    auto source = *request.observed.plan->physical_snapshot;
+    source.current_pose = rotate(source.current_pose);
+    for (auto &pose : source.control_prefix) pose = rotate(pose);
+    for (auto &k : source.course_frame_knots) {
+      const auto pose = rotate({k.x_m, k.y_m, k.heading_rad});
+      k.x_m = pose.x_m; k.y_m = pose.y_m; k.heading_rad = pose.yaw_rad;
+    }
+    const auto plan = certified::build(request.observed.plan->execution_artifact, source, accepted_result(source));
+    ASSERT_TRUE(plan.plan);
+    auto &observed = request.observed; observed.plan = plan.plan;
+    auto observation = observed.publication_prefix->observation;
+    auto &state = observation.initial.state;
+    const auto pose = rotate({state.x_m, state.y_m, state.yaw_rad});
+    state.x_m = pose.x_m; state.y_m = pose.y_m; state.yaw_rad = pose.yaw_rad;
+    observed.publication_prefix = vehicle::predict_prospective_publication(observation,
+      observed.publication_prefix->proposed_packet, observed.plan->execution_artifact->vehicle_model);
+    ASSERT_TRUE(observed.publication_prefix);
+    const auto &forecast = *observed.publication_prefix;
+    const auto &origin = forecast.control_origin;
+    observed.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+    observed.control_origin_physical_progress_m = 50 +
+      (std::cos(angle) * (origin.x_m - 50) + std::sin(angle) * origin.y_m);
+    request.progress_frame = {{50, 0, angle}, 50};
+    observed.current_speed_mps = forecast.current.forward_velocity_mps;
+    observed.control_origin_speed_mps = origin.forward_velocity_mps;
+    observed.current_steering_rad = origin.desired_steering_rad;
+    observed.current_response_steering_rad = origin.tire_steering_rad;
+    observed.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+    observed.current_yaw_rate_radps = origin.yaw_rate_radps;
+    observed.measured_to_control_path.clear(); observed.measured_to_control_elapsed_sec.clear();
+    for (const auto &sample : forecast.current_to_control) {
+      observed.measured_to_control_path.push_back({sample.state.x_m, sample.state.y_m, sample.state.yaw_rad});
+      observed.measured_to_control_elapsed_sec.push_back(sample.source_sec - observed.now_sec);
+    }
+    const auto result = scheduled::evaluate(request);
+    ASSERT_TRUE(result.applied.certificate) << retained::to_string(result.reason);
+    const auto &certificate = *result.applied.certificate;
+    auto fresh = scheduled_fresh_observation(certificate);
+    EXPECT_EQ(scheduled::check_measurement_consistency(certificate, fresh).reason, scheduled::MeasurementReason::Compatible);
+    fresh.initial.state.yaw_rad = std::atan2(std::sin(fresh.initial.state.yaw_rad), std::cos(fresh.initial.state.yaw_rad));
+    EXPECT_EQ(scheduled::check_measurement_consistency(certificate, fresh).reason, scheduled::MeasurementReason::Compatible);
+    fresh.initial.state.x_m += .5;
+    EXPECT_EQ(scheduled::check_measurement_consistency(certificate, fresh).reason, scheduled::MeasurementReason::PoseMismatch);
+  }
+}
+
+
+TEST(MpccScheduledPrefix, AuthenticatesOriginalOldAndNewPacketsAcrossAdoption)
+{
+  const auto request = scheduled_request();
+  const auto result = scheduled::evaluate(request);
+  ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  vehicle::PublishedInputLedger ledger(256);
+  for (const auto &packet : certificate.tube().observation.commands)
+    ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2));
+  const auto cursor = ledger.snapshot(); ASSERT_TRUE(cursor);
+  std::vector<std::optional<vehicle::PublishedProgramSource>> prior_sources;
+  for (std::size_t i = 0; i < 2; ++i) {
+    prior_sources.push_back(vehicle::PublishedProgramSource{50, 7, 8, 9, 10 + i});
+    const auto &packet = request.prior_program.commands[i];
+    ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2, prior_sources.back()));
+  }
+  auto fresh = scheduled_fresh_observation(certificate);
+  EXPECT_EQ(scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, prior_sources, 0),
+    scheduled::PrefixReason::Consistent);
+  auto wrong_sources = prior_sources; wrong_sources[0]->solution_id++;
+  EXPECT_EQ(scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, wrong_sources, 0),
+    scheduled::PrefixReason::ActualPrefixMismatch);
+  const auto owner = scheduled::scheduled_program_source(certificate, 0); ASSERT_TRUE(owner);
+  EXPECT_EQ(owner->decision_id, request.observed.decision_id);
+  EXPECT_EQ(owner->solution_id, request.observed.plan->execution_artifact->identity.sequence);
+  EXPECT_EQ(owner->problem_fingerprint, request.observed.plan->execution_artifact->identity.source_context.fingerprint);
+  EXPECT_EQ(owner->input_context_fingerprint, certificate.tube().context_fingerprint);
+  const auto &packet = certificate.suffix().program.commands.front();
+  ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2, owner));
+  fresh.commands = ledger.history();
+  EXPECT_EQ(scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, prior_sources, 1),
+    scheduled::PrefixReason::Consistent);
+  EXPECT_EQ(scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, prior_sources, 0),
+    scheduled::PrefixReason::ActualPrefixMismatch);
+  EXPECT_FALSE(scheduled::scheduled_program_source(certificate, 10000));
+  ledger.reset(); fresh.commands = ledger.history();
+  EXPECT_NE(scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, prior_sources, 1),
+    scheduled::PrefixReason::Consistent);
+}
+
+TEST(MpccScheduledPrefix, RejectsUnboundHistoryMissingStopAndPostPublicationOverrun)
+{
+  const auto request = scheduled_request();
+  const auto result = scheduled::evaluate(request);
+  ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  const std::vector<std::optional<vehicle::PublishedProgramSource>> emergency_prefix(2);
+  for (int variant = 0; variant < 4; ++variant) {
+    SCOPED_TRACE(variant);
+    vehicle::PublishedInputLedger ledger(256);
+    for (auto packet : certificate.tube().observation.commands) {
+      if (variant == 0 && packet.published_sec == 0) packet.wire_acceleration_mps2 = -2;
+      ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2));
+    }
+    const auto cursor = ledger.snapshot(); ASSERT_TRUE(cursor);
+    for (std::size_t i = 0; i < 2; ++i) {
+      if (variant == 1 && i == 0) continue;
+      const auto &packet = request.prior_program.commands[i];
+      const auto deadline = vehicle::publication_epoch(request.prior_program, i, true); ASSERT_TRUE(deadline);
+      const double after = variant == 2 && i == 1 ?
+        static_cast<double>(*vehicle::publication_nanoseconds(*deadline) + 1) / 1e9 : packet.published_sec;
+      ASSERT_TRUE(ledger.record(packet, packet.published_sec, after, 2));
+    }
+    auto fresh = scheduled_fresh_observation(certificate); fresh.commands = ledger.history();
+    if (variant == 2) { fresh.now_sec = 1.100000001; fresh.control_origin_sec = 1.14; }
+    if (variant == 3) fresh.commands.back().wire_acceleration_mps2 = 1;
+    const auto rejected = scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, emergency_prefix, 0);
+    const auto expected = variant == 0 ? scheduled::PrefixReason::OriginalHistoryMismatch :
+      variant == 3 ? scheduled::PrefixReason::CurrentHistoryMismatch : scheduled::PrefixReason::ActualPrefixMismatch;
+    EXPECT_EQ(rejected, expected);
+  }
+}
+
+TEST(MpccFollowOriginBoundary, TargetAbsoluteProgressIsIndependentOfEgoFrameOffset)
+{
+  const double waypoint_progress = 50;
+  const double target_progress = 55;
+  for (double lag : {-.1, .05, .2}) {
+    SCOPED_TRACE(lag);
+    const double physical_control_origin = waypoint_progress + lag;
+    const double gap = target_progress - physical_control_origin;
+    // The peer coordinate comes from independent straight-course geometry.
+    // Both live producers now use a physical-origin type without waypoint lag.
+    const auto observation = retained::build_physical_origin_follow_target_observation(
+      {"d2", 7, 1.05, gap, 3, 2, {.1, .1}, true});
+    ASSERT_TRUE(observation);
+    for (double elapsed : {0.0, .05, .2, .4}) {
+      const auto relative = retained::follow_target_progress_at(*observation, elapsed);
+      ASSERT_TRUE(relative);
+      EXPECT_NEAR(physical_control_origin + *relative, target_progress + 2 * elapsed, 1e-12);
+    }
+  }
+}
+
+
+TEST(MpccFollowOriginBoundary, StopCannotBorrowWaypointOffsetAsExtraHardGap)
+{
+  for (double gap : {3.7, 4.7}) {
+    SCOPED_TRACE(gap);
+    auto request = applied_request(contract::ControlIntent::Follow);
+    request.applied_program_required = true;
+    request.input_application_profile = vehicle::InputApplicationProfile{"test-receiver", .25, .25, .02};
+    request.obstacles.obstacles[0].circle.x_m = request.control_origin_physical_progress_m + gap;
+    request.obstacles.obstacles[0].circle.velocity_x_mps = 0;
+    request.follow_target = retained::build_physical_origin_follow_target_observation({"d2", request.obstacles.generation,
+      request.obstacles.observed_sec, gap, 3, 0, {.1, .1}, true});
+    const auto result = retained::evaluate(request);
+    if (gap == 3.7) {
+      EXPECT_FALSE(result.proof);
+      EXPECT_EQ(result.reason, retained::Reason::TerminalContingencyUnavailable);
+    } else {
+      ASSERT_TRUE(result.proof) << retained::to_string(result.reason);
+      ASSERT_TRUE(result.proof->applied_program);
+      EXPECT_GE(result.proof->applied_program->minimum_follow_gap_m(), 3);
+    }
+  }
+}
+
+retained::Request scheduled_fresh_world(const applied::ScheduledCertificate &certificate, double now = 1.1)
+{
+  auto fresh = certificate.nominal()->observed();
+  auto observation = scheduled_fresh_observation(certificate);
+  observation.now_sec = now; observation.control_origin_sec = now + .04;
+  fresh.now_sec = now; fresh.control_origin_sec = observation.control_origin_sec;
+  fresh.decision_id++;
+  fresh.previous_published_steering_rad = observation.initial.state.desired_steering_rad;
+  fresh.previous_published_command_age_sec = now - observation.commands.back().published_sec;
+  const auto packet = retained::prospective_artifact_packet(fresh);
+  if (!packet) throw std::runtime_error("current world fixture packet unavailable");
+  fresh.publication_prefix = vehicle::predict_prospective_publication(observation, *packet,
+    fresh.plan->execution_artifact->vehicle_model);
+  if (!fresh.publication_prefix) throw std::runtime_error("current world fixture prediction unavailable");
+  const auto &predicted = *fresh.publication_prefix;
+  const auto &origin = predicted.control_origin;
+  fresh.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+  fresh.control_origin_physical_progress_m = origin.x_m;
+  fresh.current_speed_mps = predicted.current.forward_velocity_mps;
+  fresh.control_origin_speed_mps = origin.forward_velocity_mps;
+  fresh.current_time_steering_rad = predicted.current.tire_steering_rad;
+  fresh.current_steering_rad = origin.desired_steering_rad;
+  fresh.current_response_steering_rad = origin.tire_steering_rad;
+  fresh.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+  fresh.current_yaw_rate_radps = origin.yaw_rate_radps;
+  fresh.measured_to_control_path.clear(); fresh.measured_to_control_elapsed_sec.clear();
+  for (const auto &sample : predicted.current_to_control) {
+    fresh.measured_to_control_path.push_back({sample.state.x_m, sample.state.y_m, sample.state.yaw_rad});
+    fresh.measured_to_control_elapsed_sec.push_back(sample.source_sec - now);
+  }
+  const double lead = now - fresh.obstacles.observed_sec;
+  for (auto &peer : fresh.obstacles.obstacles) {
+    const auto center = peer.circle.predicted_center(lead);
+    peer.circle.x_m = center[0]; peer.circle.y_m = center[1];
+  }
+  fresh.obstacles.generation++; fresh.obstacles.observed_sec = now;
+  if (fresh.follow_target) {
+    const auto &peer = fresh.obstacles.obstacles.front();
+    fresh.follow_target = retained::build_physical_origin_follow_target_observation({peer.id,
+      fresh.obstacles.generation, now, peer.circle.x_m - fresh.control_origin_physical_progress_m,
+      fresh.follow_target->hard_gap_m, peer.circle.velocity_x_mps, {.1, .1}, true});
+  }
+  return fresh;
+}
+
+TEST(MpccScheduledCurrentWorld, RechecksOnlyTheRemainingOriginalBodyAndCorners)
+{
+  const auto result = scheduled::evaluate(scheduled_request()); ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  auto fresh = scheduled_fresh_world(certificate, 1.1025);
+  // A newly observed obstacle at a past ego location must be checked only
+  // against the remaining tube, with nonnegative fresh-peer elapsed times.
+  const auto &old = certificate.tube().observation.initial.state;
+  fresh.obstacles.obstacles.push_back({"behind", {old.x_m, old.y_m, 0, 0, .01}});
+  auto wall = std::make_shared<recovery::OccupancyGrid>(*fresh.current_wall_grid);
+  const auto occupy = [&](double x, double y) {
+    const auto cell = wall->world_to_grid(x, y);
+    ASSERT_TRUE(cell);
+    wall->cells[cell->row * wall->width + cell->column] = recovery::CellState::Occupied;
+    wall->non_free_integral_index.clear();
+  };
+  occupy(old.x_m - .04, old.y_m); fresh.current_wall_grid = wall;
+  const auto check = scheduled::recheck_remaining_world(certificate, fresh);
+  EXPECT_EQ(check.reason, scheduled::CurrentWorldReason::Current) << static_cast<int>(check.physical_reason);
+  EXPECT_GT(check.checked_samples, 0U); EXPECT_LT(check.checked_samples, certificate.checked_samples());
+  const auto &body = certificate.nominal()->forecast().publication_state;
+  occupy(body.x_m, body.y_m);
+  const auto contact = scheduled::recheck_remaining_world(certificate, fresh);
+  EXPECT_EQ(contact.reason, scheduled::CurrentWorldReason::PhysicalRejected);
+  EXPECT_EQ(contact.physical_reason, applied::Reason::WallRejected);
+  EXPECT_GE(contact.rejected_sec, fresh.now_sec);
+}
+
+TEST(MpccScheduledCurrentWorld, RejectsFreshPeersAndChangedPhysicalContext)
+{
+  const auto result = scheduled::evaluate(scheduled_request()); ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  const auto original = scheduled_fresh_world(certificate);
+  auto fresh = original;
+  const auto &body = certificate.nominal()->forecast().publication_state;
+  fresh.obstacles.obstacles.push_back({"new-contact", {body.x_m, body.y_m, 0, 0, .1}});
+  const auto contact = scheduled::recheck_remaining_world(certificate, fresh);
+  EXPECT_EQ(contact.reason, scheduled::CurrentWorldReason::PhysicalRejected);
+  EXPECT_EQ(contact.physical_reason, applied::Reason::PeerRejected);
+  EXPECT_EQ(contact.rejected_peer_id, "new-contact");
+  fresh = original; fresh.current_footprint.front_extent_m += .1;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidContext);
+  fresh = original; fresh.maximum_acceleration_mps2 += .1;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidContext);
+  fresh = original; fresh.stop_lateral_policy.lateral_gain += .1;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidContext);
+  fresh = original; fresh.control_pose.x_m += .1;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidContext);
+  fresh = original; fresh.obstacles.current = false;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidContext);
+}
+
+TEST(MpccScheduledCurrentWorld, BindsFreshFollowForecastAndCircularPhysicalOrigin)
+{
+  const auto result = scheduled::evaluate(scheduled_request(contract::ControlIntent::Follow));
+  ASSERT_TRUE(result.applied.certificate);
+  const auto &certificate = *result.applied.certificate;
+  const auto original = scheduled_fresh_world(certificate);
+  const auto check = scheduled::recheck_remaining_world(certificate, original);
+  ASSERT_EQ(check.reason, scheduled::CurrentWorldReason::Current) << static_cast<int>(check.physical_reason);
+  EXPECT_GE(check.minimum_follow_gap_m, original.follow_target->hard_gap_m);
+  auto fresh = original; fresh.control_origin_physical_progress_m += fresh.path_length_m;
+  const auto wrapped = scheduled::recheck_remaining_world(certificate, fresh);
+  EXPECT_EQ(wrapped.reason, scheduled::CurrentWorldReason::Current);
+  EXPECT_NEAR(wrapped.minimum_follow_gap_m, check.minimum_follow_gap_m, 1e-12);
+  fresh = original;
+  for (auto &progress : fresh.follow_target->target_progress_from_current_origin_m) progress += .8;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason,
+    scheduled::CurrentWorldReason::InvalidFollowObservation);
+  fresh = original; fresh.control_origin_physical_progress_m += 1;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::FollowOriginUnavailable);
+  fresh = original; fresh.follow_target->current_target_gap_m = 2;
+  const auto unsafe = scheduled::recheck_remaining_world(certificate, fresh);
+  EXPECT_EQ(unsafe.reason, scheduled::CurrentWorldReason::PhysicalRejected);
+  EXPECT_EQ(unsafe.physical_reason, applied::Reason::FollowGapRejected);
+  fresh = original; fresh.follow_target->observation_generation--;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidFollowObservation);
+  fresh = original; fresh.follow_target->target_id = "different";
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidFollowObservation);
+  fresh = original; fresh.obstacles.observed_sec = original.now_sec + .01;
+  EXPECT_EQ(scheduled::recheck_remaining_world(certificate, fresh).reason, scheduled::CurrentWorldReason::InvalidContext);
+}

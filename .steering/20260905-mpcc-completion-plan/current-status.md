@@ -1,22 +1,26 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。承認済みM1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体未完。同期証明の実公開期限とM4–M6は未解決。**
+**全体未完。実公開期限とM4–M6は未解決。**
 
-旧programmeの明示prefixを含む予定nominal/full-rest証明を別型で実装。
-R246/r247で元Follow車間の消失と他車の予測時刻不備を再現し、接続前に修正した。
-R248は103test合格。r250は保存130ms設定の6入力x3prefix=18証明合格。
-最終レビューの予定context伝播漏れはR255で修正前後を比較し、全104native test合格。
-最終Buildr74は26packages、testsr62は2494記録/64group、エラー/失敗/skip0。
-R251–253は既存21判定を維持。現在のnormal authorityは同期のままで、新規実走行の
-期限合格は未確認。次はC4sensor/world/context/実送信prefixを照合し、C5非同期単一
-dispatcherへ接続する。同じsliceで旧同期authorityを退役する。
+C3予定full-rest証明に対するC4個別source観測・実送信prefix・現在worldの必要条件を
+実装した。Follow現在位置のwaypoint lag二重加算をR259/r261で再現し、両live producerを
+物理control-origin専用APIに変更。R265全115native、buildr75全26package、testsr64全
+2505記録/64groupでエラー・失敗・skip0。R63の旧API名テスト失敗も履歴に保存。
 
-[予定全停止証明](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-certificate-design.md)、
-[次の接続設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-dispatch-design.md)、
-[tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
+Dev2-r44はD1判断892で送信前約10ms超過、905で送信後約5ms超過し失敗。Follow記録0件、
+完走なし。今回のFollow修正はnativeのみ検証済みで、実走確認は未完。
+その後のepoch不一致はteardown開始後で、最初の原因ではない。コンテナ停止・ユーザー
+成果物復元済み。公開履歴と原観測を固定し、追加の確認待ちなしで接続実装を続ける。
+
+可変ROS parameter、参照軌道、外部境界を含むC4採用contextとC5非同期単一dispatchは
+未完。旧同期authorityの退役は同じ接続sliceで行う。r43/r44実公開期限失敗は未解決。
 実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalは未完。r43実公開期限失敗は未解決。
+dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+
+[現在証拠の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-current-evidence-design.md)、
+[接続義務](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-dispatch-design.md)、
+[tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 
 ## Superseded checkpoint and historical evidence
 

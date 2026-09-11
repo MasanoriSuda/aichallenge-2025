@@ -1,0 +1,767 @@
+{
+  "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+  "integrated_acceptance": false,
+  "normal_authority_replacement": false,
+  "summary": {
+    "build_packages": 26,
+    "package_test_records": 2505,
+    "ctest_groups": 64,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0,
+    "native_tests": 115
+  },
+  "runtime": {
+    "run": "output/20260910-nine-state-dev2-r44",
+    "termination": "first authority/publication-window failure; preserve earliest failure",
+    "follow_authority_records": 0,
+    "completed_laps": 0,
+    "timing_acceptance": false,
+    "earliest_moving_override": {
+      "domain": "d1",
+      "decision": 892,
+      "nominal_sec": 9.239999793,
+      "before_clock_sec": 9.274999792,
+      "deadline_sec": 9.264999793,
+      "exact_packet_matches": true
+    },
+    "epoch_mismatch": "observed only after teardown started; not first cause",
+    "protected_artifacts_restored": true
+  },
+  "limitations": [
+    "Only measurement/prefix/world necessary gates; complete atomic adoption context and C5single dispatcher pending.",
+    "Live Follow origin producer repaired; native proof acceptance impact reproduced. Runtime coverage must be assessed separately.",
+    "R262wall fixture used wrong Y-axis; r263corrected fixture. R264new C4boundary offset forecast mismatch reproduced; r265rejects it.",
+    "M4-M6, actual strict publication timing and final archive/image/eval remain incomplete."
+  ],
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r44/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/autoware.log",
+      "sha256": "477c341039b4b1a76fd58b50b13de1aa409e2b63dad181d810d8f619a4dab326"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000649-pre-stationary/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000649-pre-stationary/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000649-pre-stationary/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000649-pre-stationary/snapshot.yaml",
+      "sha256": "6ff2e51ba121ba871a7f9951c76abc505cf8468f2f9e3946be10b5dc29f0a63a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000892-pre-moving/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000892-pre-moving/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000892-pre-moving/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000892-pre-moving/snapshot.yaml",
+      "sha256": "e889aeb0a4ad750adce0abbc5177015ef3a62b49aac3eb048d57680d151a7aa8"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000905-post-moving/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000905-post-moving/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000905-post-moving/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d1/mpcc_architecture_snapshots/publication-000000000905-post-moving/snapshot.yaml",
+      "sha256": "9223765db657e3f5c2445a40238be301abb25d9d21e3232455e17e421c392d34"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/autoware.log",
+      "sha256": "dc14503af89a7bd587449dcff79fb575f287f9736676ebd2ce054628cacc5b19"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/mpcc_architecture_snapshots/publication-000000000593-pre-stationary/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/mpcc_architecture_snapshots/publication-000000000593-pre-stationary/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/mpcc_architecture_snapshots/publication-000000000593-pre-stationary/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/mpcc_architecture_snapshots/publication-000000000593-pre-stationary/snapshot.yaml",
+      "sha256": "e4bfdd6e313f4ff59eaa1a87942d8e64df9d1896783b83519515b722ea1dffb4"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/mpcc_architecture_snapshots/publication-000000001070-pre-moving/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/mpcc_architecture_snapshots/publication-000000001070-pre-moving/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/mpcc_architecture_snapshots/publication-000000001070-pre-moving/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/d2/mpcc_architecture_snapshots/publication-000000001070-pre-moving/snapshot.yaml",
+      "sha256": "30a0195d1ad724df51ff3f649a469e7c1e59037b981e4ab9751781e8517770dd"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/down.log",
+      "sha256": "35e5c6b4c1e49e171ec645d7071b8f18f6745f257a41d01612d3e7ed4ec6e355"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/launch.log",
+      "sha256": "d1b8f9966e4fd7de8dcfbb753086fc4a3f3e3f78728c06fd63fbff4c47147681"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/manifest.json",
+      "sha256": "91a03e1b00ddfcc6b1ffcbff22865765e0e64dd5e38009df66b2495e748ad4dd"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/monitor-summary.json",
+      "sha256": "d428ab1084da1cc6e70824eb1b41b906ebfb679d541e757230f2a177b4b8a051"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r44/mpcc-source.patch",
+      "sha256": "b5d796df9de3b5e84ec7448099bb3304499b4ba5df634534981165065bbdf456"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/compile-command.json",
+      "sha256": "d632c1c952f6f9f0d9b4be815d2c37a66b351754bb6abf8b337bfbd5cf2f425f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/generator.py",
+      "sha256": "24fc54cec61ef819298eaac234cb0c83319952e7d1353a052fe583db557b3727"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "c15ce3b268ce699783bfa7b678657cccd3ab7efb6642c9bebee7cb6b63aebfe3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/native",
+      "sha256": "09cceadb47dbeb169f6d5e1e7eb202f1764e44620c14bc932e45f0a97c21d36f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/results.xml",
+      "sha256": "7036398e086a33d20c6332416768b8cd76b98817c3fa989d5f6b74849d3773ae"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/run-command.json",
+      "sha256": "f325aa4f31d338e29e0b55f1400c7eae714dccc698cf8508f3e8910478884e6d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/run.log",
+      "sha256": "027058319f522bdf1a3f0e24d9b8fbdbca638a9501e62907d47b4e4654e39f43"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r256/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "fcc523db25dcc95cb300768b4f8b8a03e8f66aed11b56f2ada5a56f79046904b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/compile-command.json",
+      "sha256": "efaa10222f459bee44f0f2a8df929c25ac61c92e04780e01721b271245b368d8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/generator.py",
+      "sha256": "1e66a36d33c458c86f3ead270d57b48219128afeead501e282694897cfe8a88b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "c15ce3b268ce699783bfa7b678657cccd3ab7efb6642c9bebee7cb6b63aebfe3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/native",
+      "sha256": "bf3b8133e24b54226ece633c47ad8c353926b509bf66ce2334b297f6a1858dfe"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/results.xml",
+      "sha256": "b24d8a7e087d05abaea36a78eab5f6ae1829e0c0a9b1bba6fd6f3e154f733521"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/run-command.json",
+      "sha256": "1d2e742d2697d93db49c9f4212db7518bc687f19c73bf0f93ff3508f2a1fad3e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/run.log",
+      "sha256": "e43deae04149f1930348e0d8551c0c8ca002a0bc50f9e762b51de7056bfc501f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r257/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "c51c8d23e8217a98b34dd8e1b4c71440c5c9dab6f46b94f8443464fae7a2f8b2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/compile-command.json",
+      "sha256": "cab0eab61d7dfb460836cef6902c953a2098761cf4558c655f50c7c4b44c5974"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/generator.py",
+      "sha256": "229ff7d3bc343ca44cf2214c5f5b9594e664a36abc83790712bc501bd8245cc1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "5167db2255d6f3d78c0dee32c9c861abcffe81dfed8da0065153748545700271"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/native",
+      "sha256": "c773bec5b312203607512066b4ba5369e71acc8b68f569586a35fe4041b53b83"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/results.xml",
+      "sha256": "7dd5cd72237fb70847c1c43bffbea738c4e4bf1b807d2de1f74baa6f908cf08f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/run-command.json",
+      "sha256": "7ee0a55084f3967d8da3f7ce0adf4743d26cd7457845b11a11f20aff2153c49d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/run.log",
+      "sha256": "f6997d1df32b0bc64a01f175d338195460f03f1f2020e3144a4615250775420d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r258/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "d08f2e5faec52884ce7a952e363f892aa5dbafccf50d1ccf9a3dda5af91f03a9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/compile-command.json",
+      "sha256": "742d64a3cda02c7a9d9a26790f3411a215b82747eff91fb66e038ef8552e18e9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/generator.py",
+      "sha256": "f56aa42be44ac9fcccf0b348b804f53b5c6c8c52504514ee448d1e08986ff9df"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/mpcc_follow_origin_before_r259.cpp",
+      "sha256": "82efed8b52e359f558da2516582d05c637db0d2f0d7c8a13308d05e1e79bc10a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "5167db2255d6f3d78c0dee32c9c861abcffe81dfed8da0065153748545700271"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/native",
+      "sha256": "f8a65b9dfe0c3c5acaf1f199dfe6a39ced860eb866aac35f78c2219b66ebbe5a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/results.xml",
+      "sha256": "413350eb98ae4bdb0520f48e26f67bcd1a06b813fbc07d2763eada125b87d9ba"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/run-command.json",
+      "sha256": "622c458d754e1f888594e1a2221954589afbe5ac34b44e70b3e14381f7a8ce9b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r259/run.log",
+      "sha256": "5adf19618d81307032ae983b684725eb728c10fc35e1b39db0b1cd3d30555fb2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/compile-command.json",
+      "sha256": "a0774c97a2a06513fc050ee44044e00e9065508dd335a86026ca8dfb930b0f2e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/generator.py",
+      "sha256": "62ea4d5eb13d246140ac877799243e2c0581859e720188efbc23c3f0b97afa96"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "5167db2255d6f3d78c0dee32c9c861abcffe81dfed8da0065153748545700271"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "31cfbb839ce062d2b9633bd6547d7758ed02a483d3bf98533329b022dd05049c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/native",
+      "sha256": "58a7f1df312e79acdd38fa7fe5120595f9c93c0c94eea92c525c2d33d03cafa1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/results.xml",
+      "sha256": "4c88e17457b93431c12f879200a7f46dcbce92a715258da95f4984acc7865258"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/run-command.json",
+      "sha256": "904f0d3f94c86c92d785789a2ed6e4210a333898f9cc2058f0d88faa9d8b039b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/run.log",
+      "sha256": "c85a79f5dbecfe96c5629a76fadb15c885b846ac9662e11a9cc263151f6b6d0e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r260/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "a744c45dec3b72b3ea07d30b0753a095849039fc2e7def1c692d15c9bc794639"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/compile-command.json",
+      "sha256": "4bdae0bf1c41b411cc45cddcfbc100e203c3f1154d897b650fe8d7f3ce7093e3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/generator.py",
+      "sha256": "73ec614a65abb3bf5d3d363805dd9f8d5ec7940a67dca8d18b306b14d890091f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/mpcc_follow_gap_counterexample_r261.cpp",
+      "sha256": "573d23679878b780349bdbfa0e7f9ad19061b266092fe16bd0128718738d49b7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "5167db2255d6f3d78c0dee32c9c861abcffe81dfed8da0065153748545700271"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "31cfbb839ce062d2b9633bd6547d7758ed02a483d3bf98533329b022dd05049c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/native",
+      "sha256": "ac32d2d776366cef00513d3dbec47588d98aeb22a2ca65fb9ac45a96f7721a9b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/results.xml",
+      "sha256": "5ea2be164ed2e94658ef904241647671f80150bc7c198c9b056d3f11f1fd52a8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/run-command.json",
+      "sha256": "671b24a0a8c894090a133f9cda2203be81639c965407452c70772898ffad6ae1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r261/run.log",
+      "sha256": "d8d877c5be92e67eb4780c87a515f574bb871eca9bf110ba412f5017c4cb0460"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/compile-command.json",
+      "sha256": "a8da8213e7c1980593613795090dea0dcf7cc6ba3351107566773b828b9dad9e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/generator.py",
+      "sha256": "88c122eb896bab034c10d43f1a0fc3c3d6617d8f22124d1cf5a6ec088d569d99"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "409ed8c551383ca4d4724aa073600e2d79aa4f5174b4ceef2615cd1da51c8a1a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "1e5ca6b8c500a0148a595f2b2fe38af7db246d6821abf978e5e774264d3aac7e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/native",
+      "sha256": "c2a2fc4f7ee4b92330a110d18fd60590159ed01e1c4b87335ce2a1f599ec3414"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/results.xml",
+      "sha256": "8f0aca6dc8677cad1ec5cad8c163337c70ab7b5f1bd01b275c8c4f8e7758e3a0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/run-command.json",
+      "sha256": "a0f478035ceb86651c55314a94d956f4322dacde7a0b76fa2345836045a1c20a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/run.log",
+      "sha256": "e2e0ff909df885319810c2c7b901e448f6a00923c002e8aa7922db3929ac6c45"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r262/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "90f5c239f993a16d8022246880b3d4b94e8b87fe6db3de3f99eea697198f8745"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/compile-command.json",
+      "sha256": "cf2ab435d5dad3ae260c9c3d2f1e022783ad94c9d8c310674b935b78da873598"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/generator.py",
+      "sha256": "8ff20511b7839221016858dfca30203064a76a1db5b2129d526b9fa1d3877bed"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "409ed8c551383ca4d4724aa073600e2d79aa4f5174b4ceef2615cd1da51c8a1a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "1e5ca6b8c500a0148a595f2b2fe38af7db246d6821abf978e5e774264d3aac7e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/native",
+      "sha256": "5a2920070bfe7cc7fe29ddfb3d4d69a57f3a144a0fd27380b9df7156116b6417"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/results.xml",
+      "sha256": "640c3e6f5126dfe5a696ab8c9f42815525a48da164b61fd4e76fa743045e56a4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/run-command.json",
+      "sha256": "88d682551b07a8b91f295fe25d9d32b62a6227cb6a6898e52882db52a84bdb29"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/run.log",
+      "sha256": "b2d53b5dfbcfead12b5e4af92e9ee8f7eefef63ba760f96dfe4ae57d8e2c8694"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r263/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "6e69c8c6daebfd0f32de949f4290b244ab2d8a5ae53c82ba16d4329e50d64b71"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/compile-command.json",
+      "sha256": "f4b255a1522753e3a85be5d7749512bade865ef83f8754032d1146e01d56130a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/generator.py",
+      "sha256": "eb3cc976bd9fb5d7c0f3fb4320b0671b6cca9e5a414b22229f33e7a8b581c609"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "409ed8c551383ca4d4724aa073600e2d79aa4f5174b4ceef2615cd1da51c8a1a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "1e5ca6b8c500a0148a595f2b2fe38af7db246d6821abf978e5e774264d3aac7e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/native",
+      "sha256": "79d13af029de214ec35f82692d967b64275855df2f9cf71b75d7ee6603d8aef6"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/results.xml",
+      "sha256": "9e6384d52910dc20ecb3e3e12e8562535f7bfd5c064f081ca71a3a5f586c76c8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/run-command.json",
+      "sha256": "6cce0b21a534604eaf9b156c4856fb299499362208a3e5fa9cba96f5bbe405a5"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/run.log",
+      "sha256": "82b5fdd6973ff79ebf1e8a108d423f8459efdffcf64c326ac5105a37b9242b2a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r264/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "945f71024d7cdd38ae94a80480fa9a041bf274381f54683a32992cf24a75b8ba"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/compile-command.json",
+      "sha256": "61c59879fb655567449fc34fe04736438b2655a3cd6af227f2135469a50b586f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/generator.py",
+      "sha256": "c399e48bdb1e9d1b4f4eddf51150025cd36ca74cb574c0a06127e6e32f4d83a9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "421de892cf2616e2bebf1d3e4f7534bcb9270bda4f762e8473820079ada23896"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "1e5ca6b8c500a0148a595f2b2fe38af7db246d6821abf978e5e774264d3aac7e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/native",
+      "sha256": "df703d1611d4d080a4aeaf536feb62db1b742ee640dfcdabc4b60e1e8bcdaefe"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/results.xml",
+      "sha256": "e45d3b8fd3eb9c0de6098139ab40c87964e802c1a78826e053cce009c1d4b46e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/run-command.json",
+      "sha256": "72807e043fe749e5358542c1ee15f3f8deff918aa021e06ccda9024bc120b732"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/run.log",
+      "sha256": "9b4f235b027e61d73140d9340ea23de4306d8740cb2b9129224961c3b1fdb347"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r265/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "945f71024d7cdd38ae94a80480fa9a041bf274381f54683a32992cf24a75b8ba"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-r44-analysis/d1-callback-samples.json",
+      "sha256": "58447fb0e32119eca7ac5921fe229b9b8ddb80e60bf2bb12278b7b901f321475"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-r44-analysis/d1-command-clock-anomalies.json",
+      "sha256": "7f951784e23b88af6f7b3c103aeb5deb8581faf6cee06343a6b71676fa1cf2ce"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-r44-analysis/d1-prediction-samples.json",
+      "sha256": "686621b9bb5f3836dae48857d4df0737b959eb0cdcd5ada659684f0a8aa5fbcf"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-r44-analysis/d2-callback-samples.json",
+      "sha256": "1dbe7405d86e1052f375dc69e3755e9d8f6fc594e96991fb1e0d73f7acd6698f"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-r44-analysis/d2-command-clock-anomalies.json",
+      "sha256": "978af2eaf6aba2533feb884dda9c131d3de3ef93d03a715f0924cefbc800fd50"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-r44-analysis/d2-prediction-samples.json",
+      "sha256": "757ed170bf5b86c81920c2c13e50a4fe152fcaf26c09add1647423a3882dcf7b"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-r44-analysis/report.json",
+      "sha256": "eca0528aac46c331d375b606cbd7559f9c1ede678add6cceb918b6358fb72703"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-current-evidence-quality-initial.log",
+      "sha256": "bd4dc0f7e042ea2b2a59976ff3c077ba1ab69f7ad862a0f6d49101f69966b94e"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-current-world-native-r262.log",
+      "sha256": "3d06254bb664a317ea6d53e4daa00b09ba0744a14d73e1fc905ef924f22136f3"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-current-world-native-r263.log",
+      "sha256": "f2dae38fd894b32884e2d2a3980aae8998fce83a2afe2165f231173534e97e0d"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-current-world-native-r264.log",
+      "sha256": "18ed361c6d75d906274e43948191990f04d1e6dbadfae325dfa2c47d7bee96eb"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-current-world-native-r265.log",
+      "sha256": "a545bbd37ed463ed0c942ae478d104457399e6d15ae6c0834bdeb8b70c2005f5"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-dev2-r44-analysis.log",
+      "sha256": "8f54b050ff78607ade50df350c11eb0b5b03e6d3de1ddb7a1002fdb2726702cf"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-dev2-r44.log",
+      "sha256": "eae4d6efebe1d4b80c8e0ea12c3ba097dcb6ad0b40c36e7622f9f0a56b685647"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-follow-gap-native-r261.log",
+      "sha256": "a6ccd07320df822a61634beaa5f12d1492453aba7ccccc27588eb6c8a17b323e"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-follow-origin-native-r259.log",
+      "sha256": "868a3c272719af39b8520d556030eaf21ef31bed2e7d1e2f05004aa842b797f7"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-follow-origin-native-r260.log",
+      "sha256": "e00055abdb2b67a3481f3b16002c24028c9f6c31ebb4d13494d858998b5b47ef"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-measurement-native-r256.log",
+      "sha256": "da0a3ce3783345ec69f7a9c0f2834f33c9773669f1cf9ff0450ddf08dc11e36d"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-measurement-native-r257.log",
+      "sha256": "bdaaff33f63a605ff31c752d5d81d781ee467cd45d864aa97d10be3b478b151b"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-nine-state-build-r75.log",
+      "sha256": "eb68029356a6e2212cdf680be0911927033572cc7281689c54fd23d30caeff8b"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-nine-state-tests-r63.log",
+      "sha256": "2b686df682b32666e289603ddf30254ee886bae1c00ef3f91953b8b950379779"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-nine-state-tests-r64.log",
+      "sha256": "c7a2c3a216fd444b7416460e997201ddb07530edb16eb54c41fa8ec63f88856e"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc-prefix-native-r258.log",
+      "sha256": "c21063f28459ff40d4b7cf5bc4503c933d47a08a78d525377089673f36d8276b"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_add_current_world_r262.py",
+      "sha256": "9477d8e1359d0b8f36f6c3799f777b08548a964cab5ffcee1407448935ef8cc0"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_add_measurement_consistency_r256.py",
+      "sha256": "40f7fd1dcfb43f7205da7e48274d1b659818b175bdc07c2451999a8180c63c06"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_add_prefix_gate_r258.py",
+      "sha256": "3c3cd73f7cde1103ac0c8cd69f967c4b8cb070ed6fd92483343720f4b831036b"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_add_rotated_measurement_r257.py",
+      "sha256": "a7d76c99e19b8d5f9185a71dc69425ca40fb068026c4e0fd20eee1144707e974"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_c5_post_publication_design_notes.md",
+      "sha256": "9b6bf764f15670d3dd94a33f3b7f3985d237ecb2ffc5267362801510c5c9c5db"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_current_world_api.hpp",
+      "sha256": "54fa5573ff26b93e0729cf1258b98f1e6d20ec86df57342c391435268e90c25e"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_current_world_impl.cpp",
+      "sha256": "873f354298aa77825398a5a163e3ce6b4cac0ec55e4f5ea5035cabd6849a7c19"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_current_world_native_r262.py",
+      "sha256": "88c122eb896bab034c10d43f1a0fc3c3d6617d8f22124d1cf5a6ec088d569d99"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_current_world_native_r263.py",
+      "sha256": "8ff20511b7839221016858dfca30203064a76a1db5b2129d526b9fa1d3877bed"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_current_world_native_r264.py",
+      "sha256": "eb3cc976bd9fb5d7c0f3fb4320b0671b6cca9e5a414b22229f33e7a8b581c609"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_current_world_native_r265.py",
+      "sha256": "c399e48bdb1e9d1b4f4eddf51150025cd36ca74cb574c0a06127e6e32f4d83a9"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_document_current_evidence.py",
+      "sha256": "414d20b3fa57e92ab39b20016ed58cdabccd1c555adcd68ca98e82e06917cb6f"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_fix_follow_physical_origin_r260.py",
+      "sha256": "c1d578912b2b04d1cb98a1ad1aa2a3e2160eac01cb39ee3c9e4736cf499c706f"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_follow_gap_counterexample_r261.cpp",
+      "sha256": "573d23679878b780349bdbfa0e7f9ad19061b266092fe16bd0128718738d49b7"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_follow_gap_native_r261.py",
+      "sha256": "73ec614a65abb3bf5d3d363805dd9f8d5ec7940a67dca8d18b306b14d890091f"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_follow_origin_before_r259.cpp",
+      "sha256": "82efed8b52e359f558da2516582d05c637db0d2f0d7c8a13308d05e1e79bc10a"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_follow_origin_native_r259.py",
+      "sha256": "f56aa42be44ac9fcccf0b348b804f53b5c6c8c52504514ee448d1e08986ff9df"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_follow_origin_native_r260.py",
+      "sha256": "62ea4d5eb13d246140ac877799243e2c0581859e720188efbc23c3f0b97afa96"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_follow_physical_origin_api.hpp",
+      "sha256": "d2172ad9c2f5085df52384f65ac189d6e307c33b5c96fedc63219a20b2a479a2"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_measurement_native_r256.py",
+      "sha256": "24fc54cec61ef819298eaac234cb0c83319952e7d1353a052fe583db557b3727"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_measurement_native_r257.py",
+      "sha256": "1e66a36d33c458c86f3ead270d57b48219128afeead501e282694897cfe8a88b"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_prefix_native_r258.py",
+      "sha256": "229ff7d3bc343ca44cf2214c5f5b9594e664a36abc83790712bc501bd8245cc1"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_scheduled_measurement_api.hpp",
+      "sha256": "5f7d6d2d60256b98b610ac3a6ccd1856cff329ce4b4dc05c1e031b0f33d28604"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_scheduled_measurement_impl.cpp",
+      "sha256": "b4b5dcd63692dcb51ac0b24cd7a725018ab414e521bf5b11409fe9e7fe86d27f"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_scheduled_prefix_api.hpp",
+      "sha256": "2bd337613bf04fc81ad08f21a36111e8a17ddc0f649d9770df978d2a2f51ee13"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_scheduled_prefix_impl.cpp",
+      "sha256": "81c84e7d682f0d4deeed3b06dd877a594ff30a26548a117d693881b5997dbfb2"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_seal_current_evidence.py",
+      "sha256": "909d04a34aabbab1d83414d433937f14395b736ea22b84b71f1ec30b4a448012"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/production-source/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "6fe24cd399bcd9981bb15741f0d43e27a0f81046b57b3a6333f0aec2a585e4b9"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/production-source/include/multi_purpose_mpc_ros/mpcc_rate_resolved_scheduled.hpp",
+      "sha256": "1a0a4c8794ad153d5a44efb2d29c1e75cbac755adb9b71febfd9452b0854d078"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/production-source/src/mpc_controller_cpp.cpp",
+      "sha256": "1c046a37fe28751eb6673ec026eca103dec3983292dfc0838388dd6ca0c2dc7a"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/production-source/src/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "421de892cf2616e2bebf1d3e4f7534bcb9270bda4f762e8473820079ada23896"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/production-source/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "1e5ca6b8c500a0148a595f2b2fe38af7db246d6821abf978e5e774264d3aac7e"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/production-source/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "945f71024d7cdd38ae94a80480fa9a041bf274381f54683a32992cf24a75b8ba"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/production-source/test/test_single_authority_source_contract.py",
+      "sha256": "00d8eb1452176104b3e99ee90b6437d5fceb2574a8547d5291ff3f89dafca5ee"
+    },
+    {
+      "path": "output/20260911-nine-state-scheduled-current-evidence/mpcc_finish_current_evidence.py",
+      "sha256": "bb45a3cd52e09ed8cf7cebab1c51f335fc3d26ff045c5086cca1e18e598ed5f7"
+    }
+  ]
+}

@@ -293,7 +293,8 @@ def test_follow_current_world_observation_survives_a_new_intent_proposal() -> No
     assert "current_world.obstacles.obstacles" in helper
     assert "selected_target_provenance(" not in helper
     assert "last_v2x_behavior_output_" not in helper
-    assert "build_follow_target_observation(" in helper
+    assert helper.count("build_physical_origin_follow_target_observation(") == 2
+    assert "build_follow_target_observation(" not in helper
 
     evaluate_start = SOURCE.index(
         "RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan("

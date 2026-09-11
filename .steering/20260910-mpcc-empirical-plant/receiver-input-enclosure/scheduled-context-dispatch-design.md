@@ -1,6 +1,8 @@
 # Pending C4 and C5 after scheduled full certificate
 
-C3 compiled/native/replay; do not infer runtime authorization. Existing synchronous authority remains.
+C3 compiled/native/replay; C4measurement, ledger and current-world necessary gates
+implemented in [current evidence](scheduled-current-evidence-design.md). Full atomic
+adoption context and C5remain pending. Existing synchronous authority remains.
 
 C4 sensor verification against original ScheduledInputTube:
 - Keep original population; this is observation consistency/falsification, NOT a
@@ -53,3 +55,23 @@ C5 integration:
   shutdown; current ledger only detects observed raw regression, not unseen jumps.
 - New actual ledger source bookkeeping carries planned packet index and full
   input context while recording before/after raw clocks; post-failure invalidates.
+
+
+## Live mutation audit (C4context remains pending)
+
+The earlier assumption of constructor-only policy is false. MPCControllerCpp
+setup_parameters callback changes runtime v_max, Q/R/QN, ay_max, filter gains and
+waypoint preview settings. update_v_max is also called with the current start-window
+speed each cycle. ReferencePath.set_v_ref is called each cycle, so invalidation
+must follow changed values rather than every setter invocation. External path
+constraints and border-cell subscriptions mutate reference bounds; trajectory
+replacement occurs every100callbacks when enabled. Bind the complete course,
+mission and bounds/cost policy with explicit ownership/generations; the current
+fixed schema strings cannot authenticate these values. Handle both successful
+and partially failed mutation paths; do not assume a failed callback rolled back
+already applied members. An opaque snapshot alone does not bind future changes.
+
+Existing tactical epoch invalidation handles mission/reset paths but is not yet
+proved complete for these normal-context sources. Audit session/admin/clock,
+Recovery and shutdown before reusing it. These findings are integration design,
+not authority changes in this slice.

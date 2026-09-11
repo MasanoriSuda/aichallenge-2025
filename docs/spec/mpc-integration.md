@@ -4623,3 +4623,11 @@ reset・履歴脱落を不透明なsnapshotで照合する。意図したsource�
 この型の生成だけでは公開を許可しない。現在sensor/world/context・実送信prefix・
 非同期単一dispatchの接続と旧同期authorityの退役は未完。
 [設計・反例・保存入力の証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-certificate-design.md)。
+
+
+予定証明の現在観測チェックは、元のtubeを維持し、pose/velocity/yaw-rate/tireを
+各source時刻で照合する。実送信台帳は途中のStopを含む全指令を照合し、現在worldは
+元のbody/rigid cornersの残区間からrestまで再検査する。これらは必要条件であり、
+単独で公開を許可しない。可変設定・参照軌道・mission等の採用contextとC5は未接続。
+Followの現在予測は物理的なcontrol-originからの距離を使い、waypointのlagを加えない。
+[設計・反例・検証範囲](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-current-evidence-design.md)。

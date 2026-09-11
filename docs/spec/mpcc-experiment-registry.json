@@ -1063,6 +1063,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-certificate-evidence.json",
       "replay_ready": true,
       "reason": "Explicit original Stop prefix and opaque scheduled full certificate; unpromoted factory counterexamples and repair, preserved legacy classifications. No current-context/dispatch or integrated acceptance."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-current-evidence",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-current-evidence.json",
+      "replay_ready": true,
+      "reason": "Current observation/prefix/world necessary gates and physical Follow origin counterexamples. C4full context/C5and integrated acceptance pending."
     }
   ],
   "experiments": [
@@ -12691,6 +12697,182 @@
         "No alternate authority introduced; old synchronous authority retirement remains coupled to C5promotion."
       ],
       "revisit_condition": "C4current context and ledger, C5single dispatch, finalHEAD M4-M6 required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r63",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "All existing package source contracts reflect the new Follow API",
+      "changed_dimension": "Both live producers use the new explicit physical origin",
+      "result": "rejected",
+      "reason": "One legacy source-name assertion fails; native behavior tests pass. Update existing assertion, not controller acceptance conditions.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r256-r258",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "Fresh samples and actual prefix can be authenticated without changing original input population",
+      "changed_dimension": "Individual source epochs and ledger owner/raw publication history",
+      "result": "accepted",
+      "reason": "107/108/110native tests pass, including mixed epochs, rotation, missing Stop and overruns.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r259",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "The current Follow producer already uses a consistent physical origin",
+      "changed_dimension": "Independent waypoint/physical/target coordinate fixture",
+      "result": "rejected",
+      "reason": "Three ego offsets reproduce the same target-position error. Existing producer double-counts waypoint lag.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r260-r261",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "Removing duplicate ego lag repairs target coordinates and can change physical Stop acceptance",
+      "changed_dimension": "Explicit physical-origin builder; stationary target at unchanged hard gap",
+      "result": "accepted",
+      "reason": "111tests pass. Erroneous+.8m at gap3.7accepted min3.02617; corrected gap3.7rejects. No infeasibility or collision claim.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r262",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "New remaining-world wall fixture places the wall at the intended body pose",
+      "changed_dimension": "Fresh wall/peer/Follow recheck fixture",
+      "result": "rejected",
+      "reason": "114/115pass; failed fixture writes wrong Y-axis. Does not establish a collision checker defect.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r263",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "Correct map indexing permits a valid remaining-world positive/negative test",
+      "changed_dimension": "Fixture world_to_grid and derived index invalidation",
+      "result": "accepted",
+      "reason": "115/115pass; new peer/wall reject, behind historical obstacle clear, fresh Follow circular association passes.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r264",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "New current-world boundary rejects offset-form Follow forecasts",
+      "changed_dimension": "Added+.8m to future forecast with unchanged current gap",
+      "result": "rejected",
+      "reason": "One focused test reproduces erroneous Current classification.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r265",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "Exact current-gap/forecast-origin binding rejects the reproduced mismatch",
+      "changed_dimension": "New C4boundary physical-origin check",
+      "result": "accepted",
+      "reason": "115/115native tests pass; no proof/cache reanchor or new publication authority.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-r75-r64",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "Changed source compiles and passes complete MPCC package checks",
+      "changed_dimension": "Current evidence APIs and both live Follow producers",
+      "result": "accepted",
+      "reason": "26packages;2505records/64groups;0errors/failures/skips.",
+      "production_impact": "Follow producer coordinates repaired; C4necessary gates disconnected from normal dispatcher.",
+      "deleted_code": [
+        "Duplicate waypoint lag and redundant Cartesian-rejoin waypoint projection removed. No normal authority added."
+      ],
+      "revisit_condition": "New failed case/changed source; C4atomic context, C5single dispatch and finalHEAD M4-M6still required."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-dev2-r44-timing",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "Current source meets actual25ms publication contract",
+      "changed_dimension": "Buildr75/testsr64source; unchanged standard2vehicle campaign and failure criteria",
+      "result": "rejected",
+      "reason": "D1moving892rawbefore exceeds deadline by9.999999ms;905postsend exceeds by4.999999ms. D2moving1070exceeds by5ms. Exact final packets match. Subsequent epoch mismatches are after teardown started.",
+      "production_impact": "No C4/C5promotion or safety parameter change. All containers removed and userJSON/originalDLLrestored.",
+      "deleted_code": [
+        "No diagnostic promoted to authority."
+      ],
+      "revisit_condition": "C4full adoption context/C5single dispatcher or a newly reproduced causal defect; then sameHEAD M4-M6acceptance."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-current-evidence-dev2-r44-follow",
+      "baseline_commit": "c057d6b85e857ac5fa5db926201244b9e2af9e72",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-current-evidence"
+      ],
+      "hypothesis": "The physical-origin Follow producer is exercised in the new run",
+      "changed_dimension": "Buildr75/testsr64source; unchanged standard2vehicle campaign and failure criteria",
+      "result": "inconclusive",
+      "reason": "Zero Follow authority records and no completed laps. Native coordinate/proof counterexamples pass, but runtime coverage remains pending.",
+      "production_impact": "No C4/C5promotion or safety parameter change. All containers removed and userJSON/originalDLLrestored.",
+      "deleted_code": [
+        "No diagnostic promoted to authority."
+      ],
+      "revisit_condition": "C4full adoption context/C5single dispatcher or a newly reproduced causal defect; then sameHEAD M4-M6acceptance."
     }
   ]
 }

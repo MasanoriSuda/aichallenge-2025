@@ -112,3 +112,14 @@
 
 - [x] 最終レビューのscheduled引数漏れをR255で修正前後比較し、専用回帰を追加。
   最終buildr74は26package、testsr62は2494記録/64groupで失敗0。
+
+
+2026-09-11 current evidence / Follow origin (baselinec057d6b8):
+- [x] 元の予定tubeに対する個別source時刻の観測照合と実送信prefix照合を実装。
+- [x] 元のbody/rigid cornersの残区間を現在wall/peers/Followで再検査。
+- [x] R259/r261でFollow原点二重加算と停止証明への影響を再現し両live producerを修正。
+- [x] R265全115native、buildr75全26package、testsr64全2505記録/64group合格。
+- [x] Dev2-r44を実行・記録。D1判断892送信前約10ms超過、905送信後約5ms超過で失敗。
+- [ ] Live Followは記録0件で未検証。全intent/Stop/rest/restartはC5後に再開。
+- [ ] 可変param・参照軌道・外部境界・session等を含む原子的C4採用context。
+- [ ] C5単一非同期dispatchの接続と旧同期authorityの同時退役、全M4–M6。

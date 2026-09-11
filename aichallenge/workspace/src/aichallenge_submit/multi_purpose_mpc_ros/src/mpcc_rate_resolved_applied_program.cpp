@@ -642,3 +642,237 @@ ScheduledResult certify_scheduled_terminal_stop(
 }
 
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_applied_program
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+MeasurementCheck check_measurement_consistency(
+    const applied::ScheduledCertificate &certificate,
+    const vehicle::ObservationProvenance &fresh) {
+  MeasurementCheck result;
+  if (!vehicle::valid(fresh) || !certificate.nominal()) return result;
+  const auto &tube = certificate.tube();
+  const auto &old = tube.observation;
+  if (fresh.now_sec < old.now_sec || fresh.now_sec > tube.rest_sec) {
+    result.reason = MeasurementReason::TimeOutsideProof; return result;
+  }
+  if (fresh.acceleration_delay_sec != old.acceleration_delay_sec ||
+      fresh.steering_delay_sec != old.steering_delay_sec) {
+    result.reason = MeasurementReason::InputDelayMismatch; return result;
+  }
+  const auto &model = certificate.nominal()->observed().plan->execution_artifact->vehicle_model;
+  if (mpcc_wire_command::steering(fresh.initial.state.desired_steering_rad,
+      model.steering_wire_gain) != fresh.commands.back().wire_steering_rad) {
+    result.reason = MeasurementReason::IssuedSteeringMismatch; return result;
+  }
+  const auto ranges_at = [&](const double time) -> const vehicle::BodyRanges * {
+    const auto it = std::lower_bound(tube.source_to_rest.begin(), tube.source_to_rest.end(), time,
+      [](const vehicle::AppliedInputSample &sample, const double epoch) { return sample.end_sec < epoch; });
+    if (it == tube.source_to_rest.end() || time < it->begin_sec) return nullptr;
+    return time == it->end_sec ? &it->endpoint_body : &it->swept_body;
+  };
+  const auto same_or_new = [&](double original, double next) { return next >= original && next <= tube.rest_sec; };
+  const auto scalar_matches = [&](double old_source, double fresh_source, double original, double value,
+      std::size_t component) {
+    if (!same_or_new(old_source, fresh_source)) return false;
+    if (old_source == fresh_source) return original == value;
+    const auto *ranges = ranges_at(fresh_source);
+    return ranges && (*ranges)[component].lower <= value && value <= (*ranges)[component].upper;
+  };
+  const auto &initial = old.initial.state;
+  const auto &measured = fresh.initial.state;
+  const double pose_time = fresh.initial.source_sec;
+  bool pose_matches = same_or_new(old.initial.source_sec, pose_time);
+  if (pose_matches && pose_time == old.initial.source_sec) {
+    pose_matches = initial.x_m == measured.x_m && initial.y_m == measured.y_m && initial.yaw_rad == measured.yaw_rad;
+  } else if (pose_matches) {
+    const auto *ranges = ranges_at(pose_time);
+    pose_matches = ranges != nullptr;
+    if (ranges) {
+      namespace n = vehicle::numerical;
+      const auto body = applied::box(*ranges);
+      const auto &origin = tube.coordinate_origin;
+      const n::I yaw{origin.yaw_rad, origin.yaw_rad};
+      const auto x = n::I{origin.x_m, origin.x_m} + n::cos(yaw) * body[0] - n::sin(yaw) * body[1];
+      const auto y = n::I{origin.y_m, origin.y_m} + n::sin(yaw) * body[0] + n::cos(yaw) * body[1];
+      const auto absolute_yaw = yaw + body[2];
+      const auto c = n::cos(absolute_yaw), s = n::sin(absolute_yaw);
+      const double measured_c = std::cos(measured.yaw_rad), measured_s = std::sin(measured.yaw_rad);
+      pose_matches = x.lo <= measured.x_m && measured.x_m <= x.hi &&
+        y.lo <= measured.y_m && measured.y_m <= y.hi &&
+        c.lo <= measured_c && measured_c <= c.hi && s.lo <= measured_s && measured_s <= s.hi;
+    }
+  }
+  if (!pose_matches) return {MeasurementReason::PoseMismatch, pose_time};
+  if (!scalar_matches(old.velocity_source_sec, fresh.velocity_source_sec,
+      initial.forward_velocity_mps, measured.forward_velocity_mps, 3) ||
+      !scalar_matches(old.velocity_source_sec, fresh.velocity_source_sec,
+      initial.lateral_velocity_mps, measured.lateral_velocity_mps, 4))
+    return {MeasurementReason::VelocityMismatch, fresh.velocity_source_sec};
+  if (!scalar_matches(old.yaw_rate_source_sec, fresh.yaw_rate_source_sec,
+      initial.yaw_rate_radps, measured.yaw_rate_radps, 5))
+    return {MeasurementReason::YawRateMismatch, fresh.yaw_rate_source_sec};
+  if (!scalar_matches(old.tire_source_sec, fresh.tire_source_sec,
+      initial.tire_steering_rad, measured.tire_steering_rad, 7))
+    return {MeasurementReason::TireMismatch, fresh.tire_source_sec};
+  result.reason = MeasurementReason::Compatible;
+  return result;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+std::optional<vehicle::PublishedProgramSource> scheduled_program_source(
+    const applied::ScheduledCertificate &certificate, const std::size_t index) {
+  const auto &suffix = certificate.suffix();
+  const auto epoch = vehicle::publication_epoch(suffix.program, index);
+  if (!certificate.nominal() || !epoch || *epoch > certificate.tube().rest_sec ||
+      suffix.program.commands.empty() ||
+      (index >= suffix.program.commands.size() && !suffix.program.repeat_last_until_rest))
+    return std::nullopt;
+  return vehicle::PublishedProgramSource{certificate.nominal()->observed().decision_id,
+    suffix.source.sequence, suffix.source.source_context.fingerprint,
+    certificate.tube().context_fingerprint, index};
+}
+
+PrefixReason check_actual_publication_prefix(
+    const applied::ScheduledCertificate &certificate,
+    const vehicle::PublishedInputLedger &ledger,
+    const vehicle::PublishedInputLedger::Snapshot &original_cursor,
+    const vehicle::ObservationProvenance &fresh,
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
+    const std::size_t already_published_suffix_packets) {
+  const auto same_history = [](const std::vector<vehicle::PublishedCommand> &a,
+      const std::vector<vehicle::PublishedCommand> &b) {
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i) {
+      for (auto field : {&vehicle::PublishedCommand::published_sec,
+          &vehicle::PublishedCommand::wire_acceleration_mps2, &vehicle::PublishedCommand::wire_steering_rad})
+        if (std::memcmp(&(a[i].*field), &(b[i].*field), sizeof(double)) != 0) return false;
+    }
+    return true;
+  };
+  if (!same_history(certificate.tube().observation.commands, original_cursor.history()))
+    return PrefixReason::OriginalHistoryMismatch;
+  if (!vehicle::valid(fresh) || fresh.now_sec < certificate.tube().observation.now_sec ||
+      !same_history(fresh.commands, ledger.history()))
+    return PrefixReason::CurrentHistoryMismatch;
+  if (prior_sources.size() != certificate.first_suffix_index() || prior_sources.size() > 10000 ||
+      already_published_suffix_packets > 10000 - prior_sources.size())
+    return PrefixReason::InvalidDeclaredPrefix;
+  auto sources = prior_sources;
+  for (std::size_t i = 0; i < already_published_suffix_packets; ++i) {
+    const auto source = scheduled_program_source(certificate, i);
+    if (!source) return PrefixReason::InvalidDeclaredPrefix;
+    sources.push_back(source);
+  }
+  if (!ledger.matches_prefix(original_cursor, certificate.tube().program, sources))
+    return PrefixReason::ActualPrefixMismatch;
+  return PrefixReason::Consistent;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+CurrentWorldCheck recheck_remaining_world(
+    const applied::ScheduledCertificate &certificate, const retained::Request &fresh) {
+  CurrentWorldCheck result;
+  if (!certificate.nominal()) return result;
+  const auto &original = certificate.nominal()->observed();
+  const auto &tube = certificate.tube();
+  if (fresh.plan != original.plan || !fresh.plan || !fresh.plan->physical_snapshot ||
+      fresh.current_intent != original.current_intent ||
+      !std::isfinite(fresh.now_sec) || fresh.now_sec < original.now_sec || fresh.now_sec > tube.rest_sec ||
+      !retained::current_publication_prefix_matches(fresh) || !fresh.applied_program_required ||
+      !fresh.input_application_profile ||
+      fresh.input_application_profile->profile_id != tube.profile.profile_id ||
+      fresh.input_application_profile->acceleration_age_sec != tube.profile.acceleration_age_sec ||
+      fresh.input_application_profile->steering_receipt_age_sec != tube.profile.steering_receipt_age_sec ||
+      fresh.input_application_profile->steering_mechanical_delay_sec != tube.profile.steering_mechanical_delay_sec ||
+      fresh.minimum_acceleration_mps2 != original.minimum_acceleration_mps2 ||
+      fresh.maximum_acceleration_mps2 != original.maximum_acceleration_mps2 ||
+      fresh.path_length_m != original.path_length_m || fresh.circular != original.circular ||
+      fresh.progress_continuity_tolerance_m != original.progress_continuity_tolerance_m ||
+      !std::isfinite(fresh.control_origin_physical_progress_m) ||
+      !fresh.current_wall_grid || !fresh.current_wall_grid->valid() ||
+      !fresh.obstacles.current || !mpcc_rate_resolved_dynamic_proof::observation_valid(fresh.obstacles) ||
+      fresh.obstacles.observed_sec > fresh.now_sec || tube.source_to_rest.empty()) return result;
+  using Footprint = recovery_footprint::FootprintExtents;
+  for (auto field : {&Footprint::front_extent_m, &Footprint::rear_extent_m, &Footprint::left_extent_m,
+      &Footprint::right_extent_m, &Footprint::margin_m})
+    if (fresh.current_footprint.*field != original.current_footprint.*field) return result;
+  using Policy = race_mpcc_foundation::StopPathTrackingPolicy;
+  for (auto field : {&Policy::wheelbase_m, &Policy::maximum_abs_steering_rad, &Policy::maximum_abs_steering_rate_radps,
+      &Policy::maximum_lateral_acceleration_mps2, &Policy::steering_command_gain, &Policy::lateral_gain, &Policy::heading_gain})
+    if (fresh.stop_lateral_policy.*field != original.stop_lateral_policy.*field) return result;
+  double follow_reference = 0;
+  const bool follow_required = fresh.current_intent == retained::contract::ControlIntent::Follow;
+  if (fresh.follow_target.has_value() != follow_required || original.follow_target.has_value() != follow_required)
+    return result;
+  if (follow_required) {
+    result.reason = CurrentWorldReason::InvalidFollowObservation;
+    const auto &target = *fresh.follow_target;
+    const auto &context = fresh.plan->execution_artifact->identity.source_context;
+    if (!target.current || !retained::follow_target_progress_at(target, 0) ||
+        target.target_id != context.target_id || target.target_id != original.follow_target->target_id ||
+        target.observation_generation != fresh.obstacles.generation ||
+        target.observed_sec != fresh.obstacles.observed_sec || target.observed_sec > fresh.now_sec ||
+        target.hard_gap_m != original.follow_target->hard_gap_m ||
+        !std::any_of(fresh.obstacles.obstacles.begin(), fresh.obstacles.obstacles.end(),
+          [&](const auto &peer) { return peer.id == target.target_id; })) return result;
+    if (target.current_target_gap_m + 1e-9 < target.hard_gap_m) {
+      result.reason = CurrentWorldReason::PhysicalRejected;
+      result.physical_reason = applied::Reason::FollowGapRejected;
+      result.rejected_sec = fresh.now_sec; return result;
+    }
+    // This current-world API anchors the forecast at physical control-origin
+    // progress. An offset-form forecast must not silently move the peer away.
+    if (target.elapsed_time_sec.front() != 0.0 ||
+        target.target_progress_from_current_origin_m.front() != target.current_target_gap_m) return result;
+    // Associate the fresh canonical physical coordinate with the immutable
+    // source window. Every potentially nearest branch must agree; a crossing
+    // cannot supply a convenient alternate lap/branch for the target forecast.
+    vehicle::numerical::Box point{};
+    vehicle::State origin{};
+    origin.x_m = fresh.control_pose.x_m; origin.y_m = fresh.control_pose.y_m;
+    origin.yaw_rad = fresh.control_pose.yaw_rad;
+    const auto projected = applied::course_progress(point, origin, fresh.plan->physical_snapshot->course_frame_knots);
+    result.reason = CurrentWorldReason::FollowOriginUnavailable;
+    if (!projected || !std::isfinite(projected->lo) || !std::isfinite(projected->hi)) return result;
+    follow_reference = fresh.control_origin_physical_progress_m;
+    if (fresh.circular) {
+      if (!std::isfinite(fresh.path_length_m) || fresh.path_length_m <= 0) return result;
+      const double laps = std::round(((projected->lo / 2 + projected->hi / 2) - follow_reference) / fresh.path_length_m);
+      follow_reference += laps * fresh.path_length_m;
+    }
+    if (!std::isfinite(follow_reference) ||
+        std::abs(follow_reference - projected->lo) > fresh.progress_continuity_tolerance_m ||
+        std::abs(follow_reference - projected->hi) > fresh.progress_continuity_tolerance_m) return result;
+  }
+  const auto footprint = mpcc_rate_resolved_physical_wall::resolve_clearance_footprint(
+    fresh.current_footprint, fresh.plan->physical_snapshot->hard_wall_clearance_m);
+  if (!footprint) return result;
+  applied::Result diagnostic;
+  applied::WorldCheckStatistics statistics;
+  const auto &ceiling = certificate.nominal()->proof().terminal_stop_forward_velocity_ceiling_mps;
+  applied::AppliedWorldCheck checker{fresh, tube.observation, *footprint, ceiling, follow_reference, statistics, diagnostic};
+  for (const auto &sample : tube.source_to_rest) {
+    if (sample.end_sec < fresh.now_sec) continue;
+    const double begin = std::max(sample.begin_sec, fresh.now_sec);
+    const bool endpoint = begin == sample.end_sec;
+    const auto &corners = endpoint ? sample.endpoint_footprint : sample.swept_footprint;
+    if (!corners) { result.reason = CurrentWorldReason::InvalidContext; return result; }
+    try {
+      diagnostic.reason = checker.check(endpoint ? sample.endpoint_body : sample.swept_body,
+        *corners, begin, sample.end_sec);
+    } catch (const std::exception &) { diagnostic.reason = applied::Reason::InvalidWorld; }
+    if (diagnostic.reason != applied::Reason::Accepted) {
+      result.reason = CurrentWorldReason::PhysicalRejected;
+      result.physical_reason = diagnostic.reason; result.rejected_sec = diagnostic.rejected_sec;
+      result.rejected_peer_id = diagnostic.rejected_peer_id; return result;
+    }
+  }
+  if (!statistics.checked_samples) return result;
+  result.reason = CurrentWorldReason::Current; result.physical_reason = applied::Reason::Accepted;
+  result.minimum_peer_clearance_m = statistics.minimum_peer_clearance_m;
+  result.minimum_follow_gap_m = statistics.minimum_follow_gap_m;
+  result.checked_samples = statistics.checked_samples;
+  return result;
+}
+} // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

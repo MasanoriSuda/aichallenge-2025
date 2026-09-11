@@ -430,6 +430,14 @@ std::optional<FollowTargetObservation> build_follow_target_observation(
   return observation;
 }
 
+std::optional<FollowTargetObservation> build_physical_origin_follow_target_observation(
+  const PhysicalOriginFollowTargetBuildRequest &request) noexcept
+{
+  return build_follow_target_observation({request.target_id, request.observation_generation,
+    request.observed_sec, request.gap_from_control_origin_m, 0.0, request.hard_gap_m,
+    request.target_speed_mps, request.stage_duration_sec, request.current});
+}
+
 const char * to_string(const Reason reason) noexcept
 {
   switch (reason) {
@@ -770,6 +778,12 @@ static bool publication_prefix_consistent(const Request & request,
       item.source_sec - request.now_sec != request.measured_to_control_elapsed_sec[i]) return false;
   }
   return true;
+}
+
+bool current_publication_prefix_matches(const Request &request) noexcept
+{
+  return request.publication_prefix_required && request.publication_prefix &&
+    publication_prefix_consistent(request);
 }
 
 std::optional<double> source_horizon_velocity_ceiling(const Request & request) noexcept

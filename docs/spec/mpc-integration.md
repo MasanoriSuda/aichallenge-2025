@@ -4796,3 +4796,11 @@ r57の先行するD1/D2送信前遅延は別件で、proof区間の非自発的�
 値がなければ候補を拒否する。全26build、2570tests、旧・新指令の再生で確認した。
 起動停止r58は制御未評価、r59の別件の遅延・証明範囲不足と統合受入れは未解決。
 [送信形式の到達可能性](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/wire-reachability-design.md)。
+
+2026-09-12: ad18d262の標準r60は最終送信窓を跨いで失敗。短い現在証明でのCPU分離
+比較r61も期限超過を解消せず、方針を採用しない。新規候補の約95%が実送信prefixで
+拒否されたが、意図変更を伴う別原因も区別する。r358の同じCruise場面では、計算中の
+既存2指令を元の時刻・IDで計画に含めた新規証明が、現在の履歴と元の送信前条件を通過。
+これは診断であり実行権限ではない。実装には事前に凍結した予約ID、完全な遅延入力履歴、
+候補の予約時刻までの保持、未来の操舵変化率、加速区間と停止区間のintentの検証が必要。
+[可用性監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-availability-audit.md)。

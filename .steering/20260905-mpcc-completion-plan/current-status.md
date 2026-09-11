@@ -1,21 +1,19 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。r59で再現したfloat32操舵の変化率境界を修正・検証。次は標準r60。**
+**全体未完。標準r60とCPU分離比較r61が失敗。元の送信履歴を保つ将来指令計画を検証中。**
 
-基点3ac41a0e。r58はAWSIM起動停止で制御未評価。同一設定のr59は通常制御へ進み、
-最初のD2送信前948で操舵の二段float32変換が元の上限を4.9e-9rad越えた。
-送信形式でも元の上限を満たす値を証明前に選び、完全な証明と新しい入力IDを生成。
-R350で元の送信窓・上限のまま通過を確認。R351旧5場面維持、R353旧r51は新指令でも
-実際の期限超過を拒否。Buildr99全26、testsr86全2570/66（source105含む）、native5合格。
+制御基点ad18d262。Buildr99全26、testsr86全2570/66は同じソースで合格済み。
+R60は現在証明が短い場面でも元25ms送信窓を跨ぐ。R61も解消せずCPU方針を不採用。
+両runの清掃、保護成果物復元、r61の変更した30threadの終了を確認。
+R358の同じCruise場面では、計算中に送られる既存2指令を含める新規計画が、元の履歴・
+現在物理証明・送信前条件を通過。長い元計画からの加速後停止も証明成立。ただし診断の
+未来ID参照はlive権限ではなく、事前予約、完全なprior入力の独立証明、未来操舵制約、
+加速/停止intentを実装・回帰検証する必要がある。元の期限・安全条件は維持する。
 
-R59D1pre1117はadmission log区間8.35ms中に非自発的切替4回、D2movingpre1073は
-速度の証明範囲外により完全再計算14.73ms/8.16msCPU・切替12回。R347で範囲外成分を
-確定し、位置の対称範囲化では速度不足を解消しないことを確認。追加範囲拡大やCPU方針は
-未採用。worker二重future、lateFollow、通常指令の継続可用性と時間保証は未解決。
 全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
 単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/wire-reachability-design.md)、
+[現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-availability-audit.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

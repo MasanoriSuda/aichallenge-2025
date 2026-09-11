@@ -317,5 +317,14 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Full pose symmetry covers r57pose miss but not r59velocity miss; no domain widening promoted.
 - [x] Select representable steering before new full proof; preserve valid old values, old API and final guards.
 - [x] R349 five native boundary tests; r99build all26/r86tests all2570/66; R350new r59, R351five unchanged, R353new r51 with old late rejection.
-- [ ] Standarddev2-r60, then causal scheduling/coverage work if still failing.
+- [x] Executed (failed) Standarddev2-r60, then causal scheduling/coverage work if still failing.
 - [ ] All M4–M6 runtime/mission/sibling/Store/Stop-rest-restart/race/gate/submission acceptance remains open.
+
+2026-09-12 scheduling/source availability (baseline ad18d262):
+- [x] R60 standard fails; r354 exact source/current/history/guard reproduction.
+- [x] R61 bounded CPU partition still fails; all30 owned changed threads exited, restoration errors0; policy rejected.
+- [x] Worker median32.6/35.4ms; about95% new admissions reject actual extra prefixes. Counts do not exclude additional semantic failures.
+- [x] R355/R357 original Track→Cruise context conflict retained; r356 reader error preserved.
+- [x] R358 unchanged Cruise scene: pending2 original packets supports new immediate/long source, full composite domain and actual current/unchanged before guard; pending0/1 reject. Diagnostic source-ID knowledge is not live authority.
+- [ ] Implement causally reserved source pipeline, complete prior-input domain theorem and exact future slew, with failing regressions and long-programme intent review.
+- [ ] All remaining M4–M6, standard races/gates and same submission/eval.

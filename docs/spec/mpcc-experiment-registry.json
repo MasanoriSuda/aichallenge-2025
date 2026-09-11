@@ -1195,6 +1195,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/wire-reachability-evidence.json",
       "replay_ready": true,
       "reason": "Frozen r58/r59 startup and guard evidence, exact r347, five unchanged and two newly certified actual-library inputs."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-scheduling-availability",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-availability-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen r60/r61, rejected CPU partition, exact r354 and bounded programme/prefix r355-r358 comparisons."
     }
   ],
   "experiments": [
@@ -14389,6 +14395,76 @@
         "Scheduled acceptance of double-only reachable endpoint before wire encoding"
       ],
       "revisit_condition": "Concrete new representation, clock or proof-coverage failure. Domain/scheduling alternatives require separately sealed causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduling-availability-r60",
+      "baseline_commit": "ad18d2623b054008655e8b35b9d63fc0841c3482",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduling-availability"
+      ],
+      "hypothesis": "A next-slot job with zero pending prior packets becomes prefix-incompatible while the worker calculates; retain exact original scheduled prior inputs in a new future job.",
+      "changed_dimension": "Diagnostic CPU partition or frozen source lead/programme comparison only; production unchanged.",
+      "result": "rejected",
+      "reason": "Original final send window failure remains with short accepted current domain; separate D2 domain miss.",
+      "production_impact": "None. CPU policy rejected; future causal source IDs, composite domain theorem, pending job lifetime and slew/intent obligations remain before promotion.",
+      "deleted_code": [],
+      "revisit_condition": "New source/history or structural source scheduler/domain implementation. No unchanged CPU partition repeat, clock/window/physical/rate relaxation or late-prefix acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduling-availability-r61",
+      "baseline_commit": "ad18d2623b054008655e8b35b9d63fc0841c3482",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduling-availability"
+      ],
+      "hypothesis": "A next-slot job with zero pending prior packets becomes prefix-incompatible while the worker calculates; retain exact original scheduled prior inputs in a new future job.",
+      "changed_dimension": "Diagnostic CPU partition or frozen source lead/programme comparison only; production unchanged.",
+      "result": "rejected",
+      "reason": "Bounded owned CPU partition fails original deadlines; all30 changed threads exited, errors0; no laps.",
+      "production_impact": "None. CPU policy rejected; future causal source IDs, composite domain theorem, pending job lifetime and slew/intent obligations remain before promotion.",
+      "deleted_code": [],
+      "revisit_condition": "New source/history or structural source scheduler/domain implementation. No unchanged CPU partition repeat, clock/window/physical/rate relaxation or late-prefix acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduling-availability-r354",
+      "baseline_commit": "ad18d2623b054008655e8b35b9d63fc0841c3482",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduling-availability"
+      ],
+      "hypothesis": "A next-slot job with zero pending prior packets becomes prefix-incompatible while the worker calculates; retain exact original scheduled prior inputs in a new future job.",
+      "changed_dimension": "Diagnostic CPU partition or frozen source lead/programme comparison only; production unchanged.",
+      "result": "accepted",
+      "reason": "Three exact source/current/history and original guard outcomes reproduced.",
+      "production_impact": "None. CPU policy rejected; future causal source IDs, composite domain theorem, pending job lifetime and slew/intent obligations remain before promotion.",
+      "deleted_code": [],
+      "revisit_condition": "New source/history or structural source scheduler/domain implementation. No unchanged CPU partition repeat, clock/window/physical/rate relaxation or late-prefix acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduling-availability-r355-r357",
+      "baseline_commit": "ad18d2623b054008655e8b35b9d63fc0841c3482",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduling-availability"
+      ],
+      "hypothesis": "A next-slot job with zero pending prior packets becomes prefix-incompatible while the worker calculates; retain exact original scheduled prior inputs in a new future job.",
+      "changed_dimension": "Diagnostic CPU partition or frozen source lead/programme comparison only; production unchanged.",
+      "result": "inconclusive",
+      "reason": "Source/domain proof feasibility does not grant current authority. Track-to-Cruise semantic conflict correctly rejects r357. Initial r356 reader asserted compatibility incorrectly.",
+      "production_impact": "None. CPU policy rejected; future causal source IDs, composite domain theorem, pending job lifetime and slew/intent obligations remain before promotion.",
+      "deleted_code": [],
+      "revisit_condition": "New source/history or structural source scheduler/domain implementation. No unchanged CPU partition repeat, clock/window/physical/rate relaxation or late-prefix acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduling-availability-r358",
+      "baseline_commit": "ad18d2623b054008655e8b35b9d63fc0841c3482",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduling-availability"
+      ],
+      "hypothesis": "A next-slot job with zero pending prior packets becomes prefix-incompatible while the worker calculates; retain exact original scheduled prior inputs in a new future job.",
+      "changed_dimension": "Diagnostic CPU partition or frozen source lead/programme comparison only; production unchanged.",
+      "result": "accepted",
+      "reason": "Same Cruise snapshot, same original world/history: pending0/1 reject two extra transactions; pending2 immediate and long new sources pass actual full current proof and unchanged before guard. Frozen known prior IDs are diagnostic only.",
+      "production_impact": "None. CPU policy rejected; future causal source IDs, composite domain theorem, pending job lifetime and slew/intent obligations remain before promotion.",
+      "deleted_code": [],
+      "revisit_condition": "New source/history or structural source scheduler/domain implementation. No unchanged CPU partition repeat, clock/window/physical/rate relaxation or late-prefix acceptance."
     }
   ]
 }

@@ -201,4 +201,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R47same-frame side+1/0 conflict; r295reproduces original rejection and independent fullproof for explicitly selected current context.
 - [x] Bind/reseal current Cruise/Follow candidate choice; strict other-context equality and final authority unchanged; filter incompatible source candidates before worker evaluation.
 - [x] R296140native, r297production helper replay, r298original-window/slew/post-send checks; buildr88/testsr76(2532)passed.
-- [ ] Fresh committed dev2-r48 and causal repair of first failure; all M4-M6acceptance remains open.
+- [x] Fresh committed dev2-r48 failed at D1dispatch1156 actual post-send window; causal repair/M4-M6remain open.
+
+
+2026-09-11 publication call observation (baselinefe5f16a2):
+- [x] Dev2-r48 first D1dispatch1156 post-send window violation saved; Ready dispatch works, full race fails.
+- [x] R299 original fingerprint and before-pass/after-fail reproduced; call observer buildr89/testsr77passed.
+- [ ] Dev2-r49 measured first boundary, causal repair, all M4–M6 acceptance and local commits.

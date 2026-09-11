@@ -1111,6 +1111,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-selection-evidence.json",
       "replay_ready": true,
       "reason": "Exact R47source/current mismatch and explicit current candidate selection; dynamic acceptance pending."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-publication-call-observation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-call-timing-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact r48post-send failure, independent current proof and split call observation; live attribution pending."
     }
   ],
   "experiments": [
@@ -13432,6 +13438,48 @@
         "Using unresolved current dynamic side as a selected problem at new-source dispatch; strict selected-context comparison remains"
       ],
       "revisit_condition": "New same-frame source/current evidence or reproduced downstream failure; no repeated unchanged rejected run or relaxed context/physical/clock requirement."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-call-observation-dev2-r48",
+      "baseline_commit": "fe5f16a2cbb85b2d1a211635d5c8c9aeae8a2935",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-call-observation"
+      ],
+      "hypothesis": "Selected current context permits integrated Ready execution within certified windows",
+      "changed_dimension": "Split guard/raw/final publish observation only; no authority or timing parameter changes",
+      "result": "rejected",
+      "reason": "Ready normal publications311/33, but D1dispatch1156crosses original deadline by4.999978ms. No moving/lap acceptance.",
+      "production_impact": "Existing sole normal dispatcher and actual ledger unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New exact measured first-failure boundary or a causally justified producer repair; do not rerun unchanged failed races."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-call-observation-r299",
+      "baseline_commit": "fe5f16a2cbb85b2d1a211635d5c8c9aeae8a2935",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-call-observation"
+      ],
+      "hypothesis": "Exact saved post-send failure survives current physical reconstruction",
+      "changed_dimension": "Split guard/raw/final publish observation only; no authority or timing parameter changes",
+      "result": "accepted",
+      "reason": "Original input fingerprint reproduced; full current proof passes; raw before passes and actual after rejects; isolated final guard timing cannot identify DDS/scheduling cost.",
+      "production_impact": "Existing sole normal dispatcher and actual ledger unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New exact measured first-failure boundary or a causally justified producer repair; do not rerun unchanged failed races."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-call-observation-r89-r77",
+      "baseline_commit": "fe5f16a2cbb85b2d1a211635d5c8c9aeae8a2935",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-call-observation"
+      ],
+      "hypothesis": "Observation-only call timestamps preserve package contracts",
+      "changed_dimension": "Split guard/raw/final publish observation only; no authority or timing parameter changes",
+      "result": "accepted",
+      "reason": "Build26packages, tests2532records/64groups, source104pass; no errors/failures/skips. Live diagnosticr49pending.",
+      "production_impact": "Existing sole normal dispatcher and actual ledger unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New exact measured first-failure boundary or a causally justified producer repair; do not rerun unchanged failed races."
     }
   ]
 }

@@ -4654,3 +4654,11 @@ R296全140native、r298保存入力の送信後照合、buildr88全26package、t
 64group合格。R48の実走行と全M4–M6は未検証。
 [設計と同時点証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-adoption-design.md)、
 [検証証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-selection-evidence.json)。
+
+R48（fe5f16a2）はReady後D1/D2で311/33回の通常送信があるが、D1decision1156の
+元nominal15.384999677→送信後15.414999655で原25ms窓を約5ms超え、不合格。
+Callback全体18.840074msだけでは原公開窓との対応を保証できない。R299は元の
+input fingerprintと現在全物理証明を再現し、送信前合格・送信後不合格を維持する。
+最終guard/raw topic/最終指令publishの間へROS/steady時刻観測を追加。判定・送信順・
+台帳・周期・期限・物理条件は維持する。Buildr89/testsr77合格、責任区間はr49で確認。
+[時刻観測の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-call-timing-design.md)。

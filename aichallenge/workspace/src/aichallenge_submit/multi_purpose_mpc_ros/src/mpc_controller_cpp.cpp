@@ -55160,7 +55160,8 @@ private:
   void record_scheduled_publication_failure(
     const std::shared_ptr<const scheduled_control::DispatchCandidate> &dispatch,
     const bool after_publication,const rclcpp::Time &before,const rclcpp::Time &after,
-    const AckermannControlCommand &command)
+    const AckermannControlCommand &command,
+    std::optional<mpcc_architecture_snapshot::PublicationCallTiming> call_timing = {})
   {
     if (!mpc_ || !dispatch) return;
     auto capture=mpc_->scheduled_failure_capture(mpc_->pending_scheduled_entry_,published_input_ledger_,
@@ -55174,6 +55175,7 @@ private:
       before.seconds(),after.seconds(),command.longitudinal.acceleration,command.lateral.steering_tire_angle,
       after_publication,odom_ && std::abs(odom_->twist.twist.linear.x)>0.1};
     observation.scheduled_capture=std::move(capture);
+    observation.call_timing=std::move(call_timing);
     mpc_->record_applied_publication_failure(std::move(observation));
   }
 
@@ -55196,6 +55198,7 @@ private:
     if (!command_is_finite(raw_command) || !command_is_finite(final_command)) {
       publish_failsafe_command(stamp,"non-finite control command rejected");return std::nullopt;
     }
+    const auto guard_started=SteadyClock::now();
     const auto before=now();
     const auto deadline=dispatch ? mpcc_vehicle_model::publication_epoch(dispatch->certificate()->suffix().program,
       dispatch->source().packet_index,true).value_or(std::numeric_limits<double>::quiet_NaN()) :
@@ -55208,7 +55211,18 @@ private:
       record_scheduled_publication_failure(dispatch,false,before,before,final_command);
       publish_failsafe_command(stamp,"scheduled program does not cover final packet/publication time");return std::nullopt;
     }
-    command_raw_pub_->publish(raw_command); command_pub_->publish(final_command);
+    const auto guard_finished=SteadyClock::now();
+    const auto guard_finished_ros=now();
+    command_raw_pub_->publish(raw_command);
+    const auto raw_finished=SteadyClock::now();
+    const auto raw_finished_ros=now();
+    command_pub_->publish(final_command);
+    const auto final_finished=SteadyClock::now();
+    const mpcc_architecture_snapshot::PublicationCallTiming call_timing{
+      guard_finished_ros.seconds(),raw_finished_ros.seconds(),
+      std::chrono::duration<double,std::milli>(guard_finished-guard_started).count(),
+      std::chrono::duration<double,std::milli>(raw_finished-guard_finished).count(),
+      std::chrono::duration<double,std::milli>(final_finished-raw_finished).count()};
     auto after=before;
     record_published_vehicle_command(publication_stamp,final_command.longitudinal.acceleration,
       final_command.lateral.steering_tire_angle,before,&after,
@@ -55219,18 +55233,22 @@ private:
     last_published_steering_steady_=SteadyClock::now();
     if (canonical_execution && !dispatch->matches_after_publication(published_input_ledger_, mpc_->current_normal_context_generation())) {
       RCLCPP_ERROR(get_logger(),
-        "MPCC publication window violated: decision=%lu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f",
-        static_cast<unsigned long>(active_control_decision_id_),publication_stamp.seconds(),before.seconds(),after.seconds(),deadline);
-      record_scheduled_publication_failure(dispatch,true,before,after,final_command);
+        "MPCC publication window violated: decision=%lu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f, guard_end=%.9f, raw_end=%.9f, call_wall_ms=%.6f/%.6f/%.6f",
+        static_cast<unsigned long>(active_control_decision_id_),publication_stamp.seconds(),before.seconds(),after.seconds(),deadline,
+        call_timing.guard_finished_ros_sec,call_timing.raw_finished_ros_sec,
+        call_timing.guard_wall_ms,call_timing.raw_publish_wall_ms,call_timing.final_publish_wall_ms);
+      record_scheduled_publication_failure(dispatch,true,before,after,final_command,call_timing);
       publish_failsafe_command(stamp,"publication crossed certified input window");return std::nullopt;
     }
     if (canonical_execution) RCLCPP_INFO(get_logger(),
-      "MPCC scheduled publication: dispatch=%lu, job=%lu, source=%lu, index=%zu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f, programme_input=%lu, physical_input=%lu, independent=%d",
+      "MPCC scheduled publication: dispatch=%lu, job=%lu, source=%lu, index=%zu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f, programme_input=%lu, physical_input=%lu, independent=%d, guard_end=%.9f, raw_end=%.9f, call_wall_ms=%.6f/%.6f/%.6f",
       static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(dispatch->source().decision_id),
       static_cast<unsigned long>(dispatch->source().solution_id),dispatch->source().packet_index,
       publication_stamp.seconds(),before.seconds(),after.seconds(),deadline,
       static_cast<unsigned long>(dispatch->source().input_context_fingerprint),
-      static_cast<unsigned long>(dispatch->physical_input_fingerprint()), dispatch->current_physical_proof() ? 1 : 0);
+      static_cast<unsigned long>(dispatch->physical_input_fingerprint()), dispatch->current_physical_proof() ? 1 : 0,
+      call_timing.guard_finished_ros_sec,call_timing.raw_finished_ros_sec,
+      call_timing.guard_wall_ms,call_timing.raw_publish_wall_ms,call_timing.final_publish_wall_ms);
     command_failsafe_active_=false;
     return published_steering;
   }

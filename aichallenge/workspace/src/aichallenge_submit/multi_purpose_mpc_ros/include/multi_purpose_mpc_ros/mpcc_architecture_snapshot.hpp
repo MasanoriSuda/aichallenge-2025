@@ -157,6 +157,15 @@ struct ScheduledFailureCapture;
 
 /// Exact late publisher boundary, separate from an earlier solver-source world.
 /// The certificate is immutable evidence only; the final guard already failed.
+struct PublicationCallTiming
+{
+  double guard_finished_ros_sec{};
+  double raw_finished_ros_sec{};
+  double guard_wall_ms{};
+  double raw_publish_wall_ms{};
+  double final_publish_wall_ms{};
+};
+
 struct PublicationFailureObservation
 {
   std::shared_ptr<const mpcc_rate_resolved_applied_program::Certificate> certificate;
@@ -171,6 +180,7 @@ struct PublicationFailureObservation
   bool moving{false};
   std::filesystem::path output_root{"mpcc_architecture_snapshots"};
   std::shared_ptr<const ScheduledFailureCapture> scheduled_capture{};
+  std::optional<PublicationCallTiming> call_timing{};
 };
 
 RecordResult record_publication_failure(const PublicationFailureObservation &) noexcept;

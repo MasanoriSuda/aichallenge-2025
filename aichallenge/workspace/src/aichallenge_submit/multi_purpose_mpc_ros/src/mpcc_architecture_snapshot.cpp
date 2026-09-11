@@ -2815,6 +2815,16 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
     boundary["wire_steering_rad"] = o.wire_steering_rad;
     boundary["after_publication"] = o.after_publication;
     boundary["moving"] = o.moving;
+    if (o.call_timing) {
+      const auto &timing = *o.call_timing;
+      auto calls = boundary["call_timing"];
+      calls["meaning"] = "Observation only; original before/after guard remains authoritative. Wall intervals include scheduling pauses and clock sampling overhead.";
+      calls["guard_finished_ros_sec"] = timing.guard_finished_ros_sec;
+      calls["raw_finished_ros_sec"] = timing.raw_finished_ros_sec;
+      calls["guard_wall_ms"] = timing.guard_wall_ms;
+      calls["raw_publish_wall_ms"] = timing.raw_publish_wall_ms;
+      calls["final_publish_wall_ms"] = timing.final_publish_wall_ms;
+    }
     const recovery_footprint::OccupancyGrid * inspected_grid = nullptr;
     const recovery_footprint::OccupancyGrid * observed_grid = nullptr;
     const recovery_footprint::OccupancyGrid * certified_grid = nullptr;

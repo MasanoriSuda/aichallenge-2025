@@ -1,24 +1,20 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。M1–M6を追加確認なしで自律実行中。必要分のローカルcommitのみ。
-**全体未完。候補選択contextの生成を修正し、次はdev2-r48で動的検証。**
+2026-09-11 JST。追加確認なしでM1–M6を自律実行。必要分のローカルcommitのみ。
+**全体未完。R48公開窓の違反を保存し、送信処理の責任区間をr49で測定する。**
 
-Daf40d09の独立現在物理証明は、R46起動中の連続index送信で確認できたが、Ready正常走行0。
-89bda5bbの観測追加を使ったR47も走行受入れは失敗。D1decision850の同時点証拠により、
-選択済みCruise候補side+1と未選択の現在要求side0の照合が原因と確定した。
-現在要求に候補選択を明示して再sealするproducerを実装。worker候補選別と送信前で共用し、
-他のcontext一致・generation・実prefix・全rest/壁/他車/Follow証明・原窓・操舵速度を維持。
-固定方向やMissionの反対側採用に流用しない。
+Fe5f16a2の候補選択修正によりReady後D1/D2で311/33回の認証済み送信を観測。
+R48はD1decision1156で原25ms公開期限を約5ms超え、不合格。18.840074msのcallback
+だけでは安全な公開窓を保証できない。R299は元fingerprint/現在全物理証明を再現し、
+原送信前は合格、実送信後は不合格を維持。最終guard/raw/最終publishのROS/steady時刻を
+分離観測する変更を追加した。送信順、元before/after判定、全物理条件、周期は維持。
+Buildr89全26package、testsr77全2532記録/64group、source104合格。R49実測は次。
 
-R296全140native、r297/r298保存入力再生、buildr88全26package、testsr76全2532記録/64group合格。
-保存caseの元nominal時点は操舵速度条件で拒否し、原窓内+1..25msの標本は送信/送信後照合が通過。
-これらは再生の仮想送信時刻であり実走行ではない。次はr48で実時刻とReady/Startの進行を検証する。
-
-残りはfirst-failure因果修正、全intent/Mission/sibling/Store、実Stop/rest/restart、
+残り: 公開時刻の因果修正、全intent/Mission/sibling/Store、実Stop/rest/restart、
 Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、
-同一tar/image/eval。受け入れ基準・物理bounds・時間窓・予算は維持する。
+同一tar/image/eval。期限・margin・重み・timeout緩和、旧cacheやgraceの昇格はしない。
 
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-adoption-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-call-timing-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

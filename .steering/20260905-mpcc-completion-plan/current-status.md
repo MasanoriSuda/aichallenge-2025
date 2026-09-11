@@ -1,20 +1,20 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。M1–M6を追加確認なしで自律実行中。必要分のローカルcommitのみ。
-**全体未完。R46はReady以降の通常走行がなく不合格。現在はsource context選択を調査中。**
+**全体未完。候補選択contextの生成を修正し、次はdev2-r48で動的検証。**
 
-Daf40d09で現在観測からの独立完全証明を唯一のdispatcherへ接続。
-R293保存2件約6.9ms、R294全138native、buildr86全26package/testsr74全2530記録合格。
-R46では起動中にD1/D2で162/155回の認証送信と同じprogrammeの後続indexを実送信。
-しかしReadyでD1は新しいCruise計画のSemanticChanged、D2は予定sourceなしとなり静止。
-実走行・lap・moving Stop/rest/restartの受入れではない。保護成果物は復元済み。
+Daf40d09の独立現在物理証明は、R46起動中の連続index送信で確認できたが、Ready正常走行0。
+89bda5bbの観測追加を使ったR47も走行受入れは失敗。D1decision850の同時点証拠により、
+選択済みCruise候補side+1と未選択の現在要求side0の照合が原因と確定した。
+現在要求に候補選択を明示して再sealするproducerを実装。worker候補選別と送信前で共用し、
+他のcontext一致・generation・実prefix・全rest/壁/他車/Follow証明・原窓・操舵速度を維持。
+固定方向やMissionの反対側採用に流用しない。
 
-現在要求のdynamic side0と、左右を選んだsolver候補の符号付きcontextの対応が候補原因。
-R46最初のactive保存枠は旧Track/session失効を記録したため、同時点の新しい候補と
-現在要求の不一致は保存されなかった。独立したsemantic/geometry観測枠とworker元要求
-context保存を追加。制御判断を変えずbuildr87/testsr75合格、次はr47で正確な対を保存する。
+R296全140native、r297/r298保存入力再生、buildr88全26package、testsr76全2532記録/64group合格。
+保存caseの元nominal時点は操舵速度条件で拒否し、原窓内+1..25msの標本は送信/送信後照合が通過。
+これらは再生の仮想送信時刻であり実走行ではない。次はr48で実時刻とReady/Startの進行を検証する。
 
-残りはsource選択の因果修正、全intent/mission/sibling/Store、実Stop/rest/restart、
+残りはfirst-failure因果修正、全intent/Mission/sibling/Store、実Stop/rest/restart、
 Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、
 同一tar/image/eval。受け入れ基準・物理bounds・時間窓・予算は維持する。
 

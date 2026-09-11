@@ -4646,3 +4646,64 @@ TEST(MpccScheduledDispatch, IndependentFollowProofKeepsFreshPhysicalGapAndReject
   EXPECT_FALSE(invalid.candidate);
   EXPECT_EQ(invalid.current.world.physical_reason, applied::Reason::FollowGapRejected);
 }
+
+
+TEST(MpccScheduledCandidateChoice, SelectsEitherNormalAvoidanceDisjunctWithoutChangingSourceOrObservation)
+{
+  for (auto intent : {contract::ControlIntent::Cruise, contract::ControlIntent::Follow}) {
+    for (int side : {-1, 1}) {
+      auto source = scheduled_request(intent).observed.plan->execution_artifact->identity.source_context;
+      source.dynamic_obstacle_constraint_active = true;
+      source.dynamic_obstacle_id = "d2"; source.dynamic_obstacle_generation = 128;
+      source.dynamic_obstacle_side_sign = side; source = contract::seal_problem_context(source);
+      auto proposed = source;
+      proposed.decision_id = 850; proposed.observation_generation = 850;
+      proposed.dynamic_obstacle_generation = 132; proposed.dynamic_obstacle_side_sign = 0;
+      if (intent == contract::ControlIntent::Follow) proposed.target_obstacle_generation = 132;
+      proposed = contract::seal_problem_context(proposed);
+      ASSERT_TRUE(contract::problem_context_complete(source)); ASSERT_TRUE(contract::problem_context_complete(proposed));
+      const auto selected = scheduled::select_new_source_context(source, proposed);
+      ASSERT_TRUE(selected);
+      EXPECT_EQ(selected->dynamic_obstacle_side_sign, side);
+      EXPECT_EQ(selected->decision_id, 850U); EXPECT_EQ(selected->observation_generation, 850U);
+      EXPECT_EQ(selected->dynamic_obstacle_generation, 132U);
+      EXPECT_EQ(selected->stage_geometry_id, proposed.stage_geometry_id);
+      EXPECT_NE(selected->fingerprint, proposed.fingerprint);
+      EXPECT_EQ(proposed.dynamic_obstacle_side_sign, 0);
+      EXPECT_EQ(source.dynamic_obstacle_generation, 128U);
+      EXPECT_TRUE(contract::problem_context_complete(*selected));
+    }
+  }
+}
+
+TEST(MpccScheduledCandidateChoice, FixedSideMissionTargetGeometryModelAndSchemaStillReject)
+{
+  auto source = scheduled_request(contract::ControlIntent::Cruise).observed.plan->execution_artifact->identity.source_context;
+  source.dynamic_obstacle_constraint_active = true; source.dynamic_obstacle_id = "d2";
+  source.dynamic_obstacle_generation = 128; source.dynamic_obstacle_side_sign = 1;
+  source = contract::seal_problem_context(source);
+  for (int variant = 0; variant < 10; ++variant) {
+    SCOPED_TRACE(variant);
+    auto proposed = source; proposed.dynamic_obstacle_side_sign = 0;
+    if (variant == 0) proposed.dynamic_obstacle_side_sign = -1;
+    if (variant == 1) proposed.dynamic_obstacle_id = "different";
+    if (variant == 2) proposed.intent_generation++;
+    if (variant == 3) proposed.stage_geometry_id++;
+    if (variant == 4) proposed.vehicle_model_fingerprint++;
+    if (variant == 5) proposed.cost_schema_id += "-changed";
+    if (variant == 6) proposed.bounds_schema_id += "-changed";
+    if (variant == 7) proposed.horizon_steps++;
+    if (variant == 8) proposed.execution_side_sign = -1;
+    proposed = contract::seal_problem_context(proposed);
+    if (variant == 9) proposed.fingerprint++;
+    EXPECT_FALSE(scheduled::select_new_source_context(source, proposed));
+  }
+  for (auto intent : {contract::ControlIntent::Track, contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass, contract::ControlIntent::Return, contract::ControlIntent::Rejoin,
+      contract::ControlIntent::Stop, contract::ControlIntent::Hold}) {
+    auto other = source; other.intent = intent; other = contract::seal_problem_context(other);
+    auto proposed = other; proposed.dynamic_obstacle_side_sign = 0; proposed = contract::seal_problem_context(proposed);
+    EXPECT_FALSE(scheduled::select_new_source_context(other, proposed));
+  }
+  EXPECT_TRUE(scheduled::select_new_source_context(source, source));
+}

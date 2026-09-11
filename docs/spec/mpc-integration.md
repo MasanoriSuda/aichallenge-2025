@@ -4642,3 +4642,15 @@ R46（daf40d09）は不合格。起動中D1/D2の162/155回に新しい物理証
 Buildr87全26package/testsr75全2530記録・64group合格。候補の符号付きsideと未選択side0
 の意味は現在調査中であり、照合条件を緩めていない。M4–M6は未完。
 [観測・次の因果確認](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-adoption-design.md)。
+
+R47の同時点入力で、D1decision850の拒否原因を特定。通常更新の観測ID等を除く差は、
+解いたCruise候補のdynamic side+1と現在要求の未選択side0だけだった。現在要求から
+候補選択を明示する`select_new_source_context`を追加し、同じ規則を予定workerへの
+入力候補選別と、単一dispatcher直前の新規採用へ接続。元sourceとraw要求は変更せず、
+選択した現在contextに新しいfingerprintを付ける。Cruise/Followの未選択方向だけが
+対象で、固定方向・Missionの実行側・他intent・対象/形状/model/schema変更は拒否。
+厳密なcontext照合、実prefix、現在全物理証明、原25ms窓と操舵速度条件は維持する。
+R296全140native、r298保存入力の送信後照合、buildr88全26package、testsr76全2532記録/
+64group合格。R48の実走行と全M4–M6は未検証。
+[設計と同時点証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-adoption-design.md)、
+[検証証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-selection-evidence.json)。

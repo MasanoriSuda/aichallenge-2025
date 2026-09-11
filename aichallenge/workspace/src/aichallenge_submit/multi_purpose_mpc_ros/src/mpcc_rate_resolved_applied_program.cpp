@@ -893,14 +893,10 @@ CurrentWorldCheck recheck_remaining_world(
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
-ContextReason check_current_context(
-    const applied::ScheduledCertificate &certificate, const ContextSnapshot &fresh_generation,
+namespace {
+ContextReason compare_selected_problem_context(
+    const retained::contract::MpccProblemContext &source,
     const retained::contract::MpccProblemContext &fresh, const ContextUse use) {
-  if (!certificate.nominal() || !certificate.nominal()->source_context().valid() || !fresh_generation.valid())
-    return ContextReason::MissingGeneration;
-  if (!certificate.nominal()->source_context().same_generation(fresh_generation))
-    return ContextReason::GenerationChanged;
-  const auto &source = certificate.suffix().source.source_context;
   if (!retained::contract::problem_context_complete(source) ||
       !retained::contract::problem_context_complete(fresh) ||
       (use != ContextUse::NewSource && use != ContextUse::PublishedRemainder)) return ContextReason::InvalidProblem;
@@ -921,6 +917,42 @@ ContextReason check_current_context(
     return ContextReason::GeometryChanged;
   return ContextReason::Compatible;
 }
+} // namespace
+
+std::optional<retained::contract::MpccProblemContext> select_new_source_context(
+    const retained::contract::MpccProblemContext &source,
+    const retained::contract::MpccProblemContext &proposed) {
+  if (!retained::contract::problem_context_complete(source) ||
+      !retained::contract::problem_context_complete(proposed)) return std::nullopt;
+  auto selected = proposed;
+  using Intent = retained::contract::ControlIntent;
+  // The normal avoidance producer enumerates both sides of this unresolved
+  // Cruise/Follow request. Select one candidate; never overwrite a fixed side
+  // or infer permission for an opposite-side mission transition.
+  if ((proposed.intent == Intent::Cruise || proposed.intent == Intent::Follow) &&
+      source.intent == proposed.intent && proposed.execution_side_sign == 0 && source.execution_side_sign == 0 &&
+      proposed.dynamic_obstacle_constraint_active && source.dynamic_obstacle_constraint_active &&
+      proposed.dynamic_obstacle_side_sign == 0 &&
+      (source.dynamic_obstacle_side_sign == -1 || source.dynamic_obstacle_side_sign == 1)) {
+    selected.dynamic_obstacle_side_sign = source.dynamic_obstacle_side_sign;
+    selected = retained::contract::seal_problem_context(std::move(selected));
+  }
+  if (compare_selected_problem_context(source, selected, ContextUse::NewSource) != ContextReason::Compatible)
+    return std::nullopt;
+  return selected;
+}
+
+ContextReason check_current_context(
+    const applied::ScheduledCertificate &certificate, const ContextSnapshot &fresh_generation,
+    const retained::contract::MpccProblemContext &fresh, const ContextUse use) {
+  if (!certificate.nominal() || !certificate.nominal()->source_context().valid() || !fresh_generation.valid())
+    return ContextReason::MissingGeneration;
+  if (!certificate.nominal()->source_context().same_generation(fresh_generation))
+    return ContextReason::GenerationChanged;
+  const auto &source = certificate.suffix().source.source_context;
+  return compare_selected_problem_context(source, fresh, use);
+}
+
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {

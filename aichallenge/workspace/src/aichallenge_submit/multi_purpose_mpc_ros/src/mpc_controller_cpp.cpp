@@ -30728,7 +30728,7 @@ struct MPC
     const auto add = [&](const auto &plan) {
       if (plan && plan->execution_artifact && plan->solver_source_snapshot &&
           plan->solver_source_snapshot->normal_context_generation.same_generation(current_normal_context_generation()) &&
-          plan->execution_artifact->identity.source_context.intent == context.intent &&
+          scheduled_control::select_new_source_context(plan->execution_artifact->identity.source_context, context).has_value() &&
           std::none_of(plans.begin(),plans.end(),[&](const auto &p) { return p == plan; })) plans.push_back(plan);
     };
     // Tactical proposals are source candidates only; their old synchronous
@@ -30838,6 +30838,12 @@ struct MPC
         return false;
       }
       std::optional<mpcc_contract::MpccProblemContext> context = proposed_context;
+      if (entry->sent == 0 && context) {
+        const auto selected = scheduled_control::select_new_source_context(source, *context);
+        // Retain the raw context on selection failure so the strict dispatcher
+        // records its original rejection reason and complete conflicting pair.
+        if (selected) context = *selected;
+      }
       if (entry->sent > 0) {
         // This permission was committed by an authenticated actual first send.
         // New proposals do not relabel it. Hard mission/session/policy changes

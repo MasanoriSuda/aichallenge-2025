@@ -151,6 +151,16 @@ ContextReason check_current_context(
   const applied::ScheduledCertificate &certificate, const ContextSnapshot &fresh_generation,
   const retained::contract::MpccProblemContext &fresh, ContextUse use);
 
+/// Bind one solved candidate to a fresh current proposal before strict context
+/// checking. Only an unresolved side0 normal Cruise/Follow avoidance request
+/// permits selecting its -1/+1 disjunct. All other semantics and new-source
+/// geometry must already agree; fixed sides and mission sides are immutable.
+/// Source and raw proposal stay unchanged, and the returned current choice is
+/// resealed. This grants no physical/generation/prefix/publication authority.
+std::optional<retained::contract::MpccProblemContext> select_new_source_context(
+  const retained::contract::MpccProblemContext &source,
+  const retained::contract::MpccProblemContext &proposed);
+
 enum class CurrentReason { Compatible, InvalidFrame, ContextRejected, MeasurementRejected, PrefixRejected, WorldRejected };
 struct CurrentCheck {
   CurrentReason reason{CurrentReason::InvalidFrame};

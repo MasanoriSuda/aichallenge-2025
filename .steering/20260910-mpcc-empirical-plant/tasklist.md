@@ -194,4 +194,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 2026-09-11 scheduled context observation (baseline daf40d09):
 - [x] R46first active snapshot shows old-session invalidation; later D1fresh Cruise SemanticChanged is not captured in that slot.
 - [x] Preserve worker-proposed context and separately capture first active semantic/geometry mismatch; no authority change.
-- [ ] Buildr87/testsr75 and fresh diagnostic dev2-r47; seal same-frame conflict before producer fix.
+- [x] Buildr87/testsr75 and diagnosticr47; exact D1dispatch850 conflict saved. Observer committed89bda5bb.
+
+
+2026-09-11 scheduled candidate selection (baseline89bda5bb):
+- [x] R47same-frame side+1/0 conflict; r295reproduces original rejection and independent fullproof for explicitly selected current context.
+- [x] Bind/reseal current Cruise/Follow candidate choice; strict other-context equality and final authority unchanged; filter incompatible source candidates before worker evaluation.
+- [x] R296140native, r297production helper replay, r298original-window/slew/post-send checks; buildr88/testsr76(2532)passed.
+- [ ] Fresh committed dev2-r48 and causal repair of first failure; all M4-M6acceptance remains open.

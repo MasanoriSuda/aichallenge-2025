@@ -1105,6 +1105,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-observation-evidence.json",
       "replay_ready": true,
       "reason": "R46 failed availability; observation-only next slice captures missing same-frame semantic pair."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-context-selection",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduled-context-selection-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact R47source/current mismatch and explicit current candidate selection; dynamic acceptance pending."
     }
   ],
   "experiments": [
@@ -13362,6 +13368,70 @@
       "production_impact": "No authority or parameter change in observer slice.",
       "deleted_code": [],
       "revisit_condition": "New simultaneous source/current context payload or causal producer fix; do not retry the unchanged stopped run without added observation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-context-selection-dev2-r47",
+      "baseline_commit": "89bda5bb4975c55fa971afdd00b8a9bc0fb5dac8",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-context-selection"
+      ],
+      "hypothesis": "Separate context observer captures the exact persistent new-session conflict",
+      "changed_dimension": "Explicit normal Cruise/Follow candidate-side choice in the current proposal; all other current context and physical/clock gates unchanged",
+      "result": "accepted",
+      "reason": "D1dispatch850/job849/source840: only selected dynamic side+1 versus current0 differs beyond normal fresh IDs. R47race availability remains failed; this is observation acceptance only.",
+      "production_impact": "Candidate selection producer feeds the existing single scheduled dispatcher; no alternate normal authority.",
+      "deleted_code": [
+        "Using unresolved current dynamic side as a selected problem at new-source dispatch; strict selected-context comparison remains"
+      ],
+      "revisit_condition": "New same-frame source/current evidence or reproduced downstream failure; no repeated unchanged rejected run or relaxed context/physical/clock requirement."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-context-selection-r295",
+      "baseline_commit": "89bda5bb4975c55fa971afdd00b8a9bc0fb5dac8",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-context-selection"
+      ],
+      "hypothesis": "Explicit current candidate choice repairs the context producer while retaining exact physical proof",
+      "changed_dimension": "Explicit normal Cruise/Follow candidate-side choice in the current proposal; all other current context and physical/clock gates unchanged",
+      "result": "accepted",
+      "reason": "Unchanged raw current request rejects SemanticChanged; selecting the solved disjunct/resealing current context reaches independent whole-current physical proof in6.359ms. Original source/programme unchanged.",
+      "production_impact": "Candidate selection producer feeds the existing single scheduled dispatcher; no alternate normal authority.",
+      "deleted_code": [
+        "Using unresolved current dynamic side as a selected problem at new-source dispatch; strict selected-context comparison remains"
+      ],
+      "revisit_condition": "New same-frame source/current evidence or reproduced downstream failure; no repeated unchanged rejected run or relaxed context/physical/clock requirement."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-context-selection-r296-r298",
+      "baseline_commit": "89bda5bb4975c55fa971afdd00b8a9bc0fb5dac8",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-context-selection"
+      ],
+      "hypothesis": "Production choice helper preserves fixed-side/context/physical/raw-window constraints",
+      "changed_dimension": "Explicit normal Cruise/Follow candidate-side choice in the current proposal; all other current context and physical/clock gates unchanged",
+      "result": "accepted",
+      "reason": "R296140native; r297production helper replay; r298nominal-time slew rejection retained, original-window offsets+1..25ms pass, diagnostic actual ledger/post-send matches, deadline+1ns rejects.",
+      "production_impact": "Candidate selection producer feeds the existing single scheduled dispatcher; no alternate normal authority.",
+      "deleted_code": [
+        "Using unresolved current dynamic side as a selected problem at new-source dispatch; strict selected-context comparison remains"
+      ],
+      "revisit_condition": "New same-frame source/current evidence or reproduced downstream failure; no repeated unchanged rejected run or relaxed context/physical/clock requirement."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-context-selection-r88-r76",
+      "baseline_commit": "89bda5bb4975c55fa971afdd00b8a9bc0fb5dac8",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-context-selection"
+      ],
+      "hypothesis": "The candidate selection slice builds and passes package contracts",
+      "changed_dimension": "Explicit normal Cruise/Follow candidate-side choice in the current proposal; all other current context and physical/clock gates unchanged",
+      "result": "accepted",
+      "reason": "Buildr88passes26packages; testsr76passes2532records/64groups; no errors/failures/skips. Source104pass; live r48next.",
+      "production_impact": "Candidate selection producer feeds the existing single scheduled dispatcher; no alternate normal authority.",
+      "deleted_code": [
+        "Using unresolved current dynamic side as a selected problem at new-source dispatch; strict selected-context comparison remains"
+      ],
+      "revisit_condition": "New same-frame source/current evidence or reproduced downstream failure; no repeated unchanged rejected run or relaxed context/physical/clock requirement."
     }
   ]
 }

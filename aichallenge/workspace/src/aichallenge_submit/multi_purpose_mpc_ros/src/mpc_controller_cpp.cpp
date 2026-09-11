@@ -8028,6 +8028,8 @@ struct NormalJoinTimingObservation
   double stop_successor_ms{};
   double output_ms{};
   double snapshots_ms{};
+  double primary_applied_ms{};
+  double primary_continuation_ms{};
 };
 
 struct ControlCallbackTimingObservation
@@ -30560,6 +30562,8 @@ struct MPC
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
       problem, now_sec, intent);
     primary_retained_ms = retained.elapsed_ms;
+    const double primary_applied_ms = retained.aggregate_runtime.applied_program_ms;
+    const double primary_continuation_ms = retained.aggregate_runtime.continuation_proof_ms;
     const auto ordinary_retained = retained;
     if (!retained.production_authority.has_value()) {
       const auto stop_lattice_started = SteadyClock::now();
@@ -30905,7 +30909,8 @@ struct MPC
       primary_retained_ms, stop_lattice_ms, stop_successor_ms + published_stop_join_ms,
       std::chrono::duration<double, std::milli>(
         production_finished - retained_join_finished).count(),
-      failure_snapshot_ms + normal_authority_snapshot_ms};
+      failure_snapshot_ms + normal_authority_snapshot_ms,
+      primary_applied_ms, primary_continuation_ms};
     if (production_total_ms > 20.0) {
       static rclcpp::Clock runtime_log_clock{RCL_STEADY_TIME};
       RCLCPP_WARN_THROTTLE(
@@ -54210,6 +54215,11 @@ private:
       if (!recovery_grid_->valid() || !recovery_footprint_.valid()) {
         throw std::runtime_error("static wall map or footprint configuration is invalid");
       }
+      // The occupancy cells are final here. Recovery uses the same exact
+      // free-area broad phase as normal wall proofs for every later callback.
+      if (!recovery_grid_->build_non_free_integral_index()) {
+        throw std::runtime_error("failed to build recovery wall-grid broad-phase index");
+      }
     }
     std::vector<double> wp_x;
     std::vector<double> wp_y;
@@ -58700,7 +58710,8 @@ private:
         "nested=problem_initialization:%.3f/publication_successor:%.3f/"
         "prediction_marker:%.3fms/points:%zu, "
         "normal_join=primary:%.3f/stop_lattice:%.3f/stop_successor:%.3f/"
-        "output:%.3f/snapshots:%.3fms, observation_only=1",
+        "output:%.3f/snapshots:%.3fms, "
+        "primary_proof=applied:%.3f/continuation:%.3fms, observation_only=1",
         static_cast<unsigned long>(timing.decision_id), elapsed_ms, period_ms,
         timing.pre_mpc_ms, timing.mpc_ms, timing.post_mpc_ms,
         timing.recovery_ms, timing.publish_ms, unattributed_ms,
@@ -58708,7 +58719,8 @@ private:
         timing.publication_successor_ms, timing.prediction_marker_ms,
         timing.prediction_marker_points, timing.normal_join.primary_ms,
         timing.normal_join.stop_lattice_ms, timing.normal_join.stop_successor_ms,
-        timing.normal_join.output_ms, timing.normal_join.snapshots_ms);
+        timing.normal_join.output_ms, timing.normal_join.snapshots_ms,
+        timing.normal_join.primary_applied_ms, timing.normal_join.primary_continuation_ms);
     }
 
     if (!last_control_callback_telemetry_steady_.has_value()) {

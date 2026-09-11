@@ -4571,3 +4571,11 @@ MPCCの区間微分は、タイヤ角を固定した車輪力の線形係数と�
 最初のイベントを保持し、終了時に書き込みを完了する。既存failsafeを実行してから
 queueへ渡し、ファイルI/Oは制御callback外で行う。保存結果は公開認可には使わない。
 [最終公開観測の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-observation-design.md)。
+
+
+区間演算の隣接浮動小数点への丸めは、SSE2対象では上下端点を同時に計算し、
+それ以外は従来のscalar処理を使う。四頂点の共通座標変換は同じmap呼出し内で
+一度計算する。結果のbit一致を保存入力と独立oracleで確認する。Recoveryの
+静的地図もcell構築完了後に既存の非free積分索引を用意し、衝突判定を維持する。
+これらは計算量の改善であり、25ms公開期限や実走行の受入れ合格を意味しない。
+[同値変換と実行時間の検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/exact-runtime-design.md)。

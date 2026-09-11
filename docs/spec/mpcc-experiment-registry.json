@@ -1021,6 +1021,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-observation-evidence.json",
       "replay_ready": false,
       "reason": "R30has final bracket logs andsame-runMCAP, but noexactfinalguardinput. New observation producer is validated by permanent tests; live input collection is next."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-exact-runtime-work",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/exact-runtime-evidence.json",
+      "replay_ready": true,
+      "reason": "Six exact final-publication inputs, original/candidate numerical tubes, scheduler logs and current production replay. No live acceptance."
     }
   ],
   "experiments": [
@@ -11784,6 +11790,159 @@
       "production_impact": "Observation only. Fail-safe guard remains unchanged; no first-publication backdating or window increase.",
       "deleted_code": [],
       "revisit_condition": "Collect exact committed final-boundary inputs and compare timing/clock contributions. Do not repeat unchangedr30 or substitute unrelated startup snapshots."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r31-live",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Captured proof acceptance is sufficient for live publication timing",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "rejected",
+      "reason": "All six proof inputs Accepted offline; moving863/883still exceed25msROS.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r32-startup",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Observe normal controller CPU/wait during two-vehicle launch",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "inconclusive",
+      "reason": "Sensor updates stop beforeReady; simulator stall cause unknown; SIGINT and restoration complete.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r33-cpu",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Controller deadline loss is purely runqueue waiting",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "rejected",
+      "reason": "Startup callbacks use18-24msCPU plus1-10msrunqueue; nearest sample estimates. Failure714beforeReady.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r208-wrapper",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Prospective input builder or output adapter explains live/offline gap",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "rejected",
+      "reason": "Prefix0.010-0.012ms, adapter0.061-0.186ms, bundle identity negligible; proof dominates.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r209-pair",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Pair scalar outward bit steps without changing intervals",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "accepted",
+      "reason": "Six entire tubes byte-identical; about10%applied proof reduction; not live acceptance.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r210-corners",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Share identical translation within four-corner map",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "accepted",
+      "reason": "Six entire tubes byte-identical; original arithmetic order retained.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r211-grid",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Prepare missing Recovery immutable grid index",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "accepted",
+      "reason": "324same-result/same-rollout comparisons,192accepted132rejected; no contact policy change.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r212-combined",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Combine exact numerical representations",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "accepted",
+      "reason": "Six full tubes byte-identical;2,000,392scalar endpoint bit checks pass.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
+    },
+    {
+      "experiment_id": "20260911-nine-state-exact-runtime-work-r213-215-production",
+      "baseline_commit": "3387e684b16fcbad770e2cc48297fd6e2b407791",
+      "snapshot_ids": [
+        "20260911-nine-state-exact-runtime-work"
+      ],
+      "hypothesis": "Native production preserves current and older proof classifications",
+      "changed_dimension": "diagnostic runtime attribution / exact arithmetic representation / existing immutable-grid broad phase",
+      "result": "accepted",
+      "reason": "All15older scene results match non-timing fields; all6finalpublicationinput proofs remainAccepted. Build26packages/test2465 pass.",
+      "production_impact": "Only paired adjacency, within-map common terms and Recovery index preparation promoted. No across-request cache, safety gate, timing tolerance or authority change.",
+      "deleted_code": [
+        "Repeated per-vertex common translation evaluation",
+        "Scalar paired adjacency only replaced when compiler targets SSE2"
+      ],
+      "revisit_condition": "Evaluate committed dev2-r34. Do not repeat unchanged prior failures or treat offline Accepted as publication authorization."
     }
   ]
 }

@@ -14,6 +14,9 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#endif
 namespace multi_purpose_mpc_ros::mpcc_vehicle_model::numerical {
 namespace model = multi_purpose_mpc_ros::mpcc_vehicle_model;
 struct I {
@@ -41,22 +44,47 @@ inline double adjacent(double x, bool upward) {
 }
 inline double down(double x) { return adjacent(x, false); }
 inline double up(double x) { return adjacent(x, true); }
+// Exactly the scalar down/up bit step, evaluated for both endpoints together.
+// Keep the scalar fallback and the special/random-bit adjacency oracle.
+inline I outward_pair(double lower, double upper) {
+#if defined(__SSE2__)
+  const __m128d value = _mm_set_pd(upper, lower);
+  const __m128i bits = _mm_castpd_si128(value);
+  const __m128i positive = _mm_castpd_si128(_mm_cmpgt_pd(value, _mm_setzero_pd()));
+  const __m128i positive_step = _mm_set_epi64x(1, -1);
+  const __m128i negative_step = _mm_set_epi64x(-1, 1);
+  const __m128i step = _mm_or_si128(_mm_and_si128(positive, positive_step),
+    _mm_andnot_si128(positive, negative_step));
+  __m128i next = _mm_add_epi64(bits, step);
+  const __m128i zero = _mm_castpd_si128(_mm_cmpeq_pd(value, _mm_setzero_pd()));
+  const __m128i zero_next = _mm_set_epi64x(1, std::numeric_limits<std::int64_t>::min() + 1);
+  next = _mm_or_si128(_mm_and_si128(zero, zero_next), _mm_andnot_si128(zero, next));
+  const __m128i unchanged = _mm_castpd_si128(_mm_or_pd(_mm_cmpunord_pd(value, value),
+    _mm_cmpeq_pd(value, _mm_set_pd(INFINITY, -INFINITY))));
+  next = _mm_or_si128(_mm_and_si128(unchanged, bits), _mm_andnot_si128(unchanged, next));
+  double result[2];
+  _mm_storeu_pd(result, _mm_castsi128_pd(next));
+  return {result[0], result[1]};
+#else
+  return {down(lower), up(upper)};
+#endif
+}
+
 inline I operator+(I a, I b) {
   if (a.lo == 0 && a.hi == 0)
     return b;
   if (b.lo == 0 && b.hi == 0)
     return a;
-  return {down(a.lo + b.lo), up(a.hi + b.hi)};
+  return outward_pair(a.lo + b.lo, a.hi + b.hi);
 }
-inline I operator-(I a, I b) { return {down(a.lo - b.hi), up(a.hi - b.lo)}; }
+inline I operator-(I a, I b) { return outward_pair(a.lo - b.hi, a.hi - b.lo); }
 inline I operator-(I a) { return {-a.hi, -a.lo}; }
 inline I operator*(I a, I b) {
   if ((a.lo == 0 && a.hi == 0) || (b.lo == 0 && b.hi == 0))
     return I(0);
   const std::array<double, 4> p{a.lo * b.lo, a.lo * b.hi, a.hi * b.lo,
                                 a.hi * b.hi};
-  return {down(*std::min_element(p.begin(), p.end())),
-          up(*std::max_element(p.begin(), p.end()))};
+  return outward_pair(*std::min_element(p.begin(), p.end()), *std::max_element(p.begin(), p.end()));
 }
 inline I operator/(I a, double b) {
   if (b == 0)
@@ -400,20 +428,25 @@ advance_corners(const CornerProbe &probe, const Box &previous, const JS &range,
   const J half_delta = delta / 2;
   const J mid_angle = J(I(probe.origin_yaw)) + inputs[2] + half_delta;
   // Preserve the common angle in both values and interval derivatives.
-  const J dc = J(-2) * sin(mid_angle) * sin(half_delta);
-  const J ds = J(2) * cos(mid_angle) * sin(half_delta);
+  const J half_sine = sin(half_delta);
+  const J dc = J(-2) * sin(mid_angle) * half_sine;
+  const J ds = J(2) * cos(mid_angle) * half_sine;
   const I point_mid = I(probe.origin_yaw) + center[2] + point_delta / 2;
   const I pdc = I(-2) * sine(point_mid) * sine(point_delta / 2);
   const I pds = I(2) * cosine(point_mid) * sine(point_delta / 2);
   const I turn = enclose(delta, point_delta);
   const double max_turn = std::max(std::abs(turn.lo), std::abs(turn.hi));
+  const J world_x = J(co) * range[0] - J(so) * range[1];
+  const J world_y = J(so) * range[0] + J(co) * range[1];
+  const I point_x = co * point[0] - so * point[1];
+  const I point_y = so * point[0] + co * point[1];
   CornerImage out;
   for (size_t k = 0; k < 8; k += 2) {
     const I x = probe.offsets[k], y = probe.offsets[k + 1];
-    const J dx = J(co) * range[0] - J(so) * range[1] + J(x) * dc - J(y) * ds;
-    const J dy = J(so) * range[0] + J(co) * range[1] + J(x) * ds + J(y) * dc;
-    const I px = co * point[0] - so * point[1] + x * pdc - y * pds;
-    const I py = so * point[0] + co * point[1] + x * pds + y * pdc;
+    const J dx = world_x + J(x) * dc - J(y) * ds;
+    const J dy = world_y + J(x) * ds + J(y) * dc;
+    const I px = point_x + x * pdc - y * pds;
+    const I py = point_y + x * pds + y * pdc;
     out.endpoint[k] = previous[k] + enclose(dx, px);
     out.endpoint[k + 1] = previous[k + 1] + enclose(dy, py);
     const I radius2 = I(std::max(std::abs(x.lo), std::abs(x.hi))) *

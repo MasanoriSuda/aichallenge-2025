@@ -1129,3 +1129,37 @@ TEST(MpccAppliedInput, CausalObservationFloorCannotHideAPublicationClockReset)
   EXPECT_TRUE(vehicle::first_publication_bracket_admitted(program, .995, .995, .999));
   EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, .995, .995, .99));
 }
+
+TEST(MpccVehicleModel, PairedOutwardRoundingPreservesScalarBits)
+{
+  namespace n = vehicle::numerical;
+  const auto bits = [](double value) {
+      std::uint64_t result;
+      std::memcpy(&result, &value, sizeof(result));
+      return result;
+    };
+  const auto check = [&](double lower, double upper) {
+      const auto pair = n::outward_pair(lower, upper);
+      ASSERT_EQ(bits(pair.lo), bits(n::down(lower)));
+      ASSERT_EQ(bits(pair.hi), bits(n::up(upper)));
+    };
+  const double special[]{
+    0.0, -0.0, INFINITY, -INFINITY, NAN, -NAN,
+    std::numeric_limits<double>::max(), -std::numeric_limits<double>::max(),
+    std::numeric_limits<double>::min(), -std::numeric_limits<double>::min(),
+    std::numeric_limits<double>::denorm_min(), -std::numeric_limits<double>::denorm_min(),
+    1.0, -1.0};
+  for (double lower : special) {
+    for (double upper : special) {
+      check(lower, upper);
+    }
+  }
+  std::mt19937_64 random(20260911);
+  for (std::size_t index = 0; index < 1000000; ++index) {
+    const auto lower_bits = random(), upper_bits = random();
+    double lower, upper;
+    std::memcpy(&lower, &lower_bits, sizeof(lower));
+    std::memcpy(&upper, &upper_bits, sizeof(upper));
+    check(lower, upper);
+  }
+}

@@ -45,4 +45,8 @@
 - [x] Production same-step coefficients; buildr62/testsr51/rebuiltr203–206passed.
 - [x] Dev2-r30on7c283cc7fails beforeReady: D1645/D2662postpublicationwindow; preserved, not accepted.
 - [x] Final-publication immutableinput observer, bounded fourbuckets, buildr63/testsr52passed.
-- [ ] Fixed committed dev2-r31, exact finalguardrequest replay and causal deadline repair; then M4–M6.
+- [x] Dev2-r31on3387e684captures six exact finalguardrequests; r207/r208Accepted offline, live deadline still fails.
+- [x] R32inconclusive startup sensor stall, r33startupCPU/wait attribution; no integrated acceptance.
+- [x] R209–r212same-input arithmetic/corner/index comparisons; full result parity.
+- [x] Exact runtime slice buildr64/testsr53 (2465), r213–215production21cases, sealed2214files/review/quality.
+- [ ] Commit exact-runtime slice and run fixed dev2-r34; then causal repair/M4–M6.

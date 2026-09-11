@@ -2838,7 +2838,8 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
           o.decision_clock_sec, o.before_clock_sec, o.after_clock_sec);
       if (!program.commands.empty()) {
         const auto & first = program.commands.front();
-        boundary["deadline_sec"] = first.published_sec + program.maximum_publication_delay_sec;
+        boundary["deadline_sec"] = mpcc_vehicle_model::publication_epoch(program, 0, true).
+          value_or(std::numeric_limits<double>::quiet_NaN());
         boundary["final_packet_matches"] = first.published_sec == o.nominal_sec &&
           first.wire_acceleration_mps2 == o.wire_acceleration_mps2 &&
           first.wire_steering_rad == o.wire_steering_rad;

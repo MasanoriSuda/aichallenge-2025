@@ -60,3 +60,11 @@
 - [x] R39時計参照/更新の実値確認。短いwallcallbackでも25msROSを超える。
 - [ ] 新しい共有力計算でSIMDを再評価し、採用前にbit一致とportable dispatchを検証。
 - [ ] 正しい時計端点表現、長い証明、実走行の公開期限、全M4–M6を完遂。
+
+
+2026-09-11 integer publication checkpoint（baseline2994c7b2）:
+- [x] 整数25ms境界の証明/公開/Stop/YAML/hash整合を修正。旧連続時刻の意味を維持。
+- [x] Buildr65:26package、testsr54:2466記録/63group、エラー/失敗/skip0。
+- [x] R225:境界1件だけを改善、実超過19件は拒否。R226–R228:旧21ケース判定維持。
+- [x] R224:旧r179を新しい共有力計算で再比較。bit一致だが約1ms短縮だけで未採用。
+- [ ] 固定commitのdev2-r40。残る実公開期限と長い証明、全M4–M6を完遂。

@@ -27,6 +27,7 @@ struct Request {
   double actuator_tolerance{};
   std::vector<Sample> nominal_stop_samples;
   double maximum_publication_delay_sec{};
+  std::optional<vehicle::PublicationNanosecondClock> nanosecond_clock{};
 };
 
 struct Prepared {

@@ -1,20 +1,20 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。bb2d8843の2台走行は公開期限で不合格。**
+**全体は未完。実際の30–35ms公開遅延とM4–M6は未解決。**
 
-Buildr64は26package、testsr53は2465記録/63group・エラー/失敗/skip0。
-同一入力の負荷中計測でCPU費用増を確認したが、CPU分離だけでは解消しない。
-r37では15.4mscallback中にROS時刻が30ms進む。r39の内部時計観測でも
-約19ms中に30–35ms進み、更新と参照値は一致する。時計配送のまとまりと
-演算費用を分けて扱う。r38は観測ライブラリの適用範囲による起動失敗で、
-制御評価から除外。診断設定は全て未採用、元の公開条件と物理条件を維持。
+整数ROS時刻でちょうど25ms後を浮動小数点加算の丸めだけで拒否する不具合を修正。
+入力範囲の証明、停止、保存形式、公開判定で同じ整数境界を共有する。
+Buildr65は26package、testsr54は2466記録/63group、エラー/失敗/skip0。
+保存入力では境界の1件だけが通り、残る19件の実超過は拒否。旧21ケースの
+物理・停止判定も維持した。大きなepochの整数精度は主張せず、元の意味を維持。
+次は固定commitのdev2-r40。CPU配置やSIMDの診断設定は採用していない。
 
-[計算費用・スケジューリング・時計の証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-cost-design.md)、
+[整数時刻の設計・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/nanosecond-publication-design.md)、
+[時計とCPUの因果計測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-cost-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-25msのnanosecond境界表現、長い初期証明、実Stop/rest/restart、全intent、
-Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、dev3/dev4六周、
-gate1–3、同一tar/image/evalは未完。公開条件を緩めず継続する。
+長い初期証明、実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、
+同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
 
 ## Superseded checkpoint and historical evidence
 

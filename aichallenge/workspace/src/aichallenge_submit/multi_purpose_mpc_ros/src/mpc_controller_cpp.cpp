@@ -9735,7 +9735,8 @@ struct MPC
     const auto & program = proof.prepared();
     const auto & packet = program.program.commands.front();
     if (publication_deadline_sec)
-      *publication_deadline_sec = packet.published_sec + program.program.maximum_publication_delay_sec;
+      *publication_deadline_sec = mpcc_vehicle_model::publication_epoch(program.program, 0, true).
+        value_or(std::numeric_limits<double>::quiet_NaN());
     return decision_id == pending.decision_id && decision_id == program.decision_id &&
       program.source.sequence == pending.command.solution_id &&
       program.source.source_context.fingerprint == pending.command.problem_fingerprint &&

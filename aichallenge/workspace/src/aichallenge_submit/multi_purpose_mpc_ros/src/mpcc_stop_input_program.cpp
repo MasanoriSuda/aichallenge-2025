@@ -62,7 +62,7 @@ Result prepare(const Request &r) noexcept {
   Prepared out{r.source,
                r.decision_id,
                r.nominal_control_origin_sec,
-               {period, {}, true, r.maximum_publication_delay_sec},
+               {period, {}, true, r.maximum_publication_delay_sec, r.nanosecond_clock},
                false};
   const auto command_count = static_cast<std::size_t>(
       std::ceil((previous - kClockTolerance) / period));
@@ -99,6 +99,11 @@ Result prepare(const Request &r) noexcept {
     vehicle::PublishedCommand packet{
         now + command * period, static_cast<float>(first.acceleration_mps2),
         mpcc_wire_command::steering(steering, r.steering_wire_gain)};
+    if (r.nanosecond_clock) {
+      const auto epoch = vehicle::publication_epoch(out.program, command);
+      if (!epoch) return {R::InvalidTiming, {}};
+      packet.published_sec = *epoch;
+    }
     if (command == 0) {
       // The caller already selected the actual first publication. Sampling a
       // future angle must not silently change it or its first held interval.
@@ -161,13 +166,23 @@ remaining_program(const vehicle::PublishedInputProgram &source,
       static_cast<std::size_t>(upper - source.commands.begin() - 1);
   vehicle::PublishedInputProgram result{
       source.publication_interval_sec, {}, true, source.maximum_publication_delay_sec};
+  if (source.nanosecond_clock) {
+    result.nanosecond_clock = vehicle::publication_nanosecond_clock(now,
+      source.publication_interval_sec, source.maximum_publication_delay_sec);
+    if (!result.nanosecond_clock) return std::nullopt;
+  }
   result.commands.reserve(source.commands.size() - index);
   for (std::size_t i = index; i < source.commands.size(); ++i) {
     auto packet = source.commands[i];
     packet.published_sec = now + (i - index) * source.publication_interval_sec;
     result.commands.push_back(packet);
+    if (result.nanosecond_clock) {
+      const auto epoch = vehicle::publication_epoch(result, i - index);
+      if (!epoch) return std::nullopt;
+      result.commands.back().published_sec = *epoch;
+    }
   }
-  return result;
+  return vehicle::valid(result, now) ? std::optional{std::move(result)} : std::nullopt;
 }
 
 } // namespace multi_purpose_mpc_ros::mpcc_stop_input_program

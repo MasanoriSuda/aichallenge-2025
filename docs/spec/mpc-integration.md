@@ -4579,3 +4579,15 @@ queueへ渡し、ファイルI/Oは制御callback外で行う。保存結果は�
 静的地図もcell構築完了後に既存の非free積分索引を用意し、衝突判定を維持する。
 これらは計算量の改善であり、25ms公開期限や実走行の受入れ合格を意味しない。
 [同値変換と実行時間の検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/exact-runtime-design.md)。
+
+
+公開プログラムには、元の秒表現へ一意に戻せる場合、最初の時刻・周期・最大公開遅延を
+整数nanosecondで束縛する。証明中の入力範囲と停止時刻、最終公開判定は同じ整数の
+境界を使い、25ms後ちょうどを浮動小数点加算の丸めだけで拒否しない。1ns超過や
+時計の逆行は拒否する。整数へ一意に戻せない秒や大きなepochは従来の連続時刻の
+意味を保持し、丸めて整数時刻として扱わない。現APIでの一意変換範囲は2^51nsまで。
+
+整数時刻の内部Stop provenanceはv4で、fingerprintと保存形式に時刻の表現を含める。
+v1–v3の意味は維持し、表現の欠落・混在・改変を拒否する。この境界修正によって
+30ms以上の実際の公開遅延が許可されることはなく、統合走行の合格も未確認である。
+[整数公開時刻の設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/nanosecond-publication-design.md)。

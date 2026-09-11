@@ -92,6 +92,12 @@ inline YAML::Node encode_input_program(const PublishedInputProgram &program) {
   node["repeat_last_until_rest"] = program.repeat_last_until_rest;
   if (program.maximum_publication_delay_sec != 0)
     node["maximum_publication_delay_sec"] = program.maximum_publication_delay_sec;
+  if (program.nanosecond_clock) {
+    auto clock = node["nanosecond_clock"];
+    clock["first_ns"] = program.nanosecond_clock->first_ns;
+    clock["interval_ns"] = program.nanosecond_clock->interval_ns;
+    clock["maximum_delay_ns"] = program.nanosecond_clock->maximum_delay_ns;
+  }
   node["published_time_wire_acceleration_wire_steering"] =
       YAML::Node(YAML::NodeType::Sequence);
   for (const auto &packet : program.commands)
@@ -107,6 +113,13 @@ decode_input_program(const YAML::Node &node) {
                                 node["repeat_last_until_rest"].as<bool>(),
                                 node["maximum_publication_delay_sec"] ?
                                   node["maximum_publication_delay_sec"].as<double>() : 0};
+  if (const auto clock = node["nanosecond_clock"]) {
+    if (!clock.IsMap() || !clock["first_ns"] || !clock["interval_ns"] ||
+        !clock["maximum_delay_ns"]) return std::nullopt;
+    program.nanosecond_clock = PublicationNanosecondClock{
+      clock["first_ns"].as<std::int64_t>(), clock["interval_ns"].as<std::int64_t>(),
+      clock["maximum_delay_ns"].as<std::int64_t>()};
+  }
   for (const auto &packet :
        node["published_time_wire_acceleration_wire_steering"]) {
     if (packet.size() != 3)
@@ -123,7 +136,8 @@ inline YAML::Node
 encode_applied_program_provenance(const AppliedProgramProvenance &value) {
   YAML::Node node;
   const bool window = value.program.maximum_publication_delay_sec > 0;
-  node["schema"] = window ? "applied-stop-provenance-v3" :
+  node["schema"] = value.program.nanosecond_clock ? "applied-stop-provenance-v4" :
+    window ? "applied-stop-provenance-v3" :
     value.forward_velocity_ceiling_mps ? "applied-stop-provenance-v2" : "applied-stop-provenance-v1";
   if (window) node["has_forward_velocity_ceiling"] = value.forward_velocity_ceiling_mps.has_value();
   if (value.forward_velocity_ceiling_mps)
@@ -140,7 +154,8 @@ inline std::optional<AppliedProgramProvenance>
 decode_applied_program_provenance(const YAML::Node &node,
                                   const Parameters &parameters) {
   const auto schema = node["schema"].as<std::string>();
-  const bool window = schema == "applied-stop-provenance-v3";
+  const bool integer_clock = schema == "applied-stop-provenance-v4";
+  const bool window = schema == "applied-stop-provenance-v3" || integer_clock;
   if (schema != "applied-stop-provenance-v1" && schema != "applied-stop-provenance-v2" && !window)
     return std::nullopt;
   if (window && !node["has_forward_velocity_ceiling"]) return std::nullopt;
@@ -151,6 +166,7 @@ decode_applied_program_provenance(const YAML::Node &node,
   const auto profile = decode_input_application_profile(node["profile"]);
   const auto program = decode_input_program(node["program"]);
   if (!observation || !profile || !program ||
+      integer_clock != program->nanosecond_clock.has_value() ||
       window != (program->maximum_publication_delay_sec > 0))
     return std::nullopt;
   AppliedProgramProvenance value{

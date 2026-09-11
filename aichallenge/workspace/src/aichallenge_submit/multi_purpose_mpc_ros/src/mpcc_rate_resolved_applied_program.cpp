@@ -300,6 +300,11 @@ Result certify_terminal_stop(const retained::Request &request,
                          execution.physical_global_tolerance,
                          nominal.terminal_stop_actuation_samples};
   input.maximum_publication_delay_sec = execution.publication_interval_sec;
+  // Seconds outside the uniquely representable ns domain keep their existing
+  // continuous-clock semantics. Never guess an integer origin for them.
+  input.nanosecond_clock = mpcc_vehicle_model::publication_nanosecond_clock(
+    input.first_packet.published_sec, input.publication_interval_sec,
+    input.maximum_publication_delay_sec);
   const auto prepared = program::prepare(input);
   result.program_reason = prepared.reason;
   if (!prepared.prepared) {

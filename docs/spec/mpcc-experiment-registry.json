@@ -1033,6 +1033,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-clock-evidence.json",
       "replay_ready": true,
       "reason": "Exact final publication inputs, same-input loaded CPU comparisons, scheduling observations and controller clock get/set trace. No live acceptance."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-nanosecond-publication",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/nanosecond-publication-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen integer endpoint versus nineteen real overruns, old negative/control cases and native range tests. No integrated acceptance."
     }
   ],
   "experiments": [
@@ -12117,6 +12123,86 @@
       "production_impact": "None. Existing authority,25mspublicationwindow,250msreceiverprofile,model,hardboundsandratesremain unchanged.",
       "deleted_code": [],
       "revisit_condition": "Only new implementation or causal evidence; preserve all failed classifications. SIMD may be revisited on new shared-force producer with full bit parity and portable dispatch before production."
+    },
+    {
+      "experiment_id": "20260911-nine-state-nanosecond-publication-r223-compile",
+      "baseline_commit": "2994c7b223e8f678f91fb22502633e1a0d16f472",
+      "snapshot_ids": [
+        "20260911-nine-state-nanosecond-publication"
+      ],
+      "hypothesis": "Compile SIMD comparison without steeringmount",
+      "changed_dimension": "Explicit clock representation and common proof/guard endpoint; separately unpromoted SIMD diagnostic",
+      "result": "inconclusive",
+      "reason": "Missing read-only source include; no numerical result; corrected inr224.",
+      "production_impact": "Integer-grid representation only. Retires floating addition as deadline owner for explicitly bound integer programmes. No authority addition, tolerance, window/profile/rate or physical-bound relaxation.",
+      "deleted_code": [
+        "Independent floatingdeadlineaddition for integer programme publication andinputcoverage"
+      ],
+      "revisit_condition": "Fixed committed dev2-r40 for clock representation. Real overruns require a separate measured structural fix; do not claim integrated acceptance or repeat rejected SIMD unchanged."
+    },
+    {
+      "experiment_id": "20260911-nine-state-nanosecond-publication-r224-simd",
+      "baseline_commit": "2994c7b223e8f678f91fb22502633e1a0d16f472",
+      "snapshot_ids": [
+        "20260911-nine-state-nanosecond-publication"
+      ],
+      "hypothesis": "AVX2 closes current shared-force proof cost",
+      "changed_dimension": "Explicit clock representation and common proof/guard endpoint; separately unpromoted SIMD diagnostic",
+      "result": "rejected",
+      "reason": "New shared-forcearchitecture justifies revisit ofr179. Six full tubes byte-identical; currentproofgain~1ms; longproof60.410→53.743msstillrejected. No dispatch/productionpromotion.",
+      "production_impact": "Integer-grid representation only. Retires floating addition as deadline owner for explicitly bound integer programmes. No authority addition, tolerance, window/profile/rate or physical-bound relaxation.",
+      "deleted_code": [
+        "Independent floatingdeadlineaddition for integer programme publication andinputcoverage"
+      ],
+      "revisit_condition": "Fixed committed dev2-r40 for clock representation. Real overruns require a separate measured structural fix; do not claim integrated acceptance or repeat rejected SIMD unchanged."
+    },
+    {
+      "experiment_id": "20260911-nine-state-nanosecond-publication-r225-boundary",
+      "baseline_commit": "2994c7b223e8f678f91fb22502633e1a0d16f472",
+      "snapshot_ids": [
+        "20260911-nine-state-nanosecond-publication"
+      ],
+      "hypothesis": "Use the same integer clock endpoints in proof and publisher",
+      "changed_dimension": "Explicit clock representation and common proof/guard endpoint; separately unpromoted SIMD diagnostic",
+      "result": "accepted",
+      "reason": "20physicalproofsAccepted; onlyr31D1602exact25msendpoint changesfromguardRejectedtoAccepted. Nineteen real overrun observations remainRejected. Three earlier scene replays retain expectedoutcomes.",
+      "production_impact": "Integer-grid representation only. Retires floating addition as deadline owner for explicitly bound integer programmes. No authority addition, tolerance, window/profile/rate or physical-bound relaxation.",
+      "deleted_code": [
+        "Independent floatingdeadlineaddition for integer programme publication andinputcoverage"
+      ],
+      "revisit_condition": "Fixed committed dev2-r40 for clock representation. Real overruns require a separate measured structural fix; do not claim integrated acceptance or repeat rejected SIMD unchanged."
+    },
+    {
+      "experiment_id": "20260911-nine-state-nanosecond-publication-r226-228-regressions",
+      "baseline_commit": "2994c7b223e8f678f91fb22502633e1a0d16f472",
+      "snapshot_ids": [
+        "20260911-nine-state-nanosecond-publication"
+      ],
+      "hypothesis": "Preserve original physical and Stop rejection classes",
+      "changed_dimension": "Explicit clock representation and common proof/guard endpoint; separately unpromoted SIMD diagnostic",
+      "result": "accepted",
+      "reason": "All21oldcaseclassifications unchanged; gap259.999994msstillpredictionreason5. Publication clockrepresentation is not a physical margin or longerdeadline.",
+      "production_impact": "Integer-grid representation only. Retires floating addition as deadline owner for explicitly bound integer programmes. No authority addition, tolerance, window/profile/rate or physical-bound relaxation.",
+      "deleted_code": [
+        "Independent floatingdeadlineaddition for integer programme publication andinputcoverage"
+      ],
+      "revisit_condition": "Fixed committed dev2-r40 for clock representation. Real overruns require a separate measured structural fix; do not claim integrated acceptance or repeat rejected SIMD unchanged."
+    },
+    {
+      "experiment_id": "20260911-nine-state-nanosecond-publication-r65-r54-build-test",
+      "baseline_commit": "2994c7b223e8f678f91fb22502633e1a0d16f472",
+      "snapshot_ids": [
+        "20260911-nine-state-nanosecond-publication"
+      ],
+      "hypothesis": "Validate complete clockgrid/legacy/YAML/Stop/native propagation",
+      "changed_dimension": "Explicit clock representation and common proof/guard endpoint; separately unpromoted SIMD diagnostic",
+      "result": "accepted",
+      "reason": "26packagesbuilt4m59s;2466records/63groups,0errors/failures/skips,32.0s. 10000integerorigins/endpoints andbothclockmodes×18native input schedules throughrest.",
+      "production_impact": "Integer-grid representation only. Retires floating addition as deadline owner for explicitly bound integer programmes. No authority addition, tolerance, window/profile/rate or physical-bound relaxation.",
+      "deleted_code": [
+        "Independent floatingdeadlineaddition for integer programme publication andinputcoverage"
+      ],
+      "revisit_condition": "Fixed committed dev2-r40 for clock representation. Real overruns require a separate measured structural fix; do not claim integrated acceptance or repeat rejected SIMD unchanged."
     }
   ]
 }

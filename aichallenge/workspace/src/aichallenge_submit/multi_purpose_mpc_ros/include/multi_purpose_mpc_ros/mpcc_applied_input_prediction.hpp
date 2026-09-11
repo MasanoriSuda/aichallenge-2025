@@ -27,6 +27,12 @@ struct InputApplicationProfile {
 /// Commands start at the observation's publication epoch and follow its fixed
 /// publication period. An enabled tail republishes the final nonpositive
 /// packet at that same period until all admitted body states reach rest.
+struct PublicationNanosecondClock {
+  std::int64_t first_ns{};
+  std::int64_t interval_ns{};
+  std::int64_t maximum_delay_ns{};
+};
+
 struct PublishedInputProgram {
   double publication_interval_sec{};
   std::vector<PublishedCommand> commands;
@@ -35,7 +41,18 @@ struct PublishedInputProgram {
   /// window. Actual history keeps exact recorded epochs. Zero is legacy exact
   /// timing; canonical proof uses the existing publisher period as its deadline.
   double maximum_publication_delay_sec{};
+  /// Explicit integer grid, when the input seconds uniquely round-trip to ns.
+  /// Absence retains the original continuous-double clock and fingerprints.
+  std::optional<PublicationNanosecondClock> nanosecond_clock{};
 };
+
+/// Conversion is fail-closed outside the uniquely representable range and for
+/// non-grid values. It never rounds a continuous timestamp into permission.
+std::optional<PublicationNanosecondClock> publication_nanosecond_clock(
+  double first_sec, double interval_sec, double maximum_delay_sec) noexcept;
+/// The common endpoint used by input coverage, rest proof and final guards.
+std::optional<double> publication_epoch(const PublishedInputProgram &program,
+  std::size_t index, bool latest = false) noexcept;
 
 /// Bounded input provenance carried by a materialized Stop artifact. This
 /// stores no parent plan pointer, so repeated Stop joins cannot retain an

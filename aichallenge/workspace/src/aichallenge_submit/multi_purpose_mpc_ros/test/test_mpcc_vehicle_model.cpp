@@ -1049,13 +1049,75 @@ TEST(MpccAppliedInput, FirstPublicationWindowIsExactAndBoundIntoTheInputContext)
   EXPECT_EQ(vehicle::applied_input_context_fingerprint(observation, program, profile, model), legacy);
 }
 
+TEST(MpccAppliedInput, IntegerPublicationEndpointIsExactAndDistinctFromContinuousClock)
+{
+  constexpr std::int64_t first_ns = 1619999963, period_ns = 25000000;
+  const double first = static_cast<double>(first_ns) / 1e9;
+  const double latest = static_cast<double>(first_ns + period_ns) / 1e9;
+  auto program = stop_program(first);
+  program.maximum_publication_delay_sec = .025;
+  ASSERT_LT(first + .025, latest);  // Frozen r31D1decision602 failure.
+  EXPECT_FALSE(vehicle::first_publication_time_admitted(program, latest));
+  program.nanosecond_clock = vehicle::publication_nanosecond_clock(first, .025, .025);
+  ASSERT_TRUE(program.nanosecond_clock);
+  ASSERT_TRUE(vehicle::valid(program, first));
+  EXPECT_EQ(vehicle::publication_epoch(program, 0, true), latest);
+  EXPECT_TRUE(vehicle::first_publication_bracket_admitted(program, first, latest, latest));
+  EXPECT_FALSE(vehicle::first_publication_time_admitted(program,
+    static_cast<double>(first_ns + period_ns + 1) / 1e9));
+  EXPECT_FALSE(vehicle::first_publication_time_admitted(program, std::nextafter(latest, INFINITY)));
+  EXPECT_FALSE(vehicle::first_publication_time_admitted(program, std::nextafter(latest, -INFINITY)));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, first, latest, first));
+  EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, first, first - .005, latest));
+  for (double invalid : std::array<double, 5>{-1., NAN, INFINITY, 3e6, std::nextafter(first, INFINITY)})
+    EXPECT_FALSE(vehicle::publication_nanosecond_clock(invalid, .025, .025));
+  for (double invalid : std::array<double, 5>{-1., 0., NAN, INFINITY, .026})
+    EXPECT_FALSE(vehicle::publication_nanosecond_clock(first, .025, invalid));
+  auto changed = program; ++changed.nanosecond_clock->first_ns;
+  EXPECT_FALSE(vehicle::valid(changed, first));
+  changed = program; changed.nanosecond_clock->interval_ns = std::numeric_limits<std::int64_t>::max();
+  EXPECT_FALSE(vehicle::publication_epoch(changed, 10000, true));
+  EXPECT_FALSE(vehicle::valid(changed, first));
+
+  std::mt19937_64 random(602);
+  std::uniform_int_distribution<std::int64_t> origins(1000000000, 2000000000000000);
+  for (int i = 0; i < 10000; ++i) {
+    const auto ns = origins(random);
+    const double epoch = static_cast<double>(ns) / 1e9;
+    auto candidate = stop_program(epoch);
+    candidate.maximum_publication_delay_sec = .025;
+    candidate.nanosecond_clock = vehicle::publication_nanosecond_clock(epoch, .025, .025);
+    ASSERT_TRUE(candidate.nanosecond_clock);
+    EXPECT_EQ(candidate.nanosecond_clock->first_ns, ns);
+    ASSERT_TRUE(vehicle::valid(candidate, epoch));
+    EXPECT_TRUE(vehicle::first_publication_time_admitted(candidate, static_cast<double>(ns + period_ns) / 1e9));
+    EXPECT_FALSE(vehicle::first_publication_time_admitted(candidate, static_cast<double>(ns + period_ns + 1) / 1e9));
+  }
+  const auto observation = applied_observation();
+  auto continuous = stop_program(observation.now_sec);
+  continuous.maximum_publication_delay_sec = .025;
+  const auto prior = vehicle::applied_input_context_fingerprint(observation, continuous, applied_profile(), vehicle_model());
+  continuous.nanosecond_clock = vehicle::publication_nanosecond_clock(observation.now_sec, .025, .025);
+  const auto current = vehicle::applied_input_context_fingerprint(observation, continuous, applied_profile(), vehicle_model());
+  EXPECT_NE(prior, 0U); EXPECT_NE(current, 0U); EXPECT_NE(prior, current);
+  continuous.nanosecond_clock.reset();
+  EXPECT_EQ(vehicle::applied_input_context_fingerprint(observation, continuous, applied_profile(), vehicle_model()), prior);
+}
+
 TEST(MpccAppliedInput, IndependentPacketPublicationTimesRemainEnclosedThroughRest)
 {
   const auto observation = applied_observation();
   const auto profile = applied_profile();
   const auto model = vehicle_model();
-  const vehicle::PublishedInputProgram program{.025,
+  for (const bool integer_clock : {false, true}) {
+  vehicle::PublishedInputProgram program{.025,
     {{1.45, 1, .125}, {1.45 + .025, -3, -.125}, {1.45 + 2*.025, -3, 0}}, true, .025};
+  if (integer_clock) {
+    program.nanosecond_clock = vehicle::publication_nanosecond_clock(observation.now_sec, .025, .025);
+    ASSERT_TRUE(program.nanosecond_clock);
+    for (std::size_t i = 0; i < program.commands.size(); ++i)
+      program.commands[i].published_sec = *vehicle::publication_epoch(program, i);
+  }
   const auto prediction = vehicle::predict_applied_inputs_to_rest(observation, program, profile, model);
   ASSERT_TRUE(prediction.tube);
   EXPECT_GT(prediction.tube->rest_sec, program.commands.front().published_sec +
@@ -1066,14 +1128,18 @@ TEST(MpccAppliedInput, IndependentPacketPublicationTimesRemainEnclosedThroughRes
     for (std::size_t i = 0; i < 160; ++i) {
       auto packet = program.commands[std::min(i, program.commands.size() - 1)];
       const double phase = arm < 6 ? double(arm % 3) / 2 : double((i + arm) % 3) / 2;
-      const double nominal = observation.now_sec + i * program.publication_interval_sec;
-      packet.published_sec = nominal + phase * program.maximum_publication_delay_sec;
+      const double nominal = *vehicle::publication_epoch(program, i);
+      packet.published_sec = integer_clock ?
+        static_cast<double>(program.nanosecond_clock->first_ns +
+          static_cast<std::int64_t>(i) * program.nanosecond_clock->interval_ns +
+          static_cast<std::int64_t>(phase * program.nanosecond_clock->maximum_delay_ns)) / 1e9 :
+        nominal + phase * program.maximum_publication_delay_sec;
       // Adjacent closed windows can overlap by one representable timestamp.
       // Select a nondecreasing actual epoch inside the same certified window;
       // keep both values at equal epochs and keep the exact boundary checks.
       packet.published_sec = std::max(packet.published_sec, packets.back().published_sec);
       ASSERT_GE(packet.published_sec, nominal);
-      ASSERT_LE(packet.published_sec, nominal + program.maximum_publication_delay_sec);
+      ASSERT_LE(packet.published_sec, *vehicle::publication_epoch(program, i, true));
       packets.push_back(packet);
     }
     ASSERT_TRUE(std::is_sorted(packets.begin(), packets.end(), [](const auto &a, const auto &b) {
@@ -1107,6 +1173,7 @@ TEST(MpccAppliedInput, IndependentPacketPublicationTimesRemainEnclosedThroughRes
     EXPECT_EQ(state.forward_velocity_mps, 0);
     EXPECT_EQ(state.lateral_velocity_mps, 0);
     EXPECT_EQ(state.yaw_rate_radps, 0);
+  }
   }
 }
 

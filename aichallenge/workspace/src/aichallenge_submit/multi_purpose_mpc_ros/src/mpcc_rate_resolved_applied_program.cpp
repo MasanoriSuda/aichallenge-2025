@@ -991,6 +991,25 @@ std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
     }
   }
   if (!initialized) return {};
+  // A candidate starting set, never a claimed sensor-error bound. Include the
+  // raw component origins as well as their later model predictions. Pose can
+  // lead or lag the source motion; declare both directions and prove the
+  // entire new set independently below. Body/actuator coordinates keep their
+  // original raw-inclusive hull and all physical limits remain unchanged.
+  const auto &state = source.observation.initial.state;
+  const std::array<double, 8> center{0, 0, 0, state.forward_velocity_mps,
+    state.lateral_velocity_mps, state.yaw_rate_radps, state.desired_steering_rad,
+    state.tire_steering_rad};
+  for (std::size_t i = 0; i < request.body.size(); ++i) {
+    auto &range = request.body[i];
+    range.lower = std::min(range.lower, center[i]);
+    range.upper = std::max(range.upper, center[i]);
+    if (i >= 3) continue;
+    const auto delta = vehicle::numerical::I(range.lower, range.upper) - vehicle::numerical::I(center[i]);
+    const double radius = std::max(std::abs(delta.lo), std::abs(delta.hi));
+    const auto symmetric = vehicle::numerical::I(center[i]) + vehicle::numerical::I(-radius, radius);
+    range = {symmetric.lo, symmetric.hi};
+  }
   auto prediction = vehicle::predict_starting_domain_to_rest(request, original.plan->execution_artifact->vehicle_model);
   if (!prediction.tube) return {};
   auto result = std::shared_ptr<StartingDomainEvidence>(new StartingDomainEvidence);

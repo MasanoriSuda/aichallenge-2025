@@ -274,3 +274,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R326all146native, R327all3actual-library replays/prefix parity/original pre-post failures, source105, buildr94all26/testsr82all2560/66passed. Failed r323mount and r325fixture attempts preserved.
 - [ ] Commit and standard dev2-r55: live worker availability, current proof cost, actual deadlines and full runtime acceptance.
 - [ ] All remainingM4-M6: Mission/sibling/Store, multi-tick Stop/rest/restart, Recovery/Rejoin/Boost/async, repeated single/multicar races/gates and same submission/eval.
+
+
+2026-09-12 domain coverage after standard r55 (baseline4a73f87f):
+- [x] R55firstD1post974 fails: currentX/tire outsideD, full current12.98mswall/10.51CPU; Recovery0.05ms. Completed bags/logs and teardown distinction retained, no laps.
+- [x] R328raw inclusion repairs tire only; all-signed symmetry failsR53hard state bound. R329pose-only symmetry with raw-inclusive body/actuator hull independently proves all4cases.
+- [x] Change only candidateDproducer, retain strict whole-prefix/current-world/source/context/history/actual-window checks. R330all147native, R331all4actual-library replays, buildr95all26/testsr83all2561/66/source105pass.
+- [ ] Commit and standarddev2-r56; verify coverage and actual worker/current deadlines. Retained suffix and worker duplicate propagation remain hypotheses to compare if timing fails.
+- [ ] All remainingM4-M6 and final same submission/eval; no partial validation is overall completion.

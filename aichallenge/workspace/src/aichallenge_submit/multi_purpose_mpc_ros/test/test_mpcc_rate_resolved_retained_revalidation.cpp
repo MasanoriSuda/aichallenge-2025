@@ -4894,3 +4894,29 @@ TEST(MpccScheduledDomainDispatch, ActualLateSendIsRecordedAndCannotMintReceipt)
   EXPECT_FALSE(candidate.publication_identity(f.ledger, f.owner.capture()));
   ASSERT_EQ(f.ledger.since(*f.original_cursor)->size(), 1U);
 }
+
+
+TEST(MpccScheduledDomainDispatch, IndependentlyProvesPoseBehindTheOriginalSourcePopulation)
+{
+  ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Track, true);
+  const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+  // A fresh pose behind the raw source cannot be in its forward-only old
+  // population. It can still be inside a newly and independently proved set.
+  auto observation = f.fresh.publication_prefix->observation;
+  observation.initial.state.x_m = f.certificate->tube().coordinate_origin.x_m - .001;
+  f.fresh.publication_prefix->observation = observation;
+  f.bind_next(0);
+  const auto full = f.prepare(); ASSERT_TRUE(full.candidate); ASSERT_TRUE(full.candidate->current_physical_proof());
+  const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+    f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
+  ASSERT_TRUE(result.candidate);
+  ASSERT_EQ(result.domain_use, scheduled::DomainUseReason::Accepted);
+  ASSERT_TRUE(result.candidate->current_domain_proof());
+  const auto &prefix = result.candidate->current_domain_proof()->prefix();
+  EXPECT_LT(prefix.coordinate_origin.x_m, f.certificate->tube().coordinate_origin.x_m);
+  EXPECT_NE(domain->tube().context_fingerprint, f.certificate->tube().context_fingerprint);
+  EXPECT_EQ(result.candidate->source().input_context_fingerprint, f.certificate->tube().context_fingerprint);
+  EXPECT_GT(result.current.world.checked_samples, 1U);
+  EXPECT_TRUE(result.candidate->matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
+    f.fresh.now_sec, result.candidate->packet().wire_acceleration_mps2, result.candidate->packet().wire_steering_rad));
+}

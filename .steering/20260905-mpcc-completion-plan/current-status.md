@@ -1,21 +1,23 @@
 # Current status and remaining completion work
 
-2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分のローカルcommitのみ。
-**全体未完。開始範囲の認証接続と静的/再生検証が完了。次は標準dev2-r55。**
+2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
+**全体未完。標準r55失敗を保存し、開始範囲の生成を修正・検証。次は標準dev2-r56。**
 
-単一dispatcherへimmutable worker evidenceとCurrentDomainProofを接続。
-現在prefixを新規計算し、厳密包含・現在world/Followと元のepoch/context/実台帳を確認する。
-元source/packet identityと実pre/post送信窓は維持。範囲外/非対応は既存の完全再計算。
-先行予定packetを持つsourceは遅延入力記憶を省略できないため前計算の対象外。
-本番producerは元々preceding_packet_count=0。最初の未送信suffixだけを扱う。
+R55D1post974:現在X/タイヤ角がD外、完全再計算12.98mswall/10.51CPU。
+Recovery0.05ms。元25ms窓を越え失敗、移動lapなし。全runのdomain採用17/11、
+初回範囲外66/41、非対応残suffix349/265。採用時の現在CPU中央値約1ms。
 
-R326全146native、R327本番libraryで保存3例の厳密prefix/全world/元期限判定が合格。
-Buildr94全26package、testsr82全2560records/66groups、source105合格。
-新経路のworker/current CPUと実期限は標準dev2-r55で検証する。最新標準r54は失敗。
-全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
-同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+R328全成分対称化はR53状態上限違反で不採用。R329姿勢だけの対称化とraw成分を
+含むbody/actuator範囲は保存4例の全prefix・全域/全停止/現在worldを独立に証明。
+候補D生成だけ反映、元の物理条件・履歴/context/観測/実送信窓は維持。
+R330全147native、R331本番library保存4例、buildr95全26、testsr83全2561/66合格。
 
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-integration-design.md)、
+標準r56の実coverage/worker/current期限を検証する。残suffixとworker二重未来計算は
+必要に応じた次の比較対象であり未実装。全intent/Mission/sibling/Store、実Stop/rest/restart、
+Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、dev3/dev4六周、
+gate1–3、同一tar/image/evalは未完。単体/再生の合格を全体完了にしない。
+
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-coverage-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

@@ -4742,3 +4742,14 @@ Followの範囲証明は進捗knotsの厳密な非減少と非負終端速度を
 R326全146test、R327保存3例の本番library再生、buildr94全26package、testsr82全2560/66合格。
 標準dev2-r55による実worker availability/期限の検証とM4-M6は未完。
 [接続の設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-integration-design.md)。
+
+標準r55はD1指令974で送信後期限超過。現在X/タイヤ角が開始範囲外となり、
+完全再計算12.98mswall/10.51CPUへ戻っていた。前計算が使えた現在CPUは約1msだが、
+全runの採用17/11件に対し初回範囲外66/41件、非対応の残suffix349/265件があり、未完。
+R328では全符号付き成分の対称化がR53の状態上限に違反し不採用。R329の姿勢だけの
+対称化と元raw成分を含むbody/actuator範囲は保存4例の全域証明を通過した。
+workerの候補D生成だけをこの方式に変更し、全D/元時刻から全停止まで新規計算する。
+観測誤差上限や許容差として扱わず、現在の全prefix厳密包含・全worldと元の公開条件を維持。
+R330全147native、R331本番library保存4例、buildr95全26、testsr83全2561/66合格。
+標準r56の実タイミング・範囲coverageとM4-M6は未完。
+[比較と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-coverage-design.md)。

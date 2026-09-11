@@ -1165,6 +1165,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-integration-evidence.json",
       "replay_ready": true,
       "reason": "Authenticated independent domain and current prefix/world inside sole dispatcher; final native and actual-library replay; live acceptance pending."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-domain-pose-coverage",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-coverage-evidence.json",
+      "replay_ready": true,
+      "reason": "R55standard failure and causal starting-set comparison, with exact four-case and final native/build/package evidence."
     }
   ],
   "experiments": [
@@ -13984,6 +13990,48 @@
       "production_impact": "Connected within sole scheduled dispatcher; existing complete point proof required for unsupported cases. Worker availability still subject to live run.",
       "deleted_code": [],
       "revisit_condition": "Fresh committed standard run or new counterexample; do not relax original windows or admit pending prior input memory."
+    },
+    {
+      "experiment_id": "20260912-nine-state-domain-pose-coverage-dev2-r55",
+      "baseline_commit": "4a73f87f73daaa62345f1498dec2565620d0acd4",
+      "snapshot_ids": [
+        "20260912-nine-state-domain-pose-coverage"
+      ],
+      "hypothesis": "A causal independently proved pose domain can admit lead/lag localization and raw component origins without widening actual measurement/window tolerances",
+      "changed_dimension": "Starting candidate set only; every expanded state/time recomputed under unchanged model and physical limits",
+      "result": "rejected",
+      "reason": "D1post974outsideX/tire returned tofull point proof andmissed original window. Domain accepted17/11; no laps.",
+      "production_impact": "Only pose/raw candidate producer promoted after complete replay/tests; original full-point path and all actual publication guards stay.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard run or new counterexample; do not mirror actuator limits or relax failed proofs."
+    },
+    {
+      "experiment_id": "20260912-nine-state-domain-pose-coverage-r328-all-signed",
+      "baseline_commit": "4a73f87f73daaa62345f1498dec2565620d0acd4",
+      "snapshot_ids": [
+        "20260912-nine-state-domain-pose-coverage"
+      ],
+      "hypothesis": "A causal independently proved pose domain can admit lead/lag localization and raw component origins without widening actual measurement/window tolerances",
+      "changed_dimension": "Starting candidate set only; every expanded state/time recomputed under unchanged model and physical limits",
+      "result": "rejected",
+      "reason": "Independent larger domain contains current prefix but failsR53hard state bound; no promotion.",
+      "production_impact": "Only pose/raw candidate producer promoted after complete replay/tests; original full-point path and all actual publication guards stay.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard run or new counterexample; do not mirror actuator limits or relax failed proofs."
+    },
+    {
+      "experiment_id": "20260912-nine-state-domain-pose-coverage-r329-r330-r331-r95-r83",
+      "baseline_commit": "4a73f87f73daaa62345f1498dec2565620d0acd4",
+      "snapshot_ids": [
+        "20260912-nine-state-domain-pose-coverage"
+      ],
+      "hypothesis": "A causal independently proved pose domain can admit lead/lag localization and raw component origins without widening actual measurement/window tolerances",
+      "changed_dimension": "Starting candidate set only; every expanded state/time recomputed under unchanged model and physical limits",
+      "result": "accepted",
+      "reason": "Pose-only symmetric candidate plus rawbody origins independently passes4complete cases; native147/build26/tests2561/66/source105. Live timing unverified.",
+      "production_impact": "Only pose/raw candidate producer promoted after complete replay/tests; original full-point path and all actual publication guards stay.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard run or new counterexample; do not mirror actuator limits or relax failed proofs."
     }
   ]
 }

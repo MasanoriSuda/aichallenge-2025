@@ -1,0 +1,129 @@
+{
+  "baseline_commit": "892cbdfc945f2f88c7b3ff3f313d3c110ca19494",
+  "integrated_acceptance": false,
+  "production_authority_change": false,
+  "summary": {
+    "build_packages": 26,
+    "package_test_records": 2480,
+    "ctest_groups": 64,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0,
+    "native_tests": 53
+  },
+  "limitations": [
+    "All final normal, Emergency and shutdown publications are recorded. History values/floor/order/pruning remain delegated to the unchanged serialized recorder. Intended source is not proof of successful post-publication authority.",
+    "Immutable cursor rejects owner/reset/observed raw-clock regression and lost transactions. Strict prefix comparison checks all raw brackets, exact wire bits, sequence and source. This supplies no state/world/intent or full-rest authority.",
+    "This slice does not activate scheduled normal commands or retire the synchronous authority. Fixed-commit dev2-r42 live ledger verification and future nominal/current-world/async integration remain pending. M4-M6 remains incomplete."
+  ],
+  "files": [
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/build.log",
+      "sha256": "6bc584668b8333444a2d11464bef83f01b9c55ba925f939749ae8171f30da669"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/compile-command.json",
+      "sha256": "8b5ad08fe852683140059d58abb26a0dc8824083d0ed883584f26aec44652723"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/generator.py",
+      "sha256": "8b84df74f12e351b0373d4736295c3a9a4336508b5d1ffa092c7c4e7d2bd4e00"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/mpcc_applied_input_prediction.cpp",
+      "sha256": "4e119a746c88c9a6688d357fdf25d516cbec24c1acc69428ecc579e572f28a1f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/mpcc_applied_input_prediction.hpp",
+      "sha256": "938c5eb9a82517a8296fdc42c77b11de62cfd7f1de19015e568097599d5549ef"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/mpcc_publication_ledger.cpp",
+      "sha256": "f9595afffee1b42adc2f84eed9ed944465fe65b638015eb74b10ccbffd591d78"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/mpcc_publication_ledger.hpp",
+      "sha256": "dd005d13fb2537920800fd5e58dfd5dc5f5d09ab2547c211fb42f36c3f5e57e8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/native",
+      "sha256": "72e505f14c0f5eb1589bcde7d124af540275a4d25e7a32771ac64dc75fd03e13"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/results.xml",
+      "sha256": "363366d95e85df58ddb508495434518e5b5a6e41105ef1d9ed3824174a0ecfa0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/run-command.json",
+      "sha256": "2ae3b6a279d0726e2a05c74e38f453c179f074a2298a9ff0cc527e142f20d322"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/run.log",
+      "sha256": "f08f2d56de98fcd35b9f4c6904d33d719b3b5bcf395f434c3a365ba3aa8e2d35"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/test_mpcc_publication_ledger.cpp",
+      "sha256": "cb47c4438f45b0b30b98c173dd8f9830eae68bc6e5eb64e7c2a42ad5e7a13562"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r236/test_mpcc_vehicle_model.cpp",
+      "sha256": "6855b0d1a4a1d5533487740ffe18f19ad4b87b7ebbc6c1815880dea8383d7e5a"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/mpcc-ledger-native-r236.log",
+      "sha256": "3ec01bf8a9ef585aaefc3b1e652d8b61911541f4e48b61266a0fda5e99f8c2b7"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/mpcc-ledger-quality-initial.log",
+      "sha256": "bd4dc0f7e042ea2b2a59976ff3c077ba1ab69f7ad862a0f6d49101f69966b94e"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/mpcc-nine-state-build-r69.log",
+      "sha256": "246344e3932e743b17eea9e7e72ca08a8fe24e68d5431af85e4d78ac8bf34726"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/mpcc-nine-state-build-r70.log",
+      "sha256": "bdbce6d5d882b6bb93537d9183409150a35b7dddf39582862dba1ea0691a52f8"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/mpcc-nine-state-tests-r58.log",
+      "sha256": "fcd1351b84121c4602815842935be492aa63983be464355f083f7b193d6cf8d7"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/mpcc_ledger_native_r236.py",
+      "sha256": "8b84df74f12e351b0373d4736295c3a9a4336508b5d1ffa092c7c4e7d2bd4e00"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/mpcc_record_ledger.py",
+      "sha256": "111510a99f8cf02475a0b0e17cd7cc88e280c8ef585e2b46a81ffd0c3d00dd50"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/production-source/CMakeLists.txt",
+      "sha256": "b84c537e922c6cbec3c545dbd380fddd9c68d85dcda5b6df551bf0c0df16909e"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/production-source/include/multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp",
+      "sha256": "938c5eb9a82517a8296fdc42c77b11de62cfd7f1de19015e568097599d5549ef"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/production-source/include/multi_purpose_mpc_ros/mpcc_publication_ledger.hpp",
+      "sha256": "dd005d13fb2537920800fd5e58dfd5dc5f5d09ab2547c211fb42f36c3f5e57e8"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/production-source/src/mpc_controller_cpp.cpp",
+      "sha256": "597c9fe83357de1cc4e537f9614cb203c7130e2db561214f146a748d8f5fbb4a"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/production-source/src/mpcc_applied_input_prediction.cpp",
+      "sha256": "4e119a746c88c9a6688d357fdf25d516cbec24c1acc69428ecc579e572f28a1f"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/production-source/src/mpcc_publication_ledger.cpp",
+      "sha256": "f9595afffee1b42adc2f84eed9ed944465fe65b638015eb74b10ccbffd591d78"
+    },
+    {
+      "path": "output/20260911-nine-state-publication-ledger-evidence/production-source/test/test_mpcc_publication_ledger.cpp",
+      "sha256": "19b597c007b50f62ceeecee586dd90d5c504dd5637a1d1107802f8ac0df0e06e"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 #include <multi_purpose_mpc_ros/mpcc_wire_command.hpp>
 #include <multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp>
 #include <multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp>
+#include <multi_purpose_mpc_ros/mpcc_publication_ledger.hpp>
 #include <autoware_auto_vehicle_msgs/msg/velocity_report.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <deque>
@@ -54949,7 +54950,8 @@ private:
 
   void record_published_vehicle_command(
     const rclcpp::Time & stamp, const double acceleration, const double wire_steering,
-    rclcpp::Time * recorded_ros_clock = nullptr)
+    const rclcpp::Time & before_clock, rclcpp::Time * recorded_ros_clock = nullptr,
+    std::optional<mpcc_vehicle_model::PublishedProgramSource> source = {})
   {
     // Called immediately after the final ROS publication. The packet stamp is
     // the nominal decision epoch; it cannot backdate an already sent input.
@@ -54960,11 +54962,10 @@ private:
     // Keep a predecessor for both channels before the oldest accepted state.
     const double retain_sec = mpc_cfg_.odom_timeout_sec +
       mpc_cfg_.state_prediction_delay_sec;
-    if (!mpcc_vehicle_model::record_serialized_publication(
-        published_vehicle_commands_, {stamp.seconds(), acceleration, wire_steering},
-        publication_clock.seconds(), retain_sec))
+    if (!published_input_ledger_.record({stamp.seconds(), acceleration, wire_steering},
+        before_clock.seconds(), publication_clock.seconds(), retain_sec, std::move(source)))
     {
-      published_vehicle_commands_.clear();
+      published_input_ledger_.reset();
       last_published_steering_control_time_.reset();
       return;
     }
@@ -55028,7 +55029,7 @@ private:
         yaw_rate->first, *last_published_physical_steering_rad_, tire->first}};
     auto prediction = mpcc_vehicle_model::predict_published_history(
       initial, now_sec, now_sec + (state_prediction_active_ ?
-      mpc_cfg_.state_prediction_delay_sec : 0.0), published_vehicle_commands_,
+      mpc_cfg_.state_prediction_delay_sec : 0.0), published_input_ledger_.history(),
       mpc_cfg_.vehicle_model, mpc_cfg_.nominal_acceleration_application_delay_sec,
       mpc_cfg_.nominal_steering_application_delay_sec);
     if (prediction) {
@@ -55080,9 +55081,10 @@ private:
     if (!command_is_finite(raw_command)) {
       raw_command.lateral.steering_tire_angle = 0.0;
     }
+    const auto publication_clock_before = now();
     command_pub_->publish(raw_command);
     record_published_vehicle_command(stamp, raw_command.longitudinal.acceleration,
-      raw_command.lateral.steering_tire_angle);
+      raw_command.lateral.steering_tire_angle, publication_clock_before);
     last_published_physical_steering_rad_ =
       safe_control[1];
     last_published_steering_steady_ = SteadyClock::now();
@@ -55139,11 +55141,22 @@ private:
       if (mpc_) mpc_->record_applied_publication_failure(std::move(observation));
       return std::nullopt;
     }
+    std::optional<mpcc_vehicle_model::PublishedProgramSource> publication_source;
+    if (canonical_execution) {
+      const auto certificate = mpc_->applied_publication_observation();
+      if (certificate) {
+        const auto & prepared = certificate->prepared();
+        publication_source = mpcc_vehicle_model::PublishedProgramSource{
+          prepared.decision_id, prepared.source.sequence,
+          prepared.source.source_context.fingerprint, certificate->tube().context_fingerprint, 0};
+      }
+    }
     command_raw_pub_->publish(raw_command);
     command_pub_->publish(final_command);
     auto publication_clock_after = publication_clock_before;
     record_published_vehicle_command(stamp, final_command.longitudinal.acceleration,
-      final_command.lateral.steering_tire_angle, &publication_clock_after);
+      final_command.lateral.steering_tire_angle, publication_clock_before,
+      &publication_clock_after, publication_source);
     if (canonical_execution) {
       const double publication_after_sec = last_published_steering_control_time_ ?
         last_published_steering_control_time_->seconds() : std::numeric_limits<double>::quiet_NaN();
@@ -58823,7 +58836,7 @@ private:
         last_odom_receipt_steady_.reset();
         last_odom_source_stamp_.reset();
         last_odom_source_advance_steady_.reset();
-        published_vehicle_commands_.clear();
+        published_input_ledger_.reset();
         velocity_observations_.clear();
         yaw_rate_observations_.clear();
         tire_observations_.clear();
@@ -58891,6 +58904,20 @@ private:
       return;
     }
     mpc_->update_vehicle_observation_provenance(prediction->provenance);
+    if (const auto * event = published_input_ledger_.latest_transaction()) {
+      RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+        "MPCC publication ledger: sequence=%lu, records=%zu, history=%zu, discontinuities=%lu, "
+        "cursor_ready=%d, nominal=%.9f, before=%.9f, after=%.9f, "
+        "intended_decision=%lu, intended_solution=%lu, intended_packet=%zu",
+        static_cast<unsigned long>(event->sequence), published_input_ledger_.transaction_count(),
+        published_input_ledger_.history().size(),
+        static_cast<unsigned long>(published_input_ledger_.discontinuities()),
+        published_input_ledger_.snapshot_ready() ? 1 : 0, event->nominal.published_sec,
+        event->before_clock_sec, event->after_clock_sec,
+        static_cast<unsigned long>(event->source ? event->source->decision_id : 0),
+        static_cast<unsigned long>(event->source ? event->source->solution_id : 0),
+        event->source ? event->source->packet_index : 0);
+    }
     const auto & observed = prediction->current;
     const auto & predicted = prediction->control_origin;
     const auto & provenance = prediction->provenance;
@@ -59335,6 +59362,9 @@ private:
 
   void publish_zero_command()
   {
+    // End pending snapshot continuity even when ROS has already shut down and
+    // no final packet can be published. This is not a normal-program successor.
+    published_input_ledger_.reset();
     if (!rclcpp::ok() || !command_pub_) {
       return;
     }
@@ -59342,7 +59372,12 @@ private:
     const double shutdown_acceleration =
       recovery_may_be_in_reverse() && stuck_recovery_actuation_io_enabled_ ?
       reverse_actuation_calibration(cfg_.stuck_recovery).stop_acceleration_mps2 : 0.0;
-    command_pub_->publish(create_ackermann_control_command(now(), zero, shutdown_acceleration));
+    const auto stamp = now();
+    const auto command = create_ackermann_control_command(stamp, zero, shutdown_acceleration);
+    const auto before = now();
+    command_pub_->publish(command);
+    record_published_vehicle_command(stamp, command.longitudinal.acceleration,
+      command.lateral.steering_tire_angle, before);
   }
 
   std::string config_path_;
@@ -59352,7 +59387,7 @@ private:
   bool use_sim_time_{};
   bool simulation_mode_{};
   bool state_prediction_active_{false};
-  std::vector<mpcc_vehicle_model::PublishedCommand> published_vehicle_commands_;
+  mpcc_vehicle_model::PublishedInputLedger published_input_ledger_{256};
   std::optional<double> previous_control_ros_clock_sec_;
   bool use_obstacle_avoidance_{};
   bool use_stats_{};

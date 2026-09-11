@@ -1045,6 +1045,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/planned-publication-evidence.json",
       "replay_ready": true,
       "reason": "R40/R41 real publication failures, original observed clock versus planned first publication, full waiting-prefix proof, native and old-case regression. No integrated acceptance."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-publication-ledger",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-ledger-evidence.json",
+      "replay_ready": true,
+      "reason": "Immutable actual publication transactions, native prefix/reset/clock regressions, build and package evidence. No scheduled normal authority."
     }
   ],
   "experiments": [
@@ -12337,6 +12343,22 @@
         "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
       ],
       "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-ledger-r236-r70-r58",
+      "baseline_commit": "892cbdfc945f2f88c7b3ff3f313d3c110ca19494",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-ledger"
+      ],
+      "hypothesis": "Capture actual ordered publications with source and clock continuity without altering legacy history or normal authority",
+      "changed_dimension": "Single-writer publication ledger and strict indexed scheduled guard",
+      "result": "accepted",
+      "reason": "53 native tests; 26 packages; 2480 records/64 groups with zero failures/errors/skips. All three final publication paths recorded. Fixed-commit runtime verification pending.",
+      "production_impact": "Actual history owner and bounded telemetry; no changed physical/rate/window/timeout or normal authority.",
+      "deleted_code": [
+        "Replaced node-owned bare history vector; history arithmetic remains shared and unchanged."
+      ],
+      "revisit_condition": "Verify dev2-r42 ledger and integrate future nominal/current-world/prefix/async. This result cannot establish deadline or M4-M6 acceptance."
     }
   ]
 }

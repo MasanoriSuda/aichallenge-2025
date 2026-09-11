@@ -304,12 +304,23 @@ bool scheduled_publication_bracket_admitted(const PublishedInputProgram &program
                                             const double decision_clock,
                                             const double before_clock,
                                             const double after_clock) noexcept {
-  if (program.commands.empty() || !nonnegative(decision_clock) ||
-      decision_clock > program.commands.front().published_sec ||
+  return scheduled_publication_bracket_admitted(program, 0, decision_clock, before_clock, after_clock);
+}
+
+bool scheduled_publication_bracket_admitted(const PublishedInputProgram &program,
+                                            const std::size_t index,
+                                            const double decision_clock,
+                                            const double before_clock,
+                                            const double after_clock) noexcept {
+  if (program.commands.empty() || !valid(program, program.commands.front().published_sec) ||
+      (index >= program.commands.size() && !program.repeat_last_until_rest) ||
+      !nonnegative(decision_clock) || !nonnegative(before_clock) || !nonnegative(after_clock) ||
       before_clock < decision_clock || after_clock < before_clock ||
-      (program.nanosecond_clock && !exact_nanoseconds(decision_clock))) return false;
-  return first_publication_time_admitted(program, before_clock) &&
-         first_publication_time_admitted(program, after_clock);
+      (program.nanosecond_clock && (!exact_nanoseconds(decision_clock) ||
+       !exact_nanoseconds(before_clock) || !exact_nanoseconds(after_clock)))) return false;
+  const auto first = publication_epoch(program, index);
+  const auto latest = publication_epoch(program, index, true);
+  return first && latest && decision_clock <= *first && before_clock >= *first && after_clock <= *latest;
 }
 
 static bool program_epoch_valid(const ObservationProvenance &observation,

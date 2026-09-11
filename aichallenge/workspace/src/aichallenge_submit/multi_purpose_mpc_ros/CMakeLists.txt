@@ -90,6 +90,7 @@ ament_auto_add_library(${PROJECT_NAME}_mpcc_vehicle_model SHARED
   NO_TARGET_LINK_LIBRARIES
   src/mpcc_vehicle_model.cpp
   src/mpcc_applied_input_prediction.cpp
+  src/mpcc_publication_ledger.cpp
   src/mpcc_vehicle_prediction.cpp
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_vehicle_model yaml-cpp)
@@ -667,6 +668,8 @@ if(BUILD_TESTING)
     ${PROJECT_NAME}_mpcc_vehicle_model
     ${PROJECT_NAME}_recovery_footprint
   )
+  ament_add_gtest(test_mpcc_publication_ledger test/test_mpcc_publication_ledger.cpp)
+  target_link_libraries(test_mpcc_publication_ledger ${PROJECT_NAME}_mpcc_vehicle_model)
   find_package(Boost REQUIRED)
   ament_add_gtest(test_mpcc_vehicle_jacobian test/test_mpcc_vehicle_jacobian.cpp)
   target_include_directories(test_mpcc_vehicle_jacobian PRIVATE ${Boost_INCLUDE_DIRS})

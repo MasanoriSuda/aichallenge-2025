@@ -80,3 +80,11 @@
 - [ ] Fresh sensor/peer/world/targetと全残存区間の整合、async逆転/取消/期限/Stop-rest-restart。
 - [ ] 単一dispatcherへ接続し旧同期authorityを退役。未接続部品を無期限に残さない。
 - [ ] 固定final HEADでdynamic acceptanceを再開し、全M4–M6を完遂する。
+
+
+2026-09-11 actual publication ledger（baseline892cbdfc）:
+- [x] 単一送信台帳、opaque snapshot、raw clock/reset/脱落/source/float/各windowのprefix照合。
+- [x] 通常・Emergency・終了時の全最終送信を記録。既存historyとauthorityは維持。
+- [x] Native r236/buildr70/testsr58合格、証拠保存。新しいnormal authorityは未接続。
+- [ ] 固定commit dev2-r42で実記録を検証。
+- [ ] 予定nominal/明示旧prefix/current sensor-world/async単一dispatchを接続し、全M4–M6。

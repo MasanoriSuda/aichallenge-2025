@@ -1,24 +1,19 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。全M1–M6を確認待ちなしで自律実行中。必要分のローカルcommitのみ。
-**全体は未完。公開期限のruntime修正とM4–M6は未解決。**
+2026-09-11 JST。承認済みの全M1–M6を自律実行中。必要分のローカルcommitのみ。
+**全体未完。同期証明の実公開期限とM4–M6は未解決。**
 
-固定f661ced6のdev2-r40は、20.789259ms callbackで34.999999msのROS公開遅延があり
-不合格。r41は描画とRVizを止めても失敗した。両runの証拠・復元結果を保存した。
-予定公開を観測時刻と分ける共通予測器を実装し、待機区間を含む全body/4cornerと
-完全停止を検査する。未来のhistory、早期公開、時計逆行を拒否し、旧APIの意味を維持。
-この部品は既存のnormal authorityへ未接続で、走行改善としては未受入れ。
+予定公開の数値部品に続き、通常・Emergency・終了時の実送信を単一台帳へ統合した。
+旧historyの値/順序/floor/pruningを保ち、raw clock・source・reset・途中指令を照合する。
+この台帳は新しいnormal authorityを持たず、旧同期経路を維持する準備段階。
+Buildr70は26packages/4m13s、testsr58は2480記録/64group/32.0s、全合格。
+次は固定commit dev2-r42で実記録を確認し、予定nominal・旧certified prefix・現在sensor/
+world照合・非同期単一dispatchを接続する。旧同期authorityは接続sliceで退役する。
 
-Buildr68は26package/4m57s、testsr57は2471記録/63group/32.0s、エラー/失敗/skip0。
-6保存入力×0/25/75msの18通りで待機prefixを含む全物理検査がAccepted。旧21ケースの
-判定も維持した。診断は途中追加送信なしの仮定で、実prefixの整合や非同期採用を示さない。
-次は、旧certificateが約束した指令列を守る実送信台帳、予定programmeの照合、fresh
-sensor/world検査、単一dispatchと非同期計算の接続。旧同期authorityは同じsliceで退役する。
-
-[予定公開の設計・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/planned-publication-design.md)、
+[送信台帳](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-ledger-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-長い初期証明、実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、
-同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、同一HEADの単車/dev2各3回、
+dev3/dev4六周、gate1–3、同一tar/image/evalは未完。R40/R41の実期限超過は未解消。
 
 ## Superseded checkpoint and historical evidence
 

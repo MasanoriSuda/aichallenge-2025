@@ -196,6 +196,12 @@ bool scheduled_publication_bracket_admitted(const PublishedInputProgram &program
                                             double decision_clock_sec,
                                             double before_clock_sec,
                                             double after_clock_sec) noexcept;
+/// Same strict check for a later explicit packet or nonpositive repeated tail.
+bool scheduled_publication_bracket_admitted(const PublishedInputProgram &program,
+                                            std::size_t packet_index,
+                                            double decision_clock_sec,
+                                            double before_clock_sec,
+                                            double after_clock_sec) noexcept;
 std::uint64_t
 applied_input_context_fingerprint(const ObservationProvenance &observation,
                                   const PublishedInputProgram &program,

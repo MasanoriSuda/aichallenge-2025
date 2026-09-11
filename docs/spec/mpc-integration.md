@@ -4600,3 +4600,10 @@ v1–v3の意味は維持し、表現の欠落・混在・改変を拒否する�
 従来Certificateから区別し、現時点でnormal authorityへ未接続とする。既存の同時刻API、
 保存形式、物理境界・公開周期/window・receiver profileは維持する。
 [予定公開の設計と受入れ範囲](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/planned-publication-design.md)。
+
+
+最終送信は`PublishedInputLedger`が既存のserialized historyと送信transactionを所有する。
+normal・Emergency・終了時のraw clock前後と意図したsourceを記録し、途中指令・clock逆行・
+reset・履歴脱落を不透明なsnapshotで照合する。意図したsourceだけでは公開後のauthorityを
+示さない。予定prefix照合は数値/物理/現在worldの検査を代替しない。
+[送信台帳の設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-ledger-design.md)。

@@ -4591,3 +4591,12 @@ queueへ渡し、ファイルI/Oは制御callback外で行う。保存結果は�
 v1–v3の意味は維持し、表現の欠落・混在・改変を拒否する。この境界修正によって
 30ms以上の実際の公開遅延が許可されることはなく、統合走行の合格も未確認である。
 [整数公開時刻の設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/nanosecond-publication-design.md)。
+
+
+予定公開の共通数値APIは、実観測の`ObservationProvenance.now_sec`と未来programmeの
+最初の公開時刻を分ける。元のnowから待機中の各body/rigid-footprint区間を含め、
+未来の加速と完全停止まで検査する。未送信指令をactual historyへ入れず、早期公開の
+判定に受信済み観測用のcausal floorを流用しない。`ScheduledInputTube`とそのhashは
+従来Certificateから区別し、現時点でnormal authorityへ未接続とする。既存の同時刻API、
+保存形式、物理境界・公開周期/window・receiver profileは維持する。
+[予定公開の設計と受入れ範囲](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/planned-publication-design.md)。

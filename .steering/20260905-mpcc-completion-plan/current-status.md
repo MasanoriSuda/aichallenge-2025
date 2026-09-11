@@ -1,17 +1,21 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。実際の30–35ms公開遅延とM4–M6は未解決。**
+2026-09-11 JST。全M1–M6を確認待ちなしで自律実行中。必要分のローカルcommitのみ。
+**全体は未完。公開期限のruntime修正とM4–M6は未解決。**
 
-整数ROS時刻でちょうど25ms後を浮動小数点加算の丸めだけで拒否する不具合を修正。
-入力範囲の証明、停止、保存形式、公開判定で同じ整数境界を共有する。
-Buildr65は26package、testsr54は2466記録/63group、エラー/失敗/skip0。
-保存入力では境界の1件だけが通り、残る19件の実超過は拒否。旧21ケースの
-物理・停止判定も維持した。大きなepochの整数精度は主張せず、元の意味を維持。
-次は固定commitのdev2-r40。CPU配置やSIMDの診断設定は採用していない。
+固定f661ced6のdev2-r40は、20.789259ms callbackで34.999999msのROS公開遅延があり
+不合格。r41は描画とRVizを止めても失敗した。両runの証拠・復元結果を保存した。
+予定公開を観測時刻と分ける共通予測器を実装し、待機区間を含む全body/4cornerと
+完全停止を検査する。未来のhistory、早期公開、時計逆行を拒否し、旧APIの意味を維持。
+この部品は既存のnormal authorityへ未接続で、走行改善としては未受入れ。
 
-[整数時刻の設計・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/nanosecond-publication-design.md)、
-[時計とCPUの因果計測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-cost-design.md)、
+Buildr68は26package/4m57s、testsr57は2471記録/63group/32.0s、エラー/失敗/skip0。
+6保存入力×0/25/75msの18通りで待機prefixを含む全物理検査がAccepted。旧21ケースの
+判定も維持した。診断は途中追加送信なしの仮定で、実prefixの整合や非同期採用を示さない。
+次は、旧certificateが約束した指令列を守る実送信台帳、予定programmeの照合、fresh
+sensor/world検査、単一dispatchと非同期計算の接続。旧同期authorityは同じsliceで退役する。
+
+[予定公開の設計・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/planned-publication-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 長い初期証明、実Stop/rest/restart、全intent、Recovery/Rejoin/Boost/async、
 同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。

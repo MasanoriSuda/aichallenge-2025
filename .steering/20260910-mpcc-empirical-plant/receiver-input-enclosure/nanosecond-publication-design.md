@@ -69,4 +69,4 @@ closecost,soisnotpromoted. [Sealed evidence](nanosecond-publication-evidence.jso
 
 - [x] Implementation, legacy compatibility and exact frozen endpoint regression.
 - [x] Build/package/native tests and current/old recorded proof replay.
-- [ ] Fixed committed dev2-r40; actual clock/timing and remainingM4–M6.
+- [x] Fixed committed dev2-r40 failed at a real publication overrun; see [scheduled publication work](planned-publication-design.md). Remaining M4–M6 stays open.

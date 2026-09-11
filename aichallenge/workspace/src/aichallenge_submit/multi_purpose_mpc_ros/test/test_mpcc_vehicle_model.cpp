@@ -1109,71 +1109,98 @@ TEST(MpccAppliedInput, IndependentPacketPublicationTimesRemainEnclosedThroughRes
   const auto observation = applied_observation();
   const auto profile = applied_profile();
   const auto model = vehicle_model();
-  for (const bool integer_clock : {false, true}) {
-  vehicle::PublishedInputProgram program{.025,
-    {{1.45, 1, .125}, {1.45 + .025, -3, -.125}, {1.45 + 2*.025, -3, 0}}, true, .025};
-  if (integer_clock) {
-    program.nanosecond_clock = vehicle::publication_nanosecond_clock(observation.now_sec, .025, .025);
-    ASSERT_TRUE(program.nanosecond_clock);
-    for (std::size_t i = 0; i < program.commands.size(); ++i)
-      program.commands[i].published_sec = *vehicle::publication_epoch(program, i);
-  }
-  const auto prediction = vehicle::predict_applied_inputs_to_rest(observation, program, profile, model);
-  ASSERT_TRUE(prediction.tube);
-  EXPECT_GT(prediction.tube->rest_sec, program.commands.front().published_sec +
-    program.maximum_publication_delay_sec + profile.acceleration_age_sec);
-  namespace num = vehicle::numerical;
-  for (std::size_t arm = 0; arm < 18; ++arm) {
-    auto packets = observation.commands;
-    for (std::size_t i = 0; i < 160; ++i) {
-      auto packet = program.commands[std::min(i, program.commands.size() - 1)];
-      const double phase = arm < 6 ? double(arm % 3) / 2 : double((i + arm) % 3) / 2;
-      const double nominal = *vehicle::publication_epoch(program, i);
-      packet.published_sec = integer_clock ?
-        static_cast<double>(program.nanosecond_clock->first_ns +
-          static_cast<std::int64_t>(i) * program.nanosecond_clock->interval_ns +
-          static_cast<std::int64_t>(phase * program.nanosecond_clock->maximum_delay_ns)) / 1e9 :
-        nominal + phase * program.maximum_publication_delay_sec;
-      // Adjacent closed windows can overlap by one representable timestamp.
-      // Select a nondecreasing actual epoch inside the same certified window;
-      // keep both values at equal epochs and keep the exact boundary checks.
-      packet.published_sec = std::max(packet.published_sec, packets.back().published_sec);
-      ASSERT_GE(packet.published_sec, nominal);
-      ASSERT_LE(packet.published_sec, *vehicle::publication_epoch(program, i, true));
-      packets.push_back(packet);
-    }
-    ASSERT_TRUE(std::is_sorted(packets.begin(), packets.end(), [](const auto &a, const auto &b) {
-      return a.published_sec < b.published_sec;
-    }));
-    auto state = observation.initial.state;
-    state.x_m = state.y_m = state.yaw_rad = 0;
-    for (const auto & sample : prediction.tube->source_to_rest) {
-      const auto select = [&](const bool steering) -> std::optional<double> {
-        const double clock = sample.begin_sec - (steering ? profile.steering_mechanical_delay_sec : 0);
-        const double age = steering ? profile.steering_receipt_age_sec : profile.acceleration_age_sec;
-        std::optional<double> value;
-        for (const auto & packet : packets) {
-          if (packet.published_sec < clock - age || packet.published_sec > clock) continue;
-          value = steering ? packet.wire_steering_rad : packet.wire_acceleration_mps2;
-          if ((arm / 3 + static_cast<std::size_t>(steering)) % 2 == 0) break;
+  for (const std::int64_t lead_ns : {0LL, 75000000LL}) {
+    for (const bool integer_clock : {false, true}) {
+      const double first = static_cast<double>(1450000000LL + lead_ns) / 1e9;
+      SCOPED_TRACE(::testing::Message() << "lead=" << lead_ns << "/integer=" << integer_clock);
+      vehicle::PublishedInputProgram program{.025,
+        {{first, 1, .125}, {first + .025, -3, -.125}, {first + 2*.025, -3, 0}}, true, .025};
+      if (integer_clock) {
+        program.nanosecond_clock = vehicle::publication_nanosecond_clock(first, .025, .025);
+        ASSERT_TRUE(program.nanosecond_clock);
+        for (std::size_t i = 0; i < program.commands.size(); ++i)
+          program.commands[i].published_sec = *vehicle::publication_epoch(program, i);
+      }
+      auto footprint = corner_validation();
+      const auto ordinary = lead_ns == 0 ?
+        vehicle::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &footprint) :
+        vehicle::AppliedInputPrediction{};
+      const auto scheduled = lead_ns > 0 ?
+        vehicle::predict_scheduled_inputs_to_rest(observation, program, profile, model, {}, &footprint) :
+        vehicle::ScheduledInputPrediction{};
+      ASSERT_TRUE(ordinary.tube || scheduled.tube);
+      const auto &samples = lead_ns == 0 ? ordinary.tube->source_to_rest : scheduled.tube->source_to_rest;
+      const double rest_sec = lead_ns == 0 ? ordinary.tube->rest_sec : scheduled.tube->rest_sec;
+      EXPECT_GT(rest_sec, program.commands.front().published_sec +
+        program.maximum_publication_delay_sec + profile.acceleration_age_sec);
+      namespace num = vehicle::numerical;
+      for (std::size_t arm = 0; arm < 18; ++arm) {
+        auto packets = observation.commands;
+        for (std::size_t i = 0; i < 160; ++i) {
+          auto packet = program.commands[std::min(i, program.commands.size() - 1)];
+          const double phase = arm < 6 ? double(arm % 3) / 2 : double((i + arm) % 3) / 2;
+          const double nominal = *vehicle::publication_epoch(program, i);
+          packet.published_sec = integer_clock ?
+            static_cast<double>(program.nanosecond_clock->first_ns +
+              static_cast<std::int64_t>(i) * program.nanosecond_clock->interval_ns +
+              static_cast<std::int64_t>(phase * program.nanosecond_clock->maximum_delay_ns)) / 1e9 :
+            nominal + phase * program.maximum_publication_delay_sec;
+          // Adjacent closed windows can overlap by one representable timestamp.
+          // Select a nondecreasing actual epoch inside the same certified window;
+          // keep both values at equal epochs and keep the exact boundary checks.
+          packet.published_sec = std::max(packet.published_sec, packets.back().published_sec);
+          ASSERT_GE(packet.published_sec, nominal);
+          ASSERT_LE(packet.published_sec, *vehicle::publication_epoch(program, i, true));
+          packets.push_back(packet);
         }
-        return value;
-      };
-      const auto acceleration = select(false), steering = select(true);
-      ASSERT_TRUE(acceleration); ASSERT_TRUE(steering);
-      state.desired_steering_rad = *steering / model.steering_wire_gain;
-      const auto advanced = vehicle::advance(state, {*acceleration, 0}, model, sample.duration_sec);
-      ASSERT_TRUE(advanced); state = advanced->state;
-      const auto values = num::values(state);
-      for (std::size_t i = 0; i < values.size(); ++i) {
-        EXPECT_GE(values[i], sample.endpoint_body[i].lower) << arm << '/' << i;
-        EXPECT_LE(values[i], sample.endpoint_body[i].upper) << arm << '/' << i;
+        ASSERT_TRUE(std::is_sorted(packets.begin(), packets.end(), [](const auto &a, const auto &b) {
+          return a.published_sec < b.published_sec;
+        }));
+        auto state = observation.initial.state;
+        state.x_m = state.y_m = state.yaw_rad = 0;
+        for (const auto & sample : samples) {
+          const auto select = [&](const bool steering) -> std::optional<double> {
+            const double clock = sample.begin_sec - (steering ? profile.steering_mechanical_delay_sec : 0);
+            const double age = steering ? profile.steering_receipt_age_sec : profile.acceleration_age_sec;
+            std::optional<double> value;
+            for (const auto & packet : packets) {
+              if (packet.published_sec < clock - age || packet.published_sec > clock) continue;
+              value = steering ? packet.wire_steering_rad : packet.wire_acceleration_mps2;
+              if ((arm / 3 + static_cast<std::size_t>(steering)) % 2 == 0) break;
+            }
+            return value;
+          };
+          const auto acceleration = select(false), steering = select(true);
+          ASSERT_TRUE(acceleration); ASSERT_TRUE(steering);
+          state.desired_steering_rad = *steering / model.steering_wire_gain;
+          const auto advanced = vehicle::advance(state, {*acceleration, 0}, model, sample.duration_sec);
+          ASSERT_TRUE(advanced); state = advanced->state;
+          const auto values = num::values(state);
+          for (std::size_t i = 0; i < values.size(); ++i) {
+            EXPECT_GE(values[i], sample.endpoint_body[i].lower) << arm << '/' << i;
+            EXPECT_LE(values[i], sample.endpoint_body[i].upper) << arm << '/' << i;
+          }
+          ASSERT_TRUE(sample.endpoint_footprint);
+          const double origin_yaw = observation.initial.state.yaw_rad;
+          const double world_x = std::cos(origin_yaw) * state.x_m - std::sin(origin_yaw) * state.y_m;
+          const double world_y = std::sin(origin_yaw) * state.x_m + std::cos(origin_yaw) * state.y_m;
+          const double yaw = origin_yaw + state.yaw_rad;
+          for (std::size_t i = 0; i < 8; i += 2) {
+            const double x = footprint.local_offsets[i].lower;
+            const double y = footprint.local_offsets[i + 1].lower;
+            const double px = world_x + std::cos(yaw) * x - std::sin(yaw) * y;
+            const double py = world_y + std::sin(yaw) * x + std::cos(yaw) * y;
+            EXPECT_GE(px, (*sample.endpoint_footprint)[i].lower);
+            EXPECT_LE(px, (*sample.endpoint_footprint)[i].upper);
+            EXPECT_GE(py, (*sample.endpoint_footprint)[i + 1].lower);
+            EXPECT_LE(py, (*sample.endpoint_footprint)[i + 1].upper);
+          }
+        }
+        EXPECT_EQ(state.forward_velocity_mps, 0);
+        EXPECT_EQ(state.lateral_velocity_mps, 0);
+        EXPECT_EQ(state.yaw_rate_radps, 0);
       }
     }
-    EXPECT_EQ(state.forward_velocity_mps, 0);
-    EXPECT_EQ(state.lateral_velocity_mps, 0);
-    EXPECT_EQ(state.yaw_rate_radps, 0);
-  }
   }
 }
 
@@ -1195,6 +1222,188 @@ TEST(MpccAppliedInput, CausalObservationFloorCannotHideAPublicationClockReset)
   // floor while checking the unmodified raw clock sequence for regression.
   EXPECT_TRUE(vehicle::first_publication_bracket_admitted(program, .995, .995, .999));
   EXPECT_FALSE(vehicle::first_publication_bracket_admitted(program, .995, .995, .99));
+}
+
+TEST(MpccScheduledInput, FutureAppointmentCannotBorrowTheReceivedObservationFloor)
+{
+  auto program = stop_program(1.475);
+  program.maximum_publication_delay_sec = .025;
+  program.nanosecond_clock = vehicle::publication_nanosecond_clock(1.475, .025, .025);
+  ASSERT_TRUE(program.nanosecond_clock);
+  // The old floor is deliberately preserved for a received observation, and
+  // is precisely why a future appointment needs its own explicit guard.
+  EXPECT_TRUE(vehicle::first_publication_bracket_admitted(program, 1.45, 1.46, 1.47));
+  EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.45, 1.46, 1.47));
+  EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.45, 1.474999999, 1.475));
+  EXPECT_TRUE(vehicle::scheduled_publication_bracket_admitted(program, 1.45, 1.475, 1.5));
+  EXPECT_TRUE(vehicle::scheduled_publication_bracket_admitted(program, 1.45, 1.5, 1.5));
+  EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.45, 1.5, 1.500000001));
+  EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.46, 1.45, 1.48));
+  EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.45, 1.48, 1.475));
+  EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.48, 1.48, 1.49));
+  EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.45,
+    std::nextafter(1.475, -INFINITY), 1.48));
+  for (const double invalid : {double(NAN), double(INFINITY), -double(INFINITY), -1.0}) {
+    EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, invalid, 1.475, 1.48));
+    EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.45, invalid, 1.48));
+    EXPECT_FALSE(vehicle::scheduled_publication_bracket_admitted(program, 1.45, 1.475, invalid));
+  }
+}
+
+TEST(MpccScheduledInput, WaitingPrefixIsValidatedWithoutInventingFutureObservations)
+{
+  const auto observation = applied_observation();
+  auto program = stop_program(1.525);
+  program.maximum_publication_delay_sec = .025;
+  const auto model = vehicle_model();
+  const auto profile = applied_profile();
+  EXPECT_FALSE(vehicle::predict_applied_inputs_to_rest(observation, program, profile, model).tube);
+  EXPECT_EQ(vehicle::applied_input_context_fingerprint(observation, program, profile, model), 0U);
+
+  // Counterexample to simply advancing the old observation view: none of its
+  // validator calls cover the interval between actual observation and sending.
+  auto future_view = observation;
+  future_view.now_sec = program.commands.front().published_sec;
+  const auto reject_wait = [&](const auto &, double begin, double) {
+      return begin >= program.commands.front().published_sec;
+    };
+  ASSERT_TRUE(vehicle::predict_applied_inputs_to_rest(future_view, program, profile,
+    model, reject_wait).tube);
+  const auto rejected = vehicle::predict_scheduled_inputs_to_rest(
+    observation, program, profile, model, reject_wait);
+  EXPECT_EQ(rejected.reason, vehicle::AppliedInputRejectReason::ValidationRejected);
+  EXPECT_FALSE(rejected.tube);
+
+  std::vector<std::pair<double, double>> intervals;
+  auto footprint = corner_validation();
+  std::vector<std::pair<double, double>> corner_intervals;
+  footprint.validate = [&](const auto &, const auto &, double begin, double end) {
+      corner_intervals.emplace_back(begin, end); return true;
+    };
+  const auto result = vehicle::predict_scheduled_inputs_to_rest(
+    observation, program, profile, model,
+    [&](const auto &, double begin, double end) {
+      intervals.emplace_back(begin, end); return true;
+    }, &footprint);
+  ASSERT_TRUE(result.tube);
+  EXPECT_EQ(intervals, corner_intervals);
+  ASSERT_FALSE(intervals.empty());
+  EXPECT_EQ(intervals.front(), std::make_pair(observation.now_sec, observation.now_sec));
+  EXPECT_EQ(intervals.back().second, result.tube->rest_sec);
+  for (std::size_t i = 1; i < intervals.size(); ++i) {
+    EXPECT_EQ(intervals[i].first, intervals[i - 1].second);
+    EXPECT_GT(intervals[i].second, intervals[i].first);
+  }
+  EXPECT_EQ(result.tube->observation.now_sec, observation.now_sec);
+  EXPECT_EQ(result.tube->observation.initial.source_sec, observation.initial.source_sec);
+  EXPECT_EQ(result.tube->observation.velocity_source_sec, observation.velocity_source_sec);
+  EXPECT_EQ(result.tube->observation.yaw_rate_source_sec, observation.yaw_rate_source_sec);
+  EXPECT_EQ(result.tube->observation.tire_source_sec, observation.tire_source_sec);
+  EXPECT_EQ(result.tube->observation.commands.size(), observation.commands.size());
+  for (const auto &sample : result.tube->source_to_rest) {
+    if (sample.end_sec < program.commands.front().published_sec) {
+      EXPECT_EQ(sample.inputs.acceleration_mps2.lower, 1.0);
+    }
+  }
+  // The rigid-footprint validator must also be able to reject only in waiting.
+  footprint.validate = [&](const auto &, const auto &, double begin, double) {
+      return begin >= program.commands.front().published_sec;
+    };
+  EXPECT_FALSE(vehicle::predict_scheduled_inputs_to_rest(
+    observation, program, profile, model, {}, &footprint).tube);
+}
+
+TEST(MpccScheduledInput, FutureHistoryAndUncoveredWaitingIntervalsReject)
+{
+  const auto observation = applied_observation();
+  auto program = stop_program(1.525);
+  program.maximum_publication_delay_sec = .025;
+  const auto profile = applied_profile();
+  const auto model = vehicle_model();
+  const auto context = vehicle::scheduled_input_context_fingerprint(observation, program, profile, model);
+  ASSERT_NE(context, 0U);
+  auto invented = observation;
+  invented.commands.push_back({1.46, -3, 0});
+  EXPECT_EQ(vehicle::scheduled_input_context_fingerprint(invented, program, profile, model), 0U);
+  EXPECT_EQ(vehicle::predict_scheduled_inputs_to_rest(invented, program, profile, model).reason,
+    vehicle::AppliedInputRejectReason::InvalidObservation);
+  auto changed = observation;
+  changed.commands.back().wire_acceleration_mps2 = -3;
+  EXPECT_NE(vehicle::scheduled_input_context_fingerprint(changed, program, profile, model), context);
+  program.commands.front().published_sec = 1.675;
+  const auto gap = vehicle::predict_scheduled_inputs_to_rest(observation, program, profile, model);
+  EXPECT_EQ(gap.reason, vehicle::AppliedInputRejectReason::HistoryUnavailable);
+  EXPECT_FALSE(gap.tube);
+  program.commands.front().published_sec = 1.4;
+  EXPECT_EQ(vehicle::scheduled_input_context_fingerprint(observation, program, profile, model), 0U);
+  EXPECT_EQ(vehicle::predict_scheduled_inputs_to_rest(observation, program, profile, model).reason,
+    vehicle::AppliedInputRejectReason::InvalidProgram);
+}
+
+TEST(MpccScheduledInput, ZeroLeadRetainsEveryNumericalRangeButHasNoLegacyAuthorityIdentity)
+{
+  const auto observation = applied_observation();
+  auto program = stop_program(observation.now_sec);
+  program.maximum_publication_delay_sec = .025;
+  const auto profile = applied_profile();
+  const auto model = vehicle_model();
+  auto footprint = corner_validation();
+  const auto ordinary = vehicle::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &footprint);
+  const auto scheduled = vehicle::predict_scheduled_inputs_to_rest(observation, program, profile, model, {}, &footprint);
+  ASSERT_TRUE(ordinary.tube); ASSERT_TRUE(scheduled.tube);
+  EXPECT_NE(ordinary.tube->context_fingerprint, scheduled.tube->context_fingerprint);
+  EXPECT_EQ(scheduled.tube->context_fingerprint,
+    vehicle::scheduled_input_context_fingerprint(observation, program, profile, model));
+  EXPECT_EQ(ordinary.tube->rest_sec, scheduled.tube->rest_sec);
+  EXPECT_EQ(ordinary.tube->maximum_body_partitions, scheduled.tube->maximum_body_partitions);
+  const auto same = [](const auto &a, const auto &b) {
+      for (std::size_t i = 0; i < a.size(); ++i) {
+        EXPECT_EQ(a[i].lower, b[i].lower); EXPECT_EQ(a[i].upper, b[i].upper);
+      }
+    };
+  same(ordinary.tube->publication_body, scheduled.tube->observation_body);
+  ASSERT_TRUE(ordinary.tube->publication_footprint); ASSERT_TRUE(scheduled.tube->observation_footprint);
+  same(*ordinary.tube->publication_footprint, *scheduled.tube->observation_footprint);
+  ASSERT_EQ(ordinary.tube->source_to_rest.size(), scheduled.tube->source_to_rest.size());
+  for (std::size_t i = 0; i < ordinary.tube->source_to_rest.size(); ++i) {
+    const auto &a = ordinary.tube->source_to_rest[i];
+    const auto &b = scheduled.tube->source_to_rest[i];
+    EXPECT_EQ(a.begin_sec, b.begin_sec); EXPECT_EQ(a.end_sec, b.end_sec);
+    EXPECT_EQ(a.duration_sec, b.duration_sec);
+    same(a.swept_body, b.swept_body); same(a.endpoint_body, b.endpoint_body);
+    ASSERT_TRUE(a.swept_footprint); ASSERT_TRUE(b.swept_footprint);
+    ASSERT_TRUE(a.endpoint_footprint); ASSERT_TRUE(b.endpoint_footprint);
+    same(*a.swept_footprint, *b.swept_footprint); same(*a.endpoint_footprint, *b.endpoint_footprint);
+  }
+}
+
+TEST(MpccScheduledInput, RestBeforeAFutureLaunchDoesNotEndTheProof)
+{
+  auto observation = applied_observation();
+  observation.initial.state.forward_velocity_mps = 0;
+  observation.initial.state.lateral_velocity_mps = 0;
+  observation.initial.state.yaw_rate_radps = 0;
+  for (auto &packet : observation.commands) packet.wire_acceleration_mps2 = -3;
+  vehicle::PublishedInputProgram program{.025,
+    {{1.525, 1, 0}, {1.525 + .025, -3, 0}}, true, .025};
+  const auto profile = applied_profile();
+  const auto result = vehicle::predict_scheduled_inputs_to_rest(
+    observation, program, profile, vehicle_model());
+  ASSERT_TRUE(result.tube);
+  EXPECT_GT(result.tube->rest_sec,
+    *vehicle::publication_epoch(program, 0, true) + profile.acceleration_age_sec);
+  bool launched = false;
+  for (const auto &sample : result.tube->source_to_rest) {
+    if (sample.end_sec < program.commands.front().published_sec) {
+      EXPECT_EQ(sample.endpoint_body[3].upper, 0);
+    }
+    launched = launched || sample.endpoint_body[3].upper > 0;
+  }
+  EXPECT_TRUE(launched);
+  const auto &rest = result.tube->source_to_rest.back().endpoint_body;
+  for (std::size_t i = 3; i < 6; ++i) {
+    EXPECT_EQ(rest[i].lower, 0); EXPECT_EQ(rest[i].upper, 0);
+  }
 }
 
 TEST(MpccVehicleModel, PairedOutwardRoundingPreservesScalarBits)

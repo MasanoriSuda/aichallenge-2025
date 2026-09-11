@@ -24,9 +24,10 @@ struct InputApplicationProfile {
 };
 
 /// One common serialized program, independent of which input is applied.
-/// Commands start at the observation's publication epoch and follow its fixed
-/// publication period. An enabled tail republishes the final nonpositive
-/// packet at that same period until all admitted body states reach rest.
+/// Commands follow an explicit fixed publication clock. Ordinary prediction
+/// starts at observation.now_sec; scheduled prediction permits a later first
+/// packet. An enabled tail republishes the final nonpositive packet at that
+/// same period until all admitted body states reach rest.
 struct PublicationNanosecondClock {
   std::int64_t first_ns{};
   std::int64_t interval_ns{};
@@ -151,6 +152,28 @@ struct AppliedInputPrediction {
   std::optional<AppliedInputTube> tube;
 };
 
+/// A future programme is distinct from an already published history. Its first
+/// packet may be later than observation.now_sec; all intervening unissued
+/// packets must be in the programme. No observation epoch is moved forward.
+/// This numerical result cannot be passed as an ordinary applied certificate.
+struct ScheduledInputTube {
+  std::uint64_t context_fingerprint{};
+  ObservationProvenance observation;
+  PublishedInputProgram program;
+  InputApplicationProfile profile;
+  State coordinate_origin;
+  BodyRanges observation_body;
+  std::optional<FootprintRanges> observation_footprint;
+  std::vector<AppliedInputSample> source_to_rest;
+  double rest_sec{};
+  std::size_t maximum_body_partitions{};
+};
+
+struct ScheduledInputPrediction {
+  AppliedInputRejectReason reason{AppliedInputRejectReason::InvalidModel};
+  std::optional<ScheduledInputTube> tube;
+};
+
 bool valid(const InputApplicationProfile &profile) noexcept;
 bool valid(const PublishedInputProgram &program,
            double publication_sec) noexcept;
@@ -165,11 +188,25 @@ bool first_publication_bracket_admitted(const PublishedInputProgram &program,
                                         double decision_clock_sec,
                                         double before_clock_sec,
                                         double after_clock_sec) noexcept;
+
+/// A future appointment is not a received observation. Both raw publisher
+/// endpoints must lie in the programme's real window, without a causal floor.
+/// This checks clocks only; it grants no command, prefix or world authority.
+bool scheduled_publication_bracket_admitted(const PublishedInputProgram &program,
+                                            double decision_clock_sec,
+                                            double before_clock_sec,
+                                            double after_clock_sec) noexcept;
 std::uint64_t
 applied_input_context_fingerprint(const ObservationProvenance &observation,
                                   const PublishedInputProgram &program,
                                   const InputApplicationProfile &profile,
                                   const Parameters &parameters) noexcept;
+
+/// Separate domain from ordinary same-epoch applied-input certificates, even
+/// at zero lead. Future actual-history entries are always invalid.
+std::uint64_t scheduled_input_context_fingerprint(
+  const ObservationProvenance &observation, const PublishedInputProgram &program,
+  const InputApplicationProfile &profile, const Parameters &parameters) noexcept;
 
 /// Enclose the values of all causal packets admissible over a native substep.
 /// Equal historical epochs retain every value. Missing history rejects.
@@ -205,5 +242,16 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
                                const Parameters &parameters,
                                const AppliedInputValidator &validator,
                                const AppliedFootprintValidation *footprint) noexcept;
+
+/// Validate from the unchanged observation.now_sec through full rest,
+/// including every swept interval before the scheduled first publication.
+/// A missing intervening input rejects; no future packet becomes actual history.
+/// Same kernel, integration grid, profile and complete-rest requirements.
+/// Runtime adoption still needs an authenticated actual prefix and fresh world.
+ScheduledInputPrediction predict_scheduled_inputs_to_rest(
+  const ObservationProvenance &observation, const PublishedInputProgram &program,
+  const InputApplicationProfile &profile, const Parameters &parameters,
+  const AppliedInputValidator &validator = {},
+  const AppliedFootprintValidation *footprint = nullptr) noexcept;
 
 } // namespace multi_purpose_mpc_ros::mpcc_vehicle_model

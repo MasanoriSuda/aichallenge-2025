@@ -300,13 +300,34 @@ bool first_publication_bracket_admitted(const PublishedInputProgram &program,
     std::max(program.commands.front().published_sec, after_clock));
 }
 
-std::uint64_t
-applied_input_context_fingerprint(const ObservationProvenance &observation,
+bool scheduled_publication_bracket_admitted(const PublishedInputProgram &program,
+                                            const double decision_clock,
+                                            const double before_clock,
+                                            const double after_clock) noexcept {
+  if (program.commands.empty() || !nonnegative(decision_clock) ||
+      decision_clock > program.commands.front().published_sec ||
+      before_clock < decision_clock || after_clock < before_clock ||
+      (program.nanosecond_clock && !exact_nanoseconds(decision_clock))) return false;
+  return first_publication_time_admitted(program, before_clock) &&
+         first_publication_time_admitted(program, after_clock);
+}
+
+static bool program_epoch_valid(const ObservationProvenance &observation,
+                               const PublishedInputProgram &program,
+                               const bool scheduled) {
+  if (!scheduled) return valid(program, observation.now_sec);
+  return !program.commands.empty() &&
+    observation.now_sec <= program.commands.front().published_sec &&
+    valid(program, program.commands.front().published_sec);
+}
+
+static std::uint64_t input_context_fingerprint(const ObservationProvenance &observation,
                                   const PublishedInputProgram &program,
                                   const InputApplicationProfile &profile,
-                                  const Parameters &parameters) noexcept {
+                                  const Parameters &parameters,
+                                  const bool scheduled) noexcept {
   if (!valid(parameters) || !valid(observation) || !valid(profile) ||
-      !valid(program, observation.now_sec) || !compatible(profile, program) ||
+      !program_epoch_valid(observation, program, scheduled) || !compatible(profile, program) ||
       !history_valid(observation.commands, observation.now_sec))
     return 0;
   Hash hash;
@@ -341,7 +362,20 @@ applied_input_context_fingerprint(const ObservationProvenance &observation,
     hash.integer(program.nanosecond_clock->interval_ns);
     hash.integer(program.nanosecond_clock->maximum_delay_ns);
   }
+  if (scheduled) hash.string("scheduled-input-observation-v1");
   return hash.value == 0 ? 1 : hash.value;
+}
+
+std::uint64_t applied_input_context_fingerprint(
+    const ObservationProvenance &observation, const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters) noexcept {
+  return input_context_fingerprint(observation, program, profile, parameters, false);
+}
+
+std::uint64_t scheduled_input_context_fingerprint(
+    const ObservationProvenance &observation, const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters) noexcept {
+  return input_context_fingerprint(observation, program, profile, parameters, true);
 }
 
 std::uint64_t applied_program_provenance_fingerprint(
@@ -396,13 +430,14 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
   return predict_applied_inputs_to_rest(observation, program, profile, parameters, validator, nullptr);
 }
 
-AppliedInputPrediction
-predict_applied_inputs_to_rest(const ObservationProvenance &observation,
+static AppliedInputPrediction
+predict_inputs_to_rest(const ObservationProvenance &observation,
                                const PublishedInputProgram &program,
                                const InputApplicationProfile &profile,
                                const Parameters &parameters,
                                const AppliedInputValidator &validator,
-                               const AppliedFootprintValidation *footprint) noexcept {
+                               const AppliedFootprintValidation *footprint,
+                               const bool scheduled) noexcept {
   using Reason = AppliedInputRejectReason;
   if (!valid(parameters) || !parameters.nominal_settled_contact)
     return {Reason::InvalidModel, {}};
@@ -412,15 +447,15 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
   }
   if (!valid(profile))
     return {Reason::InvalidProfile, {}};
-  if (!valid(program, observation.now_sec) || !program.repeat_last_until_rest) {
+  if (!program_epoch_valid(observation, program, scheduled) || !program.repeat_last_until_rest) {
     return {Reason::InvalidProgram, {}};
   }
   if (!compatible(profile, program))
     return {Reason::InvalidProfile, {}};
   try {
     AppliedInputTube tube;
-    tube.context_fingerprint = applied_input_context_fingerprint(
-        observation, program, profile, parameters);
+    tube.context_fingerprint = input_context_fingerprint(
+        observation, program, profile, parameters, scheduled);
     if (tube.context_fingerprint == 0)
       return {Reason::InvalidObservation, {}};
     tube.observation = observation;
@@ -464,7 +499,7 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
     // Even an already stationary member may still receive a positive packet.
     // Every explicitly scheduled packet owns one complete publisher interval,
     // even if the body is already stationary before that interval ends.
-    double rest_not_before = observation.now_sec +
+    double rest_not_before = program.commands.front().published_sec +
       program.commands.size() * program.publication_interval_sec;
     if (program.maximum_publication_delay_sec > 0)
       rest_not_before = numerical::up(rest_not_before + program.maximum_publication_delay_sec);
@@ -557,6 +592,31 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
   } catch (const std::exception &) {
     return {Reason::NumericalFailure, {}};
   }
+}
+
+AppliedInputPrediction predict_applied_inputs_to_rest(
+    const ObservationProvenance &observation, const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters,
+    const AppliedInputValidator &validator,
+    const AppliedFootprintValidation *footprint) noexcept {
+  return predict_inputs_to_rest(observation, program, profile, parameters,
+                               validator, footprint, false);
+}
+
+ScheduledInputPrediction predict_scheduled_inputs_to_rest(
+    const ObservationProvenance &observation, const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters,
+    const AppliedInputValidator &validator,
+    const AppliedFootprintValidation *footprint) noexcept {
+  auto result = predict_inputs_to_rest(observation, program, profile, parameters,
+                                     validator, footprint, true);
+  if (!result.tube) return {result.reason, {}};
+  auto &tube = *result.tube;
+  return {result.reason, ScheduledInputTube{
+    tube.context_fingerprint, std::move(tube.observation), std::move(tube.program),
+    std::move(tube.profile), tube.coordinate_origin, tube.publication_body,
+    std::move(tube.publication_footprint), std::move(tube.source_to_rest),
+    tube.rest_sec, tube.maximum_body_partitions}};
 }
 
 } // namespace multi_purpose_mpc_ros::mpcc_vehicle_model

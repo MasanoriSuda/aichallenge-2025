@@ -51,14 +51,14 @@
 - [x] Exact runtime slice buildr64/testsr53 (2465), r213–215production21cases, sealed2214files/review/quality.
 - [x] Commitbb2d8843; dev2-r34still fails at movingD1941finalpublication30ms.
 - [x] R35same-input loaded CPU/library attribution; r216/r218–221diagnostics and architecture applicability recorded.
-- [ ] R36controller-only affinity comparison; then causal repair and M4–M6.
+- [x] R36controller-only affinity comparison completed; rejected. Causal repair and M4–M6 remain below.
 
 
 2026-09-11 scheduling/clock checkpoint（baselinebb2d8843）:
 - [x] R34–R39、R216–R222を保存・登録。観測失敗r38も除外理由を保存。
 - [x] CPU資源競合とROSclockの進み方を切り分け。affinity/trig/constantdual/FTZは未採用。
 - [x] R39時計参照/更新の実値確認。短いwallcallbackでも25msROSを超える。
-- [ ] 新しい共有力計算でSIMDを再評価し、採用前にbit一致とportable dispatchを検証。
+- [x] 新しい共有力計算でSIMDを再評価。bit一致だが効果不足で未採用。dispatch追加は不要。
 - [ ] 正しい時計端点表現、長い証明、実走行の公開期限、全M4–M6を完遂。
 
 
@@ -67,4 +67,16 @@
 - [x] Buildr65:26package、testsr54:2466記録/63group、エラー/失敗/skip0。
 - [x] R225:境界1件だけを改善、実超過19件は拒否。R226–R228:旧21ケース判定維持。
 - [x] R224:旧r179を新しい共有力計算で再比較。bit一致だが約1ms短縮だけで未採用。
-- [ ] 固定commitのdev2-r40。残る実公開期限と長い証明、全M4–M6を完遂。
+- [x] 固定commitのdev2-r40を実行。実期限超過で不合格。残る作業は下記。
+
+
+2026-09-11 scheduled publication primitives（baseline f661ced6）:
+- [x] R40通常/r41headless失敗を保存。表示変更は未採用、保護成果物は復元済み。
+- [x] R229未来viewのvalidator欠落区間を特定。明示scheduled API/結果型/hashとstrict guardを実装。
+- [x] 全待機prefix/未来history/clock/静止中の未来加速/native72schedulesの回帰。
+- [x] Buildr68/testsr57合格。R232全18物理比較Accepted、R233–235旧21分類維持。1565filesを保存。
+- [ ] 実送信順序・clock・resetのprefix台帳。未送信の約束は実historyと分離して照合する。
+- [ ] 型で区別する予定nominal/proof生成。計算中も旧certified programmeを守る。
+- [ ] Fresh sensor/peer/world/targetと全残存区間の整合、async逆転/取消/期限/Stop-rest-restart。
+- [ ] 単一dispatcherへ接続し旧同期authorityを退役。未接続部品を無期限に残さない。
+- [ ] 固定final HEADでdynamic acceptanceを再開し、全M4–M6を完遂する。

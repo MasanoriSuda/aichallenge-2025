@@ -1039,6 +1039,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/nanosecond-publication-evidence.json",
       "replay_ready": true,
       "reason": "Frozen integer endpoint versus nineteen real overruns, old negative/control cases and native range tests. No integrated acceptance."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-scheduled-prefix",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/planned-publication-evidence.json",
+      "replay_ready": true,
+      "reason": "R40/R41 real publication failures, original observed clock versus planned first publication, full waiting-prefix proof, native and old-case regression. No integrated acceptance."
     }
   ],
   "experiments": [
@@ -12203,6 +12209,134 @@
         "Independent floatingdeadlineaddition for integer programme publication andinputcoverage"
       ],
       "revisit_condition": "Fixed committed dev2-r40 for clock representation. Real overruns require a separate measured structural fix; do not claim integrated acceptance or repeat rejected SIMD unchanged."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-prefix-r40-runtime",
+      "baseline_commit": "f661ced638e875bc0666b9d44296932b05442522",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-prefix"
+      ],
+      "hypothesis": "Integer endpoint repair closes actual timing",
+      "changed_dimension": "Explicit numerical scheduled-publication contract; separately unpromoted visualization diagnostic",
+      "result": "rejected",
+      "reason": "D1decision867 uses20.789259mswall but34.999999msROS. Real deadline still exceeded.",
+      "production_impact": "Separate scheduled numerical API/type/hash and strict clock guard. Existing normal execution, old API/hash, rates, W25, receiver250, model and hard bounds unchanged.",
+      "deleted_code": [
+        "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
+      ],
+      "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-prefix-r41-headless",
+      "baseline_commit": "f661ced638e875bc0666b9d44296932b05442522",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-prefix"
+      ],
+      "hypothesis": "Disable visualization to close publication timing",
+      "changed_dimension": "Explicit numerical scheduled-publication contract; separately unpromoted visualization diagnostic",
+      "result": "rejected",
+      "reason": "NullGfx/noRViz confirmed; movingD1552still26.027607ms/30msROS. Setting unpromoted; shutdown signal log distinguished from first active failure.",
+      "production_impact": "Separate scheduled numerical API/type/hash and strict clock guard. Existing normal execution, old API/hash, rates, W25, receiver250, model and hard bounds unchanged.",
+      "deleted_code": [
+        "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
+      ],
+      "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-prefix-r229-future-view",
+      "baseline_commit": "f661ced638e875bc0666b9d44296932b05442522",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-prefix"
+      ],
+      "hypothesis": "Construct a new future25ms candidate from original sensor/history",
+      "changed_dimension": "Explicit numerical scheduled-publication contract; separately unpromoted visualization diagnostic",
+      "result": "accepted",
+      "reason": "Six nominal/applied future views accepted offline; no-intervening-publication assumption and skipped waiting-prefix validator interval prevent runtime promotion.",
+      "production_impact": "Separate scheduled numerical API/type/hash and strict clock guard. Existing normal execution, old API/hash, rates, W25, receiver250, model and hard bounds unchanged.",
+      "deleted_code": [
+        "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
+      ],
+      "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-prefix-r230-native",
+      "baseline_commit": "f661ced638e875bc0666b9d44296932b05442522",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-prefix"
+      ],
+      "hypothesis": "Separate original observation from scheduled programme and reject early send",
+      "changed_dimension": "Explicit numerical scheduled-publication contract; separately unpromoted visualization diagnostic",
+      "result": "accepted",
+      "reason": "44native tests passed including72input schedules throughrest/body/corners. Final package adds explicit initial-rest/future-launch regression. Legacy API/hash/numerical outcomes maintained; scheduled type/hash distinct.",
+      "production_impact": "Separate scheduled numerical API/type/hash and strict clock guard. Existing normal execution, old API/hash, rates, W25, receiver250, model and hard bounds unchanged.",
+      "deleted_code": [
+        "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
+      ],
+      "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-prefix-r231-compile",
+      "baseline_commit": "f661ced638e875bc0666b9d44296932b05442522",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-prefix"
+      ],
+      "hypothesis": "Compile full scheduled-world diagnostic",
+      "changed_dimension": "Explicit numerical scheduled-publication contract; separately unpromoted visualization diagnostic",
+      "result": "inconclusive",
+      "reason": "Unreachable unsupported Follow references in diagnostic copy caused compile failure. Corrected inr232; no numerical result.",
+      "production_impact": "Separate scheduled numerical API/type/hash and strict clock guard. Existing normal execution, old API/hash, rates, W25, receiver250, model and hard bounds unchanged.",
+      "deleted_code": [
+        "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
+      ],
+      "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-prefix-r232-full-prefix",
+      "baseline_commit": "f661ced638e875bc0666b9d44296932b05442522",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-prefix"
+      ],
+      "hypothesis": "Validate original now through scheduled publication and full rest",
+      "changed_dimension": "Explicit numerical scheduled-publication contract; separately unpromoted visualization diagnostic",
+      "result": "accepted",
+      "reason": "SixR40inputs×0/25/75ms:18full physical checksAccepted, including5–6/15–16waiting intervals. No intervening publication is assumed. Strict25msfuture clock-only comparison rejects2early-before brackets and admits4; never actual authority.",
+      "production_impact": "Separate scheduled numerical API/type/hash and strict clock guard. Existing normal execution, old API/hash, rates, W25, receiver250, model and hard bounds unchanged.",
+      "deleted_code": [
+        "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
+      ],
+      "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-prefix-r233-235-regression",
+      "baseline_commit": "f661ced638e875bc0666b9d44296932b05442522",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-prefix"
+      ],
+      "hypothesis": "Preserve old physical/Stop/production classifications",
+      "changed_dimension": "Explicit numerical scheduled-publication contract; separately unpromoted visualization diagnostic",
+      "result": "accepted",
+      "reason": "All21classifications unchanged; actual259.999994mshistorygapstillRejected.",
+      "production_impact": "Separate scheduled numerical API/type/hash and strict clock guard. Existing normal execution, old API/hash, rates, W25, receiver250, model and hard bounds unchanged.",
+      "deleted_code": [
+        "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
+      ],
+      "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
+    },
+    {
+      "experiment_id": "20260911-nine-state-scheduled-prefix-r68-r57-build-test",
+      "baseline_commit": "f661ced638e875bc0666b9d44296932b05442522",
+      "snapshot_ids": [
+        "20260911-nine-state-scheduled-prefix"
+      ],
+      "hypothesis": "Build and verify scheduled input primitives and legacy behavior",
+      "changed_dimension": "Explicit numerical scheduled-publication contract; separately unpromoted visualization diagnostic",
+      "result": "accepted",
+      "reason": "26packages/4m57s;2471records/63groups/32.0s,0errors/failures/skips. No C++warnings after correction; existingsetuptoolsdeprecation remains.",
+      "production_impact": "Separate scheduled numerical API/type/hash and strict clock guard. Existing normal execution, old API/hash, rates, W25, receiver250, model and hard bounds unchanged.",
+      "deleted_code": [
+        "No authority path retired in this nonexecuting primitive slice; old synchronous authority must retire in the later single-dispatch promotion."
+      ],
+      "revisit_condition": "Next implement authenticated actual/committed prefix, fresh sensor/world/target compatibility and async single dispatch. Never treat no-intervening-publication comparison or shifted observation as runtime permission; M4-M6 remains open."
     }
   ]
 }

@@ -29,7 +29,9 @@
 - [x] Capture r28 actual918/source137 versus inspected131, full-wall failure, same-world architecture and failed coordinate/partition/Stop-family hypotheses.
 - [x] Preserve r162–178 correlated/partition/Stop-family failures and native input search; same-run IMU/command chronology and registry. No production promotion.
 - [x] Establish r28 missing publication timing via r180; bind existing25ms window to common programme/provenance/final raw-clock bracket; buildr60/testsr49 (2459), native182–185. Old r19/r24 positives now peer-rejected are preserved.
-- [ ] Validate repaired publication population and earlier braking in live dev2-r29; physical-only brake witness is not normal authority.
+- [x] Run dev2-r29 onf3b444f2; preserve first post-publication violation831 and moving pre-publication rejection931/1078. Not accepted; exact final-guard proof snapshot absent.
+- [x] Preserve r186–192 arithmetic/compiler/numerical architecture comparisons; all rejected/unpromoted.
+- [ ] Repair proof scheduling/cost with exact state/input context and current-world checks, then validate fresh committed runtime.
 - [ ] Repair remaining initial long-program proof cost and actual publication timing after r27.
 - [ ] Validate integrated applied-program behavior and25ms timing in fresh runs.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.

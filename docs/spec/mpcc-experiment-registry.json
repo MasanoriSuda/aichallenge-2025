@@ -1003,6 +1003,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-evidence.json",
       "replay_ready": true,
       "reason": "Authenticated918/137nominal versus actual publication epoch; original919history and original empirical profile retained. Current production and legacy-zero physical comparisons sealed."
+    },
+    {
+      "snapshot_id": "20260911-nine-state-publication-timing-r29",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r29-publication-timing-evidence.json",
+      "replay_ready": false,
+      "reason": "Live final publisher time failure has brackets and same-run MCAP but no exact architecture snapshot. Numerical comparisons reuse sealedr27/r26/r24inputs and current publication window."
     }
   ],
   "experiments": [
@@ -11486,6 +11492,118 @@
       "production_impact": "Diagnostic only; no authority or integrated acceptance.",
       "deleted_code": [],
       "revisit_condition": "Repeat only for changed implementation, new causal evidence or recorded unverified live/timing condition. Preserve all negative cases."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-timing-r29-live",
+      "baseline_commit": "f3b444f2a7eaec65e7dbcbe78925ddb236d6f665",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-timing-r29"
+      ],
+      "hypothesis": "Correct publication binding closes integrated timing",
+      "changed_dimension": "Fixedf3b444f2dev2",
+      "result": "rejected",
+      "reason": "D1postwindow831beforeReady nominal7.394999834→after7.424999834; six D1crossings total. First movingprewindowEmergencyD1931/.14mps, D21078/.16mps. Preserved and stopped.",
+      "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
+      "deleted_code": [],
+      "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-timing-r29-r186",
+      "baseline_commit": "f3b444f2a7eaec65e7dbcbe78925ddb236d6f665",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-timing-r29"
+      ],
+      "hypothesis": "Exact zero derivative subtraction closes proof cost",
+      "changed_dimension": "Derivative exact-zero representation",
+      "result": "rejected",
+      "reason": "R27rejection98.150→83.510ms; r26current14.545→12.503; r24previous19.834→17.622ms. Same classifications; insufficient deadline improvement.",
+      "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
+      "deleted_code": [],
+      "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-timing-r29-r187",
+      "baseline_commit": "f3b444f2a7eaec65e7dbcbe78925ddb236d6f665",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-timing-r29"
+      ],
+      "hypothesis": "Sign-selected multiplication closes proof cost",
+      "changed_dimension": "Equivalent multiplication extrema",
+      "result": "rejected",
+      "reason": "Recorded r26/r24tube bits identical; r27 99.016→100.975ms, r26 14.553→14.660ms. No gain.",
+      "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
+      "deleted_code": [],
+      "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-timing-r29-r188",
+      "baseline_commit": "f3b444f2a7eaec65e7dbcbe78925ddb236d6f665",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-timing-r29"
+      ],
+      "hypothesis": "Compiler inlining defaults cause enough overhead",
+      "changed_dimension": "Compiler O2/O3/no-small-inline",
+      "result": "rejected",
+      "reason": "Recorded r26/r24tube bits identical. O2 worsensr27 99.094→119.604ms; no-small-inline97.865ms. No material gain.",
+      "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
+      "deleted_code": [],
+      "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-timing-r29-r189",
+      "baseline_commit": "f3b444f2a7eaec65e7dbcbe78925ddb236d6f665",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-timing-r29"
+      ],
+      "hypothesis": "Exact elementary identities close arithmetic cost",
+      "changed_dimension": "Exactzero/one/subtraction/trig identities",
+      "result": "rejected",
+      "reason": "R27 97.043→87.971ms; r26 14.399→13.214; r24previous18.351ms. Same classification, insufficient gain. No FTZused.",
+      "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
+      "deleted_code": [],
+      "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-timing-r29-r190",
+      "baseline_commit": "f3b444f2a7eaec65e7dbcbe78925ddb236d6f665",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-timing-r29"
+      ],
+      "hypothesis": "One directional mean-value enclosure retains useful precision",
+      "changed_dimension": "One completebox derivative direction",
+      "result": "rejected",
+      "reason": "Formerlyacceptedr26previous/current andr24previous become rejected. R27statebound rejection at7.799999829. Faster early rejection is not a proof.",
+      "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
+      "deleted_code": [],
+      "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-timing-r29-r191",
+      "baseline_commit": "f3b444f2a7eaec65e7dbcbe78925ddb236d6f665",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-timing-r29"
+      ],
+      "hypothesis": "Contained-domain seven-derivative reuse retains useful precision",
+      "changed_dimension": "Four prediction-local diagnostic Jacobian domains with exact containment",
+      "result": "rejected",
+      "reason": "Formerlyacceptedr26previous/current andr24previous reject. R27statebound reject10.794999829/31.595ms. Coarser derivative domain cannot be promoted.",
+      "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
+      "deleted_code": [],
+      "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
+    },
+    {
+      "experiment_id": "20260911-nine-state-publication-timing-r29-r192",
+      "baseline_commit": "f3b444f2a7eaec65e7dbcbe78925ddb236d6f665",
+      "snapshot_ids": [
+        "20260911-nine-state-publication-timing-r29"
+      ],
+      "hypothesis": "Forced J algebra inlining eliminates enough constant work",
+      "changed_dimension": "Existing J algebra always_inline only",
+      "result": "rejected",
+      "reason": "Recorded r26/r24tube bits identical; timings {\"baseline-r27d1\": 97.379079, \"baseline-r26d1\": 14.337965, \"baseline-r24d2\": 55.455861, \"inline_ad-r27d1\": 123.277877, \"inline_ad-r26d1\": 18.053925, \"inline_ad-r24d2\": 64.607226}. Inlining worsens cost; no promotion.",
+      "production_impact": "No new production changes or authority; failed timing/precision hypotheses remain rejected.",
+      "deleted_code": [],
+      "revisit_condition": "Requires new causal evidence or architecture. Do not rerun unchanged rejected micro-optimizations/coarse enclosures or relax25mspublication/250msreceiver constraints."
     }
   ]
 }

@@ -1,28 +1,26 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。dev2-r28の公開時刻の欠陥を修正し、build・回帰・保存データ再生まで検証した。**
+**全体は未完。公開時刻修正f3b444f2のdev2-r29は、残存する計算時間超過で不合格。**
 
-実公開918/source137の名目時刻9.919999778と実履歴9.934999777の差により、
-加速が残る期間が旧証明から漏れていた。元918状態で公開列だけ15ms遅らせると壁拒否となり、
-919状態で最後の履歴時刻だけ名目値に戻す診断では壁が通る。後者は反実仮想で本番へ使わない。
-公開列に既存25ms周期の時刻範囲を束縛し、履歴・250ms受信profile・物理条件は維持した。
-公開直前・直後と判断開始の生時刻を照合し、時刻逆行も拒否する。範囲逸脱の事後検出は
-遡及的な認可ではなく、実走の不合格として記録する。
+公開列は既存25ms周期の範囲を証明し、実履歴・250ms受信profile・物理条件を維持する。
+最終公開の前後と判断開始の生時刻を照合する。Buildr60は26package成功、testsr49は
+2459記録/62group・エラー/失敗/skip0。保存データでr28の15ms欠落と修正効果を確認した。
 
-Buildr60は26package成功、testsr49は2459記録/62group・エラー/失敗/skip0。
-新ABIのnative15ケースでは12ケースの判定・格納・joinが維持された。
-r24D2判断990、r19D2判断1070/1071は公開遅延を含めると他車の証明で拒否する。
-これらは過去の合格を置き換えず記録した。r18の実履歴欠損は引き続きreason5で拒否する。
-r185の本番証明は問題の918加速指令を公開前に拒否する。元918状態の即時ブレーキ入力列は
-物理検査を通るが、新しい公称解や実走の認可ではない。実走で早期減速・停止を確認する。
+新しい実走ではD1判断831（Ready前）、名目7.394999834に対して公開後7.424999834となり、
+25msの範囲逸脱を検出した。走行中の最初の公開前拒否はD1判断931、0.14m/s。
+D2は判断1078、0.16m/sで同じ拒否。終了までのD1事後逸脱は6件で、合格には数えない。
+既存のproof自体は通った後でpublisherが拒否するため、失敗入力のarchitecture snapshotは
+このrunでは生成されなかった。ログとMCAPを保存し、この観測不足を明記する。
 
-初回の長い停止証明と連続40Hzdeadline超過は未解決。r179のAVX2診断は全区間bit一致で
-約101→71msに短縮したが、deadlineを満たさず移植性確認も未完のため未採用。
-単発超過は元の完遂条件どおり計測・帰属する。次は修正をローカルcommitしdev2-r29。
+r186–192で算術・コンパイラ・区間微分方式を比較した。小最適化は時間短縮が不十分か悪化し、
+微分数の削減や広い領域での共用は旧合格ケースの精度を失った。すべて未採用。
+判定を保った比較のbit一致、拒否・失敗・計算時間を台帳へ残した。
+次は状態と入力の厳密な包含、全現在world検査を維持する証明の実行・再利用方式を調べる。
+単なるageや結合boxの包含を認可に使わず、25ms期限や250msprofileを広げない。
 
-[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-design.md)、
-[検証結果](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-evidence.json)、
+[現在の時間監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r29-publication-timing-audit.md)、
+[公開範囲の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/publication-window-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
 dev3/dev4六周、gate1–3、同一tar/image/eval、文書・ローカルcommitまで継続する。

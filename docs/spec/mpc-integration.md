@@ -4753,3 +4753,13 @@ workerの候補D生成だけをこの方式に変更し、全D/元時刻から�
 R330全147native、R331本番library保存4例、buildr95全26、testsr83全2561/66合格。
 標準r56の実タイミング・範囲coverageとM4-M6は未完。
 [比較と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-coverage-design.md)。
+
+標準r56は失敗。前計算採用143/91件へ増加したが、最初は起動直後D1指令530の残packet4で
+送信前拒否、停止契機はD2指令1268の残packet4で送信後期限超過。新しいworker結果が
+既送信prefixと不一致となり、残packetの完全物理再計算へ戻っていた。D1ではMPC領域に
+計測済みproof/request以外の約18msもあり、off-CPU/待機の原因は未確定。
+R332は元source14/742をAで受理。B/C/DはTrack/Cruise非対応で結論なし。R334は実保持時間
+0.5+0.13秒の履歴剪定と4回の元source付き送信を復元し、現在履歴・物理hash・元pre/post
+拒否が一致した。ここでは本番変更なし。全期間の開始時刻範囲、独立した状態boxの層、
+source-prefixとdomainの重複計算解消を比較し、元の各packet25ms窓と全入力記憶を保持する。
+[現在の比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/retained-dispatch-comparison.md)。

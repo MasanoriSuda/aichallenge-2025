@@ -282,3 +282,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Change only candidateDproducer, retain strict whole-prefix/current-world/source/context/history/actual-window checks. R330all147native, R331all4actual-library replays, buildr95all26/testsr83all2561/66/source105pass.
 - [ ] Commit and standarddev2-r56; verify coverage and actual worker/current deadlines. Retained suffix and worker duplicate propagation remain hypotheses to compare if timing fails.
 - [ ] All remainingM4-M6 and final same submission/eval; no partial validation is overall completion.
+
+
+2026-09-12 retained dispatch audit after standardr56 (baseline4495ab3e):
+- [x] R56earliestD1pre530/index4 and terminationD2post1268/index4 saved; source-ready actualprefix rejection precedes retained fullproof. Domain coverage143/91 improved; no moving laps.
+- [x] R332persistentAaccepts both source snapshots; B/C/Dunsupported Track/Cruise inconclusive. No physical infeasibility claim.
+- [x] R333diagnostic history-growth assumption fails. R334native.63s pruning and4actual source-bound sends reproduce exactcurrenthistory/physicalhash and originalpre/post failures.
+- [ ] Compare generalized observation-time domain, independent layer chain and combined source-prefix/domain proof; preserve all actual windows/inputmemory and retire replaced source path if chosen.
+- [ ] Attribute earliest unknownMPC/off-CPU phase before scheduling/logging intervention. No repeated unchangedrun.
+- [ ] All remainingM4-M6 intent/Stop/rest/restart/Recovery/async/race/gates/same submission/eval.

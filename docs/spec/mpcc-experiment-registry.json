@@ -1171,6 +1171,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-coverage-evidence.json",
       "replay_ready": true,
       "reason": "R55standard failure and causal starting-set comparison, with exact four-case and final native/build/package evidence."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-retained-dispatch-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/retained-dispatch-evidence.json",
+      "replay_ready": true,
+      "reason": "R56firstpre/firstpost failures, exact4actualpacket/prunedhistory/currentphysical replay, architecture applicability audit."
     }
   ],
   "experiments": [
@@ -14032,6 +14038,76 @@
       "production_impact": "Only pose/raw candidate producer promoted after complete replay/tests; original full-point path and all actual publication guards stay.",
       "deleted_code": [],
       "revisit_condition": "Fresh committed standard run or new counterexample; do not mirror actuator limits or relax failed proofs."
+    },
+    {
+      "experiment_id": "20260912-nine-state-retained-dispatch-audit-dev2-r56",
+      "baseline_commit": "4495ab3e55a515bb7ea78e0e9e695bba0559f7dc",
+      "snapshot_ids": [
+        "20260912-nine-state-retained-dispatch-audit"
+      ],
+      "hypothesis": "Retained current numerical cost and immutable actual-prefix timing explain remaining window failures; unexplained off-CPU phase needs separate attribution",
+      "changed_dimension": "Read-only exact replay and architecture comparison; no production change",
+      "result": "rejected",
+      "reason": "Initial-domain coverage improves but firstpre530/terminationpost1268 retainedindex4 fails; no movinglaps.",
+      "production_impact": "None. Current4495ab3e remains; alternative proof structures and phase attribution pending.",
+      "deleted_code": [],
+      "revisit_condition": "New theorem/phase observation or causal implementation; do not rerun unchanged or relax original clocks/physical conditions."
+    },
+    {
+      "experiment_id": "20260912-nine-state-retained-dispatch-audit-r332-a",
+      "baseline_commit": "4495ab3e55a515bb7ea78e0e9e695bba0559f7dc",
+      "snapshot_ids": [
+        "20260912-nine-state-retained-dispatch-audit"
+      ],
+      "hypothesis": "Retained current numerical cost and immutable actual-prefix timing explain remaining window failures; unexplained off-CPU phase needs separate attribution",
+      "changed_dimension": "Read-only exact replay and architecture comparison; no production change",
+      "result": "accepted",
+      "reason": "Exact historical PersistentA source14 and742accepted; no current-world or runtime claim.",
+      "production_impact": "None. Current4495ab3e remains; alternative proof structures and phase attribution pending.",
+      "deleted_code": [],
+      "revisit_condition": "New theorem/phase observation or causal implementation; do not rerun unchanged or relax original clocks/physical conditions."
+    },
+    {
+      "experiment_id": "20260912-nine-state-retained-dispatch-audit-r332-bcd",
+      "baseline_commit": "4495ab3e55a515bb7ea78e0e9e695bba0559f7dc",
+      "snapshot_ids": [
+        "20260912-nine-state-retained-dispatch-audit"
+      ],
+      "hypothesis": "Retained current numerical cost and immutable actual-prefix timing explain remaining window failures; unexplained off-CPU phase needs separate attribution",
+      "changed_dimension": "Read-only exact replay and architecture comparison; no production change",
+      "result": "inconclusive",
+      "reason": "Existing alternatives support Overtake only; Track/Cruiseinapplicable.",
+      "production_impact": "None. Current4495ab3e remains; alternative proof structures and phase attribution pending.",
+      "deleted_code": [],
+      "revisit_condition": "New theorem/phase observation or causal implementation; do not rerun unchanged or relax original clocks/physical conditions."
+    },
+    {
+      "experiment_id": "20260912-nine-state-retained-dispatch-audit-r333",
+      "baseline_commit": "4495ab3e55a515bb7ea78e0e9e695bba0559f7dc",
+      "snapshot_ids": [
+        "20260912-nine-state-retained-dispatch-audit"
+      ],
+      "hypothesis": "Retained current numerical cost and immutable actual-prefix timing explain remaining window failures; unexplained off-CPU phase needs separate attribution",
+      "changed_dimension": "Read-only exact replay and architecture comparison; no production change",
+      "result": "rejected",
+      "reason": "Diagnostic assumed no history pruning; source/current history count mismatch before evidence checks.",
+      "production_impact": "None. Current4495ab3e remains; alternative proof structures and phase attribution pending.",
+      "deleted_code": [],
+      "revisit_condition": "New theorem/phase observation or causal implementation; do not rerun unchanged or relax original clocks/physical conditions."
+    },
+    {
+      "experiment_id": "20260912-nine-state-retained-dispatch-audit-r334",
+      "baseline_commit": "4495ab3e55a515bb7ea78e0e9e695bba0559f7dc",
+      "snapshot_ids": [
+        "20260912-nine-state-retained-dispatch-audit"
+      ],
+      "hypothesis": "Retained current numerical cost and immutable actual-prefix timing explain remaining window failures; unexplained off-CPU phase needs separate attribution",
+      "changed_dimension": "Read-only exact replay and architecture comparison; no production change",
+      "result": "accepted",
+      "reason": "Actual.63s pruning and4source-bound sends give exactcurrenthistory andphysicalhash; firstpre/firstpost classifications preserved.",
+      "production_impact": "None. Current4495ab3e remains; alternative proof structures and phase attribution pending.",
+      "deleted_code": [],
+      "revisit_condition": "New theorem/phase observation or causal implementation; do not rerun unchanged or relax original clocks/physical conditions."
     }
   ]
 }

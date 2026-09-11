@@ -1,23 +1,22 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。標準r55失敗を保存し、開始範囲の生成を修正・検証。次は標準dev2-r56。**
+**全体未完。標準r56は残packetの送信期限で失敗。方式比較・厳密再生まで完了。**
 
-R55D1post974:現在X/タイヤ角がD外、完全再計算12.98mswall/10.51CPU。
-Recovery0.05ms。元25ms窓を越え失敗、移動lapなし。全runのdomain採用17/11、
-初回範囲外66/41、非対応残suffix349/265。採用時の現在CPU中央値約1ms。
+本番制御は4495ab3e。Buildr95全26、testsr83全2561/66合格後の標準r56は移動lapなし。
+Domain採用143/91、初回範囲外34/17、非対応残suffix479/464 (全run/終了処理を含む)。
+最初D1pre530/index4、停止契機D2post1268/index4。新worker結果のactualprefix不一致に続き
+残packetを完全再計算。D1にはproof/request外の約18msのMPC待機/off-CPUもあり原因未確定。
 
-R328全成分対称化はR53状態上限違反で不採用。R329姿勢だけの対称化とraw成分を
-含むbody/actuator範囲は保存4例の全prefix・全域/全停止/現在worldを独立に証明。
-候補D生成だけ反映、元の物理条件・履歴/context/観測/実送信窓は維持。
-R330全147native、R331本番library保存4例、buildr95全26、testsr83全2561/66合格。
+R332のpersistentAは元source14/742を受理。B/C/DはTrack/Cruise非対応で結論なし。
+R334は実.63s履歴剪定と4送信を復元し、現在履歴/物理hash/元pre-post判定を一致再生。
+この監査では本番変更なし。次は全期間の開始時刻範囲、独立boxの層、source-prefixとdomainの
+重複計算解消を比較し、必要なら最初の未解明off-CPU境界を観測。元の25ms公開窓、
+250ms受信モデル、物理条件を緩めない。変更なしの再走行はしない。
 
-標準r56の実coverage/worker/current期限を検証する。残suffixとworker二重未来計算は
-必要に応じた次の比較対象であり未実装。全intent/Mission/sibling/Store、実Stop/rest/restart、
-Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、dev3/dev4六周、
-gate1–3、同一tar/image/evalは未完。単体/再生の合格を全体完了にしない。
-
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-coverage-design.md)、
+全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
+単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+[現在の比較](../20260910-mpcc-empirical-plant/receiver-input-enclosure/retained-dispatch-comparison.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

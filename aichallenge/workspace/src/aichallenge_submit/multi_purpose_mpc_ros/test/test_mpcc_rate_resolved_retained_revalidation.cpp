@@ -4329,15 +4329,18 @@ TEST(MpccScheduledDispatch, CurrentWorldAndActualPrefixAreMandatoryBeforePrepari
   EXPECT_FALSE(ready.candidate->matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id, 1.1, packet.wire_acceleration_mps2, packet.wire_steering_rad));
 }
 
-TEST(MpccScheduledDispatch, SlewUsesActualPreviousCompletionRatherThanNominalPeriod)
+TEST(MpccScheduledDispatch, FutureSourceAccountsForActualPreviousCompletionAtItsDeadline)
 {
   ScheduledDispatchFixture f(1.099999999);
   const auto result=f.prepare(); ASSERT_TRUE(result.candidate) << static_cast<int>(result.reason) << '/' << static_cast<int>(result.current.reason);
   const auto &candidate=*result.candidate;const auto &packet=candidate.packet();
   const double gain=f.fresh.plan->execution_artifact->vehicle_model.steering_wire_gain;
-  ASSERT_GT(std::abs(packet.wire_steering_rad-f.ledger.latest_transaction()->nominal.wire_steering_rad)/gain,
+  // R359's old producer exceeded this same bound. The new source accounts
+  // for the original prior deadline before proving its newly selected word.
+  ASSERT_LE(std::abs(packet.wire_steering_rad-f.ledger.latest_transaction()->nominal.wire_steering_rad)/gain,
     f.fresh.plan->execution_artifact->physical_global_tolerance);
-  EXPECT_FALSE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id, 1.1, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+  EXPECT_TRUE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id, 1.1, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+  EXPECT_FALSE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id, 1.1, packet.wire_acceleration_mps2, packet.wire_steering_rad + .025 * gain));
 }
 
 TEST(MpccScheduledDispatch, NextRealSuffixSlotKeepsOriginalProofAndRequiresTheFirstActualSend)
@@ -4785,11 +4788,11 @@ TEST(MpccScheduledDomainDispatch, RejectedSetNeverReplacesTheCompletePointProof)
   ASSERT_TRUE(result.candidate); EXPECT_TRUE(result.candidate->current_physical_proof());
   EXPECT_FALSE(result.candidate->current_domain_proof());
   EXPECT_FALSE(scheduled::StartingDomainEvidence::build({}));
-  ScheduledDispatchFixture pending_prior;
-  ASSERT_GT(pending_prior.certificate->first_suffix_index(), 0U);
-  EXPECT_FALSE(scheduled::StartingDomainEvidence::build(pending_prior.certificate));
-  // The ordinary complete proof still retains these pending packet windows.
-  EXPECT_TRUE(pending_prior.prepare().candidate);
+  ScheduledDispatchFixture pending_follow(1.075, false, contract::ControlIntent::Follow);
+  ASSERT_GT(pending_follow.certificate->first_suffix_index(), 0U);
+  EXPECT_FALSE(scheduled::StartingDomainEvidence::build(pending_follow.certificate));
+  // Follow's separate first-window theorem still cannot replace pending memory.
+  EXPECT_TRUE(pending_follow.prepare().candidate);
 }
 
 TEST(MpccScheduledDomainDispatch, RejectsFreshWorldEpochContextHistoryAndClockFailures)
@@ -4925,7 +4928,9 @@ TEST(MpccScheduledDomainDispatch, IndependentlyProvesPoseBehindTheOriginalSource
 
 TEST(MpccScheduledDomainDispatch, RepeatedTailAuthenticatesEveryActualSendAndKeepsPrefixParity)
 {
-  ScheduledDispatchFixture f(1.075,false,contract::ControlIntent::Track,true);
+  for (bool no_prior : {true, false}) {
+  SCOPED_TRACE(no_prior);
+  ScheduledDispatchFixture f(1.075,false,contract::ControlIntent::Track,no_prior);
   const auto domain=scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
   EXPECT_EQ(domain->original_rest_sec(),f.certificate->tube().rest_sec);
   for (std::size_t index=0;index<5;++index) {
@@ -4963,7 +4968,7 @@ TEST(MpccScheduledDomainDispatch, RepeatedTailAuthenticatesEveryActualSendAndKee
       EXPECT_EQ(prefix.footprint[i].upper,(*numerical.publication_footprint)[i].upper);
     }
     EXPECT_EQ(prefix.program.commands.front().published_sec,epoch);
-    EXPECT_EQ(domain->tube().request.program.commands.front().published_sec,1.1);
+    EXPECT_EQ(domain->tube().request.program.commands.front().published_sec,no_prior ? 1.1 : 1.05);
     const auto &packet=candidate.packet();
     ASSERT_TRUE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
       epoch,packet.wire_acceleration_mps2,packet.wire_steering_rad));
@@ -4977,6 +4982,7 @@ TEST(MpccScheduledDomainDispatch, RepeatedTailAuthenticatesEveryActualSendAndKee
     ASSERT_TRUE(f.ledger.record(packet,epoch,epoch,2,candidate.source()));
     EXPECT_TRUE(candidate.matches_after_publication(f.ledger,f.owner.capture()));
   }
+}
 }
 
 TEST(MpccScheduledDispatch, PartialTerminalWindowCannotBorrowAnInstantBeforeProvedRest)
@@ -5009,4 +5015,108 @@ TEST(MpccScheduledDispatch, PartialTerminalWindowCannotBorrowAnInstantBeforeProv
   EXPECT_FALSE(result.candidate);
   EXPECT_EQ(result.reason,scheduled::DispatchReason::RestExpired);
   const auto after=f.ledger.since(*before); ASSERT_TRUE(after); EXPECT_TRUE(after->empty());
+}
+
+
+TEST(MpccScheduledCompositeDomain, RetainsPendingInputMemoryAndOriginalSourceIdentity)
+{
+  ScheduledDispatchFixture f;
+  ASSERT_EQ(f.certificate->first_suffix_index(), 2U);
+  const auto domain = scheduled::StartingDomainEvidence::build(f.certificate);
+  ASSERT_TRUE(domain);
+  const auto &original = f.certificate->tube();
+  EXPECT_EQ(domain->certificate(), f.certificate);
+  EXPECT_EQ(domain->original_rest_sec(), original.rest_sec);
+  EXPECT_EQ(domain->tube().request.program.commands.size(), original.program.commands.size());
+  EXPECT_EQ(domain->tube().request.program.commands.front().published_sec, 1.05);
+  EXPECT_EQ(domain->tube().request.starting_sec.lower, 1.1);
+  EXPECT_EQ(domain->tube().request.starting_sec.upper, original.rest_sec);
+  EXPECT_FALSE(domain->first_window_only());
+  EXPECT_TRUE(domain->includes_pending_prior());
+  for (std::size_t i = 0; i < original.program.commands.size(); ++i) {
+    const auto &a = domain->tube().request.program.commands[i], &b = original.program.commands[i];
+    EXPECT_EQ(a.published_sec, b.published_sec);
+    EXPECT_EQ(a.wire_acceleration_mps2, b.wire_acceleration_mps2);
+    EXPECT_EQ(a.wire_steering_rad, b.wire_steering_rad);
+  }
+  f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+  f.bind_next(0);
+  const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+    f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
+  ASSERT_TRUE(result.candidate);
+  ASSERT_EQ(result.domain_use, scheduled::DomainUseReason::Accepted);
+  ASSERT_TRUE(result.candidate->current_domain_proof());
+  const auto full = f.prepare(); ASSERT_TRUE(full.candidate);
+  ASSERT_TRUE(full.candidate->current_physical_proof());
+  const auto &prefix = result.candidate->current_domain_proof()->prefix();
+  const auto &body = full.candidate->current_physical_proof()->tube().numerical.publication_body;
+  for (std::size_t i = 0; i < body.size(); ++i) {
+    EXPECT_EQ(prefix.body[i].lower, body[i].lower);
+    EXPECT_EQ(prefix.body[i].upper, body[i].upper);
+  }
+  const auto &candidate = *result.candidate;
+  EXPECT_EQ(candidate.source().input_context_fingerprint, original.context_fingerprint);
+  EXPECT_TRUE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
+    f.fresh.now_sec, candidate.packet().wire_acceleration_mps2, candidate.packet().wire_steering_rad));
+  EXPECT_FALSE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
+    1.125000001, candidate.packet().wire_acceleration_mps2, candidate.packet().wire_steering_rad));
+}
+
+TEST(MpccScheduledCompositeDomain, RejectsWrongExpectedPriorSourceCountContextAndFreshWorld)
+{
+  for (int variant = 0; variant < 6; ++variant) {
+    SCOPED_TRACE(variant);
+    ScheduledDispatchFixture f;
+    const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+    f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+    f.bind_next(0);
+    if (variant == 0) f.prior_sources.pop_back();
+    if (variant == 1) f.prior_sources[0] = vehicle::PublishedProgramSource{9, 8, 7, 6, 0};
+    if (variant == 2) { f.context.stage_geometry_id++; f.context = contract::seal_problem_context(f.context); }
+    if (variant == 3) f.owner.invalidate();
+    if (variant == 4) f.fresh.obstacles.obstacles.push_back({"current-contact",
+      {f.fresh.control_pose.x_m, f.fresh.control_pose.y_m, 0, 0, .2}});
+    if (variant == 5) f.fresh.publication_prefix->observation.commands.back().wire_acceleration_mps2 += .1;
+    EXPECT_FALSE(scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+      f.ledger, *f.original_cursor, f.prior_sources, 0, domain).candidate);
+  }
+}
+
+TEST(MpccScheduledCompositeDomain, CannotBorrowAnotherCertificateOrTheFirstWindowFollowTheorem)
+{
+  ScheduledDispatchFixture f, other;
+  const auto foreign = scheduled::StartingDomainEvidence::build(other.certificate); ASSERT_TRUE(foreign);
+  f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+  f.bind_next(0);
+  const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+    f.ledger, *f.original_cursor, f.prior_sources, 0, foreign);
+  ASSERT_TRUE(result.candidate);
+  EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::SourceMismatch);
+  EXPECT_FALSE(result.candidate->current_domain_proof());
+  EXPECT_TRUE(result.candidate->current_physical_proof());
+  ScheduledDispatchFixture follow(1.075, false, contract::ControlIntent::Follow);
+  EXPECT_FALSE(scheduled::StartingDomainEvidence::build(follow.certificate));
+  EXPECT_TRUE(follow.prepare().candidate);
+}
+
+TEST(MpccScheduledCompositeDomain, FutureSteeringUsesLatestPermittedPriorSend)
+{
+  for (double delta : {-.02, .02}) {
+    SCOPED_TRACE(delta);
+    auto request = scheduled_request();
+    auto &previous = request.prior_program.commands.back();
+    previous.wire_steering_rad = static_cast<float>(previous.wire_steering_rad + delta);
+    const auto result = scheduled::evaluate(request);
+    ASSERT_TRUE(result.applied.certificate) << retained::to_string(result.reason);
+    const auto &certificate = *result.applied.certificate;
+    const double first = *vehicle::publication_epoch(certificate.suffix().program, 0);
+    const double latest_prior = *vehicle::publication_epoch(request.prior_program,
+      request.prior_index + request.preceding_packet_count - 1, true);
+    ASSERT_EQ(first, latest_prior);
+    EXPECT_EQ(certificate.nominal()->nominal_view().previous_published_command_age_sec, 0);
+    const auto &model = request.observed.plan->execution_artifact->vehicle_model;
+    const double exact_step = std::abs(certificate.suffix().program.commands.front().wire_steering_rad -
+      previous.wire_steering_rad) / model.steering_wire_gain;
+    EXPECT_LE(exact_step, request.observed.plan->execution_artifact->physical_global_tolerance);
+  }
 }

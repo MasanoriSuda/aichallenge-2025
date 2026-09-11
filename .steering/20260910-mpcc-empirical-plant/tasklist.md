@@ -328,3 +328,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R358 unchanged Cruise scene: pending2 original packets supports new immediate/long source, full composite domain and actual current/unchanged before guard; pending0/1 reject. Diagnostic source-ID knowledge is not live authority.
 - [ ] Implement causally reserved source pipeline, complete prior-input domain theorem and exact future slew, with failing regressions and long-programme intent review.
 - [ ] All remaining M4–M6, standard races/gates and same submission/eval.
+
+2026-09-12 composite prior-input proof prerequisite (baseline d0bda226):
+- [x] R359 four red regressions for missing composite scope and unsafe nominal-only future slew.
+- [x] Full original composite programme/domain binding; strict fresh prefix/source/context/world and all final gates retained. Pending Follow first-window scope remains unsupported.
+- [x] Select future wire against latest original predecessor deadline before full proof; remove C5 masking of actual feedback continuation/applied failures.
+- [x] R361153native, build100all26/tests87all2574/66 inclsource105. R36212 source/domain arms, two current composite receipts; R363five old source/hash/prefix/deadline outcomes unchanged.
+- [ ] Runtime causal source reservation, waiting-job adoption, expected-prior capture and long-programme intent integration; standarddev2-r62 after integration.
+- [ ] All remaining M4–M6 and same submission/eval; current prerequisite is not overall completion.

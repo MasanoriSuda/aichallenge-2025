@@ -1195,7 +1195,10 @@ static Result evaluate_with_stop_profile(
       if (feedback_shadow_mode) {
         result.feedback_shadow_proof_reason = reason;
         result.feedback_shadow_proof_available = reason == Reason::Accepted;
-        result.reason = Reason::SteeringUnreachable;
+        // C5 selected and forecast this reachable command before proof. Report
+        // its actual continuation/applied failure, not the retired raw-sample
+        // steering rejection that merely selected the feedback candidate.
+        result.reason = scheduled ? reason : Reason::SteeringUnreachable;
       } else {
         result.reason = reason;
       }
@@ -2302,14 +2305,21 @@ Result evaluate(const Request &request) {
     request.prior_index + request.preceding_packet_count);
   if (!first || *first < observed.now_sec) return result;
   vehicle::PublishedCommand predecessor = observation.commands.back();
+  double latest_predecessor_sec = predecessor.published_sec;
   if (request.preceding_packet_count) {
     const auto index = request.prior_index + request.preceding_packet_count - 1;
     if (index >= request.prior_program.commands.size() && !request.prior_program.repeat_last_until_rest)
       return result;
     predecessor = request.prior_program.commands[std::min(index, request.prior_program.commands.size() - 1)];
     const auto epoch = vehicle::publication_epoch(request.prior_program, index);
-    if (!epoch) return result;
+    const auto deadline = vehicle::publication_epoch(request.prior_program, index, true);
+    if (!epoch || !deadline || *deadline > *first) return result;
     predecessor.published_sec = *epoch;
+    // This prior packet is still unissued. Its actual send may reach its
+    // original deadline; nominal spacing alone overstates the available slew.
+    // Keep nominal times for the forecast and choose the new wire command
+    // against the smallest permitted actual predecessor gap before proof.
+    latest_predecessor_sec = *deadline;
   }
   auto placeholder = predecessor;
   placeholder.published_sec = *first;
@@ -2333,7 +2343,7 @@ Result evaluate(const Request &request) {
   // adapter can execute it outside the explicit scheduled evaluation below.
   view.publication_prefix.reset();
   view.previous_published_steering_rad = predecessor.wire_steering_rad / execution.vehicle_model.steering_wire_gain;
-  view.previous_published_command_age_sec = *first - predecessor.published_sec;
+  view.previous_published_command_age_sec = *first - latest_predecessor_sec;
   const auto bind = [&]() {
     view.now_sec = forecast->publication_sec;
     view.control_origin_sec = forecast->control_origin_sec;

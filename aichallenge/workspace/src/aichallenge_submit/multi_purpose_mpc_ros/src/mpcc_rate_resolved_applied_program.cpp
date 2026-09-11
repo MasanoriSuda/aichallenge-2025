@@ -959,13 +959,14 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
 std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
     std::shared_ptr<const applied::ScheduledCertificate> certificate) {
   if (!certificate || !certificate->nominal()) return {};
-  // Pending prior packets can still affect receiver inputs after the new
-  // starting state. Membership alone cannot erase that delayed input memory.
-  // This theorem uses the exact original history plus the original suffix;
-  // support composite prior programmes only with a separate complete theorem.
-  if (certificate->first_suffix_index() != 0) return {};
   const auto &source = certificate->tube();
   const auto &original = certificate->nominal()->observed();
+  const bool composite = certificate->first_suffix_index() != 0;
+  // The complete-composite theorem retains every original pending packet and
+  // its receiver-delay window. Its starting state/time population begins at
+  // the NEW suffix, not at the composite's first prior packet. Follow's older
+  // first-window theorem does not support that distinct time/input domain.
+  if (composite && original.follow_target) return {};
   if (!original.plan || !original.plan->execution_artifact || !original.plan->physical_snapshot) return {};
   const auto footprint = mpcc_rate_resolved_physical_wall::resolve_clearance_footprint(
     original.current_footprint, original.plan->physical_snapshot->hard_wall_clearance_m);
@@ -974,7 +975,7 @@ std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
   if (!footprint || !begin || !end) return {};
   vehicle::StartingDomainRequest request;
   request.source_observation = source.observation;
-  request.program = certificate->suffix().program;
+  request.program = composite ? source.program : certificate->suffix().program;
   request.profile = source.profile;
   request.coordinate_origin = source.coordinate_origin;
   request.starting_sec = {*begin, *end};
@@ -1012,6 +1013,7 @@ std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
   }
   auto result = std::shared_ptr<StartingDomainEvidence>(new StartingDomainEvidence);
   result->original_rest_sec_ = source.rest_sec;
+  result->includes_pending_prior_ = composite;
   if (original.follow_target) {
     // Keep the existing first-window theorem for Follow. A whole-state/time
     // Cartesian product destroys its progress/time relation and fails the
@@ -1071,7 +1073,8 @@ std::optional<vehicle::CurrentInputPrefix> check_current_domain(
   use = DomainUseReason::Missing;
   if (!evidence) return std::nullopt;
   use = DomainUseReason::UnsupportedSuffix;
-  if (certificate.first_suffix_index() != 0 || (index != 0 && evidence->first_window_only())) return std::nullopt;
+  if ((certificate.first_suffix_index() != 0 && !evidence->includes_pending_prior()) ||
+      (index != 0 && evidence->first_window_only())) return std::nullopt;
   use = DomainUseReason::SourceMismatch;
   if (evidence->certificate().get() != &certificate ||
       evidence->original_rest_sec() != certificate.tube().rest_sec) return std::nullopt;

@@ -1,19 +1,20 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。標準r60とCPU分離比較r61が失敗。元の送信履歴を保つ将来指令計画を検証中。**
+**全体未完。将来の前段指令を含む証明と操舵制約を実装・検証。次は実行時の事前予約。**
 
-制御基点ad18d262。Buildr99全26、testsr86全2570/66は同じソースで合格済み。
-R60は現在証明が短い場面でも元25ms送信窓を跨ぐ。R61も解消せずCPU方針を不採用。
-両runの清掃、保護成果物復元、r61の変更した30threadの終了を確認。
-R358の同じCruise場面では、計算中に送られる既存2指令を含める新規計画が、元の履歴・
-現在物理証明・送信前条件を通過。長い元計画からの加速後停止も証明成立。ただし診断の
-未来ID参照はlive権限ではなく、事前予約、完全なprior入力の独立証明、未来操舵制約、
-加速/停止intentを実装・回帰検証する必要がある。元の期限・安全条件は維持する。
+基点d0bda226。元の前段＋新規指令列の遅延入力を保持する独立証明を追加し、元の
+送信期限まで前段送信が遅れる場合を新規操舵生成へ反映。C5で物理失敗が以前の操舵
+エラーに隠れる表示も修正。Native153、build100全26、tests87全2574/66（source105含む）合格。
+R362の同じCruise場面で前段2指令を含む新規・長期指令の現在照合が0.81/1.83ms、
+元の履歴・送信前条件を通過。前段0/1は拒否を維持。R363旧5場面のID・数値・期限拒否維持。
 
+実行時はまだ前段数0の次slot計画。事前に凍結する予約ID、将来候補の保持と採用、
+長い指令列の加速/制動intentを接続・検証し、標準dev2-r62へ進む。r60/r61の失敗は
+統合修復済みではない。CPU分離方針は不採用、元の期限・安全条件は維持。
 全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
 単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-availability-audit.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/composite-prior-proof-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

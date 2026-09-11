@@ -8,10 +8,11 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
 struct DispatchResult;
 
 /// Worker numerical evidence bound to this exact immutable source certificate.
-/// It has no current-world or publication authority. Source certificates with
-/// pending prior packets are unsupported: their delayed input memory cannot
-/// be replaced by state membership. Follow retains the first-window theorem;
-/// other sources can cover original programme windows through original rest.
+/// It has no current-world or publication authority. A pending-prior source
+/// uses the complete original composite programme, including delayed prior
+/// inputs, with starting times beginning at the new suffix. The independent
+/// suffix-only theorem cannot erase those inputs. Follow keeps its original
+/// first-window theorem and does not support pending-prior domains.
 class StartingDomainEvidence {
 public:
   static std::shared_ptr<const StartingDomainEvidence> build(
@@ -20,12 +21,14 @@ public:
   const vehicle::StartingDomainTube &tube() const noexcept { return tube_; }
   double original_rest_sec() const noexcept { return original_rest_sec_; }
   bool first_window_only() const noexcept { return first_window_only_; }
+  bool includes_pending_prior() const noexcept { return includes_pending_prior_; }
 private:
   StartingDomainEvidence() = default;
   std::shared_ptr<const applied::ScheduledCertificate> certificate_;
   vehicle::StartingDomainTube tube_;
   double original_rest_sec_{};
   bool first_window_only_{true};
+  bool includes_pending_prior_{false};
 };
 
 enum class DomainUseReason {

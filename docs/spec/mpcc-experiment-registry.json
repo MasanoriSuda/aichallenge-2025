@@ -1201,6 +1201,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/scheduling-availability-evidence.json",
       "replay_ready": true,
       "reason": "Frozen r60/r61, rejected CPU partition, exact r354 and bounded programme/prefix r355-r358 comparisons."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-composite-prior-proof",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/composite-prior-proof-evidence.json",
+      "replay_ready": true,
+      "reason": "Native producer counterexamples and actual-library complete prior+suffix/current replays."
     }
   ],
   "experiments": [
@@ -14465,6 +14471,78 @@
       "production_impact": "None. CPU policy rejected; future causal source IDs, composite domain theorem, pending job lifetime and slew/intent obligations remain before promotion.",
       "deleted_code": [],
       "revisit_condition": "New source/history or structural source scheduler/domain implementation. No unchanged CPU partition repeat, clock/window/physical/rate relaxation or late-prefix acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-composite-prior-proof-r359",
+      "baseline_commit": "d0bda2269a79530ac3bd2ebd5ff1b9b55cd9d2b0",
+      "snapshot_ids": [
+        "20260912-nine-state-composite-prior-proof"
+      ],
+      "hypothesis": "A complete independently proved composite programme can retain pending receiver memory; future source slew must use the latest original predecessor deadline.",
+      "changed_dimension": "Private composite domain scope, future source slew producer and C5 actual failure reason; no runtime reservation or timing policy change.",
+      "result": "accepted",
+      "reason": "Four expected red regressions: unsupported composite domain and nominal-only future slew exceeding unchanged latest-prior boundary.",
+      "production_impact": "New proof prerequisite only; runtime next-slot source still has zero pending prior packets. All current/final authority and original safety requirements remain.",
+      "deleted_code": [
+        "Suffix-only domain assumption for composite programmes",
+        "Future nominal-spacing-only slew budget",
+        "C5 feedback physical failure masked by old raw steering rejection"
+      ],
+      "revisit_condition": "New composite source/history/world counterexample or causal source reservation integration; do not relax time, input or physical bounds."
+    },
+    {
+      "experiment_id": "20260912-nine-state-composite-prior-proof-r360-r361",
+      "baseline_commit": "d0bda2269a79530ac3bd2ebd5ff1b9b55cd9d2b0",
+      "snapshot_ids": [
+        "20260912-nine-state-composite-prior-proof"
+      ],
+      "hypothesis": "A complete independently proved composite programme can retain pending receiver memory; future source slew must use the latest original predecessor deadline.",
+      "changed_dimension": "Private composite domain scope, future source slew producer and C5 actual failure reason; no runtime reservation or timing policy change.",
+      "result": "accepted",
+      "reason": "First pass exposes C5 failure-reason mask and retired unsafe-source fixture. Actual peer rejection assertions stay unchanged; final all153native pass including repeated composite tail and unchanged final guards.",
+      "production_impact": "New proof prerequisite only; runtime next-slot source still has zero pending prior packets. All current/final authority and original safety requirements remain.",
+      "deleted_code": [
+        "Suffix-only domain assumption for composite programmes",
+        "Future nominal-spacing-only slew budget",
+        "C5 feedback physical failure masked by old raw steering rejection"
+      ],
+      "revisit_condition": "New composite source/history/world counterexample or causal source reservation integration; do not relax time, input or physical bounds."
+    },
+    {
+      "experiment_id": "20260912-nine-state-composite-prior-proof-r362",
+      "baseline_commit": "d0bda2269a79530ac3bd2ebd5ff1b9b55cd9d2b0",
+      "snapshot_ids": [
+        "20260912-nine-state-composite-prior-proof"
+      ],
+      "hypothesis": "A complete independently proved composite programme can retain pending receiver memory; future source slew must use the latest original predecessor deadline.",
+      "changed_dimension": "Private composite domain scope, future source slew producer and C5 actual failure reason; no runtime reservation or timing policy change.",
+      "result": "accepted",
+      "reason": "12 source arms; same-Cruise pending2 immediate/long privately authenticated domains and current/guard pass. Pending0/1 reject. Future expected source IDs still diagnostic, not a live reservation.",
+      "production_impact": "New proof prerequisite only; runtime next-slot source still has zero pending prior packets. All current/final authority and original safety requirements remain.",
+      "deleted_code": [
+        "Suffix-only domain assumption for composite programmes",
+        "Future nominal-spacing-only slew budget",
+        "C5 feedback physical failure masked by old raw steering rejection"
+      ],
+      "revisit_condition": "New composite source/history/world counterexample or causal source reservation integration; do not relax time, input or physical bounds."
+    },
+    {
+      "experiment_id": "20260912-nine-state-composite-prior-proof-r363",
+      "baseline_commit": "d0bda2269a79530ac3bd2ebd5ff1b9b55cd9d2b0",
+      "snapshot_ids": [
+        "20260912-nine-state-composite-prior-proof"
+      ],
+      "hypothesis": "A complete independently proved composite programme can retain pending receiver memory; future source slew must use the latest original predecessor deadline.",
+      "changed_dimension": "Private composite domain scope, future source slew producer and C5 actual failure reason; no runtime reservation or timing policy change.",
+      "result": "accepted",
+      "reason": "Five prior zero-pending sources retain exact source/current identity, prefix parity and historical deadline rejection.",
+      "production_impact": "New proof prerequisite only; runtime next-slot source still has zero pending prior packets. All current/final authority and original safety requirements remain.",
+      "deleted_code": [
+        "Suffix-only domain assumption for composite programmes",
+        "Future nominal-spacing-only slew budget",
+        "C5 feedback physical failure masked by old raw steering rejection"
+      ],
+      "revisit_condition": "New composite source/history/world counterexample or causal source reservation integration; do not relax time, input or physical bounds."
     }
   ]
 }

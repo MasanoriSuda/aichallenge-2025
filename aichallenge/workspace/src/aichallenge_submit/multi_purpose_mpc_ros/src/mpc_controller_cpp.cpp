@@ -8267,6 +8267,8 @@ struct ScheduledProductionOutcome
 {
   scheduled_control::Request request;
   scheduled_control::Result result;
+  std::shared_ptr<const scheduled_control::StartingDomainEvidence> starting_domain;
+  double starting_domain_ms{};
   std::optional<mpcc_vehicle_model::PublishedInputLedger::Snapshot> cursor;
   mpcc_contract::MpccProblemContext proposed_context;
   std::optional<mpcc_contract::MpccProblemContext> committed_context;
@@ -30716,7 +30718,7 @@ struct MPC
   {
     if (!entry) return nullptr;
     auto capture=std::make_shared<mpcc_architecture_snapshot::ScheduledFailureCapture>();
-    capture->original=entry->request; capture->certificate=entry->result.applied.certificate;
+    capture->original=entry->request; capture->certificate=entry->result.applied.certificate; capture->starting_domain=entry->starting_domain;
     capture->original_proposed_context=entry->proposed_context;
     capture->original_cursor=entry->cursor; capture->current=std::move(current);
     if (entry->cursor) capture->transactions=ledger.since(*entry->cursor);
@@ -30817,6 +30819,9 @@ struct MPC
         outcome->result = scheduled_control::evaluate(request);
         if (outcome->result.applied.certificate) break;
       }
+      const auto domain_started = SteadyClock::now();
+      outcome->starting_domain = scheduled_control::StartingDomainEvidence::build(outcome->result.applied.certificate);
+      outcome->starting_domain_ms = std::chrono::duration<double,std::milli>(SteadyClock::now()-domain_started).count();
       outcome->elapsed_ms = std::chrono::duration<double,std::milli>(SteadyClock::now()-started).count();
       std::lock_guard<std::mutex> lock(mailbox->mutex);
       if (!mailbox->latest || mailbox->latest->request.observed.decision_id < context.decision_id)
@@ -30894,21 +30899,21 @@ struct MPC
       const auto current_proof_started = SteadyClock::now();
       const double current_cpu_started = observed_thread_cpu_sec();
       const auto result = scheduled_control::prepare_dispatch(certificate,*current,*context,
-        current_normal_context_generation(),ledger,*entry->cursor,{},entry->sent);
+        current_normal_context_generation(),ledger,*entry->cursor,{},entry->sent,entry->starting_domain);
       const double current_cpu_ms = 1000.0 * (observed_thread_cpu_sec() - current_cpu_started);
       const double current_proof_ms = std::chrono::duration<double,std::milli>(
         SteadyClock::now() - current_proof_started).count();
       const double current_request_ms = std::chrono::duration<double,std::milli>(
         current_proof_started - current_request_started).count();
       RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
-        "MPCC scheduled admission: dispatch=%lu, job=%lu, source=%lu, index=%zu, reason=%d/current:%d/context:%d/measurement:%d/prefix:%d/world:%d/physical:%d, source_geometry=%lu, current_geometry=%lu, source_intent=%s, proposed=%s, worker_ms=%.3f, request_ms=%.6f, current_ms=%.6f, current_cpu_ms=%.6f",
+        "MPCC scheduled admission: dispatch=%lu, job=%lu, source=%lu, index=%zu, reason=%d/current:%d/context:%d/measurement:%d/prefix:%d/world:%d/physical:%d, source_geometry=%lu, current_geometry=%lu, source_intent=%s, proposed=%s, worker_ms=%.3f, request_ms=%.6f, current_ms=%.6f, current_cpu_ms=%.6f, domain_use=%d, domain_worker_ms=%.6f",
         static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(certificate->suffix().decision_id),
         static_cast<unsigned long>(certificate->suffix().source.sequence),entry->sent,static_cast<int>(result.reason),
         static_cast<int>(result.current.reason),static_cast<int>(result.current.context),static_cast<int>(result.current.measurement.reason),
         static_cast<int>(result.current.prefix),static_cast<int>(result.current.world.reason),static_cast<int>(result.current.world.physical_reason),
         static_cast<unsigned long>(source.stage_geometry_id),static_cast<unsigned long>(context->stage_geometry_id),
         mpcc_contract::to_string(source.intent),mpcc_contract::to_string(intent),entry->elapsed_ms,
-        current_request_ms,current_proof_ms,current_cpu_ms);
+        current_request_ms,current_proof_ms,current_cpu_ms,static_cast<int>(result.domain_use),entry->starting_domain_ms);
       if (!result.candidate) {
         // Ready's expected old-session revocation must not consume the first
         // independent semantic/geometry failure observation in the new session.
@@ -30918,7 +30923,7 @@ struct MPC
         const auto recorder = active_context_failure ? scheduled_context_recorder_ : admission_recorder;
         if (recorder) {
           auto capture=scheduled_failure_capture(entry,ledger,std::make_shared<const rate_resolved_retained::Request>(*current),"current-evidence");
-          capture->current_context=*context; capture->current_check=result.current;
+          capture->current_context=*context; capture->current_check=result.current; capture->domain_use=result.domain_use;
           mpcc_architecture_snapshot::PublicationFailureObservation observation;
           observation.decision_id=active_control_decision_id_; observation.nominal_sec=packet.published_sec;
           observation.moving=current->current_speed_mps>0.1;
@@ -55225,6 +55230,8 @@ private:
     if (capture) {
       if (mpc_->pending_scheduled_context_) capture->current_context=*mpc_->pending_scheduled_context_;
       capture->current_physical_proof=dispatch->current_physical_proof();
+      capture->current_domain_proof=dispatch->current_domain_proof();
+      if (capture->current_domain_proof) capture->domain_use=scheduled_control::DomainUseReason::Accepted;
     }
     mpcc_architecture_snapshot::PublicationFailureObservation observation{
       nullptr,active_control_decision_id_,dispatch->packet().published_sec,active_control_callback_ros_clock_sec_,
@@ -55297,12 +55304,13 @@ private:
       publish_failsafe_command(stamp,"publication crossed certified input window");return std::nullopt;
     }
     if (canonical_execution) RCLCPP_INFO(get_logger(),
-      "MPCC scheduled publication: dispatch=%lu, job=%lu, source=%lu, index=%zu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f, programme_input=%lu, physical_input=%lu, independent=%d, guard_end=%.9f, raw_end=%.9f, call_wall_ms=%.6f/%.6f/%.6f",
+      "MPCC scheduled publication: dispatch=%lu, job=%lu, source=%lu, index=%zu, nominal=%.9f, before=%.9f, after=%.9f, deadline=%.9f, programme_input=%lu, physical_input=%lu, independent=%d, starting_domain=%d, guard_end=%.9f, raw_end=%.9f, call_wall_ms=%.6f/%.6f/%.6f",
       static_cast<unsigned long>(active_control_decision_id_),static_cast<unsigned long>(dispatch->source().decision_id),
       static_cast<unsigned long>(dispatch->source().solution_id),dispatch->source().packet_index,
       publication_stamp.seconds(),before.seconds(),after.seconds(),deadline,
       static_cast<unsigned long>(dispatch->source().input_context_fingerprint),
-      static_cast<unsigned long>(dispatch->physical_input_fingerprint()), dispatch->current_physical_proof() ? 1 : 0,
+      static_cast<unsigned long>(dispatch->physical_input_fingerprint()), (dispatch->current_physical_proof() || dispatch->current_domain_proof()) ? 1 : 0,
+      dispatch->current_domain_proof() ? 1 : 0,
       call_timing.guard_finished_ros_sec,call_timing.raw_finished_ros_sec,
       call_timing.guard_wall_ms,call_timing.raw_publish_wall_ms,call_timing.final_publish_wall_ms);
     command_failsafe_active_=false;

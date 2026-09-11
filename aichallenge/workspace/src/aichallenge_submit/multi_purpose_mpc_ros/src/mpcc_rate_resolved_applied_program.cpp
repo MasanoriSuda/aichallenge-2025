@@ -956,7 +956,118 @@ ContextReason check_current_context(
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
+std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
+    std::shared_ptr<const applied::ScheduledCertificate> certificate) {
+  if (!certificate || !certificate->nominal()) return {};
+  // Pending prior packets can still affect receiver inputs after the new
+  // starting state. Membership alone cannot erase that delayed input memory.
+  // This theorem uses the exact original history plus the original suffix;
+  // support composite prior programmes only with a separate complete theorem.
+  if (certificate->first_suffix_index() != 0) return {};
+  const auto &source = certificate->tube();
+  const auto &original = certificate->nominal()->observed();
+  if (!original.plan || !original.plan->execution_artifact || !original.plan->physical_snapshot) return {};
+  const auto footprint = mpcc_rate_resolved_physical_wall::resolve_clearance_footprint(
+    original.current_footprint, original.plan->physical_snapshot->hard_wall_clearance_m);
+  const auto begin = vehicle::publication_epoch(certificate->suffix().program, 0);
+  const auto end = vehicle::publication_epoch(certificate->suffix().program, 0, true);
+  if (!footprint || !begin || !end) return {};
+  vehicle::StartingDomainRequest request;
+  request.source_observation = source.observation;
+  request.program = certificate->suffix().program;
+  request.profile = source.profile;
+  request.coordinate_origin = source.coordinate_origin;
+  request.starting_sec = {*begin, *end};
+  const auto offsets = vehicle::numerical::footprint_vertex_offsets(*footprint);
+  for (std::size_t i = 0; i < offsets.size(); ++i)
+    request.footprint_offsets[i] = {offsets[i].lo, offsets[i].hi};
+  bool initialized = false;
+  for (const auto &sample : source.source_to_rest) {
+    if (sample.end_sec < source.observation.now_sec || sample.begin_sec > *end) continue;
+    if (!initialized) { request.body = sample.swept_body; initialized = true; }
+    else for (std::size_t i = 0; i < request.body.size(); ++i) {
+      request.body[i].lower = std::min(request.body[i].lower, sample.swept_body[i].lower);
+      request.body[i].upper = std::max(request.body[i].upper, sample.swept_body[i].upper);
+    }
+  }
+  if (!initialized) return {};
+  auto prediction = vehicle::predict_starting_domain_to_rest(request, original.plan->execution_artifact->vehicle_model);
+  if (!prediction.tube) return {};
+  auto result = std::shared_ptr<StartingDomainEvidence>(new StartingDomainEvidence);
+  result->certificate_ = std::move(certificate);
+  result->tube_ = std::move(*prediction.tube);
+  return result;
+}
+
 namespace {
+std::optional<vehicle::CurrentInputPrefix> check_current_domain(
+    const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
+    std::size_t index, const std::shared_ptr<const StartingDomainEvidence> &evidence,
+    DomainUseReason &use, CurrentWorldCheck &result) {
+  use = DomainUseReason::Missing;
+  if (!evidence) return std::nullopt;
+  use = DomainUseReason::UnsupportedSuffix;
+  if (index != 0) return std::nullopt;
+  use = DomainUseReason::SourceMismatch;
+  if (evidence->certificate().get() != &certificate) return std::nullopt;
+  double follow_reference{};
+  std::optional<recovery_footprint::FootprintExtents> footprint;
+  use = DomainUseReason::WorldRejected;
+  if (!prepare_current_world(certificate, fresh, result, follow_reference, footprint)) return std::nullopt;
+  if (fresh.follow_target) {
+    use = DomainUseReason::FollowNotMonotone;
+    const auto &target = *fresh.follow_target;
+    if (target.target_speed_mps < 0 ||
+        !std::is_sorted(target.target_progress_from_current_origin_m.begin(),
+          target.target_progress_from_current_origin_m.end())) return std::nullopt;
+  }
+  const auto &domain = evidence->tube();
+  // Rebuild original clearance offsets from the freshly authenticated plan.
+  // Numeric membership must not borrow unchecked offsets from a supplied prefix.
+  vehicle::FootprintRanges offsets;
+  const auto vertices = vehicle::numerical::footprint_vertex_offsets(*footprint);
+  for (std::size_t i = 0; i < offsets.size(); ++i) offsets[i] = {vertices[i].lo, vertices[i].hi};
+  auto prediction = vehicle::predict_pending_input_prefix(fresh.publication_prefix->observation,
+    certificate.suffix().program, certificate.tube().profile,
+    fresh.plan->execution_artifact->vehicle_model, offsets);
+  use = DomainUseReason::PrefixUnavailable;
+  if (!prediction.prefix) return std::nullopt;
+  use = DomainUseReason::OutsideDomain;
+  if (!vehicle::starting_domain_contains_prefix(domain.request, *prediction.prefix)) return std::nullopt;
+  const auto &ceiling = certificate.nominal()->proof().terminal_stop_forward_velocity_ceiling_mps;
+  applied::Result diagnostic;
+  applied::WorldCheckStatistics statistics;
+  applied::AppliedWorldCheck checker{fresh, domain.request.source_observation, *footprint,
+    ceiling, follow_reference, statistics, diagnostic};
+  const auto check = [&](const vehicle::BodyRanges &body, const vehicle::FootprintRanges &corners,
+      double begin, double end) {
+    try { diagnostic.reason = checker.check(body, corners, begin, end); }
+    catch (const std::exception &) { diagnostic.reason = applied::Reason::InvalidWorld; }
+    if (diagnostic.reason == applied::Reason::Accepted) return true;
+    result.reason = CurrentWorldReason::PhysicalRejected;
+    result.physical_reason = diagnostic.reason;
+    result.rejected_sec = diagnostic.rejected_sec;
+    result.rejected_peer_id = diagnostic.rejected_peer_id;
+    return false;
+  };
+  use = DomainUseReason::WorldRejected;
+  if (!check(domain.request.body, domain.initial_footprint,
+      std::max(domain.request.starting_sec.lower, fresh.now_sec), domain.request.starting_sec.upper)) return std::nullopt;
+  for (const auto &sample : domain.source_to_rest) {
+    if (sample.absolute_end_sec < fresh.now_sec) continue;
+    if (!check(sample.swept_body, sample.swept_footprint,
+        std::max(sample.absolute_begin_sec, fresh.now_sec), sample.absolute_end_sec)) return std::nullopt;
+  }
+  if (!statistics.checked_samples) return std::nullopt;
+  result.reason = CurrentWorldReason::Current;
+  result.physical_reason = applied::Reason::Accepted;
+  result.minimum_peer_clearance_m = statistics.minimum_peer_clearance_m;
+  result.minimum_follow_gap_m = statistics.minimum_follow_gap_m;
+  result.checked_samples = statistics.checked_samples;
+  use = DomainUseReason::Accepted;
+  return std::move(prediction.prefix);
+}
+
 // New samples may define a new physical population. Older stamps, or changed
 // values under an unchanged stamp, cannot supply independent current evidence.
 bool component_epochs_are_current(const vehicle::ObservationProvenance &old,
@@ -1037,7 +1148,10 @@ CurrentCheck check_dispatch_evidence(
     const vehicle::PublishedInputLedger &ledger, const vehicle::PublishedInputLedger::Snapshot &original_cursor,
     const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
     const std::size_t already_published_suffix_packets,
-    std::optional<vehicle::PendingInputTube> *independent) {
+    std::optional<vehicle::PendingInputTube> *independent,
+    const std::shared_ptr<const StartingDomainEvidence> &domain = {},
+    std::optional<vehicle::CurrentInputPrefix> *domain_prefix = nullptr,
+    DomainUseReason *domain_use = nullptr) {
   CurrentCheck result;
   if (!fresh.publication_prefix || fresh_problem.decision_id != fresh.decision_id ||
       fresh_problem.intent != fresh.current_intent ||
@@ -1065,8 +1179,14 @@ CurrentCheck check_dispatch_evidence(
   result.context = check_current_context(certificate, fresh_generation, fresh_problem, use);
   if (result.context != ContextReason::Compatible) { result.reason = CurrentReason::ContextRejected; return result; }
   if (new_population) {
-    *independent = prove_current_remaining_program(certificate, fresh,
-      already_published_suffix_packets, result.world);
+    if (domain_prefix && domain_use)
+      *domain_prefix = check_current_domain(certificate, fresh, already_published_suffix_packets,
+        domain, *domain_use, result.world);
+    if (!domain_prefix || !*domain_prefix) {
+      result.world = CurrentWorldCheck{};
+      *independent = prove_current_remaining_program(certificate, fresh,
+        already_published_suffix_packets, result.world);
+    }
   } else {
     result.world = recheck_remaining_world(certificate, fresh);
   }
@@ -1116,7 +1236,8 @@ DispatchResult prepare_dispatch(
     const ContextSnapshot &current_generation, const vehicle::PublishedInputLedger &ledger,
     const vehicle::PublishedInputLedger::Snapshot &original_cursor,
     const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
-    std::size_t already_published_suffix_packets) {
+    std::size_t already_published_suffix_packets,
+    std::shared_ptr<const StartingDomainEvidence> domain) {
   DispatchResult result;
   if (!certificate || !certificate->nominal()) return result;
   const auto &suffix = certificate->suffix();
@@ -1145,8 +1266,9 @@ DispatchResult prepare_dispatch(
     result.reason = DispatchReason::RestExpired; return result;
   }
   std::optional<vehicle::PendingInputTube> independent;
+  std::optional<vehicle::CurrentInputPrefix> domain_prefix;
   result.current = check_dispatch_evidence(*certificate, fresh, fresh_problem, current_generation,
-    ledger, original_cursor, prior_sources, index, &independent);
+    ledger, original_cursor, prior_sources, index, &independent, domain, &domain_prefix, &result.domain_use);
   if (result.current.reason != CurrentReason::Compatible) {
     result.reason = DispatchReason::CurrentEvidenceRejected; return result;
   }
@@ -1166,6 +1288,21 @@ DispatchResult prepare_dispatch(
     physical->original_input_fingerprint_ = certificate->tube().context_fingerprint;
     physical->first_suffix_index_ = index;
     candidate->current_physical_proof_ = std::move(physical);
+  }
+  if (domain_prefix) {
+    auto physical = std::shared_ptr<CurrentDomainProof>(new CurrentDomainProof);
+    physical->observed_ = fresh;
+    physical->prefix_ = std::move(*domain_prefix);
+    physical->evidence_ = std::move(domain);
+    // Namespace-separated observation identity, never a caller-supplied token.
+    std::uint64_t hash = 14695981039346656037ULL;
+    for (const std::uint64_t value : {std::uint64_t{0x435552444f4d3031},
+        physical->evidence_->tube().context_fingerprint, physical->prefix_.context_fingerprint,
+        certificate->tube().context_fingerprint, fresh.decision_id})
+      for (unsigned shift = 0; shift < 64; shift += 8)
+        hash = (hash ^ static_cast<unsigned char>(value >> shift)) * 1099511628211ULL;
+    physical->physical_input_fingerprint_ = hash;
+    candidate->current_domain_proof_ = std::move(physical);
   }
   candidate->certificate_ = std::move(certificate);
   candidate->ledger_cursor_ = *cursor;
@@ -1195,6 +1332,11 @@ bool DispatchCandidate::clock_and_slew_match(double before_clock_sec, double aft
         current_physical_proof_->original_input_fingerprint() != certificate_->tube().context_fingerprint ||
         current_physical_proof_->first_suffix_index() != packet_index_ ||
         current_physical_proof_->observed().decision_id != dispatch_decision_id_)) ||
+      (current_domain_proof_ && (packet_index_ != 0 ||
+        current_domain_proof_->evidence()->certificate() != certificate_ ||
+        current_domain_proof_->observed().decision_id != dispatch_decision_id_ ||
+        current_domain_proof_->prefix().observation.now_sec != observed_sec_ ||
+        after_clock_sec > current_domain_proof_->evidence()->tube().rest_sec)) ||
       !vehicle::scheduled_publication_bracket_admitted(certificate_->suffix().program, packet_index_,
         certificate_->nominal()->observed().now_sec, before_clock_sec, after_clock_sec)) return false;
   const auto &execution = *certificate_->nominal()->observed().plan->execution_artifact;

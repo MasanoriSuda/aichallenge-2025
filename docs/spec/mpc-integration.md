@@ -4728,3 +4728,17 @@ R317–319は独立した開始状態/時刻範囲からの全停止計算を診
 現在world・元source/context/台帳・最終送信の照合と非同期接続は次段階であり、
 本番nodeのCurrentPhysicalProofと公開条件は維持する。
 [数値APIの検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-api-evidence.json)。
+
+開始範囲の証明を単一scheduled dispatcherへ接続した。workerの`StartingDomainEvidence`は
+元certificateと固定し、先行予定パケットを持たないsourceの最初の未送信packetのみ扱う。
+予定済みの先行packetには遅延入力の記憶があるため、状態包含だけで省略しない。
+現在の観測epoch・実台帳prefix・context/generationを確認して短い現在prefixを新規計算し、
+全状態/座標/offset/時刻の厳密包含と現在の壁/他車/Followを全停止まで確認した場合のみ、
+別型`CurrentDomainProof`をdispatcherが生成する。元のjob/packetは台帳に保持し、
+物理証明hashを区別する。最終pre/postの元送信窓と操舵slewの条件は変更しない。
+Followの範囲証明は進捗knotsの厳密な非減少と非負終端速度を必要とする。
+範囲外/非対応の場合は既存の完全な`CurrentPhysicalProof`を要求する。
+ログと失敗snapshotに採否・worker計算時間・D/T/frame/hash・現在prefixを追加した。
+R326全146test、R327保存3例の本番library再生、buildr94全26package、testsr82全2560/66合格。
+標準dev2-r55による実worker availability/期限の検証とM4-M6は未完。
+[接続の設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-integration-design.md)。

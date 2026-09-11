@@ -14,6 +14,9 @@ struct ScheduledFailureCapture {
   std::size_t suffix_index{};
   std::optional<mpcc_vehicle_model::ObservationProvenance> raw_observation;
   std::shared_ptr<const mpcc_rate_resolved_scheduled::CurrentPhysicalProof> current_physical_proof;
+  std::shared_ptr<const mpcc_rate_resolved_scheduled::StartingDomainEvidence> starting_domain;
+  std::shared_ptr<const mpcc_rate_resolved_scheduled::CurrentDomainProof> current_domain_proof;
+  mpcc_rate_resolved_scheduled::DomainUseReason domain_use{mpcc_rate_resolved_scheduled::DomainUseReason::NotNeeded};
   std::string boundary;
   std::string detail;
 };

@@ -1,10 +1,54 @@
 #pragma once
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_scheduled.hpp"
+#include "multi_purpose_mpc_ros/mpcc_starting_domain.hpp"
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled {
 
 struct DispatchResult;
+
+/// Worker numerical evidence bound to this exact immutable source certificate.
+/// It has no current-world or publication authority. Source certificates with
+/// pending prior packets are unsupported: their delayed input memory cannot
+/// be replaced by state membership.
+class StartingDomainEvidence {
+public:
+  static std::shared_ptr<const StartingDomainEvidence> build(
+    std::shared_ptr<const applied::ScheduledCertificate> certificate);
+  const std::shared_ptr<const applied::ScheduledCertificate> &certificate() const noexcept { return certificate_; }
+  const vehicle::StartingDomainTube &tube() const noexcept { return tube_; }
+private:
+  StartingDomainEvidence() = default;
+  std::shared_ptr<const applied::ScheduledCertificate> certificate_;
+  vehicle::StartingDomainTube tube_;
+};
+
+enum class DomainUseReason {
+  NotNeeded, Missing, UnsupportedSuffix, SourceMismatch, PrefixUnavailable,
+  OutsideDomain, FollowNotMonotone, WorldRejected, Accepted
+};
+
+/// Only the dispatcher can join fresh authenticated prefix and whole-world
+/// evidence to an independently computed starting domain.
+class CurrentDomainProof {
+public:
+  const retained::Request &observed() const noexcept { return observed_; }
+  const vehicle::CurrentInputPrefix &prefix() const noexcept { return prefix_; }
+  const std::shared_ptr<const StartingDomainEvidence> &evidence() const noexcept { return evidence_; }
+  std::uint64_t physical_input_fingerprint() const noexcept { return physical_input_fingerprint_; }
+private:
+  CurrentDomainProof() = default;
+  friend DispatchResult prepare_dispatch(
+    std::shared_ptr<const applied::ScheduledCertificate>, const retained::Request &,
+    const retained::contract::MpccProblemContext &, const ContextSnapshot &,
+    const vehicle::PublishedInputLedger &, const vehicle::PublishedInputLedger::Snapshot &,
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t,
+    std::shared_ptr<const StartingDomainEvidence>);
+  retained::Request observed_;
+  vehicle::CurrentInputPrefix prefix_;
+  std::shared_ptr<const StartingDomainEvidence> evidence_;
+  std::uint64_t physical_input_fingerprint_{};
+};
 
 /// Independently proved physical population for the exact unsent original
 /// programme. It never replaces the original job/programme identity in the
@@ -21,7 +65,8 @@ private:
     std::shared_ptr<const applied::ScheduledCertificate>, const retained::Request &,
     const retained::contract::MpccProblemContext &, const ContextSnapshot &,
     const vehicle::PublishedInputLedger &, const vehicle::PublishedInputLedger::Snapshot &,
-    const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t);
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t,
+    std::shared_ptr<const StartingDomainEvidence>);
   retained::Request observed_;
   vehicle::PendingInputTube tube_;
   std::uint64_t original_input_fingerprint_{};
@@ -42,7 +87,9 @@ public:
   const std::shared_ptr<const applied::ScheduledCertificate> &certificate() const noexcept { return certificate_; }
 
   const std::shared_ptr<const CurrentPhysicalProof> &current_physical_proof() const noexcept { return current_physical_proof_; }
+  const std::shared_ptr<const CurrentDomainProof> &current_domain_proof() const noexcept { return current_domain_proof_; }
   std::uint64_t physical_input_fingerprint() const noexcept {
+    if (current_domain_proof_) return current_domain_proof_->physical_input_fingerprint();
     return current_physical_proof_ ? current_physical_proof_->tube().numerical.context_fingerprint : certificate_->tube().context_fingerprint;
   }
   retained::contract::CanonicalNormalCommand canonical_command() const;
@@ -67,10 +114,12 @@ private:
     std::shared_ptr<const applied::ScheduledCertificate>, const retained::Request &,
     const retained::contract::MpccProblemContext &, const ContextSnapshot &,
     const vehicle::PublishedInputLedger &, const vehicle::PublishedInputLedger::Snapshot &,
-    const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t);
+    const std::vector<std::optional<vehicle::PublishedProgramSource>> &, std::size_t,
+    std::shared_ptr<const StartingDomainEvidence>);
   bool clock_and_slew_match(double before_clock_sec, double after_clock_sec) const noexcept;
   std::shared_ptr<const applied::ScheduledCertificate> certificate_;
   std::shared_ptr<const CurrentPhysicalProof> current_physical_proof_;
+  std::shared_ptr<const CurrentDomainProof> current_domain_proof_;
   std::optional<vehicle::PublishedInputLedger::Snapshot> ledger_cursor_;
   ContextSnapshot current_generation_;
   vehicle::PublishedCommand packet_;
@@ -95,6 +144,7 @@ enum class DispatchReason {
 struct DispatchResult {
   DispatchReason reason{DispatchReason::MissingCertificate};
   CurrentCheck current;
+  DomainUseReason domain_use{DomainUseReason::NotNeeded};
   std::shared_ptr<const DispatchCandidate> candidate;
 };
 
@@ -107,6 +157,7 @@ DispatchResult prepare_dispatch(
   const ContextSnapshot &current_generation, const vehicle::PublishedInputLedger &ledger,
   const vehicle::PublishedInputLedger::Snapshot &original_cursor,
   const std::vector<std::optional<vehicle::PublishedProgramSource>> &prior_sources,
-  std::size_t already_published_suffix_packets);
+  std::size_t already_published_suffix_packets,
+  std::shared_ptr<const StartingDomainEvidence> domain = {});
 
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_scheduled

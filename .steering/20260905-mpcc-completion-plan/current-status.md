@@ -1,22 +1,21 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分のローカルcommitのみ。
-**全体未完。開始範囲の数値API検証完了。次は非同期worker/dispatcherの認証接続。**
+**全体未完。開始範囲の認証接続と静的/再生検証が完了。次は標準dev2-r55。**
 
-CurrentInputPrefix/StartingDomainTubeを別の数値データ型として実装。短いprefixと全範囲/
-全時刻からの完全停止計算を区別し、元入力/履歴/モデル/範囲/座標/offsetのhashを持つ。
-R320六回帰test、R321保存3例の全prefix一致/厳密包含/全停止/現在worldが合格。
-既存の元/現在full tubeもbit一致。Build r93全26package、tests r81全2554/66、source105合格。
-現在側は単独診断でprefix0.08–0.22msとworld0.45–0.58ms。実worker availabilityは未検証。
+単一dispatcherへimmutable worker evidenceとCurrentDomainProofを接続。
+現在prefixを新規計算し、厳密包含・現在world/Followと元のepoch/context/実台帳を確認する。
+元source/packet identityと実pre/post送信窓は維持。範囲外/非対応は既存の完全再計算。
+先行予定packetを持つsourceは遅延入力記憶を省略できないため前計算の対象外。
+本番producerは元々preceding_packet_count=0。最初の未送信suffixだけを扱う。
 
-本番nodeの権限と経路はdbbe5fe6のまま。標準r54はD1decision1157で送信後期限超過し失敗。
-新しい数値データだけでは指令権限を与えない。次は元source/generation/台帳/実送信窓を
-保ち、immutable worker evidenceと全current prefix/worldを単一dispatcherへ接続する。
-範囲外・未知の場合に未認証指令や猶予を追加しない。全intent/Mission/sibling/Store、
-実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalは未完。個別試験を全体完了にしない。
+R326全146native、R327本番libraryで保存3例の厳密prefix/全world/元期限判定が合格。
+Buildr94全26package、testsr82全2560records/66groups、source105合格。
+新経路のworker/current CPUと実期限は標準dev2-r55で検証する。最新標準r54は失敗。
+全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
+同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
 
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-integration-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

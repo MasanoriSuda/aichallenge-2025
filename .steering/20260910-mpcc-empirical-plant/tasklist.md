@@ -266,3 +266,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Build r93 all26packages; tests r81 all2554records/66groups; source105pass.
 - [ ] Authenticate immutable worker domain evidence and current prefix/world inside sole dispatcher; preserve every original prefix/context/actual-window check, then fresh live timing.
 - [ ] All M4-M6 acceptance and final same submission/eval remain.
+
+
+2026-09-12 authenticated starting-domain integration (baseline76d7ecc4):
+- [x] Immutable worker StartingDomainEvidence and privately minted CurrentDomainProof in sole dispatcher; original epoch/prefix/context/generation/final-window guards retained.
+- [x] Review excludes composite pending-prior sources because delayed input memory must remain covered. Current production source has no pending prior packets. Unsupported set/Follow/suffix cases retain complete current point proof.
+- [x] R326all146native, R327all3actual-library replays/prefix parity/original pre-post failures, source105, buildr94all26/testsr82all2560/66passed. Failed r323mount and r325fixture attempts preserved.
+- [ ] Commit and standard dev2-r55: live worker availability, current proof cost, actual deadlines and full runtime acceptance.
+- [ ] All remainingM4-M6: Mission/sibling/Store, multi-tick Stop/rest/restart, Recovery/Rejoin/Boost/async, repeated single/multicar races/gates and same submission/eval.

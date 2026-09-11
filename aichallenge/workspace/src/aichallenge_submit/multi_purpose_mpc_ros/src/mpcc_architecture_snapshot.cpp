@@ -2877,6 +2877,37 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         node["independent_physical_first_suffix_index"]=physical.first_suffix_index();
         node["independent_physical_program"]=mpcc_vehicle_model::encode_input_program(physical.tube().numerical.program);
       }
+      node["domain_use"]=static_cast<int>(capture.domain_use);
+      const auto domain_evidence=capture.current_domain_proof ? capture.current_domain_proof->evidence() : capture.starting_domain;
+      if (domain_evidence) {
+        const auto &domain=domain_evidence->tube();
+        auto data=node["starting_domain"];
+        data["numerical_fingerprint"]=domain.context_fingerprint;
+        data["source_input_fingerprint"]=domain_evidence->certificate()->tube().context_fingerprint;
+        data["starting_sec"]=std::vector<double>{domain.request.starting_sec.lower,domain.request.starting_sec.upper};
+        data["rest_sec"]=domain.rest_sec;
+        data["sample_count"]=domain.source_to_rest.size();
+        data["source_observation"]=mpcc_vehicle_model::encode_observation_provenance(domain.request.source_observation);
+        data["program"]=mpcc_vehicle_model::encode_input_program(domain.request.program);
+        const auto &origin=domain.request.coordinate_origin;
+        data["coordinate_origin"]=std::vector<double>{origin.x_m,origin.y_m,origin.yaw_rad,origin.forward_velocity_mps,
+          origin.lateral_velocity_mps,origin.yaw_rate_radps,origin.desired_steering_rad,origin.tire_steering_rad};
+        const auto ranges=[](const auto &values) {
+          YAML::Node result(YAML::NodeType::Sequence);
+          for (const auto &v:values) result.push_back(std::vector<double>{v.lower,v.upper});
+          return result;
+        };
+        data["body"]=ranges(domain.request.body);
+        data["footprint_offsets"]=ranges(domain.request.footprint_offsets);
+        if (capture.current_domain_proof) {
+          const auto &proof=*capture.current_domain_proof;
+          data["current_physical_fingerprint"]=proof.physical_input_fingerprint();
+          data["current_prefix_fingerprint"]=proof.prefix().context_fingerprint;
+          data["current_prefix_observation"]=mpcc_vehicle_model::encode_observation_provenance(proof.prefix().observation);
+          data["current_prefix_body"]=ranges(proof.prefix().body);
+          data["current_prefix_footprint"]=ranges(proof.prefix().footprint);
+        }
+      }
       node["prior_index"]=capture.original.prior_index;
       node["preceding_packet_count"]=capture.original.preceding_packet_count;
       node["planned_control_origin_sec"]=capture.original.planned_control_origin_sec;

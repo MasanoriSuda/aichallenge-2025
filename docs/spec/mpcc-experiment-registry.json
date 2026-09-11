@@ -1159,6 +1159,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-api-evidence.json",
       "replay_ready": true,
       "reason": "Typed numerical short-prefix/independent full starting-domain implementation, no authority connection yet."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-starting-domain-integration",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-integration-evidence.json",
+      "replay_ready": true,
+      "reason": "Authenticated independent domain and current prefix/world inside sole dispatcher; final native and actual-library replay; live acceptance pending."
     }
   ],
   "experiments": [
@@ -13936,6 +13942,48 @@
       "production_impact": "Numerical library only, no new controller authority. Worker/dispatcher/current-world authentication and live timing are next.",
       "deleted_code": [],
       "revisit_condition": "New authenticated integration, negative case or live evidence; do not promote numerical data alone or relax bounds/windows."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-integration-r323",
+      "baseline_commit": "76d7ecc42576e75ef3dd5a805f9b093c6ccd9267",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-integration"
+      ],
+      "hypothesis": "Independent causal set can replace synchronous future numerical propagation when exact current population and input history are authenticated",
+      "changed_dimension": "Immutable no-prior first-suffix domain evidence and full fresh prefix/world join; original publication guards unchanged",
+      "result": "inconclusive",
+      "reason": "Replay did not compile: missing read-only steering mount. Environment corrected in r324.",
+      "production_impact": "Connected within sole scheduled dispatcher; existing complete point proof required for unsupported cases. Worker availability still subject to live run.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard run or new counterexample; do not relax original windows or admit pending prior input memory."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-integration-r325",
+      "baseline_commit": "76d7ecc42576e75ef3dd5a805f9b093c6ccd9267",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-integration"
+      ],
+      "hypothesis": "Independent causal set can replace synchronous future numerical propagation when exact current population and input history are authenticated",
+      "changed_dimension": "Immutable no-prior first-suffix domain evidence and full fresh prefix/world join; original publication guards unchanged",
+      "result": "rejected",
+      "reason": "Zero-prior fixture exposed old hard-coded two-packet helper, before assertions. Fixed declared-prefix helper; no production guard relaxed.",
+      "production_impact": "Connected within sole scheduled dispatcher; existing complete point proof required for unsupported cases. Worker availability still subject to live run.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard run or new counterexample; do not relax original windows or admit pending prior input memory."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-integration-r326-r327-r94-r82",
+      "baseline_commit": "76d7ecc42576e75ef3dd5a805f9b093c6ccd9267",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-integration"
+      ],
+      "hypothesis": "Independent causal set can replace synchronous future numerical propagation when exact current population and input history are authenticated",
+      "changed_dimension": "Immutable no-prior first-suffix domain evidence and full fresh prefix/world join; original publication guards unchanged",
+      "result": "accepted",
+      "reason": "Immutable source/current-domain join, complete native negative tests and all3actual-library replays pass; build26/test2560/66/source105. No live acceptance yet.",
+      "production_impact": "Connected within sole scheduled dispatcher; existing complete point proof required for unsupported cases. Worker availability still subject to live run.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard run or new counterexample; do not relax original windows or admit pending prior input memory."
     }
   ]
 }

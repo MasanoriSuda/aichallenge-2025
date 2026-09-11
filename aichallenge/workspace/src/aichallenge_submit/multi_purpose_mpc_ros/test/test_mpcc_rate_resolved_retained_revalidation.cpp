@@ -3594,7 +3594,7 @@ vehicle::ObservationProvenance scheduled_fresh_observation(const applied::Schedu
   // This is the physical angle issued before serialization, not an observation
   // of which desired steering the receiver has applied.
   fresh.initial.state.desired_steering_rad = forecast.observation.initial.state.desired_steering_rad;
-  fresh.commands.insert(fresh.commands.end(), forecast.nominal_prefix.commands.begin(), forecast.nominal_prefix.commands.begin() + 2);
+  fresh.commands.insert(fresh.commands.end(), forecast.nominal_prefix.commands.begin(), forecast.nominal_prefix.commands.begin() + certificate.first_suffix_index());
   return fresh;
 }
 
@@ -4154,7 +4154,12 @@ struct ScheduledDispatchFixture {
   contract::MpccProblemContext context;
 
   explicit ScheduledDispatchFixture(double last_prior_after = 1.075, bool initial_clock_floor = false,
-    contract::ControlIntent intent = contract::ControlIntent::Track) : request(scheduled_request(intent)) {
+    contract::ControlIntent intent = contract::ControlIntent::Track, bool no_prior_packets = false) : request(scheduled_request(intent)) {
+    if (no_prior_packets) {
+      request.prior_index = request.preceding_packet_count;
+      request.preceding_packet_count = 0;
+      prior_sources.clear();
+    }
     if (initial_clock_floor) {
       request.preceding_packet_count = 0;
       request.prior_program.commands = {{1.055,-3,
@@ -4706,4 +4711,186 @@ TEST(MpccScheduledCandidateChoice, FixedSideMissionTargetGeometryModelAndSchemaS
     EXPECT_FALSE(scheduled::select_new_source_context(other, proposed));
   }
   EXPECT_TRUE(scheduled::select_new_source_context(source, source));
+}
+
+TEST(MpccScheduledDomainDispatch, AuthenticatesFreshPopulationAndOriginalPublicationIdentity)
+{
+  for (double now : {1.1, 1.115}) {
+    SCOPED_TRACE(now);
+    ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Track, true);
+    const auto domain = scheduled::StartingDomainEvidence::build(f.certificate);
+    ASSERT_TRUE(domain);
+    f.fresh = scheduled_fresh_world(*f.certificate, now);
+    f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+    f.bind_next(0);
+    const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+      f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
+    ASSERT_TRUE(result.candidate);
+    ASSERT_EQ(result.domain_use, scheduled::DomainUseReason::Accepted);
+    const auto &candidate = *result.candidate;
+    ASSERT_TRUE(candidate.current_domain_proof());
+    EXPECT_FALSE(candidate.current_physical_proof());
+    const auto &proof = *candidate.current_domain_proof();
+    EXPECT_EQ(proof.evidence(), domain);
+    EXPECT_EQ(domain->certificate(), f.certificate);
+    EXPECT_EQ(proof.observed().decision_id, f.fresh.decision_id);
+    EXPECT_EQ(proof.prefix().observation.now_sec, now);
+    EXPECT_NE(candidate.physical_input_fingerprint(), f.certificate->tube().context_fingerprint);
+    EXPECT_EQ(candidate.source().input_context_fingerprint, f.certificate->tube().context_fingerprint);
+    const auto full = f.prepare(); ASSERT_TRUE(full.candidate); ASSERT_TRUE(full.candidate->current_physical_proof());
+    const auto &body = full.candidate->current_physical_proof()->tube().numerical.publication_body;
+    for (std::size_t i = 0; i < body.size(); ++i) {
+      EXPECT_EQ(proof.prefix().body[i].lower, body[i].lower);
+      EXPECT_EQ(proof.prefix().body[i].upper, body[i].upper);
+    }
+    const auto &packet = candidate.packet();
+    EXPECT_TRUE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
+      now, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+    EXPECT_FALSE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
+      1.125000001, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+    EXPECT_FALSE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id + 1,
+      now, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+    EXPECT_FALSE(candidate.matches_before_publication(f.ledger, f.owner.capture(), f.fresh.decision_id,
+      now, packet.wire_acceleration_mps2 + 1, packet.wire_steering_rad));
+    const auto command = candidate.canonical_command();
+    ASSERT_TRUE(f.ledger.record(packet, now, now, 2, candidate.source()));
+    EXPECT_TRUE(candidate.matches_after_publication(f.ledger, f.owner.capture()));
+    const auto receipt = candidate.publication_identity(f.ledger, f.owner.capture());
+    ASSERT_TRUE(receipt); EXPECT_TRUE(receipt->matches(command));
+    f.owner.invalidate();
+    EXPECT_FALSE(candidate.matches_after_publication(f.ledger, f.owner.capture()));
+  }
+}
+
+TEST(MpccScheduledDomainDispatch, RejectedSetNeverReplacesTheCompletePointProof)
+{
+  ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Track, true);
+  const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+  f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+  f.bind_next(0);
+  ScheduledDispatchFixture other(1.075, false, contract::ControlIntent::Track, true);
+  const auto foreign = scheduled::StartingDomainEvidence::build(other.certificate); ASSERT_TRUE(foreign);
+  auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+    f.ledger, *f.original_cursor, f.prior_sources, 0, foreign);
+  ASSERT_TRUE(result.candidate);
+  EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::SourceMismatch);
+  EXPECT_FALSE(result.candidate->current_domain_proof());
+  EXPECT_TRUE(result.candidate->current_physical_proof());
+  f.fresh.publication_prefix->observation.initial.state.x_m += .2;
+  f.bind_next(0);
+  result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+    f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
+  EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::OutsideDomain);
+  ASSERT_TRUE(result.candidate); EXPECT_TRUE(result.candidate->current_physical_proof());
+  EXPECT_FALSE(result.candidate->current_domain_proof());
+  EXPECT_FALSE(scheduled::StartingDomainEvidence::build({}));
+  ScheduledDispatchFixture pending_prior;
+  ASSERT_GT(pending_prior.certificate->first_suffix_index(), 0U);
+  EXPECT_FALSE(scheduled::StartingDomainEvidence::build(pending_prior.certificate));
+  // The ordinary complete proof still retains these pending packet windows.
+  EXPECT_TRUE(pending_prior.prepare().candidate);
+}
+
+TEST(MpccScheduledDomainDispatch, RejectsFreshWorldEpochContextHistoryAndClockFailures)
+{
+  for (int variant = 0; variant < 12; ++variant) {
+    SCOPED_TRACE(variant);
+    ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Track, true);
+    const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+    f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+    if (variant == 4) {
+      f.fresh.now_sec = 1.125000001;
+      f.fresh.publication_prefix->observation.now_sec = f.fresh.now_sec;
+      f.fresh.control_origin_sec = f.fresh.now_sec + .04;
+      f.fresh.publication_prefix->observation.control_origin_sec = f.fresh.control_origin_sec;
+    }
+    f.bind_next(0);
+    if (variant == 0) f.fresh.obstacles.obstacles.push_back({"current-contact",
+      {f.fresh.control_pose.x_m, f.fresh.control_pose.y_m, 0, 0, .2}});
+    if (variant == 1) { f.context.cost_schema_id += "-changed"; f.context = contract::seal_problem_context(f.context); }
+    if (variant == 2) f.fresh.publication_prefix->observation.initial.source_sec = f.certificate->tube().observation.initial.source_sec;
+    if (variant == 3) f.fresh.publication_prefix->observation.velocity_source_sec = f.certificate->tube().observation.velocity_source_sec - .001;
+    if (variant == 5) f.owner.invalidate();
+    if (variant == 6) {
+      auto extra = f.ledger.history().back(); extra.published_sec = f.fresh.now_sec;
+      ASSERT_TRUE(f.ledger.record(extra, f.fresh.now_sec, f.fresh.now_sec, 2));
+    }
+    if (variant == 7) {
+      auto wall = std::make_shared<recovery::OccupancyGrid>(*f.fresh.current_wall_grid);
+      const auto cell = wall->world_to_grid(f.fresh.control_pose.x_m, f.fresh.control_pose.y_m); ASSERT_TRUE(cell);
+      wall->cells[cell->row * wall->width + cell->column] = recovery::CellState::Occupied;
+      wall->non_free_integral_index.clear(); f.fresh.current_wall_grid = wall;
+    }
+    if (variant == 8) f.fresh.current_footprint.margin_m += .001;
+    if (variant == 9) f.fresh.input_application_profile->acceleration_age_sec += .001;
+    if (variant == 10) { f.context.vehicle_model_fingerprint++; f.context = contract::seal_problem_context(f.context); }
+    if (variant == 11) f.fresh.publication_prefix->observation.now_sec = NAN;
+    const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+      f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
+    EXPECT_FALSE(result.candidate);
+  }
+}
+
+TEST(MpccScheduledDomainDispatch, RetainedIndexRequiresActualSourceAndCompleteCurrentProof)
+{
+  ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Track, true);
+  const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+  const auto first = f.prepare(); ASSERT_TRUE(first.candidate);
+  ASSERT_TRUE(f.ledger.record(first.candidate->packet(), 1.1, 1.1, 2, first.candidate->source()));
+  f.fresh = scheduled_fresh_world(*f.certificate, 1.125, true);
+  f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+  f.bind_next(1);
+  const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+    f.ledger, *f.original_cursor, f.prior_sources, 1, domain);
+  ASSERT_TRUE(result.candidate);
+  EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::UnsupportedSuffix);
+  EXPECT_FALSE(result.candidate->current_domain_proof()); EXPECT_TRUE(result.candidate->current_physical_proof());
+}
+
+TEST(MpccScheduledDomainDispatch, FollowUsesCurrentPhysicalOriginAndMonotoneTimeMinimum)
+{
+  ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Follow, true);
+  const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+  f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+  f.bind_next(0); ASSERT_TRUE(f.fresh.follow_target);
+  f.fresh.follow_target->current_target_gap_m -= .001;
+  for (auto &p : f.fresh.follow_target->target_progress_from_current_origin_m) p -= .001;
+  const auto prepare = [&] { return scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+    f.ledger, *f.original_cursor, f.prior_sources, 0, domain); };
+  auto result = prepare(); ASSERT_TRUE(result.candidate);
+  ASSERT_EQ(result.domain_use, scheduled::DomainUseReason::Accepted);
+  ASSERT_TRUE(result.candidate->current_domain_proof());
+  EXPECT_GE(result.current.world.minimum_follow_gap_m, f.fresh.follow_target->hard_gap_m);
+  const auto original = f.fresh;
+  f.fresh.follow_target->target_progress_from_current_origin_m[1] =
+    std::nextafter(f.fresh.follow_target->target_progress_from_current_origin_m[0], -INFINITY);
+  result = prepare(); EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::FollowNotMonotone);
+  ASSERT_TRUE(result.candidate); EXPECT_FALSE(result.candidate->current_domain_proof());
+  EXPECT_TRUE(result.candidate->current_physical_proof());
+  f.fresh = original; f.fresh.control_origin_physical_progress_m += 1;
+  EXPECT_FALSE(prepare().candidate);
+  f.fresh = original; f.fresh.follow_target->target_id = "different-peer";
+  EXPECT_FALSE(prepare().candidate);
+  f.fresh = original;
+  const double gap = f.fresh.follow_target->hard_gap_m - .01;
+  for (auto &p : f.fresh.follow_target->target_progress_from_current_origin_m)
+    p += gap - f.fresh.follow_target->current_target_gap_m;
+  f.fresh.follow_target->current_target_gap_m = gap;
+  result = prepare(); EXPECT_FALSE(result.candidate);
+  EXPECT_EQ(result.current.world.physical_reason, applied::Reason::FollowGapRejected);
+}
+
+TEST(MpccScheduledDomainDispatch, ActualLateSendIsRecordedAndCannotMintReceipt)
+{
+  ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Track, true);
+  const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+  f.fresh.publication_prefix->observation.initial.state.x_m += .001; f.bind_next(0);
+  const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+    f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
+  ASSERT_TRUE(result.candidate); ASSERT_TRUE(result.candidate->current_domain_proof());
+  const auto &candidate = *result.candidate;
+  ASSERT_TRUE(f.ledger.record(candidate.packet(), 1.125, 1.125000001, 2, candidate.source()));
+  EXPECT_FALSE(candidate.matches_after_publication(f.ledger, f.owner.capture()));
+  EXPECT_FALSE(candidate.publication_identity(f.ledger, f.owner.capture()));
+  ASSERT_EQ(f.ledger.since(*f.original_cursor)->size(), 1U);
 }

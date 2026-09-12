@@ -70,6 +70,15 @@ Stop用の地図範囲は通常QPのprogress上限から独立して確保する
 QPの段数・制約を変えない。Stopの曲率・幅・座標範囲もsourceへ封印し、
 serialization/fingerprintと候補originの変更に追従させる。
 
+通常軌道の静的コース範囲には、solverが許容するprogress行の範囲と、許容された
+virtual speedを意味上の初期progressから積分する全区間を含める。solved-inaccurate時の
+既存許容誤差も含めて収録範囲を計算し、前後の実在するコース点を既存の有界builderで
+取得する。QP制約・許容誤差・座標原点・物理判定は維持する。solver初期化時の許容誤差を
+値で保持し、solverを所有しないtactical snapshotにもコピーする。静的点が取得できなければ
+従来どおり拒否する。R469では保存された同じ解・指令のまま、手前の点を含めることで
+元の完全な物理証明が成立した。build115全26package、tests102全2596件は合格。
+実走受入れは未完。[範囲計算と再生の根拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/course-support-design.md)。
+
 受信入力を表す共有数値API `mpcc_applied_input_prediction` を追加した。
 同一時刻の公開履歴を全件保持し、全予測区間の因果的な入力coverageを要求する。
 元観測から共通float32指令列へ進め、全応答のモデル内静止までを囲む。

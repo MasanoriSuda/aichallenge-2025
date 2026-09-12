@@ -75,6 +75,115 @@ TEST(MpccRateResolvedAdapter, ExposesExactExecutablePhysicalBoundary)
   EXPECT_NEAR(bounds->certificate_margin, expected_margin, 1e-12);
 }
 
+TEST(MpccRateResolvedAdapter,
+     CourseSupportCoversAcceptedNegativeVirtualProgress) {
+  auto request = curved_request(1);
+  for (auto &state : request.states)
+    state.lower[model::kProgressIndex] = 0.0;
+  const auto support =
+      adapter::resolve_course_frame_progress_support(request, kSolverTolerance);
+  ASSERT_TRUE(support);
+  constexpr double virtual_speed = -1e-6;
+  const double exact_progress =
+      virtual_speed * request.inputs.front().stage_dt_sec;
+  EXPECT_LT(exact_progress, 0.0);
+  EXPECT_LT(support->lower_progress_m, exact_progress);
+  EXPECT_GT(support->upper_progress_m,
+            request.states.back().upper[model::kProgressIndex]);
+
+  Eigen::SparseMatrix<double> row(1, 1);
+  row.insert(0, 0) = 1.0;
+  const auto residual = solver::evaluate_constraint_residuals(
+      row, Eigen::VectorXd::Constant(1, virtual_speed),
+      Eigen::VectorXd::Zero(1), Eigen::VectorXd::Constant(1, 6.0),
+      kSolverTolerance.absolute, kSolverTolerance.relative);
+  ASSERT_TRUE(residual);
+  EXPECT_LT(residual->maximum_normalized_violation, 1.0);
+
+  const std::vector<multi_purpose_mpc_ros::mpc_stage_geometry::CourseFrameKnot>
+      forward{{0.0, 0.0, 0.0, 0.0, 1}, {1.0, 1.0, 0.0, 0.0, 2}};
+  model::LinearizationRequest transition;
+  transition.reference_velocity_mps = 3.0;
+  transition.reference_virtual_progress_speed_mps = virtual_speed;
+  transition.wheelbase_m = request.wheelbase_m;
+  transition.vehicle_model = request.vehicle_model;
+  transition.stage_dt_sec = request.inputs.front().stage_dt_sec;
+  transition.minimum_stage_dt_sec = transition.stage_dt_sec;
+  transition.maximum_stage_dt_sec = transition.stage_dt_sec;
+  transition.course_frame = {std::make_shared<const decltype(forward)>(forward),
+                             0.0};
+  EXPECT_FALSE(model::evaluate_temporal_frenet_transition(transition));
+  auto covering = forward;
+  covering.insert(covering.begin(), {-1.0, -1.0, 0.0, 0.0, 0});
+  ASSERT_GT(support->lower_progress_m, covering.front().progress_m);
+  transition.course_frame.knots =
+      std::make_shared<const decltype(covering)>(covering);
+  const auto replay = model::evaluate_temporal_frenet_transition(transition);
+  ASSERT_TRUE(replay);
+  EXPECT_NEAR(replay->next_state[model::kProgressIndex], exact_progress, 1e-12);
+}
+
+TEST(MpccRateResolvedAdapter, CourseSupportIntegratesInaccurateSingletonRows) {
+  auto request = curved_request(20);
+  for (auto &state : request.states) {
+    state.lower[model::kProgressIndex] = 0.0;
+    state.upper[model::kProgressIndex] = 0.0;
+  }
+  for (auto &input : request.inputs) {
+    input.lower[model::kVirtualProgressSpeedIndex] = 0.0;
+    input.upper[model::kVirtualProgressSpeedIndex] = 0.0;
+    input.stage_dt_sec = 0.25;
+  }
+  const auto support =
+      adapter::resolve_course_frame_progress_support(request, {1e-3, 0.0});
+  ASSERT_TRUE(support);
+  // A solved-inaccurate zero row may accept -0.009. Integrating those
+  // controls can leave the nominal state box even with accepted equality
+  // residuals. The map must cover that exact trajectory in both directions.
+  EXPECT_LE(support->lower_progress_m, -0.05);
+  EXPECT_GE(support->upper_progress_m, 0.05);
+  EXPECT_LT(support->lower_progress_m, 20.0 * 0.25 * -0.009);
+}
+
+TEST(MpccRateResolvedAdapter, CourseSupportKeepsInitialAndSemanticStateRanges) {
+  auto request = curved_request(2);
+  request.initial_state[model::kProgressIndex] = 12.0;
+  request.states.back().lower[model::kProgressIndex] = -4.0;
+  request.states.back().upper[model::kProgressIndex] = 50.0;
+  const auto support =
+      adapter::resolve_course_frame_progress_support(request, {0.0, 0.0});
+  ASSERT_TRUE(support);
+  EXPECT_LE(support->lower_progress_m, -4.0);
+  EXPECT_GE(support->upper_progress_m, 50.0);
+}
+
+TEST(MpccRateResolvedAdapter,
+     CourseSupportRejectsUnavailableBoundsAndTolerance) {
+  const auto request = curved_request();
+  EXPECT_FALSE(
+      adapter::resolve_course_frame_progress_support(request, {-1.0, 0.0}));
+  EXPECT_FALSE(
+      adapter::resolve_course_frame_progress_support(request, {0.0, 0.1}));
+  auto invalid = request;
+  invalid.inputs.pop_back();
+  EXPECT_FALSE(adapter::resolve_course_frame_progress_support(
+      invalid, kSolverTolerance));
+  invalid = request;
+  invalid.inputs.front().stage_dt_sec = 0.0;
+  EXPECT_FALSE(adapter::resolve_course_frame_progress_support(
+      invalid, kSolverTolerance));
+  invalid = request;
+  invalid.inputs.front().upper[model::kVirtualProgressSpeedIndex] =
+      std::numeric_limits<double>::infinity();
+  EXPECT_FALSE(adapter::resolve_course_frame_progress_support(
+      invalid, kSolverTolerance));
+  invalid = request;
+  invalid.states.front().lower[model::kProgressIndex] =
+      invalid.states.front().upper[model::kProgressIndex] + 1.0;
+  EXPECT_FALSE(adapter::resolve_course_frame_progress_support(
+      invalid, kSolverTolerance));
+}
+
 TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
 {
   const auto request = curved_request();

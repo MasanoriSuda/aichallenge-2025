@@ -424,3 +424,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 
 - [x] R460 complete native oracle:2/4/6/8stage steering preparation then forward candidates pass original wall/peer/terminal proofs. No-preparation hitswall; positive-steering controls reject. Physical existence only, not QP/runtime authority.
 - [ ] Compare native witness as same-nine-state optimized candidate/seed; no fixed-input fallback. Remaining M4-M6 unchanged.
+
+2026-09-12 accepted progress/course support（baseline44a5e551）:
+- [x] R461 free-later-control launch candidate and R462 adaptive-target missing static support isolated.
+- [x] R464 exact original QP/primal and static-only A/B; no fixed-input authority.
+- [x] Pure accepted-row/native-prefix allocation helper; real-map producer and immutable worker tolerance copy.
+- [x] Native465 four tests; source105; build115 all26; package102 all2596; R469 built-library exact proof A/B.
+- [x] Preserve R466 source-test selection and R467 diagnostic namespace setup failures.
+- [ ] Standard dev2-r75 dynamic validation, earliest remaining failure and full M4–M6 acceptance.

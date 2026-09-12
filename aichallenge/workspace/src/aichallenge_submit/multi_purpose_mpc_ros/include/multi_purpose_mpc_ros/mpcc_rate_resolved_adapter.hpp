@@ -97,6 +97,18 @@ struct Result
   double first_steering_rate_certificate_margin_radps{};
 };
 
+struct CourseFrameProgressSupport {
+  double lower_progress_m{};
+  double upper_progress_m{};
+};
+
+/// Static course data needed by accepted state rows and by exact integration
+/// of accepted virtual-speed rows from the semantic initial state. This is
+/// an allocation range, not a relaxation of any QP or physical constraint.
+std::optional<CourseFrameProgressSupport> resolve_course_frame_progress_support(
+    const Request &request, const persistent_osqp::PhysicalConstraintTolerance
+                                &solver_tolerance) noexcept;
+
 /// Recognize the sealed feasibility contract: no tracking objective, a fixed
 /// maximum wire-braking law, shared-body velocity seeds, and terminal rest.
 /// Full execution-horizon ownership is checked by the snapshot consumer.

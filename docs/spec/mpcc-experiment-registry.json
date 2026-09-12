@@ -1279,6 +1279,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r73-r74-wall-source-evidence.json",
       "replay_ready": true,
       "reason": "Separate r73 original deadline and r74 source wall boundary; D2 shutdown limitation explicit."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-course-support",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/course-support-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact solved QP and immutable preceding static map support, native helper and worker scalar ownership."
     }
   ],
   "experiments": [
@@ -15805,6 +15811,136 @@
       "production_impact": "none; physical existence witness only, no direct/fallback normal control or current receiver/timing authority",
       "deleted_code": [],
       "revisit_condition": "Use as a candidate/seed in the same nine-state optimized pipeline, with immutable new identity, unchanged full proofs and meaningful free control variables; do not promote fixed oracle inputs as fallback."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r461",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Prepared same-nine-state candidate with later controls free",
+      "result": "accepted",
+      "reason": "Four prepared stages fully certify; two reject relinearized tire box and six reject original cumulative steering prefix. No runtime authority.",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [],
+      "revisit_condition": "Use bounded target and investigate necessary constraints rather than fixed-time prep."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r462",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Bounded adaptive steering-target preparation with later controls free",
+      "result": "rejected",
+      "reason": "Numeric solution accepted but native physical replay exits copied static domain at substep108 on accepted negative virtual speed.",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [],
+      "revisit_condition": "Supply actual static map support for accepted progress rows without altering controls or tolerances."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r463",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Strict static-donor overlap guard",
+      "result": "inconclusive",
+      "reason": "Input guard rejected four cumulative-distance rounding differences; no proof/solver conclusion.",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [],
+      "revisit_condition": "Require exact original anchor and XY/heading overlaps, recompute only adjacent geometry distance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r464",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Same original QP/primal with one verifiable preceding static knot",
+      "result": "accepted",
+      "reason": "Original source rejects108; extended static support passes full exact wall/dynamic/terminal proof with identical original row residual6.132282723880778e-5.",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [],
+      "revisit_condition": "Implement map producer support, no fixed-input authority."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r465",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Pure production helper native boundary regressions",
+      "result": "accepted",
+      "reason": "Four native regressions cover accepted negative and cumulative singleton progress, original state support and malformed tolerance/data.",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [
+        "nominal-state-box-only allocation loop"
+      ],
+      "revisit_condition": "Only if helper/model acceptance semantics change."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r466",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Source ownership test setup",
+      "result": "inconclusive",
+      "reason": "Initial source test selected wrong function/call; definition-specific check repaired and all105pass, package102 also passes.",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [],
+      "revisit_condition": "Only if constructor/snapshot ownership changes."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r467",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Replay driver namespace setup",
+      "result": "inconclusive",
+      "reason": "Diagnostic driver used a controller-local namespace alias that is not public; compilation failed, no replay evaluated.",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected in distinct R469."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r469",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Actual built-library helper and exact original solved-primal replay",
+      "result": "accepted",
+      "reason": "Production allocation enclosed by same real static map, original domain still rejects108, extended full exact proof passes unchanged controls.",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [
+        "nominal-state-box-only allocation loop"
+      ],
+      "revisit_condition": "New current world or changed support/model implementation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-course-support-r468",
+      "baseline_commit": "44a5e5512798647bb01d5125456473815ba4e8fe",
+      "snapshot_ids": [
+        "20260912-nine-state-course-support"
+      ],
+      "hypothesis": "Map support must contain accepted native replay; launch feasibility must be solved and fully certified.",
+      "changed_dimension": "Remove all preparation bindings; use native prepared tangent only",
+      "result": "accepted",
+      "reason": "{\"return_code\": 0, \"arms\": [{\"arm\": \"persistent-a\", \"stage\": \"accepted\", \"candidate_fingerprint\": 15410267174210420794, \"bundle\": true, \"detail\": \"accepted\", \"ms\": 82.220016, \"last_velocity\": 1.06309482947442, \"last_lag\": -1.22649145049963, \"last_lateral\": 0.8415463345477926, \"last_progress\": 32.779683632769185, \"last_time\": 1.7965374509832244}]}",
+      "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
+      "deleted_code": [],
+      "revisit_condition": "Compare further only with changed candidate/constraint representation and same immutable full proof."
     }
   ]
 }

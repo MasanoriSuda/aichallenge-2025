@@ -185,6 +185,88 @@ const char * to_string(const RelinearizationReason reason) noexcept
   return "unknown";
 }
 
+std::optional<CourseFrameProgressSupport> resolve_course_frame_progress_support(
+    const Request &request, const persistent_osqp::PhysicalConstraintTolerance
+                                &solver_tolerance) noexcept {
+  constexpr int progress = mpcc_rate_resolved::kProgressIndex;
+  constexpr int virtual_speed = mpcc_rate_resolved::kVirtualProgressSpeedIndex;
+  const double absolute =
+      persistent_osqp::kSolvedInaccurateToleranceMultiplier *
+      solver_tolerance.absolute;
+  const double relative =
+      persistent_osqp::kSolvedInaccurateToleranceMultiplier *
+      solver_tolerance.relative;
+  if (request.horizon_steps <= 0 ||
+      request.inputs.size() !=
+          static_cast<std::size_t>(request.horizon_steps) ||
+      request.states.size() != request.inputs.size() + 1U ||
+      !std::isfinite(request.initial_state[progress]) ||
+      !std::isfinite(absolute) || absolute < 0.0 || !std::isfinite(relative) ||
+      relative < 0.0 || relative >= 1.0) {
+    return std::nullopt;
+  }
+  const auto accepted_bounds =
+      [absolute, relative](
+          const double lower,
+          const double upper) -> std::optional<CourseFrameProgressSupport> {
+    if (!std::isfinite(lower) || !std::isfinite(upper) || lower > upper) {
+      return std::nullopt;
+    }
+    // The physical row test uses the larger of the projected and actual
+    // magnitudes. Account for that self-dependence and solved-inaccurate
+    // acceptance, just as the physical actuator inset does. Singleton
+    // virtual-speed rows remain valid; they still have numerical residuals.
+    const double margin =
+        (absolute + relative * std::max(std::abs(lower), std::abs(upper))) /
+        (1.0 - relative);
+    const double outward_lower = std::nextafter(
+        lower - margin, -std::numeric_limits<double>::infinity());
+    const double outward_upper =
+        std::nextafter(upper + margin, std::numeric_limits<double>::infinity());
+    if (!std::isfinite(outward_lower) || !std::isfinite(outward_upper)) {
+      return std::nullopt;
+    }
+    return CourseFrameProgressSupport{outward_lower, outward_upper};
+  };
+  CourseFrameProgressSupport support{request.initial_state[progress],
+                                     request.initial_state[progress]};
+  for (const auto &state : request.states) {
+    const auto bounds =
+        accepted_bounds(state.lower[progress], state.upper[progress]);
+    if (!bounds)
+      return std::nullopt;
+    support.lower_progress_m =
+        std::min(support.lower_progress_m, bounds->lower_progress_m);
+    support.upper_progress_m =
+        std::max(support.upper_progress_m, bounds->upper_progress_m);
+  }
+  double integrated_lower = request.initial_state[progress];
+  double integrated_upper = integrated_lower;
+  for (const auto &input : request.inputs) {
+    if (!std::isfinite(input.stage_dt_sec) || input.stage_dt_sec <= 0.0) {
+      return std::nullopt;
+    }
+    const auto bounds =
+        accepted_bounds(input.lower[virtual_speed], input.upper[virtual_speed]);
+    if (!bounds)
+      return std::nullopt;
+    integrated_lower = std::nextafter(
+        integrated_lower + input.stage_dt_sec * bounds->lower_progress_m,
+        -std::numeric_limits<double>::infinity());
+    integrated_upper = std::nextafter(
+        integrated_upper + input.stage_dt_sec * bounds->upper_progress_m,
+        std::numeric_limits<double>::infinity());
+    if (!std::isfinite(integrated_lower) || !std::isfinite(integrated_upper)) {
+      return std::nullopt;
+    }
+    support.lower_progress_m =
+        std::min(support.lower_progress_m, integrated_lower);
+    support.upper_progress_m =
+        std::max(support.upper_progress_m, integrated_upper);
+  }
+  return support;
+}
+
 bool is_braking_feasibility_request(const Request & request) noexcept
 {
   namespace model = mpcc_rate_resolved;

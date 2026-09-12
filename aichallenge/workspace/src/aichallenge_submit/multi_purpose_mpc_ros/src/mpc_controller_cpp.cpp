@@ -8362,6 +8362,9 @@ struct MPC
       scheduled_context_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       rate_resolved_track_cruise_shadow_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_course_support_tolerance_ =
+          rate_resolved_track_cruise_shadow_solver_context_
+              ->physical_constraint_tolerance();
       rate_resolved_normal_avoidance_negative_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_normal_avoidance_positive_solver_context_ =
@@ -8481,6 +8484,10 @@ struct MPC
     snapshot->cfg.v2x_behavior.debug_log_enabled = false;
     snapshot->cfg.v2x_behavior.overtake_line.debug_log_enabled = false;
     snapshot->start_grid_grace_guard_ = start_grid_grace_guard_;
+    // Course allocation needs the numerical owner's immutable tolerance,
+    // including in clones that intentionally have no Track/Cruise solver.
+    snapshot->rate_resolved_course_support_tolerance_ =
+        rate_resolved_course_support_tolerance_;
     snapshot->active_control_decision_id_ = active_control_decision_id_;
     snapshot->gap_planner = gap_planner_snapshot;
     if (overtake_static_wall_grid_snapshot_owner_ != nullptr) {
@@ -25066,30 +25073,25 @@ struct MPC
       return std::nullopt;
     }
 
-    double minimum_progress_m = solver_snapshot.course_progress_origin_m;
-    double maximum_progress_m = solver_snapshot.course_progress_origin_m;
-    for (const auto & state : solver_snapshot.request.states) {
-      const double lower_progress_m =
-        state.lower[mpcc_rate_resolved::kProgressIndex];
-      const double upper_progress_m =
-        state.upper[mpcc_rate_resolved::kProgressIndex];
-      if (
-        !std::isfinite(lower_progress_m) ||
-        !std::isfinite(upper_progress_m) ||
-        lower_progress_m > upper_progress_m)
-      {
-        rejection.outcome =
+    if (!rate_resolved_course_support_tolerance_) {
+      rejection.outcome =
           RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
-        rejection.detail = "rate-resolved progress range unavailable";
-        return std::nullopt;
-      }
-      minimum_progress_m = std::min(
-        minimum_progress_m,
-        solver_snapshot.course_progress_origin_m + lower_progress_m);
-      maximum_progress_m = std::max(
-        maximum_progress_m,
-        solver_snapshot.course_progress_origin_m + upper_progress_m);
+      rejection.detail = "rate-resolved progress tolerance owner unavailable";
+      return std::nullopt;
     }
+    const auto progress_support =
+        mpcc_rate_resolved_adapter::resolve_course_frame_progress_support(
+            solver_snapshot.request, *rate_resolved_course_support_tolerance_);
+    if (!progress_support) {
+      rejection.outcome =
+          RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
+      rejection.detail = "rate-resolved accepted progress range unavailable";
+      return std::nullopt;
+    }
+    const double minimum_progress_m = solver_snapshot.course_progress_origin_m +
+                                      progress_support->lower_progress_m;
+    double maximum_progress_m = solver_snapshot.course_progress_origin_m +
+                                progress_support->upper_progress_m;
     // The QP progress box is not the map domain of a complete stopping proof.
     // Retained execution may begin anywhere in that box. Preserve actual map
     // points beyond it using a shared-model allocation hint; proof still fails
@@ -31989,6 +31991,8 @@ struct MPC
   rate_resolved_preentry_right_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_track_cruise_shadow_solver_context_;
+  std::optional<persistent_osqp::PhysicalConstraintTolerance>
+      rate_resolved_course_support_tolerance_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_normal_avoidance_negative_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>

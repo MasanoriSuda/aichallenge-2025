@@ -1552,6 +1552,18 @@ def test_tactical_async_and_isolated_branches_share_one_owned_snapshot_boundary(
     clone_start = SOURCE.index("std::shared_ptr<MPC> tactical_snapshot(")
     clone_end = SOURCE.index("struct OwnedTacticalSnapshot", clone_start)
     clone = SOURCE[clone_start:clone_end]
+    # Worker clones own no Track/Cruise solver, but must retain the actual
+    # solver's allocation tolerance instead of rejecting every course window.
+    assert re.search(
+        r"snapshot->rate_resolved_course_support_tolerance_\s*=\s*"
+        r"rate_resolved_course_support_tolerance_;",
+        clone,
+    )
+    wall_start = SOURCE.index("\n  build_rate_resolved_track_cruise_physical_snapshot(")
+    wall_end = SOURCE.index("// The QP progress box", wall_start)
+    wall = SOURCE[wall_start:wall_end]
+    assert "*rate_resolved_course_support_tolerance_" in wall
+    assert "rate_resolved_track_cruise_shadow_solver_context_" not in wall
     assert (
         "snapshot->last_rate_resolved_serialized_predecessor_ =\n"
         "      last_rate_resolved_serialized_predecessor_;"

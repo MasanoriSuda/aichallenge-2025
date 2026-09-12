@@ -3,7 +3,7 @@
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
 **全体未完。標準r73は公開後の期限超過で停止。r74診断では新規solver結果の不成立を確認し、D1の壁制約を切り分け中。**
 
-制御HEADは6c7c9615。Build114全26、tests101全2592/66/source105/C5 161合格。
+直前の制御baselineは6c7c9615。旧build114全26、tests101全2592/66/source105/C5 161合格。
 標準r73のD2 Ready decision529は物理証明合格後、元の25ms公開期限を超過。
 別のr74診断は両車停止・未完走。D1/D2の世代は有効でもStoreが停止し、workerがsolver拒否。
 r72の進み続けるD1Storeとは異なる世界であり、同じ原因とは扱わない。
@@ -14,11 +14,18 @@ R448–R453で保存世界を比較。D1source618は壁の線形問題が不成�
 R450のD1はsolver前処理が実走と異なるため、R452で正しい条件による再現を別途取得した。
 R455–R458の姿勢対応の壁近似・独立前処理は数値解に達したが、元の壁証明が接触を検出。未採用。
 R460で舵角準備後の前進4候補が元の壁・他車・停止継続証明に合格。
-これは物理的存在証明で、現行QP・実時間・実走の合格ではない。同じ9状態最適化の候補・初期軌跡として比較を続ける。
+R461では準備後を自由に最適化する9状態QPの1候補も全物理証明に合格。
+R462の適応的な準備候補は、許容された微小な負進捗に対して静的コースが足りず再生停止。
+R464で同じQP解・指令を維持し、手前の静的点だけを含めると全証明に合格した。
+このコース収録範囲のproducerを修正し、build115全26、tests102全2596/source105が合格。
+R469の実ビルド再生も同じ解・指令で全証明に合格。次は標準dev2-r75。
+R468では全操作を自由にした初期軌跡のみの準備候補も完全なsource証明に合格。診断限定。
+実時間・実走と準備候補統合の合格ではない。
 
 全runtime停止、元のDLL・ユーザーJSON復元済み。
 Follow負荷、全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
 同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+[現在の修正](../20260910-mpcc-empirical-plant/receiver-input-enclosure/course-support-design.md)、
 [現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r73-r74-wall-source-audit.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 

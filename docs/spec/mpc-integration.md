@@ -5069,3 +5069,10 @@ reader既定値・記録・予測・安全境界は変えない。実適用入�
 速度・実送信台帳を証拠に付け、時計逆行で証拠を破棄する。保存枠は再補充せず、従来記録を
 上書きしない。通常権限・安全判定・指令は不変。build122全26/package109全2615合格。
 [設計と未完の実走確認](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-observation-design.md)。
+
+
+2026-09-13single-r8: 追加枠で停止1052のdue/activeと正常走行時1001の実送信証拠を取得。
+元の停止証明期限切れをR589で再現した。DispatchReason5で返るため、CurrentCheckの
+初期値を物理・context検証の実行結果と解釈しない。最後の正常1051後の再発進は未達。
+古い証明の延長ではなく、新しい認証済み計画が供給されない前段を調べる。全M4–M6未完。
+[実走・再生・残る観測不足](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-source-audit.md)。

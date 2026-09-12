@@ -1405,6 +1405,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-observation-evidence.json",
       "replay_ready": true,
       "reason": "Bounded post-motion final stationary recorder tests and exact historical current/guard replays; live witness pending."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-post-motion-run-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-source-evidence.json",
+      "replay_ready": true,
+      "reason": "Actual paired stationary1052, exact RestExpired and earlier source430/622 comparison; later fresh-source failure not captured."
     }
   ],
   "experiments": [
@@ -17901,6 +17907,62 @@
       "production_impact": "Diagnostic fifth fixed bucket and actual moving-send witness only; original buckets, model, authority and physical/timing gates unchanged.",
       "deleted_code": [],
       "revisit_condition": "New recorder or motion-witness regression; do not repeat unchanged setup failures or count recording as restart/race acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-motion-run-audit-r587",
+      "baseline_commit": "ec8e822b751e9d20e822d6755998fc48cba2347d",
+      "snapshot_ids": [
+        "20260913-nine-state-post-motion-run-audit"
+      ],
+      "hypothesis": "Preserve final stationary loss after normal motion and identify the preceding source supply boundary",
+      "changed_dimension": "Bounded final capture runtime verification",
+      "result": "accepted",
+      "reason": "Due/active1052 preserved with authentic moving normal1001 witness, matched actual publication log. No later normal or restart.4229callbacks max19.291101ms,508normal sends, no publication-window violation.",
+      "production_impact": "No additional production change after diagnostic commit ec8e822b; no model/authority/clock/safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "New exact source failure after actual post-motion final loss, not an unchanged run or acceptance by extending expired stop proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-motion-run-audit-r588",
+      "baseline_commit": "ec8e822b751e9d20e822d6755998fc48cba2347d",
+      "snapshot_ids": [
+        "20260913-nine-state-post-motion-run-audit"
+      ],
+      "hypothesis": "Preserve final stationary loss after normal motion and identify the preceding source supply boundary",
+      "changed_dimension": "Same-run public topic frequency and motion extraction",
+      "result": "accepted",
+      "reason": "Maximum public speed1.148950815m/s. Fixed7.9..14.3s Ready motion/stop window. Public body/tire28.571Hz,IMU20Hz,pose50Hz,control39.937Hz,clock200Hz. Not race or private physical truth acceptance.",
+      "production_impact": "No additional production change after diagnostic commit ec8e822b; no model/authority/clock/safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "New exact source failure after actual post-motion final loss, not an unchanged run or acceptance by extending expired stop proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-motion-run-audit-r589",
+      "baseline_commit": "ec8e822b751e9d20e822d6755998fc48cba2347d",
+      "snapshot_ids": [
+        "20260913-nine-state-post-motion-run-audit"
+      ],
+      "hypothesis": "Preserve final stationary loss after normal motion and identify the preceding source supply boundary",
+      "changed_dimension": "Exact final1052 source/ledger/domain/guard replay",
+      "result": "accepted",
+      "reason": "RestExpired because next deadline14.314999826 exceeds original rest14.299999690. CurrentCheck defaults are unexecuted. Exact source/domain/history/prior actual identities retained; unsafe extending/repeating stop is not a repair.",
+      "production_impact": "No additional production change after diagnostic commit ec8e822b; no model/authority/clock/safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "New exact source failure after actual post-motion final loss, not an unchanged run or acceptance by extending expired stop proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-motion-run-audit-r590",
+      "baseline_commit": "ec8e822b751e9d20e822d6755998fc48cba2347d",
+      "snapshot_ids": [
+        "20260913-nine-state-post-motion-run-audit"
+      ],
+      "hypothesis": "Preserve final stationary loss after normal motion and identify the preceding source supply boundary",
+      "changed_dimension": "Frozen source430/622 A/B/C/D/G",
+      "result": "inconclusive",
+      "reason": "A rejects430 at wall-refined numerical solve and622 at physical stage99. Target-dependent B/C/D/G unavailable for target-free Cruise. Current rest1052 and later failed fresh solver inputs are different worlds; all-method physical infeasibility and restart repair not established.",
+      "production_impact": "No additional production change after diagnostic commit ec8e822b; no model/authority/clock/safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "New exact source failure after actual post-motion final loss, not an unchanged run or acceptance by extending expired stop proof."
     }
   ]
 }

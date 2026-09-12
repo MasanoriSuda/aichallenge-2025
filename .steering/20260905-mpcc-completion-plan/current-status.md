@@ -20,7 +20,11 @@ force-r3/R567–R569で位置時刻の物理状態と比較した。25判断の�
 先に独立したStop/rest/restartの記録欠落を修正した。起動時の停止が保存枠を使うため、
 実際の正常送信で走行した後の停止を、送信証拠付きの追加固定枠へ保存する。
 R584旧2失敗/新2合格、source106、build122全26/package109全2615、R586過去3判定保持。
-次はローカルcommit後の120秒上限single-r8で停止時のdue/active判断と再発進を確認する。
+single-r8/ec8e822bで停止1052のdue/active記録を取得。R589は元の停止証明期限切れを
+正確に再現した。4229callback最大19.29ms、送信期限違反なしだが再発進・Start・周回なし。
+新しい計画の認証が供給されない前段は未解決。次は実際の停止判断後の新しいsolver失敗を、
+両初期化候補の完全な入力として保存して原因を絞る。
+[実走結果と次の観測境界](../20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-source-audit.md)。
 [記録欠落の修正と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-observation-design.md)。
 [力の向き・公開観測・残る測定モデル](../20260910-mpcc-empirical-plant/receiver-input-enclosure/force-frame-observability-audit.md)。
 [再構成の棄却・時刻訂正・入力切り分け](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-event-phase-audit.md)。

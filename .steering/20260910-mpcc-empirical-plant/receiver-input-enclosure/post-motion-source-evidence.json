@@ -1,0 +1,500 @@
+{
+  "baseline_commit": "ec8e822b751e9d20e822d6755998fc48cba2347d",
+  "control_model_baseline": "8d9810e0",
+  "run_id": "20260913-nine-state-single-r8",
+  "build": 122,
+  "package_test": 109,
+  "runtime_stopped": true,
+  "protected_restored": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "log": {
+    "callback_samples": 4229,
+    "callback_max_ms": 19.291101,
+    "callback_over25": [],
+    "scheduled_publications": 508,
+    "last_publication": {
+      "dispatch": 1051,
+      "job": 1034,
+      "source": 652,
+      "index": 14,
+      "nominal": 14.264999826,
+      "before": 14.269999681,
+      "after": 14.269999681,
+      "deadline": 14.289999826,
+      "programme_input": 8992647343400593273,
+      "physical_input": 8992647343400593273,
+      "independent": 0
+    },
+    "window_violations": [],
+    "states": [
+      "spawned",
+      "grounded",
+      "ready"
+    ],
+    "post_motion_pairs": 1,
+    "post_motion_decisions": [
+      1052
+    ],
+    "last_source_supply": "[mpc_controller_cpp-10] [INFO] [1789239587.177532668] [mpc_controller]: MPCC source supply: decision=4222, now=103.949997676, draft=available, scheduled=observed-request-rejected, successor=normal-submitted, plans=1/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=3729/rejected:0, worker=3729/1496/1495/running:1/pending:1/exceptions:0, mailbox=7163/7149/invalid:0, store=652/accepted:428/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=3/0/0, generation_rejected=0/invalid:0, invalidation=855/decision:788/site:reset_overtake_line_state, mailbox_result=solve-rejected/geometry:7297210173200458920/detail:native-initialization/policy=current-steering/attempts=2/total_ms=101.696464/certified=0, pipeline=rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0025509, dua_res=0.372077, failed_iterate_row=497, value=0.916819, bounds=[-inf,0.911941], violation=0.00487718, tolerance=0.00191682, normalized=2.54441, authority=observation-only"
+  },
+  "public": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r8",
+    "domain": 1,
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r8/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "f01743e2a833b383fae915a9d5f61005413bd2f5bdff03f1615ce1e9e2f94e7b"
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 183,
+        "scope_source_sec": [
+          7.9,
+          14.3
+        ],
+        "source_hz": 28.571429212828004,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 183,
+        "scope_source_sec": [
+          7.9,
+          14.3
+        ],
+        "source_hz": 28.571429212828004,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 128,
+        "scope_source_sec": [
+          7.9,
+          14.3
+        ],
+        "source_hz": 20.000000447244105,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 320,
+        "scope_source_sec": [
+          7.9,
+          14.3
+        ],
+        "source_hz": 50.00000112068968,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.030000000000000002,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 7,
+        "scope_source_sec": [
+          7.9,
+          14.3
+        ],
+        "source_hz": 1.0008340507275668,
+        "median_source_period_sec": 0.9999999775000001,
+        "max_source_gap_sec": 0.9999999780000001,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 256,
+        "scope_source_sec": [
+          7.9,
+          14.3
+        ],
+        "source_hz": 39.937354084706925,
+        "median_source_period_sec": 0.025,
+        "max_source_gap_sec": 0.034999854000000004,
+        "nonpositive_source_steps": 0
+      },
+      "/clock": {
+        "rows": 1280,
+        "scope_source_sec": [
+          7.9,
+          14.3
+        ],
+        "source_hz": 200.00000447224403,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "rows": 36994,
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789239492735647126,
+      "stamp_ns": 9519999787,
+      "v": 1.1489508152008057,
+      "vy": 0.03638273477554321,
+      "heading_rate": 0.21491709351539612
+    },
+    "limits": [
+      "Source and recorder receipt separate; controller receipt comes only from R563 immutable captures.",
+      "Heading rate is not IMU body yaw rate. Only angular.z supplies body r.",
+      "ROS topics describe public state; no direct force/contact/receiver application instrumentation in this run.",
+      "Frequency window is the observed Ready motion/stop interval, not a completed race."
+    ]
+  },
+  "terminal_replay": {
+    "single-r8": {
+      "source": "/output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001052-pre-stationary/snapshot.yaml",
+      "source_sha256": "4f771ecc618ffaff5e20355384fb3c40711d1386d204eadfe6794a5b61c0713c",
+      "repeats": [
+        {
+          "total_ms": 0.000831,
+          "dispatch_reason": 5,
+          "candidate": false,
+          "domain_use": 0,
+          "current_reason": 1,
+          "world_reason": 1,
+          "physical_reason": 4,
+          "checked_samples": 0,
+          "rejected_sec": NaN,
+          "rejected_peer": "",
+          "context_reason": 3,
+          "measurement_reason": 1,
+          "prefix_reason": 3,
+          "observed_check_exact": true,
+          "observed_rejection_time_exact": true
+        }
+      ]
+    }
+  },
+  "source_comparison": [
+    {
+      "source": "/output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "source_sha256": "b5d5a720b112671f12428d46bc4a818070c3440a39ab4899fde5bbae2390000f",
+      "command": [
+        "/output/20260913-nine-state-post-motion-sources-r590/replay",
+        "/output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-post-motion-sources-r590/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 13103031932593471888,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "solver-rejected",
+            "candidate_fingerprint": 13103031932593471888,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000468347, dua_res=0.0365594, failed_iterate_row=379, value=-0.715018, bounds=[-0.714215,0.714215], violation=0.000802848, tolerance=0.00171502, normalized=0.468128, architecture_snapshot=mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+            "ms": 143.242444
+          },
+          {
+            "arm": "stateless-left-b",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "stateless-right-b",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "rough-left-c",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "rough-right-c",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "offline-left-d",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "offline-right-d",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "production-left-g",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;",
+            "ms": 0
+          },
+          {
+            "arm": "production-right-g",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 13103031932593471888,
+            "bundle": false,
+            "detail": "candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;",
+            "ms": 0
+          }
+        ]
+      }
+    },
+    {
+      "source": "/output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "63ae5eacc84e3baba886da06760a11c228ac4809a1ddfeec61b43c6b254fa237",
+      "command": [
+        "/output/20260913-nine-state-post-motion-sources-r590/replay",
+        "/output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-post-motion-sources-r590/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 12172228289331628071,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "wall-proof-rejected",
+            "candidate_fingerprint": 12172228289331628071,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=99, wp=31, distance=5.528m, lateral=0.908m, lag=-0.184m, bounds=[-3.711,1.000]m, reserve=0.092m, heading_offset=0.128rad, progress=30.789/36.317m, progress_delta=-5.528m, pose=(89629.777,43129.334,2.462), out_of_map=0, contacts=1",
+            "ms": 62.721983
+          },
+          {
+            "arm": "stateless-left-b",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "stateless-right-b",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "rough-left-c",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "rough-right-c",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "offline-left-d",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "offline-right-d",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable",
+            "ms": 0
+          },
+          {
+            "arm": "production-left-g",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;",
+            "ms": 0
+          },
+          {
+            "arm": "production-right-g",
+            "stage": "candidate-rejected",
+            "candidate_fingerprint": 0,
+            "source_fingerprint": 12172228289331628071,
+            "bundle": false,
+            "detail": "candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;",
+            "ms": 0
+          }
+        ]
+      }
+    }
+  ],
+  "sha256": {
+    "output/20260913-nine-state-post-motion-run-audit/mpcc-post-motion-single-r8-runner.log": "811d5a866abc7f9a5da5e50c1eac2f8df14a14f63cbb097f1726d8a73ec96c3e",
+    "output/20260913-nine-state-post-motion-run-audit/mpcc-r587-audit.log": "52dd9295845987b14a5c52e611d5dc219bfc331f3f7fb916b21b747e8c9243d6",
+    "output/20260913-nine-state-post-motion-run-audit/mpcc-r588-r589.log": "75e20955fea9aff555b0ae9aeddf33bc4ab285c206ee6f37ebec9bc3301e684b",
+    "output/20260913-nine-state-post-motion-run-audit/mpcc-r590-sources.log": "2474525f6dd38457227d5daf2e87f25c21e94fd67a6f9324ef48ddc9395b14b4",
+    "output/20260913-nine-state-post-motion-run-audit/seal.py": "b0aab5ec19e4cb99417390099afc45b2d8b7d08bbb63f4ab327f6c53a16e76cf",
+    "output/20260913-nine-state-post-motion-audit-r587/generator.py": "890f6a9eaa057748d7b20a65a25ab465e7e6911baf850530420cef9686add47c",
+    "output/20260913-nine-state-post-motion-audit-r587/report.json": "5b24125b2db25244bcf71a4411c31e57390b3a713d5cd56e9d1efb033173c261",
+    "output/20260913-nine-state-post-motion-public-r588/d1.json": "6632802e09e0f49615d7841c53a79c77e90fc543ea2e1718c6d538a4d091f07c",
+    "output/20260913-nine-state-post-motion-public-r588/generator.py": "26db313067ad8ddcf2b1d8027bdb27b5c703f9c807ca3401eee548ddf41d5327",
+    "output/20260913-nine-state-post-motion-public-r588/report.json": "e4fb2a3966e3835b53df192636a7cfdc207b7e30c406cba8ad8c81b632e6e360",
+    "output/20260913-nine-state-post-motion-terminal-r589/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-motion-terminal-r589/compile.json": "aebd2fc079b55c4610f68d5243aae73cfe3d96757e66a5b3b23c6863c43d2dee",
+    "output/20260913-nine-state-post-motion-terminal-r589/driver.cpp": "0eeb4a7380293ec47ad42a635c9da173d7fd26d44b60b03e4f324bd041bdb8ef",
+    "output/20260913-nine-state-post-motion-terminal-r589/generator.py": "9772197aab385aaebca7b8b6bca83d5582c7acdf384758523bc539c78271de54",
+    "output/20260913-nine-state-post-motion-terminal-r589/replay-production": "a93028f5237f2262cc2e1a5e6e5bf9e354a197a7f559ffd70db837659272d693",
+    "output/20260913-nine-state-post-motion-terminal-r589/result.json": "3f0bd560d1e501b35461cf39cfdb33e1680adb4be59b9c59994a932eae9db411",
+    "output/20260913-nine-state-post-motion-terminal-r589/single-r8-command.json": "04014c6d95e910d5891ba6124e0116070d9faf5f07f0d29e17e6327f0eae6a62",
+    "output/20260913-nine-state-post-motion-terminal-r589/single-r8.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-motion-terminal-r589/single-r8.yaml": "e63eb5580620c259fa295bf329cc165ac0b94c9bd7dbbb527db9b58c7a348125",
+    "output/20260913-nine-state-post-motion-sources-r590/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "3fbb94668ccc26861b2ef220adbd538c8275dfd294da7bef7f746ab5e6223bbe",
+    "output/20260913-nine-state-post-motion-sources-r590/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-post-motion-sources-r590/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-motion-sources-r590/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "e7a5788cd7d8d91adc8b91468e4616f4396241d46d5d02be39018c4a25bb1b8e",
+    "output/20260913-nine-state-post-motion-sources-r590/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-motion-sources-r590/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "51c31aff953937067da9e6f8d38cd7e2849d9900d272ad30d064753b789320c9",
+    "output/20260913-nine-state-post-motion-sources-r590/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-motion-sources-r590/compile-command.json": "572f44a76486c92d850ead7c20af33680c5d6a5510fd7729c8a8b4aacfff3589",
+    "output/20260913-nine-state-post-motion-sources-r590/driver.cpp": "f3ab95f7ff2aafc930d24ae63891acddcd9e42c07b2fe1e213202dc6f61651e8",
+    "output/20260913-nine-state-post-motion-sources-r590/generator.py": "e2c8dc3fe27e317d9094081ae9df1213fb7c1c189e06f6642e3e83ac63a3879c",
+    "output/20260913-nine-state-post-motion-sources-r590/replay": "e7c0fb3baf2c0476182c98af68416597cd64349b9dba2346febe60064114a5e2",
+    "output/20260913-nine-state-post-motion-sources-r590/results.json": "d6d7bba385ebc20bbd03d099d8adc73414e846757892a3b08a4ed1e5f01d169c",
+    "output/20260913-nine-state-single-r8/manifest.json": "704ba666057674cef6aaf02305d3b76e517f790cec722305abbd11fbf991655b",
+    "output/20260913-nine-state-single-r8/monitor-summary.json": "5ecf42bbe302dd97bb0b6c1c334c541ee7d9a9810a61ff9e99e83db41ff42454",
+    "output/20260913-nine-state-single-r8/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-single-r8/launch.log": "47e9878400d323ff73457641f1b54c12434c41716e1836bbf470ed6c6f8e07d3",
+    "output/20260913-nine-state-single-r8/down.log": "1f8be5f072759b0c9e96090fd12f4d6468ef46d605b85da2230a55679b85651f",
+    "output/20260913-nine-state-single-r8/d1/autoware.log": "2d5bdaf546f09f1c2637e878f9655bdd21e387a8594e096fed822bec70e080bb",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000257-d93a31f8889e0821-track-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "b723449e20dbf43df655784312215200119fdbb4a0fb78875567758989dfae0b",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000257-d93a31f8889e0821-track-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "b5d5a720b112671f12428d46bc4a818070c3440a39ab4899fde5bbae2390000f",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "63ae5eacc84e3baba886da06760a11c228ac4809a1ddfeec61b43c6b254fa237",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000789-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000789-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000789-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000789-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000789-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000789-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000789-pre-stationary/snapshot.yaml": "27ac7c259f889e868403151809e5c144a1c9609c389e23b417c17e18154af06a",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000507-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000507-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000507-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000507-pre-stationary/snapshot.yaml": "440de6aa44e50e3b765d37c03833656d9f71aa839d3b5adcde2f8d7a6480d1e5",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000832-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000832-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000832-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000832-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000832-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000832-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000832-pre-moving/snapshot.yaml": "e83ee13dc56ec6871a7e7cd84b2a2e952424fc3567a3472b425c6e8e92908e1f",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001052-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001052-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001052-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001052-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001052-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001052-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001052-pre-stationary/snapshot.yaml": "4f771ecc618ffaff5e20355384fb3c40711d1386d204eadfe6794a5b61c0713c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000789-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000789-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000789-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000789-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000789-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000789-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000789-pre-stationary/snapshot.yaml": "694a45d2f6c21c226477eb34cdeed21531c7521e9cdf7b2402ad40fef2ff33a6",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/due/after-normal-motion/publication-000000001052-pre-stationary/snapshot.yaml": "9bacf4429b4016381194bd52842ba225f6dd645252bdd9d130241df54e360fe7",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000789-pre-stationary/snapshot.yaml": "c30dc7e9480d488b7edc6141c4ad12f9c7c7a232297444a1ac755303e2fa58d8",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-startup/active/publication-000000000494-pre-stationary/snapshot.yaml": "3fcbb78556cee4ca08a5adfcc75afc802a9e4e249389075cda9c4bc502f3e5df",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-final-startup/due/publication-000000000494-pre-stationary/snapshot.yaml": "3fcbb78556cee4ca08a5adfcc75afc802a9e4e249389075cda9c4bc502f3e5df",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000860-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000860-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000860-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000860-pre-moving/snapshot.yaml": "11f402f0d93397de123f9d6a0a9d493e5df6e8b60359dd291cb268ceef0dc9d3",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001004-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001004-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001004-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001004-pre-stationary/snapshot.yaml": "f0f574ee0b047fef3157d594219423828faf956eda3e98454cba21c844c3dce8",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000497-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000497-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000497-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000497-pre-stationary/snapshot.yaml": "a2fbe30038feb4c6f05c36c22cac1c5c59a5fc9fd35d6d9949c44a5d579243a8",
+    "output/20260913-nine-state-single-r8/d1/rosbag2_autoware/metadata.yaml": "ae5e010775ff7bdcfe957d28a0a390a483d99d3b5a652af93d3e0122604faf63",
+    "output/20260913-nine-state-single-r8/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "f01743e2a833b383fae915a9d5f61005413bd2f5bdff03f1615ce1e9e2f94e7b",
+    "output/20260913-nine-state-single-r8/run_campaign.py": "31101d5cb31b6837ede9746890b3cabb367fabbfc4de3f7312c16d3fc83d8818"
+  },
+  "experiments": [
+    {
+      "id": 587,
+      "result": "accepted",
+      "changed_dimension": "Bounded final capture runtime verification",
+      "reason": "Due/active1052 preserved with authentic moving normal1001 witness, matched actual publication log. No later normal or restart.4229callbacks max19.291101ms,508normal sends, no publication-window violation."
+    },
+    {
+      "id": 588,
+      "result": "accepted",
+      "changed_dimension": "Same-run public topic frequency and motion extraction",
+      "reason": "Maximum public speed1.148950815m/s. Fixed7.9..14.3s Ready motion/stop window. Public body/tire28.571Hz,IMU20Hz,pose50Hz,control39.937Hz,clock200Hz. Not race or private physical truth acceptance."
+    },
+    {
+      "id": 589,
+      "result": "accepted",
+      "changed_dimension": "Exact final1052 source/ledger/domain/guard replay",
+      "reason": "RestExpired because next deadline14.314999826 exceeds original rest14.299999690. CurrentCheck defaults are unexecuted. Exact source/domain/history/prior actual identities retained; unsafe extending/repeating stop is not a repair."
+    },
+    {
+      "id": 590,
+      "result": "inconclusive",
+      "changed_dimension": "Frozen source430/622 A/B/C/D/G",
+      "reason": "A rejects430 at wall-refined numerical solve and622 at physical stage99. Target-dependent B/C/D/G unavailable for target-free Cruise. Current rest1052 and later failed fresh solver inputs are different worlds; all-method physical infeasibility and restart repair not established."
+    }
+  ],
+  "limits": [
+    "No Start/lap/restart, all integrated M4–M6 remain open.",
+    "Earliest post-motion final evidence proves expected rest expiry, not the upstream fresh-source failure cause.",
+    "The last frozen source failure622 precedes later accepted652 and final1052. Exact fresh solver failure after the final stationary loss is not captured by original intent/stage buckets.",
+    "Need a bounded immutable upstream source failure capture after the known final loss, including both native initializer identities. No retry, margin, timeout or unproved normal fallback."
+  ]
+}

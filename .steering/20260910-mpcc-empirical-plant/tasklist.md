@@ -581,4 +581,5 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Identify original stationary slot consumption at startup/Ready as a detection gap for single-r7 final1012 and force-r3 final1149.
 - [x] Preserve all original buckets; add one bounded paired stationary final loss after authenticated moving normal send, with actual source/clock witness and clock-reset isolation.
 - [x] R583 fixture collision preserved; R584 old2fail/new2pass; source106; build122 all26/package109 all2615; R586 unchanged old wall/deadline replays.
-- [ ] Commit and bounded single-r8: capture first post-motion stationary failure and analyze any restart, exact due/active rejection and source supply. Then causal repair and remaining M4–M6.
+- [x] Localec8e822b and bounded single-r8: paired final1052 captured, actual witness1001 verified, no restart; R589 exact original RestExpired, R590 earlier430/622 A rejection and target-free alternative unavailability.
+- [ ] Capture exact fresh source failure after the actual post-motion final loss for both native initializers; repair its producer and complete remaining M4–M6.

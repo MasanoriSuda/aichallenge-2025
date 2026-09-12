@@ -27,8 +27,8 @@ run_kind = 'application-' if application_diagnostic else ''
 root = Path('output/20260910-nine-state-'+run_kind+mode+'-'+attempt)
 host_duration_sec = 120 if application_diagnostic else 840
 assert not subprocess.check_output(['docker', 'ps', '-q']).strip(), 'Other containers running'
-test_log = Path('/tmp/mpcc-nine-state-tests-r99.log')
-build_log = Path('/tmp/mpcc-nine-state-build-r113.log')
+test_log = Path('/tmp/mpcc-nine-state-tests-r101.log')
+build_log = Path('/tmp/mpcc-nine-state-build-r114.log')
 assert 'Summary: 2592 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
 assert 'Summary: 26 packages finished' in build_log.read_text()
 original_dll = Path('aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll')

@@ -1,25 +1,21 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。現在再証明の計算負荷を修正・ローカル検証済み。次は固定した標準r72。**
+**全体未完。標準r72は両車停止で未完走。採用境界の観測追加を検証済み、次は標準r73。**
 
-標準r71はD1decision1070の公開期限超過で失敗。新候補と継続候補の再証明が
-約13.789/15.230msを占め、callback30.281ms。期限14.844999702秒に対して公開直前
-14.854999667秒。期限判定は正しい。D2の発進修正は実走でも改善し、最大1.319m/s、
-連続72正加速指令/1.775秒を記録。D1は最大1.065m/s、57指令/1.4秒。未完走。
-元のDLL・ユーザーJSONは復元済み、走行環境は停止済み。
+ac1622d8のr72でD1最大1.073m/s、連続61正加速指令/1.5秒、D2最大1.411m/s、66指令/1.625秒。
+D1Storeは8130/354acceptedまで進むが、採用要求はplan0/context拒否0。
+D2は新geometry821299624407504693でStore645のまま。古い731入力は別geometry。
+D1Follow1168は再証明30.992ms、callback32.003msで元の公開期限を超過。
+保存入力の再現でもphysics/entryは合格し、実際の公開直前時刻は正しく拒否。
+元のDLL・ユーザーJSON復元、走行停止済み。記録された指令列は実適用の証拠とは区別する。
 
-事前証明で得た局所数式を不変の所有に保持し、既存の現在履歴・座標・完全再証明で
-範囲が合う計算だけに使用。モデル/時間刻み/状態/入力の範囲外は元の計算を行い、
-現在世界・完全停止・元の公開期限と単一権限を維持。別の現在座標表現R441は不採用。
-100桁精度の12,800点を確認。Build113全26、tests99全2,592/66（source105、C5 161）が合格。
-本番libraryのR445では保存6ケースの判定を維持し、直近2ケースの中央値は
-9.83→6.71ms、7.80→5.19ms。実際の公開時刻での期限拒否も維持。
-
-固定した標準r72の実走確認、全intent/Mission/sibling/Store、実Stop/rest/restart、
-Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、dev3/dev4六周、
-gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/current-map-cost-design.md)、
+採用前の欠落・世代拒否、失効呼び出し元と最新mailbox結果の観測を追加した。
+制御条件は維持。Build114全26、tests101全2592/66/source105/C5 161合格。
+標準r73で未確定の最初の境界を特定し、実証したproducerだけを修正する。
+Follow負荷、全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
+同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r72-source-generation-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

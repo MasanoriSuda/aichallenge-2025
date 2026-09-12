@@ -604,7 +604,7 @@ def test_rate_resolved_intent_transition_reuses_gate_a_without_sync_solve() -> N
         assert f"rate_resolved_{phase}_gate_a_proposal->complete()" in submit
         assert f"rate_resolved_{phase}_gate_a_proposal->certified_plan" in submit
     assert submit.index("submit_latest(") < submit.index("scheduled_control::evaluate(")
-    assert "normal_context_generation.same_generation(" in submit
+    assert "normal_context_generation.same_generation(" in "".join(submit.split())
     for forbidden in ("command_pub_", "mark_executed(", "record_published_bundle_source("):
         assert forbidden not in submit
 
@@ -1542,7 +1542,7 @@ def test_tactical_async_and_isolated_branches_share_one_owned_snapshot_boundary(
     """Deep-copy ownership must not drift between tactical execution paths."""
 
     helper_start = SOURCE.index("struct OwnedTacticalSnapshot")
-    helper_end = SOURCE.index("void invalidate_mpcc_lite_async_results()", helper_start)
+    helper_end = SOURCE.index("void invalidate_mpcc_lite_async_results(", helper_start)
     helper = SOURCE[helper_start:helper_end]
     assert "std::make_shared<ReferencePath>(*model->reference_path)" in helper
     assert "std::make_shared<BicycleModel>(*model)" in helper
@@ -1742,7 +1742,7 @@ def test_five_state_overtake_tactical_gate_is_physically_deleted() -> None:
     assert "solve_extended_progress_problem(" not in branch
     assert "Formulation::VelocityProgress5State" not in branch
 
-    invalidation_start = SOURCE.index("void invalidate_mpcc_lite_async_results()")
+    invalidation_start = SOURCE.index("void invalidate_mpcc_lite_async_results(")
     invalidation_end = SOURCE.index("void set_gap_planner(", invalidation_start)
     invalidation = SOURCE[invalidation_start:invalidation_end]
     assert "const auto invalidate_mailbox" in invalidation

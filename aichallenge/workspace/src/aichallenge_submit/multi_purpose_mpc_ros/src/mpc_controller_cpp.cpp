@@ -8714,15 +8714,18 @@ struct MPC
     return mpcc_lite_async_worker_context_ ? captured_normal_context_generation_ : normal_context_owner_.capture();
   }
 
-  void invalidate_scheduled_context() noexcept
-  {
+  void invalidate_scheduled_context(const char *site) noexcept {
     // Worker tactical mutations must not revoke their live parent's input.
-    if (!mpcc_lite_async_worker_context_) normal_context_owner_.invalidate();
+    if (!mpcc_lite_async_worker_context_) {
+      normal_context_owner_.invalidate();
+      ++normal_context_invalidation_count_;
+      normal_context_last_invalidation_site_ = site;
+      normal_context_last_invalidation_decision_ = active_control_decision_id_;
+    }
   }
 
-  void invalidate_mpcc_lite_async_results()
-  {
-    invalidate_scheduled_context();
+  void invalidate_mpcc_lite_async_results(const char *site) {
+    invalidate_scheduled_context(site);
     ++mpcc_lite_async_context_epoch_;
     mpcc_lite_async_last_accepted_result_.reset();
     const auto invalidate_mailbox = [this](auto & mailbox) {
@@ -8755,7 +8758,8 @@ struct MPC
 
   void set_gap_planner(V2XGapPlanner * planner)
   {
-    if (gap_planner != planner) invalidate_scheduled_context();
+    if (gap_planner != planner)
+      invalidate_scheduled_context(__func__);
     gap_planner = planner;
   }
 
@@ -8763,7 +8767,7 @@ struct MPC
     const recovery_footprint::OccupancyGrid * grid,
     const recovery_footprint::FootprintExtents & footprint)
   {
-    invalidate_scheduled_context();
+    invalidate_scheduled_context(__func__);
     overtake_static_wall_grid_snapshot_owner_.reset();
     overtake_static_wall_grid_fingerprint_ = 0U;
     if (grid != nullptr) {
@@ -8858,13 +8862,15 @@ struct MPC
 
   void update_v_max(const double v_max)
   {
-    if (cfg.v_max != v_max) invalidate_scheduled_context();
+    if (cfg.v_max != v_max)
+      invalidate_scheduled_context(__func__);
     cfg.v_max = v_max;
   }
 
   void update_ay_max(const double ay_max)
   {
-    if (cfg.ay_max != ay_max) invalidate_scheduled_context();
+    if (cfg.ay_max != ay_max)
+      invalidate_scheduled_context(__func__);
     cfg.ay_max = ay_max;
   }
 
@@ -8873,7 +8879,8 @@ struct MPC
     if (!mpc_waypoint_preview::is_valid_offset(wp_id_offset)) {
       throw std::invalid_argument("MPC waypoint preview offset must be within [0, 2]");
     }
-    if (cfg.wp_id_offset != wp_id_offset) invalidate_scheduled_context();
+    if (cfg.wp_id_offset != wp_id_offset)
+      invalidate_scheduled_context(__func__);
     cfg.wp_id_offset = wp_id_offset;
   }
 
@@ -8882,7 +8889,8 @@ struct MPC
     if (!mpc_waypoint_preview::is_valid_offset(wp_id_low_offset)) {
       throw std::invalid_argument("MPC low-speed waypoint preview offset must be within [0, 2]");
     }
-    if (cfg.wp_id_low_offset != wp_id_low_offset) invalidate_scheduled_context();
+    if (cfg.wp_id_low_offset != wp_id_low_offset)
+      invalidate_scheduled_context(__func__);
     cfg.wp_id_low_offset = wp_id_low_offset;
   }
 
@@ -9245,7 +9253,7 @@ struct MPC
       return;
     }
 
-    invalidate_scheduled_context();
+    invalidate_scheduled_context(__func__);
     v2x_race_session_active_ = active;
     v2x_behavior_state = V2XBehaviorState::Cruise;
     v2x_behavior_state_initialized = false;
@@ -9494,7 +9502,7 @@ struct MPC
     // Reject both cached and in-flight tactical worker results produced from
     // the wall-invalidated context.  A later worker may still evaluate both
     // sides in shadow mode, but live authority applies the side retry block.
-    invalidate_mpcc_lite_async_results();
+    invalidate_mpcc_lite_async_results(__func__);
     solved_mpcc_execution_trajectory_.reset();
     last_physically_validated_mpcc_execution_trajectory_.reset();
     // DynamicMissionWait normally preserves a recent DP prefix across a soft
@@ -23787,7 +23795,7 @@ struct MPC
     // hold its solver mutex. Epoch invalidation makes the in-flight result
     // unadoptable and causes each context to reset lazily on its next solve.
     if (!mpcc_lite_async_worker_context_) {
-      invalidate_mpcc_lite_async_results();
+      invalidate_mpcc_lite_async_results(__func__);
     }
     solved_mpcc_execution_trajectory_.reset();
     last_physically_validated_mpcc_execution_trajectory_.reset();
@@ -30824,25 +30832,54 @@ struct MPC
     const auto store = rate_resolved_track_cruise_certified_plan_store_ ?
       rate_resolved_track_cruise_certified_plan_store_->state() : rate_resolved_certified::StoreState{};
     const auto &window = rate_resolved_track_cruise_shadow_telemetry_window_;
-    RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
-      "MPCC source supply: decision=%lu, now=%.9f, draft=%s, scheduled=%s, successor=%s, "
-      "plans=%zu/contexts_rejected:%zu/requests:%zu, geometry=%lu, "
-      "normal_submitted=%lu/rejected:%lu, worker=%lu/%lu/%lu/running:%d/pending:%d/exceptions:%lu, "
-      "mailbox=%lu/%lu/invalid:%lu, store=%lu/accepted:%lu/cert_rejected:%lu/invalid:%lu/stale:%lu/reason:%d, "
-      "last_solver=%s/physical:%s, authority=observation-only",
-      static_cast<unsigned long>(active_control_decision_id_), now_sec, source_supply_draft_.c_str(),
-      source_supply_scheduled_, source_supply_successor_, source_supply_plans_, source_supply_context_rejects_,
-      source_supply_requests_, static_cast<unsigned long>(source_supply_geometry_),
-      static_cast<unsigned long>(window.submission_count), static_cast<unsigned long>(window.submission_reject_count),
-      static_cast<unsigned long>(worker.submitted), static_cast<unsigned long>(worker.started),
-      static_cast<unsigned long>(worker.completed), worker.running ? 1 : 0, worker.pending ? 1 : 0,
-      static_cast<unsigned long>(worker.exceptions), static_cast<unsigned long>(mailbox.latest_submitted_sequence),
-      static_cast<unsigned long>(mailbox.latest_published_sequence), static_cast<unsigned long>(mailbox.invalid_result_count),
-      static_cast<unsigned long>(store.latest_certified_sequence), static_cast<unsigned long>(store.accepted_count),
-      static_cast<unsigned long>(store.certification_reject_count), static_cast<unsigned long>(store.invalid_plan_count),
-      static_cast<unsigned long>(store.stale_sequence_count), static_cast<int>(store.last_reason),
-      window.last_result_available ? rate_resolved_shadow::to_string(window.last_result.outcome) : "unobserved",
-      window.last_physical.detail.c_str());
+    RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "MPCC source supply: decision=%lu, now=%.9f, draft=%s, scheduled=%s, "
+        "successor=%s, "
+        "plans=%zu/contexts_rejected:%zu/requests:%zu, geometry=%lu, "
+        "normal_submitted=%lu/rejected:%lu, "
+        "worker=%lu/%lu/%lu/running:%d/pending:%d/exceptions:%lu, "
+        "mailbox=%lu/%lu/invalid:%lu, "
+        "store=%lu/accepted:%lu/cert_rejected:%lu/invalid:%lu/stale:%lu/"
+        "reason:%d, "
+        "last_solver=%s/physical:%s, source_missing=%zu/%zu/%zu, "
+        "generation_rejected=%zu/invalid:%zu, "
+        "invalidation=%lu/decision:%lu/site:%s, "
+        "mailbox_result=%s/geometry:%lu/detail:%s, authority=observation-only",
+        static_cast<unsigned long>(active_control_decision_id_), now_sec,
+        source_supply_draft_.c_str(), source_supply_scheduled_,
+        source_supply_successor_, source_supply_plans_,
+        source_supply_context_rejects_, source_supply_requests_,
+        static_cast<unsigned long>(source_supply_geometry_),
+        static_cast<unsigned long>(window.submission_count),
+        static_cast<unsigned long>(window.submission_reject_count),
+        static_cast<unsigned long>(worker.submitted),
+        static_cast<unsigned long>(worker.started),
+        static_cast<unsigned long>(worker.completed), worker.running ? 1 : 0,
+        worker.pending ? 1 : 0, static_cast<unsigned long>(worker.exceptions),
+        static_cast<unsigned long>(mailbox.latest_submitted_sequence),
+        static_cast<unsigned long>(mailbox.latest_published_sequence),
+        static_cast<unsigned long>(mailbox.invalid_result_count),
+        static_cast<unsigned long>(store.latest_certified_sequence),
+        static_cast<unsigned long>(store.accepted_count),
+        static_cast<unsigned long>(store.certification_reject_count),
+        static_cast<unsigned long>(store.invalid_plan_count),
+        static_cast<unsigned long>(store.stale_sequence_count),
+        static_cast<int>(store.last_reason),
+        window.last_result_available
+            ? rate_resolved_shadow::to_string(window.last_result.outcome)
+            : "unobserved",
+        window.last_physical.detail.c_str(), source_supply_missing_plan_,
+        source_supply_missing_artifact_, source_supply_missing_source_,
+        source_supply_generation_rejects_, source_supply_generation_invalid_,
+        static_cast<unsigned long>(normal_context_invalidation_count_),
+        static_cast<unsigned long>(normal_context_last_invalidation_decision_),
+        normal_context_last_invalidation_site_,
+        mailbox.result_available
+            ? rate_resolved_shadow::to_string(mailbox.result_outcome)
+            : "unobserved",
+        static_cast<unsigned long>(mailbox.result_geometry),
+        mailbox.result_detail.c_str());
   }
 
   void submit_scheduled_post_publication(
@@ -30869,13 +30906,31 @@ struct MPC
     std::vector<std::shared_ptr<const rate_resolved_certified::CertifiedPlan>> plans;
     source_supply_scheduled_ = "no-compatible-source";
     const auto add = [&](const auto &plan) {
-      if (!plan || !plan->execution_artifact || !plan->solver_source_snapshot ||
-          !plan->solver_source_snapshot->normal_context_generation.same_generation(current_normal_context_generation())) return;
+      if (!plan) {
+        ++source_supply_missing_plan_;
+        return;
+      }
+      if (!plan->execution_artifact) {
+        ++source_supply_missing_artifact_;
+        return;
+      }
+      if (!plan->solver_source_snapshot) {
+        ++source_supply_missing_source_;
+        return;
+      }
+      if (!plan->solver_source_snapshot->normal_context_generation
+               .same_generation(current_normal_context_generation())) {
+        ++source_supply_generation_rejects_;
+        if (!plan->solver_source_snapshot->normal_context_generation.valid())
+          ++source_supply_generation_invalid_;
+        return;
+      }
       if (!scheduled_control::select_new_source_context(plan->execution_artifact->identity.source_context, context)) {
         ++source_supply_context_rejects_;
         return;
       }
-      if (std::none_of(plans.begin(),plans.end(),[&](const auto &p) { return p == plan; })) plans.push_back(plan);
+      if (std::none_of(plans.begin(),plans.end(),[&](const auto &p) { return p == plan; }))
+        plans.push_back(plan);
     };
     // Tactical proposals are source candidates only; their old synchronous
     // current-world joins no longer write normal commands.
@@ -31234,6 +31289,10 @@ struct MPC
   const char *source_supply_successor_{"not-reached"};
   std::size_t source_supply_plans_{}, source_supply_context_rejects_{}, source_supply_requests_{};
   std::uint64_t source_supply_geometry_{};
+  std::size_t source_supply_missing_plan_{}, source_supply_missing_artifact_{},
+      source_supply_missing_source_{};
+  std::size_t source_supply_generation_rejects_{},
+      source_supply_generation_invalid_{};
 
   double last_problem_initialization_ms{};
   NormalJoinTimingObservation last_normal_join_timing;
@@ -31248,6 +31307,9 @@ struct MPC
     source_supply_successor_ = "not-reached";
     source_supply_plans_ = source_supply_context_rejects_ = source_supply_requests_ = 0;
     source_supply_geometry_ = 0;
+    source_supply_missing_plan_ = source_supply_missing_artifact_ =
+        source_supply_missing_source_ = 0;
+    source_supply_generation_rejects_ = source_supply_generation_invalid_ = 0;
     last_problem_initialization_ms = 0.0;
     last_normal_join_timing = {};
     last_scheduled_phase_timing = {};
@@ -31529,6 +31591,11 @@ struct MPC
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_active_proof_recorder_;
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_context_recorder_;
   mutable scheduled_control::ContextOwner normal_context_owner_;
+  // Control-thread observation only; these values never participate in
+  // adoption.
+  std::uint64_t normal_context_invalidation_count_{};
+  std::uint64_t normal_context_last_invalidation_decision_{};
+  const char *normal_context_last_invalidation_site_{"none"};
   scheduled_control::ContextSnapshot captured_normal_context_generation_{};
   std::shared_ptr<MpccLiteAsyncMailbox> mpcc_lite_async_mailbox_;
   std::unique_ptr<LatestOnlyWorker> mpcc_lite_async_worker_;
@@ -32240,7 +32307,7 @@ private:
       overtake_line_state_.mission_generation != 0U ||
       reason != "not overtaking";
     if (!mpcc_lite_async_worker_context_ && reset_changes_async_context) {
-      invalidate_mpcc_lite_async_results();
+      invalidate_mpcc_lite_async_results(__func__);
     }
     if (overtake_solver_recovery_active_) {
       const auto gate = v2x_overtake_core::update_solver_reentry_gate(
@@ -32848,7 +32915,8 @@ private:
       return;
     }
     const bool newly_invalidated = !current_overtake_mission_invalidated();
-    if (newly_invalidated) invalidate_scheduled_context();
+    if (newly_invalidated)
+      invalidate_scheduled_context(__func__);
     overtake_line_state_.invalidated_mission_generation =
       overtake_line_state_.mission_generation;
     overtake_line_state_.mission_invalidation_reason = reason;
@@ -54543,7 +54611,9 @@ private:
       mpc_cfg_.waypoint_association);
     mpc_ = std::make_unique<MPC>(
       car_.get(), mpc_cfg_, use_obstacle_avoidance_, cfg_.reference_path.use_path_constraints_topic);
-    reference_path_->bind_context_invalidator([this]() { mpc_->invalidate_scheduled_context(); });
+    reference_path_->bind_context_invalidator([this]() {
+      mpc_->invalidate_scheduled_context("reference-path-mutation");
+    });
     if (recovery_grid_ && recovery_footprint_.valid()) {
       mpc_->set_overtake_static_wall_geometry(recovery_grid_.get(), recovery_footprint_);
     }
@@ -54664,39 +54734,59 @@ private:
               return result;
             }
           } else if (name == "Q0") {
-            if (mpc_->cfg.Q[0] != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.Q[0] != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.Q[0] = param.as_double();
           } else if (name == "Q1") {
-            if (mpc_->cfg.Q[1] != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.Q[1] != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.Q[1] = param.as_double();
           } else if (name == "Q2") {
-            if (mpc_->cfg.Q[2] != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.Q[2] != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.Q[2] = param.as_double();
           } else if (name == "R0") {
-            if (mpc_->cfg.R[0] != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.R[0] != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.R[0] = param.as_double();
           } else if (name == "R1") {
-            if (mpc_->cfg.R[1] != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.R[1] != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.R[1] = param.as_double();
           } else if (name == "QN0") {
-            if (mpc_->cfg.QN[0] != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.QN[0] != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.QN[0] = param.as_double();
           } else if (name == "QN1") {
-            if (mpc_->cfg.QN[1] != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.QN[1] != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.QN[1] = param.as_double();
           } else if (name == "QN2") {
-            if (mpc_->cfg.QN[2] != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.QN[2] != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.QN[2] = param.as_double();
           } else if (name == "ay_max") {
             mpc_cfg_.ay_max = param.as_double();
             mpc_->update_ay_max(param.as_double());
           } else if (name == "accel_low_pass_gain") {
             mpc_cfg_.accel_low_pass_gain = param.as_double();
-            if (mpc_->cfg.accel_low_pass_gain != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.accel_low_pass_gain != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.accel_low_pass_gain = param.as_double();
           } else if (name == "steer_low_pass_gain") {
             mpc_cfg_.steer_low_pass_gain = param.as_double();
-            if (mpc_->cfg.steer_low_pass_gain != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.steer_low_pass_gain != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_->cfg.steer_low_pass_gain = param.as_double();
           } else if (name == "wp_id_offset") {
             mpc_cfg_.wp_id_offset = param.as_int();
@@ -54705,7 +54795,9 @@ private:
             mpc_cfg_.wp_id_low_offset = param.as_int();
             mpc_->update_wp_id_low_offset(param.as_int());
           } else if (name == "wp_id_low_speed") {
-            if (mpc_->cfg.wp_id_low_speed_kmh != param.as_double()) mpc_->invalidate_scheduled_context();
+            if (mpc_->cfg.wp_id_low_speed_kmh != param.as_double())
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             mpc_cfg_.wp_id_low_speed_kmh = std::max(0.0, param.as_double());
             mpc_cfg_.wp_id_low_speed = kmh_to_m_per_sec(mpc_cfg_.wp_id_low_speed_kmh);
             mpc_->cfg.wp_id_low_speed_kmh = mpc_cfg_.wp_id_low_speed_kmh;
@@ -54807,7 +54899,9 @@ private:
     control_mode_request_sub_ = create_subscription<Bool>(
       "control/control_mode_request_topic", 1, [this](const Bool::SharedPtr msg) {
         if (msg->data && !enable_control_) {
-          if (mpc_) mpc_->invalidate_scheduled_context();
+          if (mpc_)
+            mpc_->invalidate_scheduled_context(
+                "configuration-or-control-status-callback");
           enable_control_ = true;
         }
       });
@@ -54818,7 +54912,9 @@ private:
     stop_request_sub_ = create_subscription<Empty>(
       "/control/mpc/stop_request", 1, [this](const Empty::SharedPtr) {
         if (enable_control_) {
-          if (mpc_) mpc_->invalidate_scheduled_context();
+          if (mpc_)
+            mpc_->invalidate_scheduled_context(
+                "configuration-or-control-status-callback");
           RCLCPP_WARN(get_logger(), "Stop request received");
           enable_control_ = false;
         }
@@ -54829,7 +54925,9 @@ private:
         [this](const GearReport::SharedPtr msg) {
           const auto next_gear = recovery_gear_from_report(msg->report);
           if (!reported_gear_.has_value() || reported_gear_.value() != next_gear) {
-            if (mpc_) mpc_->invalidate_scheduled_context();
+            if (mpc_)
+              mpc_->invalidate_scheduled_context(
+                  "configuration-or-control-status-callback");
             RCLCPP_INFO(
               get_logger(), "Stuck recovery gear report: raw=%u, gear=%s",
               static_cast<unsigned int>(msg->report), stuck_recovery::to_string(next_gear));
@@ -55284,7 +55382,8 @@ private:
     if (!published_input_ledger_.record({stamp.seconds(), acceleration, wire_steering},
         before_clock.seconds(), publication_clock.seconds(), retain_sec, std::move(source)))
     {
-      if (mpc_) mpc_->invalidate_scheduled_context();
+      if (mpc_)
+        mpc_->invalidate_scheduled_context(__func__);
       published_input_ledger_.reset();
       last_published_steering_control_time_.reset();
       return;
@@ -55600,7 +55699,8 @@ private:
   void reset_stuck_recovery_session(
     const char * reason, const V2XTrackingResetPolicy v2x_tracking_reset)
   {
-    if (mpc_) mpc_->invalidate_scheduled_context();
+    if (mpc_)
+      mpc_->invalidate_scheduled_context(__func__);
     if (stuck_recovery_core_) {
       stuck_recovery_core_->reset_session();
     }
@@ -58883,7 +58983,8 @@ private:
       return false;
     }
 
-    if (mpc_) mpc_->invalidate_scheduled_context();
+    if (mpc_)
+      mpc_->invalidate_scheduled_context(__func__);
     recovery_boost_suppressed_for_session_ = true;
     if (output.action.type == stuck_recovery::RecoveryActionType::LowSpeedRejoin) {
       if (recovery_rejoin_hold_cycle_) {
@@ -59206,7 +59307,8 @@ private:
         record_control_callback_duration(steady_now, callback_timing);
       });
     if (control_decision_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
-      if (mpc_) mpc_->invalidate_scheduled_context();
+      if (mpc_)
+        mpc_->invalidate_scheduled_context(__func__);
       control_decision_sequence_ = 0U;
     }
     active_control_decision_id_ = ++control_decision_sequence_;
@@ -59223,7 +59325,8 @@ private:
         observation_time.seconds(), mpc_cfg_.odom_timeout_sec);
       previous_control_ros_clock_sec_ = ros_control_time.seconds();
       if (epoch.clock_regressed) {
-        if (mpc_) mpc_->invalidate_scheduled_context();
+        if (mpc_)
+          mpc_->invalidate_scheduled_context(__func__);
         odom_.reset();
         last_odom_receipt_steady_.reset();
         last_odom_source_stamp_.reset();
@@ -59408,9 +59511,10 @@ private:
         }
         // Revoke before replacement, including a failed update which restores
         // the old path. Restoring values cannot revive work from before it.
-        mpc_->invalidate_scheduled_context();
-        new_reference_path->bind_context_invalidator(
-          [this]() { mpc_->invalidate_scheduled_context(); });
+        mpc_->invalidate_scheduled_context(__func__);
+        new_reference_path->bind_context_invalidator([this]() {
+          mpc_->invalidate_scheduled_context("reference-path-mutation");
+        });
         auto previous_reference_path = std::move(reference_path_);
         reference_path_ = std::move(new_reference_path);
         try {
@@ -59781,7 +59885,8 @@ private:
   {
     // End pending snapshot continuity even when ROS has already shut down and
     // no final packet can be published. This is not a normal-program successor.
-    if (mpc_) mpc_->invalidate_scheduled_context();
+    if (mpc_)
+      mpc_->invalidate_scheduled_context(__func__);
     published_input_ledger_.reset();
     if (!rclcpp::ok() || !command_pub_) {
       return;

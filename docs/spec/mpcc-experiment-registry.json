@@ -1267,6 +1267,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-map-cost-evidence.json",
       "replay_ready": true,
       "reason": "r71 restored moving supply, exact current proof cost and independently compiled local map comparisons."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-r72-source-generation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r72-source-generation-evidence.json",
+      "replay_ready": true,
+      "reason": "r72 exact Follow failure and source-admission observation gap."
     }
   ],
   "experiments": [
@@ -15283,6 +15289,54 @@
         "Repeated derivative construction for covered current native steps; original fresh computation retained for all uncovered steps"
       ],
       "revisit_condition": "New state/world/performance evidence; do not revive rejected old point-future reuse, unchanged micro-optimization, relative-current recomposition or deadline/parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r72-source-generation-r72",
+      "baseline_commit": "ac1622d88fb5af5ced2e85936dee0d20471b89c1",
+      "snapshot_ids": [
+        "20260912-nine-state-r72-source-generation"
+      ],
+      "hypothesis": "Identify earliest missing source/generation boundary before any production authority repair.",
+      "changed_dimension": "Observation only; unchanged ordered guards, invalidation and solver/rate/window/physical contracts.",
+      "result": "rejected",
+      "reason": "Both cars stop without laps. D1advancingStore is filtered before context rejection; D2new geometry has no current captured source.",
+      "production_impact": "Bounded post-publication diagnostic metadata only; integrated acceptance open.",
+      "deleted_code": [
+        "Combined silent guard replaced by the same ordered individually counted returns"
+      ],
+      "revisit_condition": "New captured source/invalidation evidence; do not infer missing geometry from older sources or relax generation/time/proof requirements."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r72-source-generation-follow1168",
+      "baseline_commit": "ac1622d88fb5af5ced2e85936dee0d20471b89c1",
+      "snapshot_ids": [
+        "20260912-nine-state-r72-source-generation"
+      ],
+      "hypothesis": "Identify earliest missing source/generation boundary before any production authority repair.",
+      "changed_dimension": "Observation only; unchanged ordered guards, invalidation and solver/rate/window/physical contracts.",
+      "result": "accepted",
+      "reason": "Exact source/history replay preserves current physics, entry-pass and actual-before-fail; 951samples/compositeFollow domain absent. Isolated timing is not a runtime bound.",
+      "production_impact": "Bounded post-publication diagnostic metadata only; integrated acceptance open.",
+      "deleted_code": [
+        "Combined silent guard replaced by the same ordered individually counted returns"
+      ],
+      "revisit_condition": "New captured source/invalidation evidence; do not infer missing geometry from older sources or relax generation/time/proof requirements."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r72-source-generation-observation-build114-tests101",
+      "baseline_commit": "ac1622d88fb5af5ced2e85936dee0d20471b89c1",
+      "snapshot_ids": [
+        "20260912-nine-state-r72-source-generation"
+      ],
+      "hypothesis": "Identify earliest missing source/generation boundary before any production authority repair.",
+      "changed_dimension": "Observation only; unchanged ordered guards, invalidation and solver/rate/window/physical contracts.",
+      "result": "accepted",
+      "reason": "No authority change; missing source/generation and caller observations; locked published-mailbox result identity. Full26build/2592records/source105/C5 161. Standardr73 and cause repair remain.",
+      "production_impact": "Bounded post-publication diagnostic metadata only; integrated acceptance open.",
+      "deleted_code": [
+        "Combined silent guard replaced by the same ordered individually counted returns"
+      ],
+      "revisit_condition": "New captured source/invalidation evidence; do not infer missing geometry from older sources or relax generation/time/proof requirements."
     }
   ]
 }

@@ -4897,3 +4897,10 @@ D1の公開期限超過1529と全体受入れは別の未解決事項。
 診断のglobal cacheや現在prefixの追加座標変換は導入しない。Build113全26、tests99全2592、
 保存6ケースの判定保持を確認したが、標準r72と全M4–M6の受入れは未完。
 [局所数式の設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-map-cost-design.md)。
+
+2026-09-12標準r72は両車停止で未完走。候補採用前のplan/artifact/source欠落と
+generation拒否を分け、失効呼び出し元・decision・累積回数を既存の公開後ログへ追加。
+mailboxは最新公開結果と同じlockでoutcome/geometry/最大512文字のdetailを観測し、
+trajectoryを複製しない。guard・失効条件・唯一のnormal authorityは維持。
+Build114全26、tests101全2592合格。原因の確定は標準r73へ続く。
+[r72採用境界の設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r72-source-generation-design.md)。

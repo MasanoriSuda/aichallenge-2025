@@ -4939,10 +4939,24 @@ std::optional<Result> Mailbox::latest_after(
 MailboxState Mailbox::state() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  return MailboxState{
-    latest_submitted_sequence_, latest_published_sequence_, accepted_count_,
-    invalid_result_count_, sequence_rollback_count_,
-    sequence_not_submitted_count_, last_reason_, latest_result_.has_value()};
+  MailboxState state{latest_submitted_sequence_,
+                     latest_published_sequence_,
+                     accepted_count_,
+                     invalid_result_count_,
+                     sequence_rollback_count_,
+                     sequence_not_submitted_count_,
+                     last_reason_,
+                     latest_result_.has_value(),
+                     Outcome::BuildRejected,
+                     0U,
+                     {}};
+  if (latest_result_) {
+    state.result_outcome = latest_result_->outcome;
+    state.result_geometry =
+        latest_result_->identity.source_context.stage_geometry_id;
+    state.result_detail = latest_result_->detail.substr(0, 512);
+  }
+  return state;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow

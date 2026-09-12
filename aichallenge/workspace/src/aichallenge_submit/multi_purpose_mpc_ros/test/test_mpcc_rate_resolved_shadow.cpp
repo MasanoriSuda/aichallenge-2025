@@ -2634,13 +2634,20 @@ TEST(MpccRateResolvedShadowMailbox, PublishesMonotonicRegisteredResults)
   EXPECT_FALSE(mailbox.latest_after(1U).has_value());
 
   ASSERT_TRUE(mailbox.register_submission(2U));
-  const auto second = context.evaluate(snapshot(2U));
+  auto second = context.evaluate(snapshot(2U));
+  second.detail = std::string(600, 'x');
   EXPECT_EQ(mailbox.publish(second), shadow::PublishReason::Accepted);
   EXPECT_EQ(
     mailbox.publish(first), shadow::PublishReason::SequenceRollback);
   const auto state = mailbox.state();
   EXPECT_EQ(state.accepted_count, 2U);
   EXPECT_EQ(state.sequence_rollback_count, 1U);
+  EXPECT_TRUE(state.result_available);
+  EXPECT_EQ(state.latest_published_sequence, 2U);
+  EXPECT_EQ(state.result_outcome, second.outcome);
+  EXPECT_EQ(state.result_geometry,
+            second.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(state.result_detail, second.detail.substr(0, 512));
 }
 
 TEST(MpccRateResolvedShadowMailbox, RejectsUnregisteredAndInvalidResults)

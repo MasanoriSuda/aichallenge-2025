@@ -403,3 +403,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Immutable per-domain4096-map ownership, strict model/duration/state/input containment and existing fresh computation for uncovered steps. Parent proof and sole current authority remain.
 - [x] Native44415tests, build113all26, package99all2592/66/source105/C5 161; built-library445six exact paired cases, old before-clock rejections retained.
 - [ ] Local commit and standardr72 current-proof/worker cost and sustained progress. FullM4-M6/intent/Mission/sibling/Store, Stop/rest/restart, Recovery/Rejoin/Boost/async, final races/gates/submission remain.
+
+2026-09-12 r72 source-generation observation (baselineac1622d8):
+- [x] ac1622d8 locally committed; standardr72 moves both then stops with no laps. D1one stationary Follow1168deadline failure; exact source/history replay preserves it.
+- [x] D1Store advances but selector returns before context rejection. D2new geometry821299624407504693 lacks a captured source; no older-world substitution.
+- [x] Split existing missing-source/generation rejection observation, record invalidation caller/decision and latest published mailbox outcome/geometry/bounded detail. No authority change.
+- [x] Build114all26, tests101all2592/66/source105/C5 161; protected original artifacts restored.
+- [ ] Committed standardr73 identifies first absent source boundary; repair demonstrated producer. Independently profile Follow1168. Full M4-M6 remains open.

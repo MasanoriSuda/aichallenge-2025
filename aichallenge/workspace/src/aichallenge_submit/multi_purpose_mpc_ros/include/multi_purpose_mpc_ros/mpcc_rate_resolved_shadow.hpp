@@ -916,6 +916,11 @@ struct MailboxState
   std::uint64_t sequence_not_submitted_count{};
   PublishReason last_reason{PublishReason::InvalidResult};
   bool result_available{false};
+  // Captured under the same mailbox lock as the sequence, without copying a
+  // trajectory.
+  Outcome result_outcome{Outcome::BuildRejected};
+  std::uint64_t result_geometry{};
+  std::string result_detail;
 };
 
 /// Observation-only monotonic transport. It intentionally has no plan-store

@@ -1339,6 +1339,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/native-seed-candidates-evidence.json",
       "replay_ready": true,
       "reason": "Bounded native initializer population, cold source comparisons, API red/green, full build/package and original current regressions."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-single-r6-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r6-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact final784/968/source642 and native/full-source programme/public-component comparisons."
     }
   ],
   "experiments": [
@@ -16911,6 +16917,104 @@
       "production_impact": "Target-free Cruise two-candidate generator only; explicit immutable source IDs/policy/warm owners and internal physical mailbox groups. Single existing normal authority and all safety/timing limits retained.",
       "deleted_code": [],
       "revisit_condition": "Fresh committed standard single-r6 for measured total source availability and original current/publication checks. Do not promote rejected global replacements or repeat old scheduler experiments unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r6-audit-r525",
+      "baseline_commit": "8d9810e0e1743e5f161d46015ca1fcedf2dc0986",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r6-audit"
+      ],
+      "hypothesis": "Separate valid wall rejection, source-model containment and future steering programme availability",
+      "changed_dimension": "Exact final active current replay",
+      "result": "accepted",
+      "reason": "Final784 context mismatch and moving968 wall rejection reproduced3times with exact source/domain/actual history/preceding publication/checks/rejection time. No live clock rejection inferred from unobserved zero brackets.",
+      "production_impact": "None after8d9810e0. Variable steering proposal remains diagnostic; all physical/scheduling/solver parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New actual application/force/contact evidence or a structurally different bounded source programme with complete identity/current/physical proof. Do not repeat rejected long programmes or fit a residual without causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r6-audit-r526",
+      "baseline_commit": "8d9810e0e1743e5f161d46015ca1fcedf2dc0986",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r6-audit"
+      ],
+      "hypothesis": "Separate valid wall rejection, source-model containment and future steering programme availability",
+      "changed_dimension": "Four native input-abstraction endpoints",
+      "result": "accepted",
+      "reason": "Two lower-acceleration traces clear, two upper traces contact original cell476325 near12.645/12.65. Same hard footprint and native model. These are abstraction witnesses, not receiver traces or whole-world infeasibility.",
+      "production_impact": "None after8d9810e0. Variable steering proposal remains diagnostic; all physical/scheduling/solver parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New actual application/force/contact evidence or a structurally different bounded source programme with complete identity/current/physical proof. Do not repeat rejected long programmes or fit a residual without causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r6-audit-r527",
+      "baseline_commit": "8d9810e0e1743e5f161d46015ca1fcedf2dc0986",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r6-audit"
+      ],
+      "hypothesis": "Separate valid wall rejection, source-model containment and future steering programme availability",
+      "changed_dimension": "Original tube versus exact later component observations",
+      "result": "accepted",
+      "reason": "Original upper speed0.1789536995 vs current0.2281698585; relative yaw upper0.0013881290 vs0.0024820591 at pose/velocity12.284999725. Async component epochs remain explicit. No new model bound or fitting.",
+      "production_impact": "None after8d9810e0. Variable steering proposal remains diagnostic; all physical/scheduling/solver parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New actual application/force/contact evidence or a structurally different bounded source programme with complete identity/current/physical proof. Do not repeat rejected long programmes or fit a residual without causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r6-audit-r528",
+      "baseline_commit": "8d9810e0e1743e5f161d46015ca1fcedf2dc0986",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r6-audit"
+      ],
+      "hypothesis": "Separate valid wall rejection, source-model containment and future steering programme availability",
+      "changed_dimension": "Constant vs integrated solved steering programmes on original job961 source",
+      "result": "inconclusive",
+      "reason": "Baseline/constant3/source-rate3 all source-certified with same first packet and complete velocity ceiling. Variable programme has constant flag false and new input fingerprint16201169140066102269. Both8prefix arms and variable16 fail full applied wall; constant16 fails nominal terminal. No long-programme repair or actual968-current acceptance. original_source_fingerprint_exact is only independently checked for baseline; its other-arm values are vacuous and not used as evidence.",
+      "production_impact": "None after8d9810e0. Variable steering proposal remains diagnostic; all physical/scheduling/solver parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New actual application/force/contact evidence or a structurally different bounded source programme with complete identity/current/physical proof. Do not repeat rejected long programmes or fit a residual without causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r6-audit-r529",
+      "baseline_commit": "8d9810e0e1743e5f161d46015ca1fcedf2dc0986",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r6-audit"
+      ],
+      "hypothesis": "Separate valid wall rejection, source-model containment and future steering programme availability",
+      "changed_dimension": "Public component trace vs original tube",
+      "result": "inconclusive",
+      "reason": "Extracts valid same-run trace, but comparison extends beyond Emergency968 into changed commands; those later x/tire departures are excluded from model-error claims. Corrected temporal scope inR530.",
+      "production_impact": "None after8d9810e0. Variable steering proposal remains diagnostic; all physical/scheduling/solver parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New actual application/force/contact evidence or a structurally different bounded source programme with complete identity/current/physical proof. Do not repeat rejected long programmes or fit a residual without causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r6-audit-r530",
+      "baseline_commit": "8d9810e0e1743e5f161d46015ca1fcedf2dc0986",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r6-audit"
+      ],
+      "hypothesis": "Separate valid wall rejection, source-model containment and future steering programme availability",
+      "changed_dimension": "Limit public component comparison to first failure entry",
+      "result": "accepted",
+      "reason": "45 component checks through12.289999725. First yaw departure12.124999728; first speed/lateral velocity departure12.144999728. No exact controller-receipt or application inference. Global observed max1.1278783083mps. Post-Emergency comparisons removed.",
+      "production_impact": "None after8d9810e0. Variable steering proposal remains diagnostic; all physical/scheduling/solver parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New actual application/force/contact evidence or a structurally different bounded source programme with complete identity/current/physical proof. Do not repeat rejected long programmes or fit a residual without causal evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r6-audit-standard",
+      "baseline_commit": "8d9810e0e1743e5f161d46015ca1fcedf2dc0986",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r6-audit"
+      ],
+      "hypothesis": "Bounded native source initialization provides integrated standard single acceptance",
+      "changed_dimension": "Fresh standard single onbuild120/package107",
+      "result": "rejected",
+      "reason": "First moving Emergency968/current wall, no Start/laps; full cleanup. Source supply continues. No integrated acceptance.",
+      "production_impact": "None after8d9810e0",
+      "deleted_code": [],
+      "revisit_condition": "Causal producer repair or explicitly different diagnostic observation; unchanged standard rerun is not a repair."
     }
   ]
 }

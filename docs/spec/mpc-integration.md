@@ -4983,3 +4983,10 @@ R515–R517は別の保存source373/573を改善したが、R518で既存source5
 総source処理には最大2候補の費用がかかり、実走行の補充能力は新しいrunで確認する。
 Build120全26/package107全2610/source106、R522全6sourceとR523/R524元判定を確認。
 [2候補の根拠と未完の受入れ](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/native-seed-candidates-design.md)。
+
+
+2026-09-12 標準single-r6（8d9810e0）はD1Ready968の元の全入力・壁証明で未達。
+同じsource/履歴/直前送信・拒否時刻をR525で再現し、R526の許容入力端点にも壁接触がある。
+R527/R530では元の予測範囲を後の観測が外れる。R528の操舵列比較だけでは長い列の拒否を
+解消せず、本番は変更しない。次の力・指令適用観測で原因を分離する。
+[現在の根拠と未検証事項](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r6-current-audit.md)。

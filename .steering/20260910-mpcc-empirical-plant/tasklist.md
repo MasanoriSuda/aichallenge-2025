@@ -516,4 +516,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Build120 all26/package107 all2610, native31/source106; R522 six full source chains and R523/R524 original current guard/wall rejections pass.
 - [x] Source review and evidence/registry sealed; local commit then original single-r6 below.
 - [ ] All remaining M4–M6, repeated final-source races/gates and same submission/eval.
-- [ ] Local commit and standard single-r6 on the committed candidate; original timing/source availability and all remaining M4–M6.
+- [x] Local8d9810e0 and standard single-r6 executed; failed moving968, no integrated acceptance.
+
+## Single-r6 physical/model boundary
+
+- [x] Exact final784/968 and native upper-input wall witnessesR525/R526; no safety relaxation.
+- [x] Original tube/current observation and same-bag component auditR527/R529/R530; exclude post-Emergency comparisons.
+- [x] R528 bounded future steering comparison: rate3 certified offline, longer programmes fail. No production promotion.
+- [ ] Bounded force/application observation on committed current controller; separate nominal plant/contact/application and sensor epochs before any model or steering-programme fix.
+- [ ] Complete remaining M4–M6, same-final-HEAD races/gates and same submitted artifact/image/eval.

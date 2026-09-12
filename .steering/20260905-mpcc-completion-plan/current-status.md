@@ -1,25 +1,24 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。通常Cruiseの初期軌道を2候補にし、ビルド・テスト・保存入力の検証を完了。**
+**全体未完。8d9810e0の単車標準走行r6は、D1Ready決定968の壁証明拒否で停止。**
 
-単純な初期軌道の置換は既存source586を失うため棄却。事前に定めた
-「目標操舵・予測中の停止からの発進」と「元の初期軌道」の2候補を、同じ9状態問題で
-順に最大1回ずつ解く。制約と全物理証明を通った最初の1候補だけを既存Storeへ渡す。
-対象は他車ターゲットを持たないCruise。候補IDはworker実行前に別々に予約し、前回解・
-保存データ・非同期結果の所有を分離。最終指令の権限・現在証明・公開期限は維持。
+ビルド120全26、package107全2610は合格。r6では初期軌道候補の供給が続くが、
+source642/job961/index4の現在証明が12.629999725で壁を拒否。直前967/index3の実指令・
+履歴・世代と同一の再生で再現し、許容入力の端点2つも同じ壁セルに接触した。
+元の予測は後の観測速度・向きを包含していない。R530はEmergency直前までの同一bagで
+成分時刻を分けて確認した。モデル・接触・実際の指令適用・センサ時刻差は未分離。
 
-Build120全26、package107全2610（エラー/失敗/skip 0）、source106が合格。
-R521は旧3失敗→新31native合格。R522は実ビルドの6source全証明を確認し、
-元のFollow673/dynamicCruise3454は従来の1候補、586は2候補目で認証できる。
-R523は元のsingle-r5決定1122の実公開期限超過、R524は元のsingle-r4決定1022の
-壁拒否を、同じsource/domain/実履歴/直前送信・時刻で維持。時計問題は未解決。
-次はローカルcommit後の標準single-r6。実走行の計算量・source補充・期限を検証する。
-[設計と検証の根拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-seed-candidates-design.md)。
+R528は一定舵角の将来列と解由来の操舵速度列を比較。短い3区間は双方認証できるが、
+長い8/16区間の壁拒否は解消しない。診断だけで本番へ昇格しない。
+次は既存の検証済みforce/application観測を現在コミットの単車へ適用して原因を絞る。
+r6はStart/周回なし、全1166callbackは25ms未満だが過去の実公開期限問題は未解決。
+元DLL・ユーザーJSON復元済み。追加確認/pushなし。
+[現在の監査・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r6-current-audit.md)。
 
-r75 Start/update_v_max失効、実公開期限、全intent/Mission/sibling/Store、Stop/rest/restart、
-Recovery/Rejoin/Boost/async、同一最終HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、
-同一tar/image/evalは未完。過去の合格を現在の全体受入れとはしない。追加確認/pushなし。
+r75 Start/update_v_max失効、全intent/Mission/sibling/Store、Stop/rest/restart、Recovery/
+Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/
+image/evalは未完。局所合格を全体受入れとしない。
 
 以下はr75開始前までの根拠。
 

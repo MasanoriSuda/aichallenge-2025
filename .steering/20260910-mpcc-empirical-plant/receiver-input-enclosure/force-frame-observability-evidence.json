@@ -1,0 +1,405 @@
+{
+  "baseline_commit": "8d6578a4e395fccf6030e36693e2a19623badcc7",
+  "production_observation_commit": "fe976b39",
+  "production_algorithm_commit": "8d9810e0",
+  "build": 121,
+  "package_test": 108,
+  "production_change": false,
+  "integrated_acceptance": false,
+  "force_native_parity": [
+    {
+      "dataset": "r1_pre_failure",
+      "maximum_abs": 3.885780586188048e-16
+    },
+    {
+      "dataset": "r2_pre_failure",
+      "maximum_abs": 4.440892098500626e-16
+    },
+    {
+      "dataset": "old_single_training",
+      "maximum_abs": 3.552713678800501e-15
+    },
+    {
+      "dataset": "old_single_holdout",
+      "maximum_abs": 7.105427357601002e-15
+    },
+    {
+      "dataset": "old_dev2_d1",
+      "maximum_abs": 4.440892098500626e-16
+    },
+    {
+      "dataset": "old_dev2_d2",
+      "maximum_abs": 4.440892098500626e-16
+    }
+  ],
+  "r578_baseline_exact": 14310,
+  "r579_baseline_exact": 42876,
+  "conditional_model_frozen": {
+    "authority": false,
+    "scope": "Exactly one prespecified seven-feature mirror-tied axle contact law; all-grounded lateral slip-demand features are functions of own predicted state/tire and fixed physical coefficients. Old4200training rows only, no future contact/body or fit of force coefficients.",
+    "feature_names": [
+      "1",
+      "u2/g",
+      "abs(u*r)/g",
+      "side*u*r/g",
+      "wire/g",
+      "abs(all_ground_lateral_demand)/g",
+      "side*all_ground_lateral_demand/g"
+    ],
+    "physics_frame_sec": 0.005,
+    "gravity": 9.8100004196167,
+    "coverage": [
+      {
+        "dataset": "old_high",
+        "path": "output/20260909-force-step-analysis-single-r1/physics.npz",
+        "window": [
+          16,
+          35
+        ],
+        "rows": 3800,
+        "u_range": [
+          5.231776924752503,
+          8.341886729095469
+        ],
+        "wire_range": [
+          1.329594373703003,
+          1.329598069190979
+        ]
+      },
+      {
+        "dataset": "r1_low",
+        "path": "output/20260912-nine-state-force-analysis-r531/physics.npz",
+        "window": [
+          8,
+          10
+        ],
+        "rows": 400,
+        "u_range": [
+          0.18291752856894403,
+          1.1528222151672356
+        ],
+        "wire_range": [
+          -3.0,
+          1.3295992612838745
+        ]
+      }
+    ],
+    "models": [
+      {
+        "axle": 0,
+        "coefficients": [
+          2.1522146561692366,
+          -0.14558037385645015,
+          0.16904874725967275,
+          -0.3743508634808997,
+          -7.8944405798970125,
+          -1.050039706351046,
+          2.08108363187997
+        ],
+        "rank": 7,
+        "scaled_condition": 9.099380084672326,
+        "feature_scale": [
+          1.0,
+          5.331990909764135,
+          0.5938967967429708,
+          0.5938967967429708,
+          0.13860244578375605,
+          0.19543923355497458,
+          0.19543923355497458
+        ],
+        "success": true,
+        "iterations": 32,
+        "message": "CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH",
+        "mean_nll": 0.6576135671760488,
+        "gradient_max": 3.037757534903239e-08,
+        "original_five_feature_nll": 0.6678328066801968,
+        "samples": 8400
+      },
+      {
+        "axle": 1,
+        "coefficients": [
+          3.395668655879313,
+          -0.2927333359096836,
+          1.5643701978970157,
+          -2.793385070620397,
+          3.0781446005199484,
+          -3.5246402209714613,
+          2.1661057801893295
+        ],
+        "rank": 7,
+        "scaled_condition": 11.122392325229573,
+        "feature_scale": [
+          1.0,
+          5.331990909764135,
+          0.5938967967429708,
+          0.5938967967429708,
+          0.13860244578375605,
+          0.31830512987016113,
+          0.31830512987016113
+        ],
+        "success": true,
+        "iterations": 27,
+        "message": "CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH",
+        "mean_nll": 0.33582134056854823,
+        "gradient_max": 1.1342522651193652e-08,
+        "original_five_feature_nll": 0.3403176875655411,
+        "samples": 8400
+      }
+    ],
+    "sources": {
+      ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/conditional-contact-force-design.md": "0d83569fd58db5af308c5f79f61bd121643f4c51fdafb015c27409c58c8438e7",
+      "output/20260908-mpcc-stop-reference-single-r3/unity-collider-geometry.json": "02ab898a6f8e7241017fe65ff8ec0f465c7483ae84bb84f288c829712d896b32",
+      "output/20260913-nine-state-contact-mixed-r549/coefficients.txt": "ea63d923ab3fdbb71c31eb1b81408e5380f41621e35cebc79c63e1d52ee1f158",
+      "output/20260913-nine-state-contact-mixed-r549/model.yaml": "c536f16a28ba9b9a0a8e3e4657a837440b9536009a8f87570e77a20a1c920c9f",
+      "output/20260913-nine-state-cached-frame-rollout-r578/inputs.txt": "1a7734bdc49aa5127abf41ad14b9b4c58aa13907c9e1f061de116c123d8f2dfb",
+      "output/20260913-nine-state-cached-frame-rollout-r578/truth.json": "d33db174abcfc0759a29cc7f3a09e2c16a1621fe6a501e56e5b9c5ff824f1ea3",
+      "output/20260909-force-step-analysis-single-r1/physics.npz": "7e2083c9df68f57cf81a40a7100f128be25e2c621b3c18cf1b2ff99b95aaef3b",
+      "output/20260912-nine-state-force-analysis-r531/physics.npz": "889f20144a2dc48e2430defb1d9c78e8eb4e8d9406631c4d8dbc07667bdb874f"
+    }
+  },
+  "public_3d_scores": {
+    "imu_attitude": {
+      "count": 182,
+      "mae": [
+        3.5577504294355847e-10,
+        7.345900916679547e-10,
+        3.0840045136142065e-08
+      ],
+      "maximum_abs": [
+        1.5745756864817953e-09,
+        2.983150741885298e-09,
+        9.192240476964024e-08
+      ]
+    },
+    "imu_body_gyro": {
+      "count": 182,
+      "mae": [
+        0.005502441671420911,
+        0.0017442559409221795,
+        0.00020210356362538635
+      ],
+      "maximum_abs": [
+        0.17936100136670274,
+        0.027343260160378958,
+        0.006157520952399369
+      ]
+    },
+    "odometry_attitude": {
+      "count": 454,
+      "mae": [
+        0.0020920308815018463,
+        0.016273125029126034,
+        0.0014739639625615728
+      ],
+      "maximum_abs": [
+        0.005364534026812849,
+        0.028693084848370874,
+        0.006408714149613043
+      ]
+    },
+    "planar_point_velocity": {
+      "count": 566,
+      "mae": [
+        0.0020495905937299485,
+        0.0018320867443738509
+      ],
+      "maximum_abs": [
+        0.07945698645128377,
+        0.018934955516631328
+      ]
+    },
+    "public_roll_pitch_point_velocity": {
+      "count": 566,
+      "mae": [
+        0.0003562931319506186,
+        0.001055811178563464
+      ],
+      "maximum_abs": [
+        0.006097514576839831,
+        0.03712711868635453
+      ]
+    },
+    "height_secant_error": {
+      "count": 453,
+      "mae": 0.0073332240776742995,
+      "maximum_abs": 0.3722233135844275
+    },
+    "height_secants": {
+      "public": {
+        "count": 453,
+        "mae": 0.002608310616068703,
+        "maximum_abs": 0.1383772019375175
+      },
+      "physical_base": {
+        "count": 453,
+        "mae": 0.005477076900245357,
+        "maximum_abs": 0.45455880387253855
+      }
+    },
+    "odometry_vertical_twist_values": [
+      0.0
+    ]
+  },
+  "imu_measurement_scores": {
+    "public_minus_finite_pose": {
+      "count": 181,
+      "mae": [
+        9.463484860434061e-08,
+        1.8527451837587875e-07,
+        8.262357410147507e-06
+      ],
+      "maximum_abs": [
+        1.019041137249198e-06,
+        1.862588111978813e-06,
+        4.303440733319032e-05
+      ]
+    },
+    "public_minus_instant": {
+      "count": 181,
+      "mae": [
+        0.00553283978906378,
+        0.0017538891792675017,
+        0.00020303015496947544
+      ],
+      "maximum_abs": [
+        0.17936100136670274,
+        0.027343260160378958,
+        0.006157520952399369
+      ]
+    },
+    "finite_pose_minus_instant": {
+      "count": 181,
+      "mae": [
+        0.00553282185848045,
+        0.0017538568358380338,
+        0.00019988623654145442
+      ],
+      "maximum_abs": [
+        0.17936115069357256,
+        0.027343454872475668,
+        0.00615491180352845
+      ]
+    }
+  },
+  "protected_restored": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "production_files_unchanged": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_received_body_observation.hpp": "15f552225e05c97008c59dbd3d91837fa8135927d23fa0e67c25302c14906414",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp": "3182d790ba0f6566cd7fd68a38bef962c82e3cfe2e792673858bf97a8366cba5",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp": "158a118f5d8d829d24f104cf41b4392a36680615c5659beeb9c93057c435219f",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "2f7957317b9a551041d5659b3567cf9ca579e62903a09d641b3a4071f1a8be2f",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp": "5a50627b272413ca4275a1bde9fcc684bde1915a5742e86e7d8b1330ad985938",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp": "9f00a7105243e7008cd954985fa8eef2af599fd11f46a6c2430afb444c8a5288"
+  },
+  "frozen_before_run": {
+    ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received_pose_bracket.py": "303b0982db0a5f28e19e8e212103b0db9604bcf6236565f55d71f644ffe7ae67",
+    ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-bracket-protocol.md": "ecc602f302713863331662dd543d5139d009fb02018badd712770653c28c89fd"
+  },
+  "experiments": [
+    {
+      "id": 576,
+      "result": "accepted",
+      "changed_dimension": "Nested current force/point-velocity/ground-frame/inertia attribution",
+      "reason": "11140original force rows retained; native derivative parity<=7.106e-15. Full point velocity and actual ground axes explain lateral forces; reconstructed ground forces match captured wheel forces. Private current attribution only, not a forecast or producer repair."
+    },
+    {
+      "id": 577,
+      "result": "accepted",
+      "changed_dimension": "Cached preceding force-frame direction hypothesis",
+      "reason": "Before tire minus preceding yaw rotation explains current ground directions much better than After tire; first-order r*dt is explicit. Current-contact derivative errors improve in several components, but private geometry/full point velocity remain and no model is promoted."
+    },
+    {
+      "id": 578,
+      "result": "rejected",
+      "changed_dimension": "Fixed contact laws crossed with cached-frame RK2 and held-force stepping",
+      "reason": "542anchors retained,541cached candidates supported; firstR554anchor unavailable without previous tire.14310original predictions exactly reproduced. High-speed lateral error improves, but launch speed and oldD1/yaw remain; isolated changes not adopted."
+    },
+    {
+      "id": 579,
+      "result": "rejected",
+      "changed_dimension": "Single prespecified conditional wheel-force contact law",
+      "reason": "4200unchanged old/r1training rows, seven mirror-tied features/fullrank and no coefficient scan.42876R578predictions exactly reproduced. New law does not close oldD1 and worsens oldholdout; cached RK2oldholdout1spos0.183831/yaw0.044669/u0.160192. No R3acceptance run is justified by this rejected fit."
+    },
+    {
+      "id": 580,
+      "result": "accepted",
+      "changed_dimension": "Public force-r3 full IMU/odometry message extraction",
+      "reason": "13048records; /tf_static absent, runtime TF broadcast not claimed. Same retained bag; source and recorder receipt separate. Full attitude/rates are content observations, not exact per-decision full-message capture."
+    },
+    {
+      "id": 581,
+      "result": "accepted",
+      "changed_dimension": "Public attitude/rate/heave content versus same-epoch physics",
+      "reason": "182IMU/454odometry matches, no unmatched in declared window. IMU attitude agrees to9.193e-8radrotation-vector component; odometry suppresses roll/pitch and linear.z=0. Public gyro improves mean point-velocity attribution with private lever height, but worsens worst lateral error; no observer promotion."
+    },
+    {
+      "id": 582,
+      "result": "accepted",
+      "changed_dimension": "Distinguish sampled pose rotation rate from instantaneous body omega",
+      "reason": "181same samples plus one explicit no-prior-rotation case. IMU matches finite5msquaternion rotation to[1.020e-6,1.863e-6,4.304e-5]radps maximum, while instantaneous Rigidbody mismatch reaches[0.179361,0.027343,0.006158]. Publisher/extrinsic defect not established; a measurement model is required before raw gyro is substituted into instantaneous wheel dynamics."
+    }
+  ],
+  "sha256": {
+    "output/20260913-nine-state-force-structure-r576/generator.py": "13778bf3b3acf1d5017a19933a9eb222a22b03a02e5d8558f83f5240ad1d293e",
+    "output/20260913-nine-state-force-structure-r576/records.json": "525de8c3b01b79c5a60b2448b9e37a65500af75dda4438b3b2bb17d9775facc1",
+    "output/20260913-nine-state-force-structure-r576/report.json": "b0fc28d6efb8cf83d8863b933117af4b0b9af93bcba34096e61e5a5a12711ab6",
+    "output/20260913-nine-state-cached-ground-axes-r577/generator.py": "529787df5ac223a517c35d5cbf6991cf833cda4940a10abef8e30d8a915a78db",
+    "output/20260913-nine-state-cached-ground-axes-r577/records.json": "013d0aa0b16cfb5c8dd8bd34cbbad2048bdbac67b102fa3b8f53672a142d97b9",
+    "output/20260913-nine-state-cached-ground-axes-r577/report.json": "a7b75a7a8be12c1b89169c56b7a423dee67a77f0511f28479cb1e1318968178c",
+    "output/20260913-nine-state-cached-frame-rollout-r578/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-cached-frame-rollout-r578/coefficients.txt": "ea63d923ab3fdbb71c31eb1b81408e5380f41621e35cebc79c63e1d52ee1f158",
+    "output/20260913-nine-state-cached-frame-rollout-r578/command.json": "599784f7da0e9af1418745586f7a7ce0ee668ced85128b81005e2abb85e22bda",
+    "output/20260913-nine-state-cached-frame-rollout-r578/compile.json": "560506d0af2ff540137e46d01755446bf051612286a3737116a4474a70babe8f",
+    "output/20260913-nine-state-cached-frame-rollout-r578/driver.cpp": "c3f0a32fe73677638e7cd2c739e5c513bb70db0726e5daa999654fbefe558b10",
+    "output/20260913-nine-state-cached-frame-rollout-r578/errors.json": "484626b47c381e8e36cadbe5938f0369b7cffa7a1dbd3d9addaafa67cb2d9bb8",
+    "output/20260913-nine-state-cached-frame-rollout-r578/frozen-mixed-model.json": "92b952a19d563e40aaad5c8b8001ca1f1e915be268ddb4a312b142e19bc3810f",
+    "output/20260913-nine-state-cached-frame-rollout-r578/input-generator.py": "9eb6c4af2dff7b6b1d471ddaa3ff618f450b7fdaeb604e3c02b399f6c09b0aaa",
+    "output/20260913-nine-state-cached-frame-rollout-r578/inputs.txt": "1a7734bdc49aa5127abf41ad14b9b4c58aa13907c9e1f061de116c123d8f2dfb",
+    "output/20260913-nine-state-cached-frame-rollout-r578/model.yaml": "c536f16a28ba9b9a0a8e3e4657a837440b9536009a8f87570e77a20a1c920c9f",
+    "output/20260913-nine-state-cached-frame-rollout-r578/native-output.txt": "2da28b1361d78b10b2a5820a15a8e3a6551b123414e7fac84f42cdc063be63a9",
+    "output/20260913-nine-state-cached-frame-rollout-r578/report.json": "d058a34b8e4f7a0adbd2b5b02524e3b769ab2cf396bc631964796b334547c804",
+    "output/20260913-nine-state-cached-frame-rollout-r578/rollout-native": "0c7e1ce522c076b27584abf1ed28168930b1997049b3a117744cac54459bbced",
+    "output/20260913-nine-state-cached-frame-rollout-r578/run-generator.py": "7134567077ce31d99ccb4e8ca4823825f64f93f6cf9afd2193debd72ef059962",
+    "output/20260913-nine-state-cached-frame-rollout-r578/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-cached-frame-rollout-r578/score-generator.py": "700a876cb7302ee82db8750fe58fe087151bfb9ddbf1051efe1df124b64e8c0d",
+    "output/20260913-nine-state-cached-frame-rollout-r578/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-cached-frame-rollout-r578/truth.json": "d33db174abcfc0759a29cc7f3a09e2c16a1621fe6a501e56e5b9c5ff824f1ea3",
+    "output/20260913-nine-state-conditional-contact-r579/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-conditional-contact-r579/coefficients.txt": "b9648f2f08714455a95567f16d8fb30ed9f2e88868e9cb678c90662c5f9cda92",
+    "output/20260913-nine-state-conditional-contact-r579/command.json": "f0e300c7671305f03fd6373da0d75b8d7f53849bb56728aab577c5a6d2e1920a",
+    "output/20260913-nine-state-conditional-contact-r579/compile.json": "9409ecbf51a1898977acd2150dc26358d4995d8396e7de337c6b92984f998776",
+    "output/20260913-nine-state-conditional-contact-r579/conditional-contact-force-design.md": "0d83569fd58db5af308c5f79f61bd121643f4c51fdafb015c27409c58c8438e7",
+    "output/20260913-nine-state-conditional-contact-r579/driver.cpp": "cfb2f888aa9679686db9b2bf650a1aa215c32f2b7548a47e0509f0708f0371b8",
+    "output/20260913-nine-state-conditional-contact-r579/errors.json": "d362d990f583f8a406cef96b4092ee07753c7d8dc9e575b16b3a619296fecf93",
+    "output/20260913-nine-state-conditional-contact-r579/fit-generator.py": "3ee7600a6859955bc7593c5930e8e3f40b34a8f79f2c80f7cd454ba9e162dcf4",
+    "output/20260913-nine-state-conditional-contact-r579/frozen-model.json": "69e2900f42d27205892ae165a8c61a3324b41b59b84cc478ca6950210a35239c",
+    "output/20260913-nine-state-conditional-contact-r579/inputs.txt": "1a7734bdc49aa5127abf41ad14b9b4c58aa13907c9e1f061de116c123d8f2dfb",
+    "output/20260913-nine-state-conditional-contact-r579/model.yaml": "c536f16a28ba9b9a0a8e3e4657a837440b9536009a8f87570e77a20a1c920c9f",
+    "output/20260913-nine-state-conditional-contact-r579/native-output.txt": "96aff8e8d4a891864691b1ca838ab959a3635dfc8ad770f4e8aecf6e2d09fa99",
+    "output/20260913-nine-state-conditional-contact-r579/report.json": "09e336b78b31d7017317a5908190937ff3140eeeb1594f19d5b71ad4cdde8704",
+    "output/20260913-nine-state-conditional-contact-r579/rollout-native": "2cf8e3b8e6d3947f821919a551f9f4561ae8c7a3ba3223b05f860098cef236df",
+    "output/20260913-nine-state-conditional-contact-r579/run-generator.py": "19a7065a81d333c36d7bde14fe23692586945c5af57af0e8344acfd86d964aba",
+    "output/20260913-nine-state-conditional-contact-r579/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-conditional-contact-r579/score-generator.py": "fc9f8313d38cbb5db94c6f9f5277bb36076e471c616ab6110edc0b0dce83c42b",
+    "output/20260913-nine-state-conditional-contact-r579/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-conditional-contact-r579/truth.json": "d33db174abcfc0759a29cc7f3a09e2c16a1621fe6a501e56e5b9c5ff824f1ea3",
+    "output/20260913-nine-state-public-3d-r580/generator.py": "94592df894d26e0c77fb044b75b3c9cb56d5485bd298233e44da15e0f7fc6e71",
+    "output/20260913-nine-state-public-3d-r580/manifest.json": "a56623ac50307f1099800309abdabd6383bf513d7f6b577e230f6a31c1710cf0",
+    "output/20260913-nine-state-public-3d-r580/records.json": "09e927fe634cce0fd89e7d2f3231d2947b7d8c9cb98727848f1038e87f919038",
+    "output/20260913-nine-state-public-3d-r580/transforms.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "output/20260913-nine-state-public-3d-availability-r581/generator.py": "fc479df0a865a98720c2e7ac0dfcf30a974ad15b8fd02658c405e589fbbae1cf",
+    "output/20260913-nine-state-public-3d-availability-r581/report.json": "7635aae47cb9feff1f7e9cf225eeb8a839651e07b203013db51e2a2cc17bd791",
+    "output/20260913-nine-state-imu-measurement-model-r582/generator.py": "630032708b967520444455d49640ffed683a78a3188896776587c678c5286fd9",
+    "output/20260913-nine-state-imu-measurement-model-r582/report.json": "57ea23cc8b8f94a040c44eea94dc196fb1e72e85f2c250b7c98e1de1fb239f7b",
+    "output/20260913-nine-state-force-observability-audit/seal.py": "bb0a60e14e8fba565f84b454e167917c773b79cb9ee3ad2358915758fa19abd0"
+  },
+  "limits": [
+    "No cached-frame/contact candidate is promoted; all inspected regression and unavailable cases remain.",
+    "IMU is a finite pose-rotation measurement; wheel momentum dynamics use instantaneous Rigidbody omega. No specific PhysX internal cause is proved by their difference.",
+    "Per-decision full IMU receipt/payload identity, body/measurement/latent-contact modelling and coherent full proof remain open.",
+    "No new live run, production parameter change, safety relaxation or M4–M6 acceptance."
+  ]
+}

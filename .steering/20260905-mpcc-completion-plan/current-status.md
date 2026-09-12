@@ -13,7 +13,11 @@ force-r3/R567–R569で位置時刻の物理状態と比較した。25判断の�
 横速度・操舵の悪化から棄却。R570–R575で共通時刻からの連成再構成も比較し、
 横速度・ヨーレート・操舵の悪化から未採用。操舵の比較は物理更新前へ訂正した。
 実際の適用入力なら操舵機構は最大約2.4e-8radで一致し、入力時刻と車体モデルの誤差を
-分離できた。次は3D姿勢・接地による力の寄与を切り分け、本番修正の根拠を固める。
+分離できた。R576–R582で接地方向・3D成分を切り分け、542区間で候補を比較したが、
+単独の時刻修正と追加接地モデルは過去区間の反例から未採用。公開IMU姿勢は物理姿勢と
+一致する一方、角速度は5msの姿勢差分であり、力学モデルが使う瞬時角速度とは差がある。
+次はこの測定定義を含めた観測・車体・接地の契約を整合させ、固定記録で修正を検証する。
+[力の向き・公開観測・残る測定モデル](../20260910-mpcc-empirical-plant/receiver-input-enclosure/force-frame-observability-audit.md)。
 [再構成の棄却・時刻訂正・入力切り分け](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-event-phase-audit.md)。
 [物理比較と次の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-truth-audit.md)。
 [今回の結果と次の条件](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-single-r7-audit.md)。

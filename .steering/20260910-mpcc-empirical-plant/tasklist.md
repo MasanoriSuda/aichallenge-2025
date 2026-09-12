@@ -568,4 +568,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Frozen force-r3/R567–R569:25unique captures,16physical matches/9explicit unmatched; primary bracket means improve but unsupported/rate cases remain. Supplemental blanket extrapolation rejected; no promotion.
 
 - [x] R570–R575 bounded coupled event comparison complete, rejected for lateral/r/tire regression; phase scoring corrected without changing legacy reader or original estimates. Private actual input isolates timing versus accurate tire mechanics.
-- [ ] Isolate current 3D/contact force contribution and select a causal producer repair. Typed raw/derived semantics, coherent full proof and physical/reset/rest negatives before production; full M4–M6 remain.
+- [x] Isolate current3D/contact force and public measurement definitions inR576–R582; no causal full producer replacement validated yet.
+- [ ] Implement a supported measurement/body/contact producer with raw/derived semantics, coherent full proof and physical/reset/rest negatives; full M4–M6 remain.
+
+- [x] R576–R578: current 3D force/cached ground direction attribution; 11140native derivative matches and14310unchanged baseline predictions. Isolated phase/step correction not promoted.
+- [x] R579 conditional contact-force law compared on unchanged4200training rows; rejected on oldD1/holdout, no further feature scan or R3acceptance run.
+- [x] R580–R582 public3Dcontent/measurement audit: attitude observable, vertical odometry not direct heave; IMUfinite pose rate differs from instantaneous Rigidbody omega.
+- [ ] Explicit causal full-message measurement model and body/contact state semantics; no raw gyro substitution for momentum, no private future normal input.

@@ -5053,3 +5053,11 @@ reader既定値・記録・予測・安全境界は変えない。実適用入�
 約2.4e-8radで一致するが、公開履歴からの適用時刻と車体・接地モデルの誤差は未解決。
 私有の物理値は原因切り分け専用で、通常権限へ使わない。全M4–M6未完。
 [訂正範囲と原因切り分け](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-event-phase-audit.md)。
+
+
+2026-09-13 R576–R582: 接地方向は前の物理更新の姿勢・操舵を反映する。単独の時刻修正や
+追加接地モデルは542保存区間の反例から未採用。公開IMU姿勢は物理姿勢と一致するが、
+角速度は5msの姿勢差分を20Hzで配信する値で、瞬時Rigidbody角速度と同一ではない。
+フィルタ済み自己位置のroll/pitch・vertical twistも直接の車体状態へ転用しない。
+観測・力学・派生状態の定義と受信証拠を整合させてから本番へ反映する。全M4–M6未完。
+[測定定義と比較・限界](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/force-frame-observability-audit.md)。

@@ -1393,6 +1393,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-event-phase-evidence.json",
       "replay_ready": true,
       "reason": "Preserved R570–R575 public-event reconstructions, explicit phase errata and private applied-input causal comparison. No production promotion or full acceptance."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-force-observability-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/force-frame-observability-evidence.json",
+      "replay_ready": true,
+      "reason": "Preserved R576–R582force and public measurement-definition comparisons, fixed baselines/candidates and explicit unavailable samples. No integrated acceptance."
     }
   ],
   "experiments": [
@@ -17735,6 +17741,104 @@
       "production_impact": "Diagnostic helper phase selector only; controller/model/normal authority unchanged.",
       "deleted_code": [],
       "revisit_condition": "Corrected source/reference semantics or a structurally different causal input/body model, original hard negatives preserved; no unchanged observer rerun or private input promotion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-observability-audit-r576",
+      "baseline_commit": "8d6578a4e395fccf6030e36693e2a19623badcc7",
+      "snapshot_ids": [
+        "20260913-nine-state-force-observability-audit"
+      ],
+      "hypothesis": "Identify causal current force frame, contact-law limitations and public measurement state semantics",
+      "changed_dimension": "Nested current force/point-velocity/ground-frame/inertia attribution",
+      "result": "accepted",
+      "reason": "11140original force rows retained; native derivative parity<=7.106e-15. Full point velocity and actual ground axes explain lateral forces; reconstructed ground forces match captured wheel forces. Private current attribution only, not a forecast or producer repair.",
+      "production_impact": "None; only diagnostic evidence/design and specification clarification.",
+      "deleted_code": [],
+      "revisit_condition": "Structurally different supported measurement/body/contact model or corrected input semantics, with original hard negatives and no private future state; no unchanged rejected contact/phase fit or blind live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-observability-audit-r577",
+      "baseline_commit": "8d6578a4e395fccf6030e36693e2a19623badcc7",
+      "snapshot_ids": [
+        "20260913-nine-state-force-observability-audit"
+      ],
+      "hypothesis": "Identify causal current force frame, contact-law limitations and public measurement state semantics",
+      "changed_dimension": "Cached preceding force-frame direction hypothesis",
+      "result": "accepted",
+      "reason": "Before tire minus preceding yaw rotation explains current ground directions much better than After tire; first-order r*dt is explicit. Current-contact derivative errors improve in several components, but private geometry/full point velocity remain and no model is promoted.",
+      "production_impact": "None; only diagnostic evidence/design and specification clarification.",
+      "deleted_code": [],
+      "revisit_condition": "Structurally different supported measurement/body/contact model or corrected input semantics, with original hard negatives and no private future state; no unchanged rejected contact/phase fit or blind live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-observability-audit-r578",
+      "baseline_commit": "8d6578a4e395fccf6030e36693e2a19623badcc7",
+      "snapshot_ids": [
+        "20260913-nine-state-force-observability-audit"
+      ],
+      "hypothesis": "Identify causal current force frame, contact-law limitations and public measurement state semantics",
+      "changed_dimension": "Fixed contact laws crossed with cached-frame RK2 and held-force stepping",
+      "result": "rejected",
+      "reason": "542anchors retained,541cached candidates supported; firstR554anchor unavailable without previous tire.14310original predictions exactly reproduced. High-speed lateral error improves, but launch speed and oldD1/yaw remain; isolated changes not adopted.",
+      "production_impact": "None; only diagnostic evidence/design and specification clarification.",
+      "deleted_code": [],
+      "revisit_condition": "Structurally different supported measurement/body/contact model or corrected input semantics, with original hard negatives and no private future state; no unchanged rejected contact/phase fit or blind live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-observability-audit-r579",
+      "baseline_commit": "8d6578a4e395fccf6030e36693e2a19623badcc7",
+      "snapshot_ids": [
+        "20260913-nine-state-force-observability-audit"
+      ],
+      "hypothesis": "Identify causal current force frame, contact-law limitations and public measurement state semantics",
+      "changed_dimension": "Single prespecified conditional wheel-force contact law",
+      "result": "rejected",
+      "reason": "4200unchanged old/r1training rows, seven mirror-tied features/fullrank and no coefficient scan.42876R578predictions exactly reproduced. New law does not close oldD1 and worsens oldholdout; cached RK2oldholdout1spos0.183831/yaw0.044669/u0.160192. No R3acceptance run is justified by this rejected fit.",
+      "production_impact": "None; only diagnostic evidence/design and specification clarification.",
+      "deleted_code": [],
+      "revisit_condition": "Structurally different supported measurement/body/contact model or corrected input semantics, with original hard negatives and no private future state; no unchanged rejected contact/phase fit or blind live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-observability-audit-r580",
+      "baseline_commit": "8d6578a4e395fccf6030e36693e2a19623badcc7",
+      "snapshot_ids": [
+        "20260913-nine-state-force-observability-audit"
+      ],
+      "hypothesis": "Identify causal current force frame, contact-law limitations and public measurement state semantics",
+      "changed_dimension": "Public force-r3 full IMU/odometry message extraction",
+      "result": "accepted",
+      "reason": "13048records; /tf_static absent, runtime TF broadcast not claimed. Same retained bag; source and recorder receipt separate. Full attitude/rates are content observations, not exact per-decision full-message capture.",
+      "production_impact": "None; only diagnostic evidence/design and specification clarification.",
+      "deleted_code": [],
+      "revisit_condition": "Structurally different supported measurement/body/contact model or corrected input semantics, with original hard negatives and no private future state; no unchanged rejected contact/phase fit or blind live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-observability-audit-r581",
+      "baseline_commit": "8d6578a4e395fccf6030e36693e2a19623badcc7",
+      "snapshot_ids": [
+        "20260913-nine-state-force-observability-audit"
+      ],
+      "hypothesis": "Identify causal current force frame, contact-law limitations and public measurement state semantics",
+      "changed_dimension": "Public attitude/rate/heave content versus same-epoch physics",
+      "result": "accepted",
+      "reason": "182IMU/454odometry matches, no unmatched in declared window. IMU attitude agrees to9.193e-8radrotation-vector component; odometry suppresses roll/pitch and linear.z=0. Public gyro improves mean point-velocity attribution with private lever height, but worsens worst lateral error; no observer promotion.",
+      "production_impact": "None; only diagnostic evidence/design and specification clarification.",
+      "deleted_code": [],
+      "revisit_condition": "Structurally different supported measurement/body/contact model or corrected input semantics, with original hard negatives and no private future state; no unchanged rejected contact/phase fit or blind live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-observability-audit-r582",
+      "baseline_commit": "8d6578a4e395fccf6030e36693e2a19623badcc7",
+      "snapshot_ids": [
+        "20260913-nine-state-force-observability-audit"
+      ],
+      "hypothesis": "Identify causal current force frame, contact-law limitations and public measurement state semantics",
+      "changed_dimension": "Distinguish sampled pose rotation rate from instantaneous body omega",
+      "result": "accepted",
+      "reason": "181same samples plus one explicit no-prior-rotation case. IMU matches finite5msquaternion rotation to[1.020e-6,1.863e-6,4.304e-5]radps maximum, while instantaneous Rigidbody mismatch reaches[0.179361,0.027343,0.006158]. Publisher/extrinsic defect not established; a measurement model is required before raw gyro is substituted into instantaneous wheel dynamics.",
+      "production_impact": "None; only diagnostic evidence/design and specification clarification.",
+      "deleted_code": [],
+      "revisit_condition": "Structurally different supported measurement/body/contact model or corrected input semantics, with original hard negatives and no private future state; no unchanged rejected contact/phase fit or blind live run."
     }
   ]
 }

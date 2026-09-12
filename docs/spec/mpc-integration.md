@@ -5038,3 +5038,10 @@ R534/R539の位置評価には診断側の車体原点/base_link混同があり�
 通常権限喪失。4239callback最大19.78ms、480送信の窓違反なしだが再発進・Start・周回は
 未達。補間は別の診断値として保存し、force-r3で物理時刻との精度を検証する。全M4–M6未完。
 [受信履歴の根拠と次の検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-single-r7-audit.md)。
+
+
+2026-09-13force-r3/R567–R569:固定した受信値補間を25判断で検証し、16件を同時刻の
+物理状態へ照合、9件は物理記録なしと明記。速度等の平均誤差は減ったが、未支持の状態と
+旋回の反例が残る。単純な過去2点外挿は横速度・操舵の悪化で棄却。本番observer/modelと
+安全・送信条件は維持し、共通の受信観測時刻からの連成モデル比較へ進む。全M4–M6未完。
+[固定検証と残る不変条件](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-truth-audit.md)。

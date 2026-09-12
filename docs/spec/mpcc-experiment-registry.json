@@ -1381,6 +1381,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-single-r7-evidence.json",
       "replay_ready": true,
       "reason": "Exact received-queue/source association and same-bag timing; source snapshots present, final stationary1012snapshot unavailable. No integrated race acceptance."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-force-r3-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-truth-evidence.json",
+      "replay_ready": true,
+      "reason": "Simultaneous immutable received histories and physical same-epoch truth with fixed primary comparison;9explicit unmatched captures, no full acceptance."
     }
   ],
   "experiments": [
@@ -17583,6 +17589,62 @@
       "production_impact": "None beyond fe976b39 diagnostic metadata.",
       "deleted_code": [],
       "revisit_condition": "Validated material production change or distinct missing observation; next force-r3 adds physical truth, not a blind repeat."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r3-audit-r567",
+      "baseline_commit": "b6c6d04fae69be002c21fc68e6b0b61ff4fc99f8",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r3-audit"
+      ],
+      "hypothesis": "Recover physically coherent pose-epoch body state from causal received samples",
+      "changed_dimension": "Simultaneous force and exact received history observation",
+      "result": "accepted",
+      "reason": "19604force records/3849received packets/972applications, one vehicle. Original7call probe and build121 unchanged, all raw data retained. Derivative moving selection is separate from reconstruction primary cohort; private truth not a runtime input.",
+      "production_impact": "None after fe976b39 observation metadata; frozen bracket and extrapolation remain diagnostics only.",
+      "deleted_code": [],
+      "revisit_condition": "New coupled physical/event reconstruction with exact receipt/source/input support and hard negative evidence; do not repeat unchanged linear extrapolation or claim inspected data is untouched."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r3-audit-r568",
+      "baseline_commit": "b6c6d04fae69be002c21fc68e6b0b61ff4fc99f8",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r3-audit"
+      ],
+      "hypothesis": "Recover physically coherent pose-epoch body state from causal received samples",
+      "changed_dimension": "Prespecified frozen received-pose bracket against physical truth",
+      "result": "inconclusive",
+      "reason": "25unique captures/35valid serialized occurrences;16same-epoch physical matches,9pre-Ready unmatched explicitly retained. All16: uMAE0.011776→0.005892mps,vy0.001346→0.000896,r0.003513→0.001890radps,tire0.002881→0.001667rad.7velocity interpolations improve but unsupported maxuerror0.038209remains; IMU5improve/3worsen. No new fit, no universal state enclosure or production adoption.",
+      "production_impact": "None after fe976b39 observation metadata; frozen bracket and extrapolation remain diagnostics only.",
+      "deleted_code": [],
+      "revisit_condition": "New coupled physical/event reconstruction with exact receipt/source/input support and hard negative evidence; do not repeat unchanged linear extrapolation or claim inspected data is untouched."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r3-audit-r569",
+      "baseline_commit": "b6c6d04fae69be002c21fc68e6b0b61ff4fc99f8",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r3-audit"
+      ],
+      "hypothesis": "Recover physically coherent pose-epoch body state from causal received samples",
+      "changed_dimension": "Supplemental two-past-sample linear projection for missing upper support",
+      "result": "rejected",
+      "reason": "Inspected same16matches, primary frozen result untouched. Past-only improvesuMAE but worsensvy0.001346→0.002084mps andr0.003513→0.003630radps; combined bracket/projection lowersuMAE0.001935but vymaximum0.011060versus0.005438original, tiremax0.007915versus0.007314. No blanket extrapolation or score-driven per-channel promotion.",
+      "production_impact": "None after fe976b39 observation metadata; frozen bracket and extrapolation remain diagnostics only.",
+      "deleted_code": [],
+      "revisit_condition": "New coupled physical/event reconstruction with exact receipt/source/input support and hard negative evidence; do not repeat unchanged linear extrapolation or claim inspected data is untouched."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r3-audit-dynamic",
+      "baseline_commit": "b6c6d04fae69be002c21fc68e6b0b61ff4fc99f8",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r3-audit"
+      ],
+      "hypothesis": "Joint receiver/physical observation through Ready motion and stop",
+      "changed_dimension": "Existing7call probe with fe976b39 received queues,120s cap",
+      "result": "inconclusive",
+      "reason": "No Start/laps/restart, no moving final override, stationary normal loss1149 after1148; exact terminal snapshot unavailable after earlier stationary787slot. Physical data obtained, no race acceptance.",
+      "production_impact": "Diagnostic timing only; original controller and guards unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Validated material production improvement or a distinct unavailable boundary; no blind live rerun."
     }
   ]
 }

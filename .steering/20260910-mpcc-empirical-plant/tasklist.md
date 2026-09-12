@@ -565,4 +565,6 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Committed bounded single-r7/R563–R566:20unique received captures, source/receipt associations and original clock guard/callback costs; stationary loss1012/no restart/laps retained. Clock reset acceptance is still open.
 - [ ] Repair supported causal observation/model producer, preserve all physical/timing negatives, then complete remaining M4–M6 and same submission/eval.
 
-- [ ] Frozen force-r3: compare original held and received-bracket initial body/tire against same-epoch private truth; retain all rest/launch/regression cases. No interpolation/model promotion without coherent proof and dynamic acceptance.
+- [x] Frozen force-r3/R567–R569:25unique captures,16physical matches/9explicit unmatched; primary bracket means improve but unsupported/rate cases remain. Supplemental blanket extrapolation rejected; no promotion.
+
+- [ ] Bounded coupled event observer comparison from exact common received sensor epoch and actual command history; typed raw/derived semantics and physical/reset/rest negatives before production changes. Full M4–M6 remain.

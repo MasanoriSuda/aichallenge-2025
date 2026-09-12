@@ -8,7 +8,11 @@ package108全2613、旧3失敗/新3合格、過去3ケースの判定保持で�
 20判断の受信済み履歴を取得し、位置時刻により新しい値を除外した事実を確認した。
 最大1.04m/sまで動き、正常送信1011の後に停止状態で通常権限を失った。全4239callbackは
 25ms以内、送信期限違反なしだが、再発進・Start・周回は未達。受信値の補間案を固定し、
-次はforce-r3で位置時刻の物理状態と比較する。
+force-r3/R567–R569で位置時刻の物理状態と比較した。25判断のうち16件を照合し、
+速度平均誤差は改善したが、未支持の最大誤差と旋回の反例が残るため未採用。単純な外挿も
+横速度・操舵の悪化から棄却。次は共通の過去観測時刻から各受信値を本来の時刻で
+モデルへ反映する方法を、固定記録で比較する。
+[物理比較と次の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-truth-audit.md)。
 [今回の結果と次の条件](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-single-r7-audit.md)。
 [診断実装と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-body-observation-design.md)。
 標準single-r6の決定968は

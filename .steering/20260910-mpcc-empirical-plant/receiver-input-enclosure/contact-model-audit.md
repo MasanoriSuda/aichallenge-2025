@@ -103,3 +103,60 @@ contact does not itself supply an accurate future contact programme.
 Next separate observation component timestamps from nominal plant error on the
 exact saved failure before selecting a new public observer or uncertainty model.
 No new standard run is justified by an unchanged rejected fixed model.
+
+## Exact input/model boundary and corrected scoring (R538–R544)
+
+The force-run programme source has aligned pose and velocity at12.004999731.
+Its public speed0.091545850 agrees with physical COM0.091545822. At12.144999728,
+public/physical speed0.20933230/0.20933235 exceeds source upper0.183793211.
+R540 checks30physics instants: every actual wire belongs to the original UNION
+of sign ranges, while24speed samples leave its body tube. Maximum speed excess
+0.026916949m/s. Twelve tire values also miss by up to2.166e-9rad; keep this
+finite-precision/update-epoch limitation, without declaring exact tire containment
+or enlarging any tolerance. Initial yaw is a5ms older IMU component, explicitly
+held. BodyIMU remains appropriate: VelocityReport.heading_rate is an Euler-angle
+difference in the local DLL, not rigid-body angular velocity (plant CIL1249–1290).
+
+R539 uses500fixed anchors with synchronized/held initial components and private
+future-contact/geometry oracles. At exact source+140ms, synchronizing initialization
+barely changes speed error−0.025650→−0.025638m/s; future contact alone reduces it
+to+0.001659m/s. This isolates contact dynamics as a contributor independently of
+that sensor skew. Actual future applied wire/tire is prescribed in every arm.
+No future physics body is reset, but future contact/geometry is privileged input;
+these arms cannot become controller authority.
+
+R541 exposed an error in the diagnostic position truth: R534/R539 scored kart-root
+motion against the native model's base_link motion. Production COM offset was
+already correct. R542 converts truth with the original serialized offset
+(0,0.05000000074505806,−0.48500001430511475)m and rescores UNCHANGED native outputs.
+Original position scores are excluded. Original/all-grounded oldholdout1sposition
+MAE is0.167555/0.593733m. Speed/yaw scores are unchanged; all-grounded remains
+rejected. Future-contact-only position MAE improves to0.077222m in oldholdout and
+0.014009m in newforce versus original0.167555/0.057117m. Correctly referenced planar
+kinematics with measured velocities has oldholdout1serror0.015703m, not0.343490m;
+the previous large number was not evidence of a production kinematic defect.
+
+The new shared diagnostic reader requires explicit kart_root/base_link and one
+vehicle identity; it keeps COM velocity separate from pose position. R544 checks
+its measured COM/base offsets on the new single, old single and both old domains.
+Ambiguous multi-domain reading rejects. Future contact diagnostics use this reader
+instead of duplicating the incompatible pose extraction.
+
+R543's setup assertion incorrectly excluded future sleep/Stop; it never executed
+native code. R544 preserves those future cases and evaluates453common anchors
+with1s of past awake Drive history inside each original window. Fixed preceding
+1/5/20/100/200tick contact forecasts receive no future contact/body data. On226old
+holdout1sanchors, every past forecast worsens position/yaw: original0.170395m/
+0.033656rad versus even past2000.180468m/0.041933rad. Several new low-speed and
+short-horizon scores improve. OldD1's1sresult has only one anchor; do not generalize
+that mean. No global past-contact replacement is accepted, even with private
+observation better than currently available public inputs.
+
+[Sealed diagnostics, corrected comparison and reader](contact-prediction-evidence.json).
+Next compare an explicitly evolving contact-mode forecast with the unchanged
+fixed model and rejected static-past forecasts. The initial comparison may use
+private PAST contact only to isolate forecast capability; this is not a public
+observer or production candidate. Training windows, model identity, independent
+regression windows, no-future-feature checks and promotion/deletion boundary must
+be fixed before execution. An observed contact statistic supplies no universal
+Rest guarantee. All normal/current/Stop and original timing gates still apply.

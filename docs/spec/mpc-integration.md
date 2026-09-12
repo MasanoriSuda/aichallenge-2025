@@ -4998,3 +4998,11 @@ R527/R530では元の予測範囲を後の観測が外れる。R528の操舵列�
 転用しない。直接観測した指令適用とセンサ成分時刻は別の境界として維持する。
 モデル・安全条件は未変更、全体受入れは未達。
 [接地監査と比較・限界](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-model-audit.md)。
+
+
+2026-09-12 R538–R544追記: 直接観測した加減速は元の入力範囲内でも、接地変動に
+起因する速度予測誤差が残る。過去の接地率を固定する各案は保持区間で棄却。
+R534/R539の位置評価には診断側の車体原点/base_link混同があり、R542で訂正した。
+本番のCOM/base_link原点は変更せず、今後の物理解析は明示的な原点・Domainを要求する
+共通readerを使う。速度・旋回比較と全輪接地案の棄却は訂正前後で変わらない。
+[訂正した比較と未解決の予測契約](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-model-audit.md)。

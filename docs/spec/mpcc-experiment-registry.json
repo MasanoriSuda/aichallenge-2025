@@ -1351,6 +1351,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-model-evidence.json",
       "replay_ready": true,
       "reason": "Exact force-run950 source/current, actual applied input/force, fixed-model and temporal contact comparisons."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-contact-prediction-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-prediction-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact force-run tube/input, initialization/contact oracle and corrected-base_link/past forecast comparisons."
     }
   ],
   "experiments": [
@@ -17119,6 +17125,104 @@
       "production_impact": "None after8d9810e0. No observer/model/clock/receiver/physical or solver limit change.",
       "deleted_code": [],
       "revisit_condition": "Distinct causal public observation or physically represented uncertainty with independent old/new windows and complete source/native/Stop/current identity. Do not repeat unchanged all-grounded replacement or assume pointwise positive contact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-contact-prediction-audit-r538",
+      "baseline_commit": "bbff45a46f00251d45f55d53fb7a907ad7d06aa4",
+      "snapshot_ids": [
+        "20260912-nine-state-contact-prediction-audit"
+      ],
+      "hypothesis": "Separate sensor epochs, actual inputs, contact prediction and diagnostic reference",
+      "changed_dimension": "Original force-run source tube and current component epochs",
+      "result": "accepted",
+      "reason": "Exact Ready950/current wall replay retained. Source pose/velocity12.004999731 aligned; current observed speed0.209332302 at12.144999728 exceeds original tube0.183793211. Public initial velocity matches physical COM within2.81e-8mps; holding stale velocity is not this source speed root cause.",
+      "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
+    },
+    {
+      "experiment_id": "20260912-nine-state-contact-prediction-audit-r539",
+      "baseline_commit": "bbff45a46f00251d45f55d53fb7a907ad7d06aa4",
+      "snapshot_ids": [
+        "20260912-nine-state-contact-prediction-audit"
+      ],
+      "hypothesis": "Separate sensor epochs, actual inputs, contact prediction and diagnostic reference",
+      "changed_dimension": "Separate original/synchronized initialization and future-contact/future-geometry oracles",
+      "result": "accepted",
+      "reason": "500anchors, native build120. At exact programme source+140ms original/synchronized speed error-0.025649712/-0.025637748 vs future-contact-only+0.001658657mps. Contact affects more than initial yaw epoch. No future oracle can execute. Original position scores use incompatible kart-root truth and are excluded; corrected inR542.",
+      "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
+    },
+    {
+      "experiment_id": "20260912-nine-state-contact-prediction-audit-r540",
+      "baseline_commit": "bbff45a46f00251d45f55d53fb7a907ad7d06aa4",
+      "snapshot_ids": [
+        "20260912-nine-state-contact-prediction-audit"
+      ],
+      "hypothesis": "Separate sensor epochs, actual inputs, contact prediction and diagnostic reference",
+      "changed_dimension": "Actual physics wire and component observations against exact original source ranges",
+      "result": "accepted",
+      "reason": "All30actual wires inside union of original sign ranges.24speed observations outside, maximum0.026916949mps.12physical tire values outside by at most2.166e-9rad; retain finite-precision/within-tick issue without adding tolerance or declaring exact tire containment. Raw initial yaw/vy comparisons include real component epoch or float differences.",
+      "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
+    },
+    {
+      "experiment_id": "20260912-nine-state-contact-prediction-audit-r541",
+      "baseline_commit": "bbff45a46f00251d45f55d53fb7a907ad7d06aa4",
+      "snapshot_ids": [
+        "20260912-nine-state-contact-prediction-audit"
+      ],
+      "hypothesis": "Separate sensor epochs, actual inputs, contact prediction and diagnostic reference",
+      "changed_dimension": "Isolate planar reference-point kinematics with measured future velocities",
+      "result": "inconclusive",
+      "reason": "Detected diagnostic kart-root/base_link mismatch. Original frozen-offset arm targets a different reference point, so its large position errors do not establish a production kinematic defect. Corrected inR542.",
+      "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
+    },
+    {
+      "experiment_id": "20260912-nine-state-contact-prediction-audit-r542",
+      "baseline_commit": "bbff45a46f00251d45f55d53fb7a907ad7d06aa4",
+      "snapshot_ids": [
+        "20260912-nine-state-contact-prediction-audit"
+      ],
+      "hypothesis": "Separate sensor epochs, actual inputs, contact prediction and diagnostic reference",
+      "changed_dimension": "Rescore unchanged R534/R539 outputs at serialized base_link and correct kinematic comparison",
+      "result": "accepted",
+      "reason": "Same native outputs, exact geometry offset(0,.050000000745,-.485000014305), original body velocities/yaw unchanged. Original/fullground old holdout1sposition0.167555/0.593733m, so global replacement still rejected. Future-contact oracle oldholdout position0.077222m; new0.014009 vs0.057117m. Correct planar kinematic oracle oldholdout0.015703m, not0.343490m. Production COM origin was already correct.",
+      "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
+    },
+    {
+      "experiment_id": "20260912-nine-state-contact-prediction-audit-r543",
+      "baseline_commit": "bbff45a46f00251d45f55d53fb7a907ad7d06aa4",
+      "snapshot_ids": [
+        "20260912-nine-state-contact-prediction-audit"
+      ],
+      "hypothesis": "Separate sensor epochs, actual inputs, contact prediction and diagnostic reference",
+      "changed_dimension": "Prepare past-contact forecast common cohort",
+      "result": "inconclusive",
+      "reason": "Setup assertion incorrectly required future samples remain awake, unlike original R534. No native execution. Retained error/log; R544 keeps future Stop/sleep samples and original Drive/window conditions.",
+      "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
+    },
+    {
+      "experiment_id": "20260912-nine-state-contact-prediction-audit-r544",
+      "baseline_commit": "bbff45a46f00251d45f55d53fb7a907ad7d06aa4",
+      "snapshot_ids": [
+        "20260912-nine-state-contact-prediction-audit"
+      ],
+      "hypothesis": "Separate sensor epochs, actual inputs, contact prediction and diagnostic reference",
+      "changed_dimension": "Freeze private past per-wheel contact averages for the whole predicted horizon",
+      "result": "rejected",
+      "reason": "453common anchors, preceding1/5/20/100/200ticks, no future contact/body features, prescribed actual future wire/tire and correct base_link. All five oldsingleholdout1sposition/yaw scores worsen: fixed0.170395m/0.033656rad vs past2000.180468m/0.041933rad; shorter histories worse. New low-speed improves several arms, insufficient for a global replacement. OldD1 one1sanchor explicitly limits its score.",
+      "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
     }
   ]
 }

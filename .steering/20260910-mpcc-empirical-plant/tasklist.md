@@ -532,5 +532,13 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R531–R533 physical-force reconstruction and native per-step contact contribution, source/current replay.
 - [x] R534 all-grounded fixed model rejected on independent old windows; no production parameters changed.
 - [x] R535/R536 exact receiver/application provenance; R537 temporal contact statistics and privileged past forecast. No new future timing/contact guarantee.
-- [ ] Exact component-epoch/model containment attribution; explicit observer/uncertainty architecture before further model changes.
+- [x] R538–R540 exact input/epoch comparison isolates contact contribution. R541/R542 correct diagnostic pose reference; shared reader prevents implicit origin use. R543 setup retained, R544 rejects static past-contact replacement.
 - [ ] Current wall/source/real publication deadline repairs and all remaining M4–M6 acceptance.
+
+## Contact prediction and diagnostic reference
+
+- [x] Actual wire union containment; original speed departure and private future-contact contribution reproduced.
+- [x] Correct R534/R539 diagnostic position origin via immutable R542 rescore; production origin unchanged. Explicit shared reader checked on four physical streams.
+- [x] R544 fixed past-contact forecasts rejected on old holdout despite new low-speed improvements; no production substitution.
+- [ ] Compare temporally evolving contact-mode prediction with fixed train/validation protocol; separate privileged past observation from deployable public input and Stop assumptions.
+- [ ] Causal production repair, original physical/timing validation and all remaining M4–M6.

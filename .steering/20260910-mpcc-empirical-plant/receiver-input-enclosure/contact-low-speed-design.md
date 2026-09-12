@@ -58,3 +58,12 @@ uninstrumented acceptance. Private-contact initialization or future-contact orac
 cannot execute. A rejected comparison stays diagnostic; no unused production
 model or observer is installed. Further modelling must explain residual contact
 regime differences, rather than accept an unsupported fit or weaken a gate.
+
+
+## Prospective result
+
+Force-r2 and R550–R558 are complete. Frozen candidates improve new mean prediction
+errors but do not close oldD1/yaw or full proof. Exact r2 source also holds a30ms
+old velocity at its pose epoch. Public common-past interpolation has freshness/
+rest-boundary counterexamples. No model or observer is promoted.
+[Fresh result and concrete continuation](contact-prospective-audit.md).

@@ -546,5 +546,14 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 ## Prospective contact-regime validation
 
 - [x] R545–R549 fixed protocols, baseline parity, separated calibration/known regressions and frozen coefficient identities.
-- [ ] Force-single-r2 on unchanged committed controller, with frozen R548/R549 forecasts; direct/public/first-failure extraction, no r2refit.
+- [x] Force-single-r2 and R550–R558: exact Ready972 failure, all direct application joins, fixed prospective comparison, force/epoch attribution and public common-past counterexamples; no r2refit or promotion.
 - [ ] Explain remaining contact-regime and yaw errors before model promotion. Coherent full proof/identity and remaining M4–M6 remain required.
+
+## Received observation and physical forecast continuation
+
+- [x] R554 prospective42anchors and unchanged158native baseline outputs; fixed coefficients retained.
+- [x] R553/R557 exact failure replay; R556 separates30ms held velocity from contact dynamics. R555valid11140step force audit.
+- [x] R558 preserves public interpolation endpoints and records freshness/rest/launch counterexamples; no blanket common-past replacement.
+- [ ] Establish actual per-decision received histories, including values discarded by pose cutoff; bounded failure observation if needed, with source/receipt/reset identities.
+- [ ] Select a current causal reconstruction and contact/lateral model with original hard proof and clock constraints; coherent QP/native/Stop/current/async implementation and new dynamic acceptance.
+- [ ] Full remaining M4–M6, repeated final-source races/gates and same submission/eval.

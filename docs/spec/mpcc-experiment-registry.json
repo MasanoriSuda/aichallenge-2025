@@ -1363,6 +1363,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-forecast-evidence.json",
       "replay_ready": true,
       "reason": "Frozen empirical contact forecasts and prospective validation boundary; all are diagnostic only."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-force-r2-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-prospective-evidence.json",
+      "replay_ready": true,
+      "reason": "Same-run fresh frozen-model validation, direct application and exact original current replay; no model/observer promotion."
     }
   ],
   "experiments": [
@@ -17299,6 +17305,146 @@
       "production_impact": "None after8d9810e0. No physical, solver, receiver or clock gate change.",
       "deleted_code": [],
       "revisit_condition": "Prospective frozen-model observation, identifiable new physical regime or a structurally different causal model. Preserve oldD1/yaw regressions and do not treat rank/convergence or nominal probabilities as a physical guarantee."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-runtime",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Fresh unchanged force-instrumented single achieves integrated acceptance",
+      "changed_dimension": "Validated observation calls only",
+      "result": "rejected",
+      "reason": "D1Ready972 moving Emergency, noStart/laps. Diagnostic timing, exact wall proof rejection; original artifacts restored.",
+      "production_impact": "None after8d9810e0.",
+      "deleted_code": [],
+      "revisit_condition": "Causal production repair or distinct missing observation; no unchanged standard race rerun."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r550",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Extract new force/application observation",
+      "result": "accepted",
+      "reason": "1810 force records,690 receiver records,157 applications, no probe errors. Moving wheel-force sum MAE3.845e-6N. Raw inertia warning outside selected states retained; no universal raw-state force claim.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r551",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Extract same-run public observation/command streams",
+      "result": "accepted",
+      "reason": "5036 rows from the sole D1 bag, bag identity retained. Recorder receipt is not controller or simulator receipt.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r552",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Bind each direct application to its actual received packet",
+      "result": "accepted",
+      "reason": "157/157 exact receiver sequence/source/float32 matches,543 public signatures,529 overwritten before last apply. Observed selected-source age16.783–85.513ms; apply intervals100.0–180.513ms include startup/teardown and are not future bounds.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r553",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Reproduce exact D1Ready972 current rejection with original build120",
+      "result": "accepted",
+      "reason": "Source643/job967/index2, previous actual971/index1. Source/domain/history/last actual/checks/time exact; current wall rejection12.599999726, vector[5,0,5,0,4,6]. One replay3.675ms; no deadline repair claim.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r554",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Prospective comparison of frozen R548/R549 on a fresh world",
+      "result": "inconclusive",
+      "reason": "42 pre-failure anchors,42/40/40/36 horizon counts at0.1/0.25/0.5/1s;158 baseline predictions exactly equal between original frozen drivers. No refit. R549with-wire1s uMAE0.085013→0.041026mps, position0.057563→0.024681m, yaw0.015305→0.011734rad. OldD1/exact-yaw regressions and full proof remain; no promotion.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r555",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Factor current native/contact/3D-force derivative and step errors",
+      "result": "accepted",
+      "reason": "11140 valid pre-failure/training/holdout steps, no invalid eligible inertia. Oldholdout planar current-contact vy stepMAE0.006507 versus measured3D-force0.000598mps; r0.003251 versus0.001431radps. Current3D-force u is worse in low-speed worlds because later constraint/integration effects remain. Private oracle, no model replacement.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r556",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Separate exact public component epochs from future contact oracle",
+      "result": "accepted",
+      "reason": "R2 programme pose12.104999729, velocity12.074999730. At actual current-velocity epoch+110ms, original held uerror-0.045432, synchronized-0.019528; future-contact held-0.024719 versus synchronized+0.001186mps. Frozen mixed synchronized u improves, yaw does not close. No private observation used for control.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r557",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Check actual input union and original source population",
+      "result": "accepted",
+      "reason": "All27 actual wires belong to original input union; all27 speed samples lie outside original tube. At source pose epoch actualu0.094152 exceeds upper0.071464, while original publicu0.068163 is30ms old. Eight tire departures include the held epoch mismatch, unlike only tiny r1 finite-precision differences. Exact wall rejection independently reproduced.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-force-r2-audit-r558",
+      "baseline_commit": "c5afc239f0d2e90e8d4e98947dfb760ceefc8c53",
+      "snapshot_ids": [
+        "20260913-nine-state-force-r2-audit"
+      ],
+      "hypothesis": "Separate source observation, physical contact and complete proof boundaries",
+      "changed_dimension": "Public common historical epoch with explicit interpolation endpoints",
+      "result": "inconclusive",
+      "reason": "Only public endpoints no later than each captured sensor-source cutoff. R2programme mixed uerror-0.026373→-0.001501mps at same end epoch, but yaw worsens and r1current old-modelu error-0.001386→-0.010919 as horizon lengthens. R2semantic interpolation crosses rest/launch and has initialuerror0.005673. No universal common-past observer replacement; actual callback availability of discarded newer samples remains unobserved.",
+      "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
+      "deleted_code": [],
+      "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
     }
   ]
 }

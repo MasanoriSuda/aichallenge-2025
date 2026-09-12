@@ -17,11 +17,17 @@ R538–R544で、入力が許容範囲内でも接地変動により速度が予
 本番の座標設定は正しく、解析の共通readerを修正した。R545–R549で接地遷移と
 速度・旋回依存のモデルを比較。旧校正は高速・一定加速に偏っていたため、r1の低速区間を
 明示して加えた診断候補を固定した。速度誤差は改善するが旋回・旧D1の問題は残る。
-次は未観測のforce-single-r2で固定候補を検証する。技術的な受入れ条件が未達のため、
-本番へは採用していない。追加のユーザー確認は不要。
+Force-single-r2の固定候補検証をR550–R558で完了。Ready972/source643/job967/index2で
+停止し、元の壁拒否を再現。新しい1秒先の速度誤差は0.085→0.041m/sに改善したが、
+過去D1と旋回・完全な安全証明は未達。今回のsourceは位置より30ms古い速度を保持し、
+初期時点から実速度が予測範囲外だった。接地変動と観測時刻差を別々に確認した。
+公開値を古い共通時刻へそろえる案も、鮮度・停止境界・旋回の反例があるため未採用。
+次は実際の受信履歴と有効時刻を確認し、観測の再構成と物理モデルを一貫して修正する。
+追加確認は不要。本番への採用は技術的な受入れ条件を満たしてから行う。
+[新規走行の結果・具体的な残作業](../20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-prospective-audit.md)。
 [接地モデル監査・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-model-audit.md)。
 
-両runはStart/周回なし。元DLL・ユーザーJSON復元済み、runtime停止。追加確認/pushなし。
+これらの新規runはStart/周回なし。元DLL・ユーザーJSON復元済み、runtime停止。追加確認/pushなし。
 過去の実公開期限問題、r75 Start/update_v_max、全intent/Mission/sibling/Store、Stop/rest/
 restart、Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、
 gate1–3、同一tar/image/evalは未完。局所合格を全体受入れとしない。

@@ -1459,6 +1459,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-confirmation-clearance-evidence.json",
       "replay_ready": true,
       "reason": "Exact single-r12observation, confirmation before/after, strict clearance/declared membership, original deadline replay and build/package/launch validation."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-recovery-entry-seal-r676",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-launch-entry-evidence.json",
+      "replay_ready": true,
+      "reason": "single-r13actual launch coverage failure and actual XML entry old/new regression."
     }
   ],
   "experiments": [
@@ -19104,6 +19110,62 @@
       "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
       "deleted_code": [],
       "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-live-audit-r671",
+      "baseline_commit": "07897bed",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-entry-seal-r676"
+      ],
+      "hypothesis": "Standard participant entry must propagate the declared Recovery vehicle count.",
+      "changed_dimension": "Actual MPC XML entry and package regression/test dependencies.",
+      "result": "rejected",
+      "reason": "single-r13 preserves confirmed Recovery and rejects incomplete V2X without overrides, but standard XML omits the vehicle-count parameter.361normal publications then SafeStop; no Start/laps; one startup callback30.77ms, no actual publication window violation.",
+      "production_impact": "Launch binding only; existing strict clearance and canonical normal controller unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "A changed entry/parameter consumer or a failing actual launch/live regression."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-public-r672",
+      "baseline_commit": "07897bed",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-entry-seal-r676"
+      ],
+      "hypothesis": "Standard participant entry must propagate the declared Recovery vehicle count.",
+      "changed_dimension": "Actual MPC XML entry and package regression/test dependencies.",
+      "result": "accepted",
+      "reason": "Same-run MCAP records public speed/control/localization frequencies and validates source epochs separately from private physical truth.",
+      "production_impact": "Launch binding only; existing strict clearance and canonical normal controller unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "A changed entry/parameter consumer or a failing actual launch/live regression."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-entry-before-r674",
+      "baseline_commit": "07897bed",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-entry-seal-r676"
+      ],
+      "hypothesis": "Standard participant entry must propagate the declared Recovery vehicle count.",
+      "changed_dimension": "Actual MPC XML entry and package regression/test dependencies.",
+      "result": "accepted",
+      "reason": "All5actual reference-to-MPC XML expansion cases fail with missing recovery_vehicle_count before wiring; standalone Python R669coverage was insufficient for standard launch.",
+      "production_impact": "Launch binding only; existing strict clearance and canonical normal controller unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "A changed entry/parameter consumer or a failing actual launch/live regression."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-entry-after-r675",
+      "baseline_commit": "07897bed",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-entry-seal-r676"
+      ],
+      "hypothesis": "Standard participant entry must propagate the declared Recovery vehicle count.",
+      "changed_dimension": "Actual MPC XML entry and package regression/test dependencies.",
+      "result": "accepted",
+      "reason": "Same5real-entry cases pass as integer parameters after additive XML argument/Node binding. Full build129/package116pass; no numerical controller changes.",
+      "production_impact": "Launch binding only; existing strict clearance and canonical normal controller unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "A changed entry/parameter consumer or a failing actual launch/live regression."
     }
   ]
 }

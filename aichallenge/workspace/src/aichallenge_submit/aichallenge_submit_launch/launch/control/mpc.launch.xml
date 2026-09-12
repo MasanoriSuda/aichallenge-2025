@@ -3,6 +3,7 @@
   <arg name="simulation" default="false"/>
   <arg name="use_sim_time" default="true"/>
   <arg name="use_obstacle_avoidance" default="false"/>
+  <arg name="recovery_vehicle_count" default="$(env AIC_VEHICLE_COUNT 0)"/>
 
   <node pkg="multi_purpose_mpc_ros" exec="mpc_controller_cpp"
         name="mpc_controller" output="screen"
@@ -16,5 +17,6 @@
     <param name="awsim_control_mode_motion_threshold_mps" value="0.1"/>
     <param name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
     <param name="use_stats" value="false"/>
+    <param name="recovery_vehicle_count" value="$(var recovery_vehicle_count)"/>
   </node>
 </launch>

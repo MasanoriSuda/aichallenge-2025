@@ -339,3 +339,9 @@ fingerprintを維持する。v1だけを理解する旧readerはv2を拒否す�
 `/v2x/vehicle_positions`の名前・型・Domain、管理面、提出entryとtar構造は変わらない。
 既存launchを破らない追加引数だが、旧force-motion設定による壁/V2X判定の無視は廃止する。
 2026公式の運行台数・完全性保証との同等性は`TBD`。これは現行ローカル環境の補助契約である。
+
+2026-09-13起動確認: 標準参加者は`reference.launch.xml`から
+`aichallenge_submit_launch/launch/control/mpc.launch.xml`へ進む。このXMLと、
+単体実行用`multi_purpose_mpc_ros/launch/mpc_controller.launch.py`の両方で
+`recovery_vehicle_count`をノードへ渡す。単体Python launchだけの展開確認を、
+標準参加者での伝播確認と混同しない。

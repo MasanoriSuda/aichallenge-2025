@@ -8,6 +8,16 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 標準起動へのRecovery台数伝播（2026-09-13）
+
+single-r13では停止確認の保持と厳格なV2X拒否は動いたが、標準起動のMPC XMLが
+台数parameterを渡しておらず、単車を未指定0としてSafeStopへ進めた。単体Python launchの
+R669合格は標準起動を網羅していなかった。実際のreferenceからのincludeを辿る5条件で
+欠落を再現し、標準XMLへの引数・Node parameter接続後に同じ5条件が合格した。
+build129/package116合格。制御実装・物理モデル・安全条件は07897bedを維持する。
+実際の単車・2台での伝播、Recovery/Rejoinと統合完走は引き続き検証する。
+[設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-launch-entry-design.md)。
+
 ## Recovery確定の保持と完全な周辺情報（2026-09-13）
 
 停止確認済みのHoldStopが通常実行を取り消しても、その自己取消によるsolver待機で

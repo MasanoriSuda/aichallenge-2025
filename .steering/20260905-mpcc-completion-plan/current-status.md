@@ -29,6 +29,12 @@ R663は2048の新鮮な空V2X配列を確認。宣言単車なのにRecoveryが�
 実施し、R667全973native/source117、build128/package115、実launch5条件が合格。
 次はcommit固定single-r13。R668で865の元入力を再生し、期限問題は別途継続。
 [現在の設計・根拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-confirmation-clearance-design.md)。
+07897bedのsingle-r13で確定保持は動いたが、標準XMLの台数配線漏れで未指定0となり
+SafeStopへ進んだ。4236callback最大30.77ms（起動485）、361通常送信は899まで。
+期限外通常送信・V2X強制overrideゼロ、Start/周回なし。R674実XML5条件失敗、
+接続後R675全5合格、build129/package116合格。次は固定版single-r14とdev2-r80で
+実際の台数伝播・完全情報・Recovery/Rejoinを確認する。
+[標準起動の配線修正](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-launch-entry-design.md)。
 source壁問題・物理観測誤差・全M4–M6は未完。追加確認は不要。
 [設計と局所検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-session-rejoin-design.md)、
 [停止source比較](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-cell-native-feasibility-audit.md)。

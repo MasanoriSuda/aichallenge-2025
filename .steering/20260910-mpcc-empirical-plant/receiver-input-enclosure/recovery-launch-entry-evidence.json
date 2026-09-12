@@ -1,0 +1,217 @@
+{
+  "baseline": "07897bed",
+  "integrated_acceptance": false,
+  "controller_source_unchanged": true,
+  "controller_validation": "build128/package1152633tests; no controller change in this entry slice",
+  "sources": {
+    "aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/CMakeLists.txt": "574bd365cf4192576d7f4a1b0d410da5e82ad564752b11436416c5fc5ed80fe2",
+    "aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/package.xml": "3808aeb70018ece9248218f5f39e7ac0eacb8dc474090fa056b78d704fa9c1f0",
+    "aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/mpc.launch.xml": "e2c1144e43ea1e687282e8da62b21157abad0130d2a3743a42e220b0bdfc944a",
+    "aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_recovery_vehicle_count_launch.py": "f36a6c5e82ffe9e44e8f934b95cb24e0fe99f353d948430a61873bc7fdfb6f7f"
+  },
+  "live": {
+    "callback_samples": 4236,
+    "callback_max_ms": 30.772436,
+    "callback_over25": [
+      [
+        485,
+        30.772436
+      ]
+    ],
+    "scheduled_publications": 361,
+    "last_publication": {
+      "dispatch": 899,
+      "job": 894,
+      "source": 509,
+      "index": 2,
+      "nominal": 10.759999828,
+      "before": 10.764999759,
+      "after": 10.769999759,
+      "deadline": 10.784999828,
+      "programme_input": 6921586804498610345,
+      "physical_input": 6921586804498610345,
+      "independent": 0
+    },
+    "window_violations": [],
+    "states": [
+      "spawned",
+      "grounded",
+      "ready"
+    ]
+  },
+  "live_recovery": [
+    "[mpc_controller_cpp-10] [INFO] [1789257061.868918465] [mpc_controller]: Stuck recovery: mode=active, reverse_actuation=enabled, simulation_only=true",
+    "[mpc_controller_cpp-10] [INFO] [1789257075.125167930] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=race_inactive, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=161, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Reverse, primitive=reverse_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=0.689 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=0/0.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=1.034 m, e_psi=-0.290 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257077.467990914] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=race_inactive, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=161, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Reverse, primitive=reverse_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=0.689 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=0/0.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.118 rad, e_y=1.034 m, e_psi=-0.290 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257082.518791816] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=solver_unsafe, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=161, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Reverse, primitive=reverse_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=0.692 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=0/0.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.350 rad, e_y=1.032 m, e_psi=-0.289 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257083.151699709] [mpc_controller]: Stuck recovery: mode=active, state=SUSPECT_STUCK, action=NormalControl, reason=stuck_suspected, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=0, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Unknown, primitive=none, steering=0.000, course_guard=0, course_rejected=0, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/0.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=0, rejoin_static=not_evaluated, rejoin_reject_at=0.000 m, rejoin_steering=0.350 rad, e_y=0.994 m, e_psi=-0.244 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257083.185116191] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=awaiting_stuck_confirmation, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=161, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Reverse, primitive=reverse_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=0.883 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.200 m, incident=1/0.03 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.350 rad, e_y=0.991 m, e_psi=-0.239 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257085.684817591] [mpc_controller]: Stuck recovery: mode=active, state=SUSPECT_STUCK, action=HoldStop, reason=stuck_confirmed, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=0, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Unknown, primitive=none, steering=0.000, course_guard=0, course_rejected=0, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/2.53 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=0, rejoin_static=not_evaluated, rejoin_reject_at=0.000 m, rejoin_steering=0.045 rad, e_y=0.897 m, e_psi=0.078 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257085.701735706] [mpc_controller]: Stuck recovery: mode=active, state=WAIT_AWSIM_RECOVERY, action=HoldStop, reason=awsim_recovery_waiting, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=25, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Forward, primitive=forward_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=-0.004 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/2.55 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.019 rad, e_y=0.895 m, e_psi=0.077 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257086.018313985] [mpc_controller]: Stuck recovery: mode=active, state=STOP_AND_CONFIRM, action=HoldStop, reason=stop_confirmation_pending, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=25, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Forward, primitive=forward_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=-0.004 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/2.87 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.896 m, e_psi=0.078 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257086.152088082] [mpc_controller]: Stuck recovery: mode=active, state=CHECK_CLEARANCE, action=HoldStop, reason=clearance_check, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=25, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Forward, primitive=forward_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=-0.004 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/3.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.895 m, e_psi=0.078 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257086.185187217] [mpc_controller]: Stuck recovery: mode=active, state=WAIT_FOR_CLEAR, action=HoldStop, reason=rear_information_incomplete, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=25, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Forward, primitive=forward_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=-0.004 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/3.03 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.895 m, e_psi=0.078 rad",
+    "[mpc_controller_cpp-10] [INFO] [1789257087.201748182] [mpc_controller]: Stuck recovery: mode=active, state=SAFE_STOP, action=SafeStop, reason=clearance_wait_timed_out, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=25, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=1, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Forward, primitive=forward_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=-0.004 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/4.05 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.894 m, e_psi=0.077 rad"
+  ],
+  "public": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r13",
+    "domain": 1,
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r13/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "488087fe2f5115bdc4837f153dd1c6ffe024b2dccdb6f4c916491498573f2c3a"
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 2914,
+        "scope_source_sec": [
+          3.0099999320000004,
+          104.96499765300001
+        ],
+        "source_hz": 28.571429210085697,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 2913,
+        "scope_source_sec": [
+          3.044999931,
+          104.96499765300001
+        ],
+        "source_hz": 28.571429210024682,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 2038,
+        "scope_source_sec": [
+          3.09999993,
+          104.949997654
+        ],
+        "source_hz": 20.00000044693177,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 5095,
+        "scope_source_sec": [
+          3.064999931,
+          104.96499765300001
+        ],
+        "source_hz": 49.99018757485424,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.039999999,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 101,
+        "scope_source_sec": [
+          4.00499991,
+          104.00499767500001
+        ],
+        "source_hz": 1.0000000223500005,
+        "median_source_period_sec": 0.9999999780000001,
+        "max_source_gap_sec": 1.014999977,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 3662,
+        "scope_source_sec": [
+          3.069999939,
+          104.96999765300001
+        ],
+        "source_hz": 35.92738059008824,
+        "median_source_period_sec": 0.029999999000000003,
+        "max_source_gap_sec": 0.039999999,
+        "nonpositive_source_steps": 20
+      },
+      "/clock": {
+        "rows": 20387,
+        "scope_source_sec": [
+          3.039999932,
+          104.96999765300001
+        ],
+        "source_hz": 200.00000447169637,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789257084616534271,
+      "stamp_ns": 9729999782,
+      "v": 1.0316829681396484,
+      "vy": 0.03249114751815796,
+      "heading_rate": 0.18940401077270508
+    },
+    "limits": [
+      "Source and recorder receipt separate; controller receipt requires this run immutable captures.",
+      "Heading rate is not IMU body yaw rate. Only angular.z supplies body r.",
+      "ROS topics describe public state; no direct force/contact/receiver application instrumentation in this run.",
+      "Frequencies cover the complete recorded source-time range per topic, including startup; no completed race inferred."
+    ]
+  },
+  "old_test": {
+    "command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_recovery_vehicle_count_launch.py",
+      "--junitxml=/output/20260913-nine-state-recovery-entry-before-r674/results.xml"
+    ],
+    "return_code": 1,
+    "elapsed_sec": 1.2751166900270618
+  },
+  "new_test": {
+    "command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_recovery_vehicle_count_launch.py",
+      "--junitxml=/output/20260913-nine-state-recovery-entry-after-r675/results.xml"
+    ],
+    "return_code": 0,
+    "elapsed_sec": 1.216146407998167
+  },
+  "package": "Summary: 12 tests, 0 errors, 0 failures, 0 skipped",
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-recovery-live-audit-r671/generator.py": "47742bc6e5ba6099e4a192621da1c400c18d788876982490d35fdfd2ae9fe8c5",
+    "output/20260913-nine-state-recovery-live-audit-r671/report.json": "a096fe3ae9a5ed3de543f986ef375315ce9d97469d57c31b137e86093a108f81",
+    "output/20260913-nine-state-recovery-public-r672/generator.py": "cf5d64e0c26bf02489c010293f379083aca42a3758d895e75eb0d7b288301d37",
+    "output/20260913-nine-state-recovery-public-r672/report.json": "b82db180ce31892abca168fc4a87db902d985af9b34d9a61ba6e53952a939b9e",
+    "output/20260913-nine-state-recovery-public-r672/d1.json": "e015faf5ae4f69e397ad189c67cda7fd5e63154a9776d33e82c60f3f65ed03f0",
+    "output/20260913-nine-state-recovery-entry-before-r674/results.xml": "5b7f7bb23db2547046eed0bb4eee30f1c8caf62977313290c945c3074a0aee14",
+    "output/20260913-nine-state-recovery-entry-before-r674/test.log": "9eb780ebf244fb1b5ecdeed798a6b3e83e47214d48bf6e8430d173e4254802f5",
+    "output/20260913-nine-state-recovery-entry-before-r674/result.json": "32c5472656527f260e090d6a882ad3c3d5f00951a926dbccf8fffa3c896ea6ec",
+    "output/20260913-nine-state-recovery-entry-before-r674/runner.py": "a31ac53c8ba9db5a3bdbc70ab6e1d77eda5d588e98502df495cc69d3c84473bd",
+    "output/20260913-nine-state-recovery-entry-before-r674/test/test_recovery_vehicle_count_launch.py": "f36a6c5e82ffe9e44e8f934b95cb24e0fe99f353d948430a61873bc7fdfb6f7f",
+    "output/20260913-nine-state-recovery-entry-before-r674/launch/reference.launch.xml": "ead507c58ecd176e3f577c9c4386ccd4f6dad4cf192216d6036475632317d61d",
+    "output/20260913-nine-state-recovery-entry-before-r674/launch/control/mpc.launch.xml": "bc0c319f6352ddd5d40518ff52877b138321e57ca0603436e1b13bb6b74fa7d1",
+    "output/20260913-nine-state-recovery-entry-after-r675/results.xml": "1c2400fa16ff9faf4c3e3ca0fefca01226845b9c3896ddd34b1509ee41f27653",
+    "output/20260913-nine-state-recovery-entry-after-r675/test.log": "9f5fca75b3047a6b50338570acc3b84d6f91fc01f7616bf565c9c7f9222d4381",
+    "output/20260913-nine-state-recovery-entry-after-r675/result.json": "dfe18628b5e60157110641ab7dfa8a99e034fa97fcb92ea21d085feddf7c2b1e",
+    "output/20260913-nine-state-recovery-entry-after-r675/runner.py": "888773aad989f82b3a5498871b8d658a6c627aba33a389f93dec1f8b5d84fe0a",
+    "output/20260913-nine-state-recovery-entry-after-r675/test/test_recovery_vehicle_count_launch.py": "f36a6c5e82ffe9e44e8f934b95cb24e0fe99f353d948430a61873bc7fdfb6f7f",
+    "output/20260913-nine-state-recovery-entry-after-r675/launch/reference.launch.xml": "ead507c58ecd176e3f577c9c4386ccd4f6dad4cf192216d6036475632317d61d",
+    "output/20260913-nine-state-recovery-entry-after-r675/launch/control/mpc.launch.xml": "e2c1144e43ea1e687282e8da62b21157abad0130d2a3743a42e220b0bdfc944a",
+    "output/20260913-nine-state-build129/status.json": "93e0da9a91baea972e9426bc90bd11f0b2c1ae34b228176edfb06f8efdf38c86",
+    "output/20260913-nine-state-build129/build.log": "2a7164d0f3408e844295e82659050414b497f07c940b923e1d876880f90fa5bf",
+    "output/20260913-nine-state-build129/runner.py": "f8fa2dcef2f21366ef298ac0ce17bf7ff142e6eedf5c824fa3cd1c16731dde1f",
+    "output/20260913-nine-state-build129/manifest.json": "18df5a5ca0a057acde94633f470fac13cd79f19ceaae98888073cc197f111dd3",
+    "output/20260913-nine-state-package116/commands.json": "89ef22d2a3c2158df7c6d2292f76015cee4ff9d338436203929d95a2a0baf7e2",
+    "output/20260913-nine-state-package116/test.log": "0a56dd2362c0341b37e3df3cd8b0e9c890d1763ee9cd475c30906114b7409011",
+    "output/20260913-nine-state-package116/status.json": "5cc09d2cb4ed8b57c24051c3c1b677fd1f7f47602cc32936dc827b5520d328fa",
+    "output/20260913-nine-state-package116/test-result.log": "58c6dee09452e642c94662b29772d89881f770a8b9b96df3df216c62a82d7fd2",
+    "output/20260913-nine-state-package116/runner.py": "5a74bd28780a1b3c4a539186f962ab025fdd6fa557832ea60a2d8c080010a7e6"
+  }
+}

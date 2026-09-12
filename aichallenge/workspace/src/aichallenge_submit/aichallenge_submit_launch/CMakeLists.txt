@@ -10,6 +10,10 @@ if(BUILD_TESTING)
     test_localization_timing_contract
     test/test_localization_timing_contract.py
   )
+  ament_add_pytest_test(
+    test_recovery_vehicle_count_launch
+    test/test_recovery_vehicle_count_launch.py
+  )
 endif()
 
 ament_auto_package(INSTALL_TO_SHARE launch map data config)

@@ -30,6 +30,11 @@ public:
   /// contains no unlearned identity.  An empty learned set fails closed.
   bool is_complete(const std::vector<std::string> & vehicle_ids) const;
 
+  /// A declared topology also requires exactly this many learned identities.
+  /// Zero is meaningful only after the caller validates a fresh empty message.
+  bool is_complete(
+    const std::vector<std::string> & vehicle_ids, std::size_t expected_count) const;
+
   std::size_t learned_vehicle_count() const noexcept;
   void reset() noexcept;
 

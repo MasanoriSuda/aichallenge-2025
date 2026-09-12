@@ -3881,3 +3881,32 @@ def test_ready_recovery_uses_the_same_operating_session_at_each_gate():
     assert 'input.detector.session_active = recovery_session_active();' in SOURCE
     assert 'use_sim_time_, recovery_session_active(), enable_control_' in SOURCE
     assert 'recovery_fault_latched_ = !recovery_session_active();' in SOURCE
+
+
+def test_recovery_cannot_promote_failed_static_or_v2x_clearance():
+    assert 'least_bad_result' not in SOURCE
+    assert 'incomplete_v2x_ignored' not in SOURCE
+    assert 'self_contract_mismatch_ignored' not in SOURCE
+    assert 'v2x_blocker_ignored' not in SOURCE
+    assert 'aggressive_force_motion_enabled' not in SOURCE
+
+
+def test_declared_recovery_topology_keeps_message_freshness_and_epoch_guards():
+    message = _cpp_function('bool has_complete_message(')
+    assert '!last_message_receipt_sec_.has_value()' in message
+    assert '!last_message_source_stamp_sec_.has_value()' in message
+    assert 'last_message_recovery_epoch_.value() != recovery_epoch_' in message
+    assert 'is_v2x_receipt_age_fresh(' in message
+    assert 'source_age_sec >= -kV2XSourceFutureToleranceSec' in message
+    assert 'source_age_sec <= cfg.timeout_sec' in message
+    assert '!last_message_has_invalid_sample_' in message
+    assert 'is_complete(last_message_vehicle_ids_, *expected_count)' in message
+    tracked = _cpp_function('bool has_complete_tracked_set(')
+    # An empty cache cannot stand in for a received fresh zero-peer declaration.
+    assert '(expected_count && *expected_count == 0U)' in tracked
+    topology = SOURCE.split('std::optional<std::size_t> expected_count;', 1)[1]
+    topology = topology[:topology.index('const auto active_vehicles')]
+    assert 'use_sim_time_ && recovery_vehicle_count_ > 0 && v2x_contract_configured' in topology
+    assert 'v2x_self_filter_mode == "excluded" ? 1U : 0U' in topology
+    assert 'has_complete_message(ros_now_sec, expected_count)' in topology
+    assert 'has_complete_tracked_set(ros_now_sec, expected_count)' in topology

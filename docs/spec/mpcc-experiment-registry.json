@@ -1453,6 +1453,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-session-rejoin-evidence.json",
       "replay_ready": true,
       "reason": "Exact stopped source cell, target-free native feasibility and separate Recovery session/Rejoin authority regression."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-recovery-clearance-seal-r670",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-confirmation-clearance-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact single-r12observation, confirmation before/after, strict clearance/declared membership, original deadline replay and build/package/launch validation."
     }
   ],
   "experiments": [
@@ -18940,6 +18946,164 @@
       "production_impact": "R653-R655diagnostic only. R656Ready Recovery and canonical Rejoin; native model/enclosure/proofs unchanged.",
       "deleted_code": [],
       "revisit_condition": "A change to source geometry, model, physical proof or authority."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-live-audit-r659",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "rejected",
+      "reason": "single-r12 Ready-only: confirmation lost after own normal cancellation; before-window guard865 rejects 36.77ms callback. Store stays fresh; no Recovery motion/Start/laps.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-public-r660",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "accepted",
+      "reason": "Same-run public observations distinguish actual normal864 from rejected865; public maximum speed0.994773388mps. Measurement does not prove private physical model accuracy.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-confirmation-before-r661",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "accepted",
+      "reason": "Original confirmation-loss regression fails before change. Initial proposed test sequence was subsequently refined in R664.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-confirmation-after-r662",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "rejected",
+      "reason": "Direct Confirmed Normal-to-Wait proposal changes original stage/wait sequence and fails57 existing tests. Reverted; no expectations weakened.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-v2x-r663",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "accepted",
+      "reason": "2048 fresh map-frame empty arrays at20Hz in declared single simulation. Existing empty producer active; Recovery considered incomplete and used obsolete force-motion override.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-confirmation-preserve-before-r664",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "accepted",
+      "reason": "Stage-preserving regression fails on original9950 confirmation ownership after own normal cancellation.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-confirmation-preserve-after-r665",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "accepted",
+      "reason": "Use existing StuckConfirmed reason to retain accepted confirmation while preserving wait/gear sequence and safety guards; all150Recovery tests pass.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-clearance-before-r666",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "accepted",
+      "reason": "Source deletion gate fails on original force-motion bypasses; frozen prior code/config retained.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-clearance-after-r667",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "accepted",
+      "reason": "Remove unsafe static/V2X/unchanged-budget bypasses. Declared count constrains learned identity set; current fresh epoch message still mandatory for empty peers.148Recovery+825V2X and117source tests pass.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [
+        "Rejected least-bad static selection",
+        "Incomplete/self-mismatch/blocked V2X override",
+        "Unchanged-scene force retry budget resets"
+      ],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-deadline-r668",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "inconclusive",
+      "reason": "Exact source/domain/history replay of single-r12decision865; inspect evidence for native cost and preserved original deadline refusal. Timing is diagnostic, not integrated25ms acceptance.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-launch-r669",
+      "baseline_commit": "9950c145",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-clearance-seal-r670"
+      ],
+      "hypothesis": "Preserve accepted Recovery confirmation and require actual complete wall/V2X clearance; separate normal proof deadline.",
+      "changed_dimension": "See recovery-confirmation-clearance-design.md and sealed evidence.",
+      "result": "accepted",
+      "reason": "Actual ROS launch expansion resolves absent/1/2/4 and explicit override3 as integer parameters; no processes launched.",
+      "production_impact": "Confirmation ownership and strict Recovery topology/clearance only; canonical9 physical model and numerical normal proof unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or changed invariant; do not repeat rejected timing/sequence/clearance relaxations."
     }
   ]
 }

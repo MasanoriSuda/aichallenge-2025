@@ -95,13 +95,8 @@ stuck_recovery:
     # Simulation race: recoverable terminal states are paused and reassessed instead of
     # remaining latched for the rest of the race.
     aggressive_sim_recovery_enabled: true
-    # Competition simulation: a blocked vehicle must keep moving. V2X overlap
-    # becomes diagnostic-only, every conservative static rejection falls back
-    # to the least-bad short primitive, and SafeStop becomes a retry delay.
-    aggressive_force_motion_enabled: true
     aggressive_retry_delay_sec: 0.2
-    # Used only when force_motion is disabled. The aggressive race policy
-    # retries even when the snapshot is unchanged.
+    # Reconsider a blocked scene only after a material observation change.
     aggressive_retry_min_lateral_change_m: 0.15
     aggressive_retry_min_heading_change_rad: 0.10
     # Simulation-race only: a transient recovery failsafe may retry after every
@@ -196,7 +191,7 @@ stuck_recovery:
     sweep_interpolation_step_m: 0.05
   rear_safety:
     # Peer IDs are learned automatically from structurally valid V2X arrays for the race session.
-    # An empty learned set fails closed unless the simulation-only aggressive override is active.
+    # Empty peers require declared single-vehicle simulation and a fresh empty array.
     self_filter_mode: excluded
     self_vehicle_id: ""
     # Complete peer body is shared with normal MPCC via mpc.v2x_peer_body_radius_m.

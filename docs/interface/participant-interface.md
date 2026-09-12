@@ -325,3 +325,17 @@ async互換性・artifact検証・最終publish前照合へ引き継ぐ。profil
 schemaの不一致を拒否し、fingerprintへ結合する。項目を持たない従来形式はv1と元の
 fingerprintを維持する。v1だけを理解する旧readerはv2を拒否するため、再生readerも
 同時更新する。通常指令の公開1周期の権限と、別途全停止まで認証する停止列は区別する。
+
+### Recoveryのローカル運行台数（2026-09-13、2025由来の暫定）
+
+`mpc_controller.launch.py`に追加する`recovery_vehicle_count`引数・同名ROS parameterは、
+既存`AIC_VEHICLE_COUNT`からシミュレーションの宣言台数を受け取る。未指定の既定値`0`は
+台数不明であり、空の他車集合を安全な単車状態と推定しない。`make dev/dev2/dev3/dev4`は
+既存の環境変数で台数を指定する。別の起動入口は台数を明示するか、保守的な未指定動作を使う。
+
+単車では評価基盤の既存空V2X publisherを用いる。宣言台数だけで通信欠落を許可せず、
+現在のRecovery epochで受信した新鮮かつ妥当な空配列と、未知の他車がないことを要求する。
+多車両はself-filter契約に従った期待台数とID集合を検証する。実車ではこの補助宣言を使わない。
+`/v2x/vehicle_positions`の名前・型・Domain、管理面、提出entryとtar構造は変わらない。
+既存launchを破らない追加引数だが、旧force-motion設定による壁/V2X判定の無視は廃止する。
+2026公式の運行台数・完全性保証との同等性は`TBD`。これは現行ローカル環境の補助契約である。

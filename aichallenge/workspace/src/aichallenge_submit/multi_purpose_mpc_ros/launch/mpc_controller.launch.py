@@ -3,13 +3,14 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch.actions import (
     DeclareLaunchArgument,
     OpaqueFunction,
 )
 
 from launch_ros.actions import Node, SetParameter
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def launch_setup(context, *args, **kwargs):
@@ -48,6 +49,8 @@ def launch_setup(context, *args, **kwargs):
         parameters=[
             {"use_obstacle_avoidance": use_obstacle_avoidance},
             {"use_stats": use_stats},
+            {"recovery_vehicle_count": ParameterValue(
+                LaunchConfiguration("recovery_vehicle_count"), value_type=int)},
         ],
     )
 
@@ -79,6 +82,11 @@ def generate_launch_description():
     arg_configs = [
         # (arg_name, default_value, description)
         ("use_sim_time", "true", "Use simulation time or not"),
+        (
+            "recovery_vehicle_count",
+            EnvironmentVariable("AIC_VEHICLE_COUNT", default_value="0"),
+            "Declared simulation vehicle count for Recovery V2X; 0 means unspecified",
+        ),
         (
             "use_obstacle_avoidance",
             "false",

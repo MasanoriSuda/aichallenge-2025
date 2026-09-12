@@ -8,6 +8,23 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Recovery確定の保持と完全な周辺情報（2026-09-13）
+
+停止確認済みのHoldStopが通常実行を取り消しても、その自己取消によるsolver待機で
+受理済みのstuck確認を失わない。既存StuckConfirmed理由から元のAWSIM待機・停止確認・
+ギア手順へ進む。独立したhard-stop、観測、制御、Boost、距離・時間予算のguardは維持する。
+
+Recoveryの車両数宣言は`recovery_vehicle_count`で伝播する。単車の「他車なし」も、現在の
+Recovery epochで受信した新鮮で有効な空V2X配列が必要であり、受信欠落を空世界とみなさない。
+多車両は宣言台数に対応した既知IDを要求する。詳細は[参加者契約](../interface/participant-interface.md)。
+旧`aggressive_force_motion_enabled`、不合格の最小接触候補選択、V2X欠落・自車不一致・
+障害の無視、場面不変の無条件予算リセットは廃止。古い外部YAMLの同名キーにも権限を与えない。
+
+R664旧失敗/R665修正後150合格、旧強制走行2テスト廃止後のR667は148Recovery+825V2X合格。
+source117/build128/package115と実launch展開を確認。single-r12の865期限超過は通常軌道証明の
+別問題であり、今回のRecovery修正による解消や統合完走は未確認。
+[設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-confirmation-clearance-design.md)。
+
 ## ReadyのRecoveryと認証済みRejoin（2026-09-13）
 
 Recoveryは従来のStart後に加え、AWSIM状態追跡が有効なシミュレーションで、

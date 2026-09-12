@@ -222,6 +222,15 @@ bool V2XPeerIdentityTracker::is_complete(
   return true;
 }
 
+bool V2XPeerIdentityTracker::is_complete(
+  const std::vector<std::string> & vehicle_ids, const std::size_t expected_count) const
+{
+  if (learned_vehicle_ids_.size() != expected_count) {
+    return false;
+  }
+  return expected_count == 0U ? vehicle_ids.empty() : is_complete(vehicle_ids);
+}
+
 std::size_t V2XPeerIdentityTracker::learned_vehicle_count() const noexcept
 {
   return learned_vehicle_ids_.size();

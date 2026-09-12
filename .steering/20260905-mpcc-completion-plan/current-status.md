@@ -3,7 +3,7 @@
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
 **全体未完。単車はReady中に停止し、再発進・完走は未達。観測時刻と接地変動による予測誤差の修正を検証中。**
 
-最新実装fdee0b8fは、二つの完全な入力予測範囲と、包含を確認した事前計算の座標変換。
+通常証明の数値実装fdee0b8fは、二つの完全な入力予測範囲と、包含を確認した事前計算の座標変換。
 Build126全26/package113全2622/source112/native216合格。新規single-r11を120秒確認し、
 4255callback最大19.92ms、送信期限拒否・期限外通常送信ともゼロ。局所的な実走時間確認は通過。
 ただし通常送信は1047/source651/index13で終わり、1048は元の停止証明期限切れ。
@@ -20,7 +20,15 @@ R653で最初の壁は左前方cell476325と特定。R655非線形3初期値比�
 LowSpeedRejoinの直接速度・加速・操舵生成を除去。速度上限を最適化へ渡し、
 現在認証済みRejoin/Stopの原指令だけを通常dispatcherへ戻す。元のStart reset/gear/
 launch/Boost/安全条件は維持。R656native228/source115、build127/package114合格。
-次はcommit固定single-r12でRecoveryから通常走行への復帰と公開期限を検証する。
+9950c145のsingle-r12は未合格。4246callback中865が36.77msで元期限を超え拒否、
+336通常送信は864で終了。Ready停止確認後、自己取消によるsolver待ちで確認を失う
+885回のループを観測。R664で再現し、元の待機順序で確定済み確認を保持する案は
+R665全150Core test合格。R662の待機順序を変える案は57回帰失敗のため未採用。
+R663は2048の新鮮な空V2X配列を確認。宣言単車なのにRecoveryが不完全扱いし、
+旧force-motionが情報欠落を無視していた。宣言台数の接続と壁/V2X/予算bypassの撤去を
+実施し、R667全973native/source117、build128/package115、実launch5条件が合格。
+次はcommit固定single-r13。R668で865の元入力を再生し、期限問題は別途継続。
+[現在の設計・根拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-confirmation-clearance-design.md)。
 source壁問題・物理観測誤差・全M4–M6は未完。追加確認は不要。
 [設計と局所検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-session-rejoin-design.md)、
 [停止source比較](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-cell-native-feasibility-audit.md)。

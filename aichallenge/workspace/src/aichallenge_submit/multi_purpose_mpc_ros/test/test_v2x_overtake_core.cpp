@@ -720,6 +720,45 @@ TEST(V2XPeerIdentityTracker, ResetClearsTheRaceSessionIdentitySet)
   EXPECT_FALSE(tracker.is_complete({"P2"}));
 }
 
+TEST(V2XPeerIdentityTracker, DeclaredZeroPeersRequiresAnEmptyKnownAndObservedSet)
+{
+  V2XPeerIdentityTracker tracker;
+  ASSERT_TRUE(tracker.observe_valid_message({}));
+  EXPECT_TRUE(tracker.is_complete({}, 0U));
+  EXPECT_FALSE(tracker.is_complete({}));  // Unknown topology stays conservative.
+  EXPECT_FALSE(tracker.is_complete({}, 1U));
+  EXPECT_FALSE(tracker.is_complete({"P2"}, 0U));
+  ASSERT_TRUE(tracker.observe_valid_message({"P2"}));
+  EXPECT_FALSE(tracker.is_complete({}, 0U));  // A missing learned peer is not absence.
+}
+
+TEST(V2XPeerIdentityTracker, DeclaredCountRejectsAnUnobservedOrDisappearedPeer)
+{
+  V2XPeerIdentityTracker tracker;
+  ASSERT_TRUE(tracker.observe_valid_message({"P2"}));
+  EXPECT_TRUE(tracker.is_complete({"P2"}, 1U));
+  EXPECT_FALSE(tracker.is_complete({"P2"}, 2U));
+  ASSERT_TRUE(tracker.observe_valid_message({"P2", "P3"}));
+  EXPECT_TRUE(tracker.is_complete({"P3", "P2"}, 2U));
+  EXPECT_FALSE(tracker.is_complete({"P2"}, 2U));
+  EXPECT_FALSE(tracker.is_complete({"P2", "P3"}, 1U));
+  EXPECT_FALSE(tracker.is_complete({"P2", "P3"}, 3U));
+  ASSERT_TRUE(tracker.observe_valid_message({"P2", "P3", "P4"}));
+  EXPECT_TRUE(tracker.is_complete({"P4", "P2", "P3"}, 3U));
+  EXPECT_FALSE(tracker.is_complete({"P2", "P3"}, 3U));
+}
+
+TEST(V2XPeerIdentityTracker, DeclaredCountCannotSubstituteDuplicateOrUnknownIds)
+{
+  V2XPeerIdentityTracker tracker;
+  ASSERT_TRUE(tracker.observe_valid_message({"P2", "P3"}));
+  EXPECT_FALSE(tracker.is_complete({"P2", "P2"}, 2U));
+  EXPECT_FALSE(tracker.is_complete({"P2", "P4"}, 2U));
+  EXPECT_FALSE(tracker.is_complete({"P2", ""}, 2U));
+  EXPECT_FALSE(tracker.observe_valid_message({"P2", "P2"}));
+  EXPECT_TRUE(tracker.is_complete({"P2", "P3"}, 2U));
+}
+
 TEST(V2XOpponentMotionFilter, SmoothsVelocityAndBoundsAcceleration)
 {
   OpponentMotionFilterRequest request;

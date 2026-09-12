@@ -63,8 +63,14 @@ simulationかつ車両数1の場合だけ、各vehicle Domain内の
 `single_vehicle_empty_v2x_publisher`がtimestamp付きの空`V2XVehiclePositionArray`をpublishする。
 `make dev2`以上ではこのproducerを起動せず、AWSIM native V2Xだけを使用する。
 
-この値はシナリオ構成の伝播に限定し、参加者controllerの車両数判定やV2X欠損fallbackには
-使用しない。
+2026-09-13: MPCC Recoveryも、この宣言値を追加parameter `recovery_vehicle_count`で
+受け取る。既定は環境変数`AIC_VEHICLE_COUNT`、未指定時は0（台数不明）。simulationでのみ、
+自車除外配列ならN−1、明示自車IDを含む配列ならNの既知IDを要求する。
+単車の空配列も、現在のRecovery epochで受信した新鮮で有効なmessageが必要である。
+NoData、期限切れ、不正時刻、欠落IDを台数宣言で補完しない。台数不明時の空配列も不完全とする。
+旧force-motionによる不完全V2X・自車不一致・peer障害の無視は廃止する。
+[参加者契約](../interface/participant-interface.md)を参照。2025由来のローカル暫定であり、
+2026公式の台数・V2X契約との同等性はTBD。
 
 ## Design Guidelines
 

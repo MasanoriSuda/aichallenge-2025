@@ -3206,71 +3206,6 @@ TEST(RecoverySupervisor, AggressiveSimulationDoesNotRepeatAnUnchangedSnapshot)
   EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
 }
 
-TEST(RecoverySupervisor, ForceMotionRetriesAnUnchangedSnapshot)
-{
-  auto config = supervisor_config();
-  config.aggressive_sim_recovery_enabled = true;
-  config.aggressive_force_motion_enabled = true;
-  config.aggressive_retry_delay_sec = 0.1;
-  config.max_attempts = 0U;
-  RecoverySupervisor supervisor(config);
-  double now = 0.0;
-  auto input = healthy_recovery_input(now);
-  input.maneuver_direction = ManeuverDirection::Unknown;
-  advance_to_clearance_check(supervisor, input, now);
-
-  now += 0.01;
-  input.now_sec = now;
-  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ManeuverDirectionUnknown);
-  ASSERT_EQ(supervisor.state(), RecoveryState::SafeStop);
-
-  now += 0.11;
-  input.now_sec = now;
-  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::AggressiveRetry);
-  ASSERT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
-
-  now += 0.01;
-  input.now_sec = now;
-  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ClearanceCheck);
-  now += 0.01;
-  input.now_sec = now;
-  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::ManeuverDirectionUnknown);
-  ASSERT_EQ(supervisor.state(), RecoveryState::SafeStop);
-
-  now += 0.11;
-  input.now_sec = now;
-  const auto action = supervisor.update(input);
-  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
-  EXPECT_EQ(action.reason, RecoveryReason::AggressiveRetry);
-  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
-}
-
-TEST(RecoverySupervisor, ForceMotionDoesNotLatchClearanceTimeout)
-{
-  auto config = supervisor_config();
-  config.clearance_wait_timeout_sec = 0.1;
-  config.clearance_safe_stop_recovery_enabled = true;
-  config.aggressive_sim_recovery_enabled = true;
-  config.aggressive_force_motion_enabled = true;
-  RecoverySupervisor supervisor(config);
-  double now = 0.0;
-  auto input = healthy_recovery_input(now);
-  input.rear_v2x_clear = false;
-  advance_to_clearance_check(supervisor, input, now);
-
-  now += 0.01;
-  input.now_sec = now;
-  ASSERT_EQ(supervisor.update(input).reason, RecoveryReason::RearVehicleBlocked);
-  ASSERT_EQ(supervisor.state(), RecoveryState::WaitForClear);
-
-  now += 0.11;
-  input.now_sec = now;
-  const auto action = supervisor.update(input);
-  EXPECT_EQ(action.type, RecoveryActionType::HoldStop);
-  EXPECT_EQ(action.reason, RecoveryReason::AggressiveRetry);
-  EXPECT_EQ(supervisor.state(), RecoveryState::StopAndConfirm);
-}
-
 TEST(RecoverySupervisor, AggressiveSimulationKeepsInvalidInputLatched)
 {
   auto config = supervisor_config();
@@ -4385,4 +4320,48 @@ TEST(StuckRecoverySession, ReadyCollectsEvidenceButRetainsControlAndEngagementGu
   input.session_active = true;
   input.now_sec = 1.3;
   EXPECT_EQ(detector.update(input).reject_reason, StuckRejectReason::ObservationWindowIncomplete);
+}
+
+TEST(StuckRecoveryCore, ConfirmedObservationSurvivesItsOwnNormalCancellation)
+{
+  CoreConfig config;
+  config.enabled = true;
+  config.shadow_mode = false;
+  config.simulation_only = true;
+  config.detector = detector_config();
+  config.detector.stationary_duration_sec = 0.25;
+  config.detector.solver_fallback_recovery_enabled = true;
+  config.detector.solver_fallback_duration_sec = 2.0;
+  config.supervisor = supervisor_config();
+  config.supervisor.awsim_recovery_wait_sec = 1.0;
+  StuckRecoveryCore core(config);
+  CoreInput input;
+  input.simulation_environment = true;
+  input.detector = eligible_detector_input(0.0);
+  input.recovery = healthy_recovery_input(0.0);
+  EXPECT_EQ(core.update(input).state, RecoveryState::Normal);
+
+  // single-r12: normal905already has a confirmed stationary wall observation.
+  // Its own HoldStop discards normal execution, so906reports solver fallback.
+  input.detector.now_sec = 0.68;
+  auto output = core.update(input);
+  ASSERT_EQ(output.detector.verdict, StuckVerdict::Confirmed);
+  EXPECT_EQ(output.state, RecoveryState::SuspectStuck);
+  EXPECT_EQ(output.action.reason, RecoveryReason::StuckConfirmed);
+  EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
+  input.detector.now_sec = 0.70;
+  input.detector.solver_fallback = true;
+  output = core.update(input);
+  EXPECT_EQ(output.detector.reject_reason, StuckRejectReason::ObservationWindowIncomplete);
+  EXPECT_EQ(output.state, RecoveryState::WaitAwsimRecovery);
+  EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
+
+  // The original AWSIM settling interval and explicit safety stop still apply.
+  input.detector.now_sec = 1.67;
+  output = core.update(input);
+  EXPECT_EQ(output.state, RecoveryState::WaitAwsimRecovery);
+  EXPECT_EQ(output.action.type, RecoveryActionType::HoldStop);
+  input.detector.now_sec = 1.68;
+  input.recovery.hard_stop_requested = true;
+  EXPECT_EQ(core.update(input).state, RecoveryState::SafeStop);
 }

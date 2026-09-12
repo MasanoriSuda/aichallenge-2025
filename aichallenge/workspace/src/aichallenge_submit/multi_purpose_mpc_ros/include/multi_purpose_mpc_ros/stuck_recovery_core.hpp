@@ -895,13 +895,8 @@ struct SupervisorConfig
   // re-evaluated instead of remaining latched for the rest of the race.
   // CoreConfig::simulation_only must also be true.
   bool aggressive_sim_recovery_enabled{false};
-  // Competition-simulation policy: SafeStop is only a short retry delay, V2X
-  // blockers are advisory at the adapter, and a least-bad motion candidate is
-  // allowed when every conservative rollout is rejected. This must remain
-  // disabled for real-vehicle configurations.
-  bool aggressive_force_motion_enabled{false};
   double aggressive_retry_delay_sec{0.5};
-  // When force motion is disabled, retry a given recovery snapshot only once
+  // Retry a given recovery snapshot only once
   // until the path-relative pose or a discrete safety/candidate field changes.
   double aggressive_retry_min_lateral_change_m{0.15};
   double aggressive_retry_min_heading_change_rad{0.10};

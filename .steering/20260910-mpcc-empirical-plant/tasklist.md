@@ -616,3 +616,5 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [ ] Independent measurement/contact/Recovery eligibility and all remainingM4–M6; no additional confirmation needed.
 
 2026-09-13R653–R656:source805front-left cell476325; native3seed comparison no useful restart (one4.496cm certificate, others rejected), Unknown. Separate prepared simulation Ready Recovery session and canonical Rejoin handoff implemented; no direct normal rejoin feedback. Native228/source115/build127/package114pass. Fixed-source single-r12and allM4–M6pending; source wall/model error not repaired. See recovery-session-rejoin-design.md/evidence.json.
+
+2026-09-13R659–R669:single-r12failed with confirmation-cancellation loop and decision865deadline. Preserve accepted confirmation via existing reason, retire static/V2X/unchanged-budget force-motion bypasses, wire simulation declared membership without treating missing data as clear. R664oldfail/R665150pass; R667148Recovery+825V2X/source117; build128/package115; actual launch5conditions pass. Exact865replay separately recorded. Next fixed-source single-r13; all integrated M4–M6remain. See recovery-confirmation-clearance-design.md/evidence.json.

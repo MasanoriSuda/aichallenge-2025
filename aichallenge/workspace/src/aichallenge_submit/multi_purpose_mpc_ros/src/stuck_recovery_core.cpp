@@ -1708,7 +1708,13 @@ RecoveryAction RecoverySupervisor::update_normal(const RecoveryInput & input)
 
 RecoveryAction RecoverySupervisor::update_suspect(const RecoveryInput & input)
 {
-  if (input.detector.verdict == StuckVerdict::Confirmed) {
+  // A Confirmed HoldStop already owns this episode. Cancelling normal execution
+  // can make its next solver observation temporarily unqualified; that is not a
+  // retraction of the accepted confirmation. Preserve the original wait/gear
+  // sequence and all supervisor safety guards, rather than restarting detection.
+  if (state_reason_ == RecoveryReason::StuckConfirmed ||
+    input.detector.verdict == StuckVerdict::Confirmed)
+  {
     transition(
       RecoveryState::WaitAwsimRecovery, RecoveryReason::AwsimRecoveryWaiting,
       input.now_sec);
@@ -1830,21 +1836,6 @@ RecoveryAction RecoverySupervisor::update_wait_for_clear(const RecoveryInput & i
     return update_check_clearance(input);
   }
   if (state_elapsed(input.now_sec) >= config_.clearance_wait_timeout_sec) {
-    if (
-      config_.aggressive_sim_recovery_enabled &&
-      config_.aggressive_force_motion_enabled)
-    {
-      attempt_count_ = 0U;
-      escape_step_count_ = 0U;
-      active_stepwise_escape_ = false;
-      reassess_after_drive_ = false;
-      safe_stop_after_drive_ = false;
-      escape_confirmed_before_drive_ = false;
-      transition(
-        RecoveryState::StopAndConfirm, RecoveryReason::AggressiveRetry,
-        input.now_sec);
-      return hold_action(RecoveryReason::AggressiveRetry);
-    }
     transition(
       RecoveryState::SafeStop, RecoveryReason::ClearanceWaitTimedOut, input.now_sec);
     return safe_stop_action(RecoveryReason::ClearanceWaitTimedOut);
@@ -1854,11 +1845,7 @@ RecoveryAction RecoverySupervisor::update_wait_for_clear(const RecoveryInput & i
 
 RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
 {
-  const bool force_motion =
-    config_.aggressive_sim_recovery_enabled &&
-    config_.aggressive_force_motion_enabled;
   if (
-    !force_motion &&
     config_.clearance_safe_stop_recovery_enabled &&
     state_reason_ == RecoveryReason::ClearanceWaitTimedOut)
   {
@@ -1892,7 +1879,6 @@ RecoveryAction RecoverySupervisor::update_safe_stop(const RecoveryInput & input)
 
   const auto current_snapshot = recovery_retry_snapshot(input);
   if (
-    !force_motion &&
     last_aggressive_retry_snapshot_.has_value() &&
     !recovery_retry_snapshot_materially_changed(
       last_aggressive_retry_snapshot_.value(), current_snapshot,

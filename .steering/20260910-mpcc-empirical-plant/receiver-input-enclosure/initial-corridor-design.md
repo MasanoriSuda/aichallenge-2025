@@ -51,7 +51,7 @@ handoff repair needs its own evidence and cannot discard context validation.
   Representative scalar bounds[-4,2] yield initial interval[-3.199,0.949].
   Query median0.607659ms, p950.611306ms, max0.659247ms over100unloaded calls;
   this is not a runtime bound or an end-to-end controller replay.
-- [ ] Fresh standard dev2-r76 dynamic validation on the committed source.
+- [x] Fresh standard dev2-r76 executed on56692749; rejected at D1current-wall3999, no race acceptance. See [r76 audit](r76-current-wall-audit.md).
 - [ ] Continue Start speed handoff, future wall/candidate/timing and full M4–M6.
 
 [r75 and initial-width validation evidence](r75-initial-corridor-evidence.json)

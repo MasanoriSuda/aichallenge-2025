@@ -441,3 +441,14 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Build116 all26/package103 all2598, R474 saved artifact/physical proof and native query timing.
 - [ ] Standard dev2-r76 on the committed source.
 - [ ] Separate speed/context handoff and remaining full M4–M6 completion.
+
+## r76 current wall and source availability audit
+
+- [x] Standard r76 on56692749/build116/tests103; first active D1decision3999, no laps, automatic teardown and restoration.
+- [x] R475 original source/history/domain equality and exact current wall failure reproduced.
+- [x] R477 native/compiled comparison; R476 setup failure retained. R478 existing-branch split still rejects.
+- [x] R479 native input endpoint samples hit original clearance footprint; no checker/tolerance repair justified.
+- [x] R480 new-world A/B/C/D/G gate; stationary C-left/D-left certify, moving source3488 all reject.
+- [x] R481 strict affine feasibility comparison; R482 eight-factor combinations each; R483 exact prototype boundary.
+- [x] R484 complete future component query proceeds but all8 full candidates reject; unpromoted.
+- [ ] R485 native braking/steering tangent and repair demonstrated candidate producer, compare stationary bounded source generation; all full M4–M6 remain.

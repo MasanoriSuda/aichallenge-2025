@@ -86,6 +86,10 @@ r75 D1の通常artifact生成拒否はR472で同じQP解から再現済み。
 修正候補のbuild116全26、tests103全2598、source106、実APIによるR474再生が合格。
 単独測定の初期幅計算は中央値0.608ms。実走時の時間上限や完走の保証ではない。
 [初期通路幅の根拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/initial-corridor-design.md)。
+標準r76はD1decision3999の現在壁証明で未達。元の送信履歴とsource/domainを一致させた
+再生も同じ壁拒否となり、元の数値計算でも成立しない。入力端点の物理モデル再生では
+安全余白込みの車体が同じ壁セルへ達する。安全判定を維持し、新規軌道の生成を修復する。
+[現在壁と新規sourceの比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r76-current-wall-audit.md)。
 
 受信入力を表す共有数値API `mpcc_applied_input_prediction` を追加した。
 同一時刻の公開履歴を全件保持し、全予測区間の因果的な入力coverageを要求する。

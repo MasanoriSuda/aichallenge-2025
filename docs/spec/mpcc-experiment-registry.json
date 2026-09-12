@@ -1291,6 +1291,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r75-initial-corridor-evidence.json",
       "replay_ready": true,
       "reason": "D1 original artifact construction and D2Start context break recorded separately."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-r76-current-wall",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r76-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact current3999 and separate original source3488/2025 worlds; no substituted failure."
     }
   ],
   "experiments": [
@@ -16035,6 +16041,160 @@
         "Initial find_cached_physical_wall_envelope call"
       ],
       "revisit_condition": "Changed physical pose/model/map or source producer; integrated live validation remains."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-rrun",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Standard dev2",
+      "result": "rejected",
+      "reason": "D1current wall3999 automatic failure, no laps; code56692749/build116/tests103.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r475",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Exact current replay",
+      "result": "accepted",
+      "reason": "Source/history/domain fingerprints exact; current world4/physical6 and98.619997805 reproduce.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r476",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Diagnostic wall instrumentation setup",
+      "result": "inconclusive",
+      "reason": "Compile rejected: contact cell is linear index, not GridIndex. Corrected only in R477.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r477",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Remove compiled equations in diagnostic current predictor",
+      "result": "rejected",
+      "reason": "Both same original wall cell reject, compiled98.619997805/native98.624997805; no candidate.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r478",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Validate all existing branch sweeps before their hull",
+      "result": "rejected",
+      "reason": "Same rejection in both equation variants; all branches retained, no refinement count change.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r479",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Native input-abstraction endpoint witnesses",
+      "result": "accepted",
+      "reason": "Latest-braking points overlap original clearance footprint at same cell; not observed collision or receiver trace.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r480",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Same-world A/B/C/D/G",
+      "result": "inconclusive",
+      "reason": "Moving3488 all9reject; separate stationary2025 C-left/D-left certify after20attempts, other7reject. No live adoption.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r481",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Independent strict affine feasibility",
+      "result": "accepted",
+      "reason": "3488 strict rows infeasible/slack0.001381865673;2025 feasible/maxresidual4.857e-16. Not nonlinear infeasibility or tolerance change.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r482",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Eight source ablations per world",
+      "result": "rejected",
+      "reason": "All16reject; pose-wall moving arms stop in prototype corridor generation before physical proof.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r483",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Localize prototype corridor construction boundary",
+      "result": "inconclusive",
+      "reason": "First arm logs provisional stage5 anchor clear=false, then diagnostic exception crosses noexcept and aborts; three remaining arms unexecuted. No changed production proof.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r76-current-wall-r484",
+      "baseline_commit": "56692749d86a633949e11916cdc5e340b3fd6afc",
+      "snapshot_ids": [
+        "20260912-nine-state-r76-current-wall"
+      ],
+      "hypothesis": "Explain current wall rejection and absent replacement sources without altering safety or timing contracts.",
+      "changed_dimension": "Complete lateral-component query at actual provisional future pose",
+      "result": "rejected",
+      "reason": "Prototype anchor rejection removed with original existing API; all8 downstream wall/dynamic/numerical arms still reject, no production promotion.",
+      "production_impact": "No production change or live authority; diagnostic/audit only.",
+      "deleted_code": [],
+      "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
     }
   ]
 }

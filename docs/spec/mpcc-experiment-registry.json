@@ -1387,6 +1387,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-truth-evidence.json",
       "replay_ready": true,
       "reason": "Simultaneous immutable received histories and physical same-epoch truth with fixed primary comparison;9explicit unmatched captures, no full acceptance."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-event-phase-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-event-phase-evidence.json",
+      "replay_ready": true,
+      "reason": "Preserved R570–R575 public-event reconstructions, explicit phase errata and private applied-input causal comparison. No production promotion or full acceptance."
     }
   ],
   "experiments": [
@@ -17193,7 +17199,7 @@
       "hypothesis": "Separate sensor epochs, actual inputs, contact prediction and diagnostic reference",
       "changed_dimension": "Actual physics wire and component observations against exact original source ranges",
       "result": "accepted",
-      "reason": "All30actual wires inside union of original sign ranges.24speed observations outside, maximum0.026916949mps.12physical tire values outside by at most2.166e-9rad; retain finite-precision/within-tick issue without adding tolerance or declaring exact tire containment. Raw initial yaw/vy comparisons include real component epoch or float differences.",
+      "reason": "All30actual wires inside union of original sign ranges.24speed observations outside, maximum0.026916949mps.12physical tire values outside by at most2.166e-9rad; retain finite-precision/within-tick issue without adding tolerance or declaring exact tire containment. Raw initial yaw/vy comparisons include real component epoch or float differences. R575phase correction: zero Before tire misses/30, original End12superseded, body24speed misses unchanged.",
       "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
       "deleted_code": [],
       "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
@@ -17613,7 +17619,7 @@
       "hypothesis": "Recover physically coherent pose-epoch body state from causal received samples",
       "changed_dimension": "Prespecified frozen received-pose bracket against physical truth",
       "result": "inconclusive",
-      "reason": "25unique captures/35valid serialized occurrences;16same-epoch physical matches,9pre-Ready unmatched explicitly retained. All16: uMAE0.011776→0.005892mps,vy0.001346→0.000896,r0.003513→0.001890radps,tire0.002881→0.001667rad.7velocity interpolations improve but unsupported maxuerror0.038209remains; IMU5improve/3worsen. No new fit, no universal state enclosure or production adoption.",
+      "reason": "25unique captures/35valid serialized occurrences;16same-epoch physical matches,9pre-Ready unmatched explicitly retained. All16: uMAE0.011776→0.005892mps,vy0.001346→0.000896,r0.003513→0.001890radps,tire0.002881→0.001667rad.7velocity interpolations improve but unsupported maxuerror0.038209remains; IMU5improve/3worsen. No new fit, no universal state enclosure or production adoption. R572initial-tire phase erratum supersedes former tire values; body scores unchanged. See received-event-phase-evidence.json.",
       "production_impact": "None after fe976b39 observation metadata; frozen bracket and extrapolation remain diagnostics only.",
       "deleted_code": [],
       "revisit_condition": "New coupled physical/event reconstruction with exact receipt/source/input support and hard negative evidence; do not repeat unchanged linear extrapolation or claim inspected data is untouched."
@@ -17627,7 +17633,7 @@
       "hypothesis": "Recover physically coherent pose-epoch body state from causal received samples",
       "changed_dimension": "Supplemental two-past-sample linear projection for missing upper support",
       "result": "rejected",
-      "reason": "Inspected same16matches, primary frozen result untouched. Past-only improvesuMAE but worsensvy0.001346→0.002084mps andr0.003513→0.003630radps; combined bracket/projection lowersuMAE0.001935but vymaximum0.011060versus0.005438original, tiremax0.007915versus0.007314. No blanket extrapolation or score-driven per-channel promotion.",
+      "reason": "Inspected same16matches, primary frozen result untouched. Past-only improvesuMAE but worsensvy0.001346→0.002084mps andr0.003513→0.003630radps; combined bracket/projection lowersuMAE0.001935but vymaximum0.011060versus0.005438original, tiremax0.007915versus0.007314. No blanket extrapolation or score-driven per-channel promotion. R572initial-tire phase erratum supersedes former tire values; body scores unchanged. See received-event-phase-evidence.json.",
       "production_impact": "None after fe976b39 observation metadata; frozen bracket and extrapolation remain diagnostics only.",
       "deleted_code": [],
       "revisit_condition": "New coupled physical/event reconstruction with exact receipt/source/input support and hard negative evidence; do not repeat unchanged linear extrapolation or claim inspected data is untouched."
@@ -17645,6 +17651,90 @@
       "production_impact": "Diagnostic timing only; original controller and guards unchanged.",
       "deleted_code": [],
       "revisit_condition": "Validated material production improvement or a distinct unavailable boundary; no blind live rerun."
+    },
+    {
+      "experiment_id": "20260913-nine-state-event-phase-audit-r570",
+      "baseline_commit": "54964eb45fb39f0fc9e52092b02865cc353d7b23",
+      "snapshot_ids": [
+        "20260913-nine-state-event-phase-audit"
+      ],
+      "hypothesis": "Separate public source-epoch reconstruction, receiver application and current body/actuator dynamics",
+      "changed_dimension": "Exact common received epoch and command-history support",
+      "result": "inconclusive",
+      "reason": "19of25captures supported from direct matching original observation, six explicitly unavailable. Input/support only; no native execution or runtime failure claim.",
+      "production_impact": "Diagnostic helper phase selector only; controller/model/normal authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected source/reference semantics or a structurally different causal input/body model, original hard negatives preserved; no unchanged observer rerun or private input promotion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-event-phase-audit-r571",
+      "baseline_commit": "54964eb45fb39f0fc9e52092b02865cc353d7b23",
+      "snapshot_ids": [
+        "20260913-nine-state-event-phase-audit"
+      ],
+      "hypothesis": "Separate public source-epoch reconstruction, receiver application and current body/actuator dynamics",
+      "changed_dimension": "Coupled native body event reconstruction from actual public seed/events/history",
+      "result": "rejected",
+      "reason": "21native reconstructions/no failures, exact body global-frame invariance. Four early inputs unavailable; ledger joins restore883/1005without borrowed later data. All16primary matches scored; u improves but lateral/r/tire regress. Original End-phase tire scores superseded byR572. No promotion.",
+      "production_impact": "Diagnostic helper phase selector only; controller/model/normal authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected source/reference semantics or a structurally different causal input/body model, original hard negatives preserved; no unchanged observer rerun or private input promotion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-event-phase-audit-r572",
+      "baseline_commit": "54964eb45fb39f0fc9e52092b02865cc353d7b23",
+      "snapshot_ids": [
+        "20260913-nine-state-event-phase-audit"
+      ],
+      "hypothesis": "Separate public source-epoch reconstruction, receiver application and current body/actuator dynamics",
+      "changed_dimension": "Explicit before/after Vehicle update diagnostic scoring reference",
+      "result": "accepted",
+      "reason": "Legacy reader bit-exact; five phase/gap/identity negatives pass. Same16primary estimates/cohort preserved; direct body before/end identical there.21unique public tire endpoints match Before to1.054e-8rad. R568/R569/R571 tire scores corrected; interpolation worsttire0.0118253versusheld0.00548674. R557tireoutside8unchanged, body27unchanged.",
+      "production_impact": "Diagnostic helper phase selector only; controller/model/normal authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected source/reference semantics or a structurally different causal input/body model, original hard negatives preserved; no unchanged observer rerun or private input promotion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-event-phase-audit-r573",
+      "baseline_commit": "54964eb45fb39f0fc9e52092b02865cc353d7b23",
+      "snapshot_ids": [
+        "20260913-nine-state-event-phase-audit"
+      ],
+      "hypothesis": "Separate public source-epoch reconstruction, receiver application and current body/actuator dynamics",
+      "changed_dimension": "Private actual applied wire and mechanical demand/tire oracle on physics grid",
+      "result": "rejected",
+      "reason": "15supported common-epoch cases. Diagnostic incorrectly double-applied tire_grip*wire_gain to physical tire demand; two private arms superseded byR574. Original outputs retained, not evidence against actuator mechanics.",
+      "production_impact": "Diagnostic helper phase selector only; controller/model/normal authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected source/reference semantics or a structurally different causal input/body model, original hard negatives preserved; no unchanged observer rerun or private input promotion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-event-phase-audit-r574",
+      "baseline_commit": "54964eb45fb39f0fc9e52092b02865cc353d7b23",
+      "snapshot_ids": [
+        "20260913-nine-state-event-phase-audit"
+      ],
+      "hypothesis": "Separate public source-epoch reconstruction, receiver application and current body/actuator dynamics",
+      "changed_dimension": "Correct physical demand to native desired conversion in private input oracle",
+      "result": "accepted",
+      "reason": "15same cases/public body seeds and measurement events. Nominal-grid outputs exactly matchR573. Actual applied delayed demand produces max tireerror2.3852e-8rad, imposed actual tire1.0533e-8. uMAE0.005630→0.002399but lateral/model/rest errors remain. Private input establishes attribution only; no deployable observer or proof.",
+      "production_impact": "Diagnostic helper phase selector only; controller/model/normal authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected source/reference semantics or a structurally different causal input/body model, original hard negatives preserved; no unchanged observer rerun or private input promotion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-event-phase-audit-r575",
+      "baseline_commit": "54964eb45fb39f0fc9e52092b02865cc353d7b23",
+      "snapshot_ids": [
+        "20260913-nine-state-event-phase-audit"
+      ],
+      "hypothesis": "Separate public source-epoch reconstruction, receiver application and current body/actuator dynamics",
+      "changed_dimension": "Propagate force from End(j) to Begin(j+1), and rescoreR540initial tire",
+      "result": "accepted",
+      "reason": "R555retained11140force predictions: five next-Sleep targets corrected, all derivative comparisons unchanged. R540before-tireoutside0of30versusoldEnd12, no tolerance change; body unchanged and24uoutside remains. No physical/model/control acceptance.",
+      "production_impact": "Diagnostic helper phase selector only; controller/model/normal authority unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected source/reference semantics or a structurally different causal input/body model, original hard negatives preserved; no unchanged observer rerun or private input promotion."
     }
   ]
 }

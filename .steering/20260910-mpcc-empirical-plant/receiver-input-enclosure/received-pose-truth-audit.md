@@ -4,6 +4,11 @@
 package108. No production observer/model change. FullM4–M6 remain incomplete.
 [Manifest and payload hashes](received-pose-truth-evidence.json).
 
+**Phase erratum R572/R575:** initial tire must use Before Vehicle update. The
+original sealed End-phase tire scores below are historical and superseded;
+[corrected scores and limitations](received-event-phase-audit.md). Body scores at
+all16matches are unchanged. Interpolation also worsens worst tire error after correction.
+
 The validated seven-call probe and received queues run together. R567 preserves
 19604physics records,3849received commands and972applications for the sole vehicle.
 The run reachesReady, continues normal sends through1148, then loses normal source

@@ -554,7 +554,7 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R554 prospective42anchors and unchanged158native baseline outputs; fixed coefficients retained.
 - [x] R553/R557 exact failure replay; R556 separates30ms held velocity from contact dynamics. R555valid11140step force audit.
 - [x] R558 preserves public interpolation endpoints and records freshness/rest/launch counterexamples; no blanket common-past replacement.
-- [ ] Establish actual per-decision received histories, including values discarded by pose cutoff; bounded failure observation if needed, with source/receipt/reset identities.
+- [x] Establish actual per-decision received histories via fe976b39/R563/R568, including values discarded by pose cutoff; source/receipt identities retained. Reset acceptance remains open.
 - [ ] Select a current causal reconstruction and contact/lateral model with original hard proof and clock constraints; coherent QP/native/Stop/current/async implementation and new dynamic acceptance.
 - [ ] Full remaining M4–M6, repeated final-source races/gates and same submission/eval.
 
@@ -567,4 +567,5 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 
 - [x] Frozen force-r3/R567–R569:25unique captures,16physical matches/9explicit unmatched; primary bracket means improve but unsupported/rate cases remain. Supplemental blanket extrapolation rejected; no promotion.
 
-- [ ] Bounded coupled event observer comparison from exact common received sensor epoch and actual command history; typed raw/derived semantics and physical/reset/rest negatives before production changes. Full M4–M6 remain.
+- [x] R570–R575 bounded coupled event comparison complete, rejected for lateral/r/tire regression; phase scoring corrected without changing legacy reader or original estimates. Private actual input isolates timing versus accurate tire mechanics.
+- [ ] Isolate current 3D/contact force contribution and select a causal producer repair. Typed raw/derived semantics, coherent full proof and physical/reset/rest negatives before production; full M4–M6 remain.

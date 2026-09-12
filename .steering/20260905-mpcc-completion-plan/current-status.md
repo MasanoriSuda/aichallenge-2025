@@ -10,8 +10,11 @@ package108全2613、旧3失敗/新3合格、過去3ケースの判定保持で�
 25ms以内、送信期限違反なしだが、再発進・Start・周回は未達。受信値の補間案を固定し、
 force-r3/R567–R569で位置時刻の物理状態と比較した。25判断のうち16件を照合し、
 速度平均誤差は改善したが、未支持の最大誤差と旋回の反例が残るため未採用。単純な外挿も
-横速度・操舵の悪化から棄却。次は共通の過去観測時刻から各受信値を本来の時刻で
-モデルへ反映する方法を、固定記録で比較する。
+横速度・操舵の悪化から棄却。R570–R575で共通時刻からの連成再構成も比較し、
+横速度・ヨーレート・操舵の悪化から未採用。操舵の比較は物理更新前へ訂正した。
+実際の適用入力なら操舵機構は最大約2.4e-8radで一致し、入力時刻と車体モデルの誤差を
+分離できた。次は3D姿勢・接地による力の寄与を切り分け、本番修正の根拠を固める。
+[再構成の棄却・時刻訂正・入力切り分け](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-event-phase-audit.md)。
 [物理比較と次の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-truth-audit.md)。
 [今回の結果と次の条件](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-single-r7-audit.md)。
 [診断実装と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-body-observation-design.md)。

@@ -35,6 +35,55 @@ class PhysicsObservations:
         return self.raw[:, [self.columns[prefix + k] for k in 'xyz']]
 
 
+@dataclass
+class VehicleUpdateBodyState:
+    phase: str
+    com_velocity_u_vy_r: np.ndarray
+    tire: np.ndarray
+    tire_supported: np.ndarray
+
+
+def vehicle_update_body_state(observations, *, phase):
+    """Choose the force-probe phase without changing the legacy end-state reader.
+
+    Begin directly records Rigidbody velocity/rotation. It does not record tire:
+    infer that value only from the preceding contiguous End row for this vehicle.
+    The first row and gaps have unsupported (NaN) tire, never a zero substitute.
+    This is a scoring reference, not a received controller observation.
+    """
+    if phase == 'after_vehicle_update':
+        return VehicleUpdateBodyState(
+            phase, observations.com_velocity_u_vy_r,
+            observations.tire_after_vehicle_update,
+            np.isfinite(observations.tire_after_vehicle_update),
+        )
+    if phase != 'before_vehicle_update':
+        raise ValueError('explicit before_vehicle_update or after_vehicle_update required')
+    rotation = Rotation.from_quat(observations.raw[:, [
+        observations.columns['bq_' + k] for k in 'xyzw'
+    ]]).as_matrix()
+    local = lambda values: np.einsum('nji,nj->ni', rotation, values)
+    velocity = local(observations.vector('bv_'))
+    omega = local(observations.vector('bw_'))
+    # fixedTimeAsDouble advances by the float fixedDeltaTime. Allow only its
+    # double accumulation rounding, not a fraction of a physics step.
+    elapsed = np.diff(observations.times)
+    dt = observations.field('dt')[1:]
+    tolerance = 8 * np.spacing(np.maximum(1., np.abs(observations.times[1:])))
+    contiguous = (
+        (np.diff(observations.field('tick')) == 1)
+        & (np.diff(observations.field('id')) == 0)
+        & np.isfinite(dt) & (dt > 0)
+        & (np.abs(elapsed - dt) <= tolerance)
+    )
+    tire = np.full(len(observations.times), np.nan)
+    tire[1:] = np.where(contiguous, observations.tire_after_vehicle_update[:-1], np.nan)
+    return VehicleUpdateBodyState(
+        phase, np.column_stack([velocity[:, 2], -velocity[:, 0], -omega[:, 1]]),
+        tire, np.isfinite(tire),
+    )
+
+
 def read_physics(path, *, pose_reference, geometry_path, vehicle_id=None):
     """Preserve raw physics timestamps and expose COM and pose fields separately."""
     if pose_reference not in ('kart_root', 'base_link'):

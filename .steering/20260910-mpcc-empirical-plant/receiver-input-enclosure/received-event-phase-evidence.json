@@ -1,0 +1,510 @@
+{
+  "baseline_commit": "54964eb45fb39f0fc9e52092b02865cc353d7b23",
+  "production_observation_commit": "fe976b39",
+  "production_algorithm_commit": "8d9810e0",
+  "build": 121,
+  "package_test": 108,
+  "production_change": false,
+  "integrated_acceptance": false,
+  "physical_phase": "COM body directly at ForceProbe.Begin; tire inferred from immediately preceding contiguous same-vehicle End. Public tire own-source agreement corroborates the phase, not a controller input.",
+  "primary_scores": {
+    "original_held": {
+      "u": {
+        "count": 16,
+        "mae": 0.011775927064867646,
+        "maximum_abs": 0.03820930030327432
+      },
+      "vy": {
+        "count": 16,
+        "mae": 0.0013456273413380577,
+        "maximum_abs": 0.005437604706964756
+      },
+      "r": {
+        "count": 16,
+        "mae": 0.0035132521622200843,
+        "maximum_abs": 0.01509968541191628
+      },
+      "tire": {
+        "count": 16,
+        "mae": 0.0014765149290689096,
+        "maximum_abs": 0.005486735052047109
+      }
+    },
+    "frozen_bracket": {
+      "u": {
+        "count": 16,
+        "mae": 0.00589198603377334,
+        "maximum_abs": 0.03820930030327432
+      },
+      "vy": {
+        "count": 16,
+        "mae": 0.0008955797735272144,
+        "maximum_abs": 0.005437604706964756
+      },
+      "r": {
+        "count": 16,
+        "mae": 0.0018898377641917525,
+        "maximum_abs": 0.005556037118751217
+      },
+      "tire": {
+        "count": 16,
+        "mae": 0.0014157647130387113,
+        "maximum_abs": 0.011825320807997449
+      }
+    },
+    "coupled_event": {
+      "u": {
+        "count": 16,
+        "mae": 0.0057220739237531125,
+        "maximum_abs": 0.02261217696234368
+      },
+      "vy": {
+        "count": 16,
+        "mae": 0.0017158854045994326,
+        "maximum_abs": 0.007514421957980813
+      },
+      "r": {
+        "count": 16,
+        "mae": 0.003731268136956568,
+        "maximum_abs": 0.01930869583575484
+      },
+      "tire": {
+        "count": 16,
+        "mae": 0.003518331896314336,
+        "maximum_abs": 0.027592413295120532
+      }
+    },
+    "past_projection": {
+      "u": {
+        "count": 16,
+        "mae": 0.003773761442473404,
+        "maximum_abs": 0.02337152345982458
+      },
+      "vy": {
+        "count": 16,
+        "mae": 0.0020837556497041963,
+        "maximum_abs": 0.011060268187766266
+      },
+      "r": {
+        "count": 16,
+        "mae": 0.0036295296794125057,
+        "maximum_abs": 0.012408209370858347
+      },
+      "tire": {
+        "count": 16,
+        "mae": 0.0015120965272341757,
+        "maximum_abs": 0.008619244363126971
+      }
+    },
+    "bracket_with_past_projection": {
+      "u": {
+        "count": 16,
+        "mae": 0.0019346498795245574,
+        "maximum_abs": 0.011917562048120778
+      },
+      "vy": {
+        "count": 16,
+        "mae": 0.0011641420827166024,
+        "maximum_abs": 0.011060268187766266
+      },
+      "r": {
+        "count": 16,
+        "mae": 0.001778894118866303,
+        "maximum_abs": 0.006967229209648984
+      },
+      "tire": {
+        "count": 16,
+        "mae": 0.001681144311503447,
+        "maximum_abs": 0.011825320807997449
+      }
+    }
+  },
+  "own_source_scores": {
+    "velocity_u_vy": {
+      "before": {
+        "count": 42,
+        "mae": 2.3916887211983593e-08,
+        "maximum_abs": 1.7075721880921435e-07
+      },
+      "after": {
+        "count": 42,
+        "mae": 2.3916887211983593e-08,
+        "maximum_abs": 1.7075721880921435e-07
+      }
+    },
+    "imu_body_yaw_rate": {
+      "before": {
+        "count": 22,
+        "mae": 8.232812000327793e-05,
+        "maximum_abs": 0.0007295679024511281
+      },
+      "after": {
+        "count": 22,
+        "mae": 8.232812000327793e-05,
+        "maximum_abs": 0.0007295679024511281
+      }
+    },
+    "physical_tire_steering": {
+      "before": {
+        "count": 21,
+        "mae": 3.020728837577004e-09,
+        "maximum_abs": 1.0532024252718486e-08
+      },
+      "after": {
+        "count": 21,
+        "mae": 0.0009945962626754386,
+        "maximum_abs": 0.006981319452256024
+      }
+    }
+  },
+  "private_input_scores": {
+    "nominal_physics_grid": {
+      "u": {
+        "count": 15,
+        "mae": 0.005629934409293258,
+        "maximum_abs": 0.02261225964493834
+      },
+      "vy": {
+        "count": 15,
+        "mae": 0.0018327362614463099,
+        "maximum_abs": 0.007556697778197785
+      },
+      "r": {
+        "count": 15,
+        "mae": 0.003923199835206228,
+        "maximum_abs": 0.019209848342316732
+      },
+      "tire": {
+        "count": 15,
+        "mae": 0.0021858314505367156,
+        "maximum_abs": 0.020723854279443753
+      }
+    },
+    "actual_wire_delayed_demand": {
+      "u": {
+        "count": 15,
+        "mae": 0.002399033296321405,
+        "maximum_abs": 0.009707180912143842
+      },
+      "vy": {
+        "count": 15,
+        "mae": 0.001724898162565756,
+        "maximum_abs": 0.007706633579033437
+      },
+      "r": {
+        "count": 15,
+        "mae": 0.0027840820105315394,
+        "maximum_abs": 0.006899722362239263
+      },
+      "tire": {
+        "count": 15,
+        "mae": 6.726894097771238e-09,
+        "maximum_abs": 2.3851293606824697e-08
+      }
+    },
+    "actual_wire_tire": {
+      "u": {
+        "count": 15,
+        "mae": 0.002399033286995304,
+        "maximum_abs": 0.009707181004904197
+      },
+      "vy": {
+        "count": 15,
+        "mae": 0.001724898070979422,
+        "maximum_abs": 0.0077066333141489335
+      },
+      "r": {
+        "count": 15,
+        "mae": 0.0027840818837678786,
+        "maximum_abs": 0.006899720640231283
+      },
+      "tire": {
+        "count": 15,
+        "mae": 1.1039865716044873e-09,
+        "maximum_abs": 1.0532024252718486e-08
+      }
+    },
+    "original_held": {
+      "u": {
+        "count": 15,
+        "mae": 0.012559752837482422,
+        "maximum_abs": 0.03820930030327432
+      },
+      "vy": {
+        "count": 15,
+        "mae": 0.001433375522327012,
+        "maximum_abs": 0.005437604706964756
+      },
+      "r": {
+        "count": 15,
+        "mae": 0.0037046337110761846,
+        "maximum_abs": 0.01509968541191628
+      },
+      "tire": {
+        "count": 15,
+        "mae": 0.0015749492576735036,
+        "maximum_abs": 0.005486735052047109
+      }
+    },
+    "frozen_bracket": {
+      "u": {
+        "count": 15,
+        "mae": 0.00628354907098183,
+        "maximum_abs": 0.03820930030327432
+      },
+      "vy": {
+        "count": 15,
+        "mae": 0.000953324783328779,
+        "maximum_abs": 0.005437604706964756
+      },
+      "r": {
+        "count": 15,
+        "mae": 0.0019729916865126314,
+        "maximum_abs": 0.005556037118751217
+      },
+      "tire": {
+        "count": 15,
+        "mae": 0.001510149027241292,
+        "maximum_abs": 0.011825320807997449
+      }
+    },
+    "coupled_event": {
+      "u": {
+        "count": 15,
+        "mae": 0.005628712644957925,
+        "maximum_abs": 0.02261217696234368
+      },
+      "vy": {
+        "count": 15,
+        "mae": 0.001829884216165477,
+        "maximum_abs": 0.007514421957980813
+      },
+      "r": {
+        "count": 15,
+        "mae": 0.003935078042909985,
+        "maximum_abs": 0.01930869583575484
+      },
+      "tire": {
+        "count": 15,
+        "mae": 0.0028220450883383362,
+        "maximum_abs": 0.027592413295120532
+      }
+    }
+  },
+  "older_force_changed_targets": [
+    {
+      "id": 590,
+      "dataset": "r1_pre_failure",
+      "physics_sec": 10.954999755136669,
+      "next_physics_sec": 10.95999975502491,
+      "next_sleep": true,
+      "before_target": [
+        0.004484047758366588,
+        -0.003975775912955438,
+        0.005055368477771363
+      ],
+      "after_target": [
+        0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "id": 732,
+      "dataset": "r1_pre_failure",
+      "physics_sec": 11.709999738261104,
+      "next_physics_sec": 11.714999738149345,
+      "next_sleep": true,
+      "before_target": [
+        0.01471724797083615,
+        -0.001301827733457498,
+        0.0036390978134748083
+      ],
+      "after_target": [
+        0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "id": 1267,
+      "dataset": "r2_pre_failure",
+      "physics_sec": 10.26499977055937,
+      "next_physics_sec": 10.269999770447612,
+      "next_sleep": true,
+      "before_target": [
+        0.0104571994230512,
+        -0.006182530194901511,
+        0.0007139800813883458
+      ],
+      "after_target": [
+        0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "id": 1461,
+      "dataset": "r2_pre_failure",
+      "physics_sec": 11.244999748654664,
+      "next_physics_sec": 11.249999748542905,
+      "next_sleep": true,
+      "before_target": [
+        0.01144555262450872,
+        -0.001451912319185008,
+        0.0045068664780643945
+      ],
+      "after_target": [
+        0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "id": 1540,
+      "dataset": "r2_pre_failure",
+      "physics_sec": 11.754999737255275,
+      "next_physics_sec": 11.759999737143517,
+      "next_sleep": true,
+      "before_target": [
+        0.013305681863908528,
+        -0.0011277136944468436,
+        0.005980113830431413
+      ],
+      "after_target": [
+        0.0,
+        -0.0,
+        -0.0
+      ]
+    }
+  ],
+  "protected_restored": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "production_files_unchanged": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_received_body_observation.hpp": "15f552225e05c97008c59dbd3d91837fa8135927d23fa0e67c25302c14906414",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp": "3182d790ba0f6566cd7fd68a38bef962c82e3cfe2e792673858bf97a8366cba5",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp": "158a118f5d8d829d24f104cf41b4392a36680615c5659beeb9c93057c435219f",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "2f7957317b9a551041d5659b3567cf9ca579e62903a09d641b3a4071f1a8be2f",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp": "5a50627b272413ca4275a1bde9fcc684bde1915a5742e86e7d8b1330ad985938",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp": "9f00a7105243e7008cd954985fa8eef2af599fd11f46a6c2430afb444c8a5288"
+  },
+  "frozen_before_run": {
+    ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received_pose_bracket.py": "303b0982db0a5f28e19e8e212103b0db9604bcf6236565f55d71f644ffe7ae67",
+    ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-bracket-protocol.md": "ecc602f302713863331662dd543d5139d009fb02018badd712770653c28c89fd"
+  },
+  "checks": {
+    "legacy_default_exact": true,
+    "phase_negative_checks": {
+      "tick": "PASS",
+      "time": "PASS",
+      "identity": "PASS",
+      "missing_row": "PASS",
+      "unknown_phase": "PASS"
+    },
+    "r573_r574_nominal_exact": true,
+    "r540_before_tire_outside": 0,
+    "r557_before_tire_outside": 8
+  },
+  "experiments": [
+    {
+      "id": 570,
+      "result": "inconclusive",
+      "changed_dimension": "Exact common received epoch and command-history support",
+      "reason": "19of25captures supported from direct matching original observation, six explicitly unavailable. Input/support only; no native execution or runtime failure claim."
+    },
+    {
+      "id": 571,
+      "result": "rejected",
+      "changed_dimension": "Coupled native body event reconstruction from actual public seed/events/history",
+      "reason": "21native reconstructions/no failures, exact body global-frame invariance. Four early inputs unavailable; ledger joins restore883/1005without borrowed later data. All16primary matches scored; u improves but lateral/r/tire regress. Original End-phase tire scores superseded byR572. No promotion."
+    },
+    {
+      "id": 572,
+      "result": "accepted",
+      "changed_dimension": "Explicit before/after Vehicle update diagnostic scoring reference",
+      "reason": "Legacy reader bit-exact; five phase/gap/identity negatives pass. Same16primary estimates/cohort preserved; direct body before/end identical there.21unique public tire endpoints match Before to1.054e-8rad. R568/R569/R571 tire scores corrected; interpolation worsttire0.0118253versusheld0.00548674. R557tireoutside8unchanged, body27unchanged."
+    },
+    {
+      "id": 573,
+      "result": "rejected",
+      "changed_dimension": "Private actual applied wire and mechanical demand/tire oracle on physics grid",
+      "reason": "15supported common-epoch cases. Diagnostic incorrectly double-applied tire_grip*wire_gain to physical tire demand; two private arms superseded byR574. Original outputs retained, not evidence against actuator mechanics."
+    },
+    {
+      "id": 574,
+      "result": "accepted",
+      "changed_dimension": "Correct physical demand to native desired conversion in private input oracle",
+      "reason": "15same cases/public body seeds and measurement events. Nominal-grid outputs exactly matchR573. Actual applied delayed demand produces max tireerror2.3852e-8rad, imposed actual tire1.0533e-8. uMAE0.005630→0.002399but lateral/model/rest errors remain. Private input establishes attribution only; no deployable observer or proof."
+    },
+    {
+      "id": 575,
+      "result": "accepted",
+      "changed_dimension": "Propagate force from End(j) to Begin(j+1), and rescoreR540initial tire",
+      "reason": "R555retained11140force predictions: five next-Sleep targets corrected, all derivative comparisons unchanged. R540before-tireoutside0of30versusoldEnd12, no tolerance change; body unchanged and24uoutside remains. No physical/model/control acceptance."
+    }
+  ],
+  "sha256": {
+    "output/20260913-nine-state-body-event-r570/input-generator.py": "afd4ebd9b4d4e225874b4e1cd2409b82cce0a7921bc180770b057d39e0bf5aa1",
+    "output/20260913-nine-state-body-event-r570/input-manifest.json": "09ad4efdc8d06a255b253bb6dd99e358d3e50533d07188d4590cdcc9b4234df1",
+    "output/20260913-nine-state-body-event-r570/inputs.yaml": "d3844eea4890b716d223e5b049f2313043571c800a02f3edb864712d9eb2f358",
+    "output/20260913-nine-state-body-event-r571/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-body-event-r571/command.json": "b37ee4fb235dc6691aa3b9e021269662d4969c7a4e76e48353c34a983ab50c97",
+    "output/20260913-nine-state-body-event-r571/compile.json": "3fe028263ce04159195e770abba511a2eab3619481a57e5ff0dc990cc9e5902e",
+    "output/20260913-nine-state-body-event-r571/driver.cpp": "f1db3af807ddbff3d4c7446f4aa40b685ca42e761292e91e19f6260d4eb890d8",
+    "output/20260913-nine-state-body-event-r571/input-generator.py": "e978984b89d0560f1213314da209ffb2e707abc8403fd23b9aac6dff285fa16a",
+    "output/20260913-nine-state-body-event-r571/input-manifest.json": "63e059f1289b3514ca6226d01e2cda763b78768dde362c4c3448e56f4759da65",
+    "output/20260913-nine-state-body-event-r571/inputs.yaml": "28a7b8e6ea09f24f75766dfb7ec38f69da4f10f9bfac26cd14f43ee33d305ab3",
+    "output/20260913-nine-state-body-event-r571/native.yaml": "a374c5370f0eba9e05b704e7bd27f53a781df2da1f2e9d1f3a83cb179166c80f",
+    "output/20260913-nine-state-body-event-r571/report.json": "cf7f4466faccfa327b28d308f717209675213a8b9bef71f5fa8a9e3f3272508d",
+    "output/20260913-nine-state-body-event-r571/rollout-native": "4caa024635d645747d218f0c140ba54d36d6a1c141dde4ac6ba80afb74c64023",
+    "output/20260913-nine-state-body-event-r571/run-generator.py": "5da62cd3e784c10e67707de1a0dc2a9eb46aa4bc40699fdd6e8161d42c629020",
+    "output/20260913-nine-state-body-event-r571/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-body-event-r571/score-generator.py": "be0995ed2f4bae8b23e4b3e8836560c591a849bf6df0c4e5560052c4305b11be",
+    "output/20260913-nine-state-body-event-r571/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-vehicle-phase-r572/__pycache__/legacy_physics_observations.cpython-310.pyc": "92de6bd67c7ecdbcc77ae4c0545135c9e1b2d57c3c16aa0ae54b95a2a9d13adf",
+    "output/20260913-nine-state-vehicle-phase-r572/generator.py": "dcaf79b112f77a409380719ac33aa4fd6298e404e918fa08242ac63bf5a90c7d",
+    "output/20260913-nine-state-vehicle-phase-r572/legacy_physics_observations.py": "a019e587ec6b7051ab598501783f93aa2bbc4d8740a696ef56f4ee69c7d3f9c2",
+    "output/20260913-nine-state-vehicle-phase-r572/physics_observations.py": "48ea2551944b2f6ac0006bc0dad7db33f70d3065c7cb4c16ff0550b432923149",
+    "output/20260913-nine-state-vehicle-phase-r572/report.json": "a9537526767164ff775173aa59abaa18ab420781764a02cd0f51ac1a007d41e9",
+    "output/20260913-nine-state-event-input-oracle-r573/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-event-input-oracle-r573/command.json": "c66eb4365cf7058f0c39c365b7195e571f967cb77e2929fa71ecd9b276b231f2",
+    "output/20260913-nine-state-event-input-oracle-r573/compile.json": "316fc07dd9a2494cf10b56eb0b9c48e30ec246beca2d248837105f1961891b6d",
+    "output/20260913-nine-state-event-input-oracle-r573/driver.cpp": "69db7504ce202a4066e21967e62652e1d99ffd5ade66b7a7824b905303a943a7",
+    "output/20260913-nine-state-event-input-oracle-r573/input-generator.py": "6ecb047c0430afa29e4ef828dd0bbf3dd2ef81c66e7d14ddb9ff09ac754ec008",
+    "output/20260913-nine-state-event-input-oracle-r573/inputs.yaml": "93922f19d046bcec0b7494b5bf32cb868e52853a876ce97dd279ef665f9586d8",
+    "output/20260913-nine-state-event-input-oracle-r573/native.yaml": "6bbd7135ce93e315ead429a23c93dfedc5cc9e62f2b152b7be0da82b52cbd35b",
+    "output/20260913-nine-state-event-input-oracle-r573/report.json": "a71c3db9cf67c58606a1a5bfd7aba90b0978959aa5f28eafa70db0c0cac14438",
+    "output/20260913-nine-state-event-input-oracle-r573/rollout-native": "42938ad5b74484543220db8ba7cf7419195e6087b3603f9099c21dcd22e42525",
+    "output/20260913-nine-state-event-input-oracle-r573/run-generator.py": "cc88027bbce75bd74ef1fcf3f65b8551cb9bf1eb075075ef20902b86decb41c1",
+    "output/20260913-nine-state-event-input-oracle-r573/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-event-input-oracle-r573/score-generator.py": "609b543b9041b05bf4a99e074a1b5db005361dd68358a85407da41b50fe160be",
+    "output/20260913-nine-state-event-input-oracle-r573/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-event-input-oracle-r574/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-event-input-oracle-r574/command.json": "b0dc6bc3113fc336c080f11b49dd9914656a8becf39c0a2ae2b78643efbc3dd6",
+    "output/20260913-nine-state-event-input-oracle-r574/compile.json": "820196a8c3566aaadfd33745b1583884cda87b9631ff0e65c07770a784a881a8",
+    "output/20260913-nine-state-event-input-oracle-r574/driver.cpp": "104475b1ec95c0767dc23e0663d7f834196d32dae55249012f8552fa504ee0cc",
+    "output/20260913-nine-state-event-input-oracle-r574/input-generator.py": "6b6689bbd40b8a75bfc6b9ce3657126a9afada4c92e1bfdca24b667602998909",
+    "output/20260913-nine-state-event-input-oracle-r574/inputs.yaml": "414c6dae9340900284ecdf698f8c4eaba89baaa77a54ee5f2ebe3799aa91a080",
+    "output/20260913-nine-state-event-input-oracle-r574/native.yaml": "9864062789d28174ca209c5e3eb72ea5604f8d1f846ec90438ca5470c8ed6e5f",
+    "output/20260913-nine-state-event-input-oracle-r574/report.json": "a7ce6dade7ceadc4c8daee3f96cd661b0dd4a8728e3646c4182021458174d8df",
+    "output/20260913-nine-state-event-input-oracle-r574/rollout-native": "0bf79caa567c8160ae6a8beeca0deb0434dc881dd5b353a9a6322816fcd71037",
+    "output/20260913-nine-state-event-input-oracle-r574/run-generator.py": "aa158943c4a97a1753386847f9cdd35d59724b4c713370a2eceb564af6c4bce4",
+    "output/20260913-nine-state-event-input-oracle-r574/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-event-input-oracle-r574/score-generator.py": "b0b156994df0d89cbbe3ecbf855c03cdc362cd84d7f374615fb82d6a489a5d0b",
+    "output/20260913-nine-state-event-input-oracle-r574/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-force-phase-scope-r575/errors.json": "7ec22949677a0a08490f881e370d7c5d3a7531abb456a27cc10d05ef58a4edf2",
+    "output/20260913-nine-state-force-phase-scope-r575/generator.py": "fbbf21b8105efb80f862799f4be2d1f6197eb7b31389035ff676e6a5d8f87252",
+    "output/20260913-nine-state-force-phase-scope-r575/report.json": "d45394723a179cb7ba809a0e6b5d56176d57ad4b09c4c01a2bb870face30d6ec",
+    "output/20260913-nine-state-event-phase-audit/seal.py": "065507a0e5ea019b937f184a8559b42c08a80ba326781494e9a8ebff496249c8"
+  },
+  "limits": [
+    "Correction supersedes initial-tire claims inR568/R569/R571 andR540; retained native estimates and original artifacts are unchanged.",
+    "R573private arms contained an input conversion defect; useR574only.",
+    "The R571coupled model is rejected for production; correct actuator mechanics still lack actual public receiver/application state.",
+    "Private actual input/tire improves attribution but body/contact/rest model errors persist. No new normal authority, relaxed bounds or runtime fallback.",
+    "FullM4–M6, clock/reset/rest/restart/Mission/Store and final repeated races/gates/submission/eval remain open."
+  ]
+}

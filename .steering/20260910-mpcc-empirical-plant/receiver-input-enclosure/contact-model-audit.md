@@ -111,9 +111,10 @@ Its public speed0.091545850 agrees with physical COM0.091545822. At12.144999728,
 public/physical speed0.20933230/0.20933235 exceeds source upper0.183793211.
 R540 checks30physics instants: every actual wire belongs to the original UNION
 of sign ranges, while24speed samples leave its body tube. Maximum speed excess
-0.026916949m/s. Twelve tire values also miss by up to2.166e-9rad; keep this
-finite-precision/update-epoch limitation, without declaring exact tire containment
-or enlarging any tolerance. Initial yaw is a5ms older IMU component, explicitly
+0.026916949m/s. The original End-phase comparison reported12tire misses. R575
+corrects the initial-state phase: all30Before tires are inside unchanged bounds;
+body values and24speed misses remain unchanged. No tolerance was enlarged.
+[Phase correction](received-event-phase-audit.md). Initial yaw is a5ms older IMU component, explicitly
 held. BodyIMU remains appropriate: VelocityReport.heading_rate is an Euler-angle
 difference in the local DLL, not rigid-body angular velocity (plant CIL1249–1290).
 

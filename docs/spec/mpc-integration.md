@@ -5045,3 +5045,11 @@ R534/R539の位置評価には診断側の車体原点/base_link混同があり�
 旋回の反例が残る。単純な過去2点外挿は横速度・操舵の悪化で棄却。本番observer/modelと
 安全・送信条件は維持し、共通の受信観測時刻からの連成モデル比較へ進む。全M4–M6未完。
 [固定検証と残る不変条件](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-truth-audit.md)。
+
+
+2026-09-13 R570–R575:共通受信時刻からの連成再構成は横速度・ヨーレート・操舵で悪化し
+未採用。物理診断はVehicle更新前後を明示し、初期操舵の比較を更新前へ訂正する。元の
+reader既定値・記録・予測・安全境界は変えない。実適用入力なら既存操舵応答は最大
+約2.4e-8radで一致するが、公開履歴からの適用時刻と車体・接地モデルの誤差は未解決。
+私有の物理値は原因切り分け専用で、通常権限へ使わない。全M4–M6未完。
+[訂正範囲と原因切り分け](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-event-phase-audit.md)。

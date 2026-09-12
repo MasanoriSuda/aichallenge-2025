@@ -37,3 +37,10 @@ negative replays, build/package tests and fresh closed-loop acceptance. A point
 estimate and lower average error alone do not establish physical uncertainty bounds
 or full acceptance. Keep current production unchanged while comparing this arm;
 any integration must retire the old mixed-epoch producer in the same slice.
+
+## Outcome
+
+R570–R575 completed. The event observer is rejected for production after lateral/r
+and correctly phased tire regressions. Actual private applied input isolates
+receiver timing from the mechanically accurate tire response; body/contact/rest
+errors remain. [Completed comparison and next structural boundary](received-event-phase-audit.md).

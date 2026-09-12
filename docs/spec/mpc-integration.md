@@ -4904,3 +4904,10 @@ mailboxは最新公開結果と同じlockでoutcome/geometry/最大512文字のd
 trajectoryを複製しない。guard・失効条件・唯一のnormal authorityは維持。
 Build114全26、tests101全2592合格。原因の確定は標準r73へ続く。
 [r72採用境界の設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r72-source-generation-design.md)。
+
+2026-09-12追記: 標準r73はD2Ready529の公開後期限超過で停止。r74は別名の観測専用診断で、
+両車停止・未完走。R448–R453の保存入力比較ではD1source618の進捗壁線形制約が不成立。
+実際の現在姿勢は接触ゼロだが、cache用の姿勢bucket/guardは2セル接触する。
+近似の寄与を確認した段階であり、全体の物理的不成立や修正完了とはしない。
+元の25ms公開期限、0.2m壁clearance、solver/tolerance、全物理証明とnormal authorityを維持。
+[現在の監査と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r73-r74-wall-source-audit.md)。

@@ -1,21 +1,25 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。標準r72は両車停止で未完走。採用境界の観測追加を検証済み、次は標準r73。**
+**全体未完。標準r73は公開後の期限超過で停止。r74診断では新規solver結果の不成立を確認し、D1の壁制約を切り分け中。**
 
-ac1622d8のr72でD1最大1.073m/s、連続61正加速指令/1.5秒、D2最大1.411m/s、66指令/1.625秒。
-D1Storeは8130/354acceptedまで進むが、採用要求はplan0/context拒否0。
-D2は新geometry821299624407504693でStore645のまま。古い731入力は別geometry。
-D1Follow1168は再証明30.992ms、callback32.003msで元の公開期限を超過。
-保存入力の再現でもphysics/entryは合格し、実際の公開直前時刻は正しく拒否。
-元のDLL・ユーザーJSON復元、走行停止済み。記録された指令列は実適用の証拠とは区別する。
+制御HEADは6c7c9615。Build114全26、tests101全2592/66/source105/C5 161合格。
+標準r73のD2 Ready decision529は物理証明合格後、元の25ms公開期限を超過。
+別のr74診断は両車停止・未完走。D1/D2の世代は有効でもStoreが停止し、workerがsolver拒否。
+r72の進み続けるD1Storeとは異なる世界であり、同じ原因とは扱わない。
 
-採用前の欠落・世代拒否、失効呼び出し元と最新mailbox結果の観測を追加した。
-制御条件は維持。Build114全26、tests101全2592/66/source105/C5 161合格。
-標準r73で未確定の最初の境界を特定し、実証したproducerだけを修正する。
+R448–R453で保存世界を比較。D1source618は壁の線形問題が不成立だが現在の車体は接触ゼロ。
+現在姿勢をキャッシュ用に丸めて余白を足すと2セル接触し、近似の影響を確認した。
+全A/B/C/D/Gと既存Hは拒否。物理的に走行不能という証明はなく、合格した修正候補もない。
+R450のD1はsolver前処理が実走と異なるため、R452で正しい条件による再現を別途取得した。
+R455–R458の姿勢対応の壁近似・独立前処理は数値解に達したが、元の壁証明が接触を検出。未採用。
+R460で舵角準備後の前進4候補が元の壁・他車・停止継続証明に合格。
+これは物理的存在証明で、現行QP・実時間・実走の合格ではない。同じ9状態最適化の候補・初期軌跡として比較を続ける。
+
+全runtime停止、元のDLL・ユーザーJSON復元済み。
 Follow負荷、全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
 同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r72-source-generation-design.md)、
+[現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r73-r74-wall-source-audit.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

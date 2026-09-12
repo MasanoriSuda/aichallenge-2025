@@ -1273,6 +1273,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r72-source-generation-evidence.json",
       "replay_ready": true,
       "reason": "r72 exact Follow failure and source-admission observation gap."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-r73-r74-wall-source",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r73-r74-wall-source-evidence.json",
+      "replay_ready": true,
+      "reason": "Separate r73 original deadline and r74 source wall boundary; D2 shutdown limitation explicit."
     }
   ],
   "experiments": [
@@ -15337,6 +15343,468 @@
         "Combined silent guard replaced by the same ordered individually counted returns"
       ],
       "revisit_condition": "New captured source/invalidation evidence; do not infer missing geometry from older sources or relax generation/time/proof requirements."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r73",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "standard same-build dev2",
+      "result": "rejected",
+      "reason": "D2 Ready529 original after-publication deadline violated; no laps.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A causal current proof/publication timing repair; do not widen the original25ms clock."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r74",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "separate bounded investigation-only run",
+      "result": "inconclusive",
+      "reason": "Both stop without laps; generations valid, Store stalls, latest worker rejects. Different immutable world from r72 advancingStore.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new source/world or causal repair; do not claim this different scene falsifies r72 generation hypotheses."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-persistent-a",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0143967, dua_res=8.98037, failed_iterate_row=497, value=0.939467, bounds=[-inf,0.911941], violation=0.0275256, tolerance=0.00193947, normalized=14.1923, architecture_snapshot=mpcc_architecture_snapshots/000000000618-3e83eaa3aca0ca06-cruise-side-positive-wall-refinement-solve-rejected/snapshot.yaml",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-stateless-left-b",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0143967, dua_res=8.98037, failed_iterate_row=497, value=0.939467, bounds=[-inf,0.911941], violation=0.0275256, tolerance=0.00193947, normalized=14.1923",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-stateless-right-b",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "rate-resolved relinearized QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000649749, dua_res=0.724496, failed_iterate_row=448, value=-0.338528, bounds=[-0.337704,0.367428], violation=0.000824313, tolerance=0.00133853, normalized=0.615836, row_semantic=steering-rate-prefix/stage=10/element=1, architecture_snapshot=mpcc_architecture_snapshots/000000000618-3da83d508e3c5137-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-rough-left-c",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved relinearized QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000210376, dua_res=0.64575, failed_iterate_row=448, value=-0.337985, bounds=[-0.337704,0.367428], violation=0.000281308, tolerance=0.00133799, normalized=0.210248, row_semantic=steering-rate-prefix/stage=10/element=1, architecture_snapshot=mpcc_architecture_snapshots/000000000618-3e0a97946dcb93d5-cruise-side-positive-successive-linearization-solve-rejected/snapshot.yaml",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-rough-right-c",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified normal-avoidance lattice/depth=0/attempts=210/best=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=1.12648e-05, dua_res=0.0180407, failed_iterate_row=447, value=-0.337719, bounds=[-0.337704,0.367428], violation=1.50689e-05, tolerance=0.00133772, normalized=0.0112646, row_semantic=steering-rate-prefix/stage=9/element=1, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000618-64156f1aba69f1da-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-offline-left-d",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved relinearized QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000210376, dua_res=0.64575, failed_iterate_row=448, value=-0.337985, bounds=[-0.337704,0.367428], violation=0.000281308, tolerance=0.00133799, normalized=0.210248, row_semantic=steering-rate-prefix/stage=10/element=1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-offline-right-d",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified normal-avoidance lattice/depth=3/attempts=210/best=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=1.12648e-05, dua_res=0.0180407, failed_iterate_row=447, value=-0.337719, bounds=[-0.337704,0.367428], violation=1.50689e-05, tolerance=0.00133772, normalized=0.0112646, row_semantic=steering-rate-prefix/stage=9/element=1, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1]",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-production-left-g",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified bounded normal candidate/best=direct-side/rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0143967, dua_res=8.98037, failed_iterate_row=497, value=0.939467, bounds=[-inf,0.911941], violation=0.0275256, tolerance=0.00193947, normalized=14.1923",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d1-production-right-g",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified bounded normal candidate/best=direct-side/rate-resolved relinearized QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000649749, dua_res=0.724496, failed_iterate_row=448, value=-0.338528, bounds=[-0.337704,0.367428], violation=0.000824313, tolerance=0.00133853, normalized=0.615836, row_semantic=steering-rate-prefix/stage=10/element=1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-persistent-a",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.839796, dua_res=2217.91, failed_iterate_row=587, value=-0.154138, bounds=[-inf,-6.20415], violation=6.05002, tolerance=0.00720415, normalized=839.796, row_semantic=dynamic-obstacle-physical-plane/stage=10/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000002967-e5e59fa318544ffb-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-stateless-left-b",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.803956, dua_res=10.6354, failed_iterate_row=578, value=-0.468125, bounds=[-inf,-6.48875], violation=6.02062, tolerance=0.00748875, normalized=803.956, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000002967-a10a3e701f3eb822-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-stateless-right-b",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.806445, dua_res=513.626, failed_iterate_row=578, value=-0.449468, bounds=[-inf,-6.48867], violation=6.03921, tolerance=0.00748867, normalized=806.445, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-rough-left-c",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=1.2535, dua_res=39.6843, failed_iterate_row=578, value=2.19464, bounds=[-inf,-3.71265], violation=5.90728, tolerance=0.00471265, normalized=1253.5, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-rough-right-c",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.399191, dua_res=242.178, failed_iterate_row=579, value=0.202365, bounds=[-inf,-0.327603], violation=0.529968, tolerance=0.0013276, normalized=399.191, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-offline-left-d",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=1.2535, dua_res=39.6843, failed_iterate_row=578, value=2.19464, bounds=[-inf,-3.71265], violation=5.90728, tolerance=0.00471265, normalized=1253.5, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-offline-right-d",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.399191, dua_res=242.178, failed_iterate_row=579, value=0.202365, bounds=[-inf,-0.327603], violation=0.529968, tolerance=0.0013276, normalized=399.191, row_semantic=dynamic-obstacle-physical-plane/stage=2/element=-1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-production-left-g",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.803956, dua_res=10.6354, failed_iterate_row=578, value=-0.468125, bounds=[-inf,-6.48875], violation=6.02062, tolerance=0.00748875, normalized=803.956, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r448-d2-production-right-g",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "A/B/C/D/G original-world architecture comparison",
+      "result": "rejected",
+      "reason": "no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.806445, dua_res=513.626, failed_iterate_row=578, value=-0.449468, bounds=[-inf,-6.48867], violation=6.03921, tolerance=0.00748867, normalized=806.445, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A new physical-wall or affine representation; all-method failure alone remains Unknown."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r449",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "same original linear constraints with independent HiGHS",
+      "result": "inconclusive",
+      "reason": "D1 affine infeasible (phase-I uniform slack0.0006210481271); D2 feasible max residual1.35232e-10. Not a nonlinear physical feasibility verdict.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A changed causally justified affine representation or bounded nonlinear physical witness."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r450",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "exact current body and generic QP replay",
+      "result": "inconclusive",
+      "reason": "Both current bodies clear. D1 generic replay policy differs from recorded internal-equilibration10 and is not exact solver-policy reproduction.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "Use R452 actual recorded policy; do not repeat the generic replay as production-equivalent."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r451",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "diagnostic row-family localization",
+      "result": "accepted",
+      "reason": "Removing progresswall458–497 makes retained rows feasible but violates original rows0.20480685; no candidate. Futureprogress-only still infeasible; lateral/lag omissions Unknown.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A coherent replacement wall representation with unchanged complete physical certificate."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r452-policy",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "serialized original solver policy with exact QP and warm start",
+      "result": "accepted",
+      "reason": "D1 warm replay exactly matches original residuals and4000iteration failure; cold also fails. D2 original pre-interruption QP solves offline.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A changed affine producer; do not tune budgets or warm starts as a root-cause fix."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r452-h",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "existing full wall feasibility restoration H",
+      "result": "rejected",
+      "reason": "D1 still fails wall497; D2 fails later dynamic physical plane. No complete certificate accepted.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "An independent physical representation; additional retries of the same restoration do not establish feasibility."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r453",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "same-map current pose/lag/cache enclosure localization",
+      "result": "accepted",
+      "reason": "Actual and zero-lag exact heading clear; both guarded heading buckets contact2cells. Warm21stage footprints clear but not complete nonlinear proof.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "Test future pose-aware representation. Current lag alone and point-only certification are insufficient."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r454",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Localize the first missing valid source and exact wall affine failure without changing physical or timing requirements.",
+      "changed_dimension": "only first wall profile upper from exact current heading",
+      "result": "rejected",
+      "reason": "Exact boundary0.9225896697843459 minus original0.001guard, resealed identity, still nine solver rejects and wall497. Current interval repair alone is insufficient.",
+      "production_impact": "none; observations/diagnostic copies have no live authority",
+      "deleted_code": [],
+      "revisit_condition": "A changed future pose-aware wall representation; do not repeat first-bound-only substitution."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r455",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Replace wall approximations only when complete native physical proof accepts the resulting trajectory.",
+      "changed_dimension": "future exact-pose lateral approximation",
+      "result": "inconclusive",
+      "reason": "D1wall QP solves, later dynamic QP fails. All nine complete arms still reject.",
+      "production_impact": "none; diagnostic-only, no authority or runtime configuration change",
+      "deleted_code": [],
+      "revisit_condition": "A coherent initial-map and solver representation with full nonlinear proof."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r456",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Replace wall approximations only when complete native physical proof accepts the resulting trajectory.",
+      "changed_dimension": "existing KKT comparison on later exact dynamic QP",
+      "result": "inconclusive",
+      "reason": "Numerical success3.468ms followed by external trajectory-adapter rejection; no bundle.",
+      "production_impact": "none; diagnostic-only, no authority or runtime configuration change",
+      "deleted_code": [],
+      "revisit_condition": "Complete normal pipeline with identical physical origin/frame and all proof stages; do not interpret generic external rejection as wall infeasibility."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r457",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Replace wall approximations only when complete native physical proof accepts the resulting trajectory.",
+      "changed_dimension": "pose-wall and independent fresh equilibrated A",
+      "result": "rejected",
+      "reason": "D1full solver pipeline reaches initial artifact corridor mismatch; D2dynamic plane rejects.",
+      "production_impact": "none; diagnostic-only, no authority or runtime configuration change",
+      "deleted_code": [],
+      "revisit_condition": "A consistent current interval producer; no initial-bound exemption or tolerance change."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r458",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Replace wall approximations only when complete native physical proof accepts the resulting trajectory.",
+      "changed_dimension": "consistent exact current-map plus pose-wall and equilibrated A",
+      "result": "rejected",
+      "reason": "D1full numerical solution rejected by unchanged exact wall proof atstage149/contact1. D2dynamic plane rejects.",
+      "production_impact": "none; diagnostic-only, no authority or runtime configuration change",
+      "deleted_code": [],
+      "revisit_condition": "Independent native physical feasible trajectory or nonlinear wall representation; do not waive exact contact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r459",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "Replace wall approximations only when complete native physical proof accepts the resulting trajectory.",
+      "changed_dimension": "native launch oracle setup",
+      "result": "inconclusive",
+      "reason": "Diagnostic compilation failed: missing required adapter physical-tolerance argument. No trajectories evaluated.",
+      "production_impact": "none; diagnostic-only, no authority or runtime configuration change",
+      "deleted_code": [],
+      "revisit_condition": "Corrected distinct R460 setup."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r73-r74-wall-source-r460",
+      "baseline_commit": "6c7c9615aff3e371ff06d58beff353d459b70478",
+      "snapshot_ids": [
+        "20260912-nine-state-r73-r74-wall-source"
+      ],
+      "hypothesis": "A bounded native steering-preparation segment before acceleration produces a physically feasible forward witness despite the original affine wall failure.",
+      "changed_dimension": "Independent native physical oracle with ten fixed bounded input sequences; all original world/model/physical bounds and full proofs retained, affine rows explicitly not treated as exact physics.",
+      "result": "accepted",
+      "reason": "Negative steering with2/4/6/8 preparation stages passes exact wall/dynamic/terminal proof; no-preparation negative steering hitswall, positive steering rejects.2stage witness ends1.005506635m/s after1.796537451s, lag0.772056763m andvirtualprogress0.",
+      "production_impact": "none; physical existence witness only, no direct/fallback normal control or current receiver/timing authority",
+      "deleted_code": [],
+      "revisit_condition": "Use as a candidate/seed in the same nine-state optimized pipeline, with immutable new identity, unchanged full proofs and meaningful free control variables; do not promote fixed oracle inputs as fallback."
     }
   ]
 }

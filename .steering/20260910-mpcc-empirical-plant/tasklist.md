@@ -410,3 +410,17 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Split existing missing-source/generation rejection observation, record invalidation caller/decision and latest published mailbox outcome/geometry/bounded detail. No authority change.
 - [x] Build114all26, tests101all2592/66/source105/C5 161; protected original artifacts restored.
 - [ ] Committed standardr73 identifies first absent source boundary; repair demonstrated producer. Independently profile Follow1168. Full M4-M6 remains open.
+
+2026-09-12 r73 timing / r74 source wall audit (6c7c9615):
+- [x] Standardr73 stopped for D2Ready529 after-window failure; source-observationr74 separately scoped, all guards unchanged, no laps, teardown/restoration complete.
+- [x] Original per-run bags analyzed. R74 valid generations with stalled Store and rejected worker differ from r72 advancing Store; no cross-world attribution.
+- [x] R448 complete A/B/C/D/G18rejects; R449original linear feasibility, R451row localization, R452actual-policy cold/warm and H restoration. R450 D1policy mismatch explicitly retained.
+- [x] R453 current exact pose clear; same cache heading bucket/guard contacts2cells. Current lag alone falsified; warm stage footprints do not establish nonlinear proof.
+- [ ] Compare exact current-heading interval with resealed identity and unchanged full proof; implement only a causally demonstrated producer repair.
+- [ ] Resolve original publication timing and Follow cost; all remaining M4-M6 and final same-artifact races/gates/submission/eval.
+
+- [x] R454 first-current-interval-only candidate rejected. R455future pose intervals passwall, R456KKT solvesdynamic but externaladapter rejects. R457initialcorridor rejects; R458consistent source solves numerically then exactwallstage149contacts1. No promotion.
+- [ ] R460 native steering-preparation/launch feasibility oracle; R459 setup failure retained. Complete native certificate, appropriate representation/producer repair and all M4–M6 remain.
+
+- [x] R460 complete native oracle:2/4/6/8stage steering preparation then forward candidates pass original wall/peer/terminal proofs. No-preparation hitswall; positive-steering controls reject. Physical existence only, not QP/runtime authority.
+- [ ] Compare native witness as same-nine-state optimized candidate/seed; no fixed-input fallback. Remaining M4-M6 unchanged.

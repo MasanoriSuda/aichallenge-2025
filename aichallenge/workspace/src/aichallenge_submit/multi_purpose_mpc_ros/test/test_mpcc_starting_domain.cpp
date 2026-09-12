@@ -478,3 +478,98 @@ TEST(MpccRelativeStartingDomain, DistinctIdentityAndStrictBodyTimeFootprintJoin)
   r.coordinate_origin.x_m=NAN;
   EXPECT_FALSE(v::predict_relative_programme_domain_to_rest({r,1.8},p).tube);
 }
+
+TEST(MpccStartingDomain,
+     CompilingEquationsPreservesEveryParentSampleAndBoundsMemory) {
+  const auto p = vehicle_model();
+  auto source = request();
+  source.starting_sec.upper = 2.0;
+  const v::ProgrammeStartingDomainRequest r{source, 2.0};
+  const auto original = v::predict_relative_programme_domain_to_rest(r, p);
+  const auto compiled = v::compile_relative_programme_domain_to_rest(r, p);
+  ASSERT_TRUE(original.tube);
+  ASSERT_TRUE(compiled.tube);
+  const auto &a = original.tube->normalized.numerical;
+  const auto &b = compiled.tube->normalized.numerical;
+  ASSERT_TRUE(compiled.tube->compiled_maps);
+  EXPECT_EQ(compiled.tube->compiled_maps->source_domain_fingerprint(),
+            b.context_fingerprint);
+  EXPECT_TRUE(compiled.tube->compiled_maps->matches(p));
+  EXPECT_LE(compiled.tube->compiled_maps->size(), 4096U);
+  EXPECT_EQ(a.context_fingerprint, b.context_fingerprint);
+  EXPECT_DOUBLE_EQ(a.rest_sec, b.rest_sec);
+  ASSERT_EQ(a.source_to_rest.size(), b.source_to_rest.size());
+  for (std::size_t i = 0; i < a.source_to_rest.size(); ++i) {
+    const auto &x = a.source_to_rest[i], &y = b.source_to_rest[i];
+    EXPECT_DOUBLE_EQ(x.absolute_begin_sec, y.absolute_begin_sec);
+    EXPECT_DOUBLE_EQ(x.absolute_end_sec, y.absolute_end_sec);
+    for (const auto member : {&v::StartingDomainSample::swept_body,
+                              &v::StartingDomainSample::endpoint_body,
+                              &v::StartingDomainSample::swept_footprint,
+                              &v::StartingDomainSample::endpoint_footprint})
+      for (std::size_t c = 0; c < 8; ++c) {
+        EXPECT_DOUBLE_EQ((x.*member)[c].lower, (y.*member)[c].lower);
+        EXPECT_DOUBLE_EQ((x.*member)[c].upper, (y.*member)[c].upper);
+      }
+  }
+  auto changed = p;
+  changed.mass_kg += 1;
+  EXPECT_FALSE(compiled.tube->compiled_maps->matches(changed));
+  namespace n = v::numerical;
+  EXPECT_EQ(n::CompiledInputMapAccess::get(compiled.tube->compiled_maps.get(),
+                                           changed),
+            nullptr);
+  n::CompiledStepMapRecorder recorder{p};
+  for (std::size_t i = 0; i < n::CompiledStepMapRecorder::maximum_maps + 5;
+       ++i) {
+    recorder.step = i;
+    recorder.record({});
+  }
+  EXPECT_EQ(recorder.data.maps.size(),
+            n::CompiledStepMapRecorder::maximum_maps);
+  EXPECT_EQ(recorder.data.rows.size(),
+            n::CompiledStepMapRecorder::maximum_maps);
+}
+
+TEST(MpccStartingDomain,
+     CompiledLocalMapRefusesForeignModelStepAndOutsideArguments) {
+  namespace n = v::numerical;
+  const auto p = vehicle_model();
+  n::Box parent{};
+  parent[2] = {-.1, .1};
+  parent[3] = {.5, 1.0};
+  parent[4] = {-.02, .02};
+  parent[5] = {-.1, .1};
+  parent[6] = {-.2, .2};
+  parent[7] = {-.15, .15};
+  n::CompiledStepMapRecorder recorder{p};
+  static_cast<void>(n::step_parts(parent, {-1, 1}, p, p.maximum_step_sec,
+                                  nullptr, nullptr, nullptr, nullptr,
+                                  &recorder));
+  const auto maps = n::CompiledInputMapAccess::finish(std::move(recorder), 42);
+  ASSERT_TRUE(maps);
+  const auto data = n::CompiledInputMapAccess::get(maps.get(), p);
+  const auto view = n::CompiledInputMapAccess::row(data, 0, p);
+  ASSERT_GT(view.count, 0U);
+  const auto compare = [&](const n::Box &body, n::I input, double dt,
+                           const v::Parameters &model) {
+    const auto exact = n::joined(n::step_parts(body, input, model, dt));
+    const auto queried = n::joined(n::step_parts(
+        body, input, model, dt, nullptr, nullptr, nullptr, &view));
+    for (std::size_t i = 0; i < 8; ++i) {
+      EXPECT_DOUBLE_EQ(exact[i].lo, queried[i].lo);
+      EXPECT_DOUBLE_EQ(exact[i].hi, queried[i].hi);
+    }
+  };
+  for (std::size_t component = 2; component < 8; ++component) {
+    auto changed = parent;
+    changed[component].hi += .01;
+    compare(changed, {-.5, .5}, p.maximum_step_sec, p);
+  }
+  compare(parent, {-2, 2}, p.maximum_step_sec, p);
+  compare(parent, {-.5, .5}, p.maximum_step_sec / 2, p);
+  auto changed_model = p;
+  changed_model.tire_lag_sec += .01;
+  compare(parent, {-.5, .5}, p.maximum_step_sec, changed_model);
+  EXPECT_EQ(n::CompiledInputMapAccess::row(data, 999999, p).count, 0U);
+}

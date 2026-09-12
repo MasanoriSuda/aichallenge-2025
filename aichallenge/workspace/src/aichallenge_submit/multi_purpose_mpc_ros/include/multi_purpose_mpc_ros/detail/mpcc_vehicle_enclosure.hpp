@@ -1,6 +1,7 @@
 #pragma once
 // Numerical enclosure of the shared native midpoint map. Callers own the
 // input/observation context and proof. These primitives grant no authority.
+#include "multi_purpose_mpc_ros/mpcc_compiled_input_maps.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_model.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp"
 #include <algorithm>
@@ -10,8 +11,8 @@
 #include <cstring>
 #include <limits>
 #include <optional>
-#include <type_traits>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 #if defined(__SSE2__)
@@ -465,11 +466,90 @@ advance_corners(const CornerProbe &probe, const Box &previous, const JS &range,
   return out;
 }
 
+// The center image and Jacobian enclose the complete recorded box. Restricting
+// its argument uses the same mean-value theorem on that convex parent box.
+// Cartesian translation is added separately by centered_step.
+struct CompiledStepMap {
+  Box body, center, point;
+  I acceleration;
+  double duration{};
+  JS range;
+  J yaw_delta;
+  I point_yaw_delta;
+  bool discontinuous{};
+  bool corner_delta_available{};
+};
+struct CompiledInputMapData {
+  std::uint64_t model_fingerprint{}, source_domain_fingerprint{};
+  std::vector<CompiledStepMap> maps;
+  struct Row {
+    std::size_t offset{}, count{};
+  };
+  std::vector<Row> rows;
+};
+struct CompiledStepMapView {
+  const CompiledStepMap *maps{};
+  std::size_t count{};
+  const model::Parameters *parameters{};
+};
+struct CompiledStepMapRecorder {
+  // Optional equation storage only. Reaching this limit never truncates the
+  // independent proof or its input/rest horizon.
+  static constexpr std::size_t maximum_maps = 4096;
+  explicit CompiledStepMapRecorder(const model::Parameters &p)
+      : parameters(&p) {
+    data.model_fingerprint = model::fingerprint(p);
+    data.maps.reserve(maximum_maps);
+  }
+  const model::Parameters *parameters;
+  std::size_t step{};
+  CompiledInputMapData data;
+  void record(CompiledStepMap map) {
+    if (data.maps.size() == maximum_maps)
+      return;
+    if (data.rows.size() <= step)
+      data.rows.resize(step + 1);
+    auto &row = data.rows[step];
+    if (!row.count)
+      row.offset = data.maps.size();
+    data.maps.push_back(std::move(map));
+    ++row.count;
+  }
+};
+struct CompiledInputMapAccess {
+  static std::shared_ptr<const model::CompiledInputMaps>
+  finish(CompiledStepMapRecorder recorder, std::uint64_t domain) {
+    if (!domain || !recorder.data.model_fingerprint ||
+        recorder.data.maps.empty())
+      return {};
+    recorder.data.source_domain_fingerprint = domain;
+    return std::shared_ptr<const model::CompiledInputMaps>(
+        new model::CompiledInputMaps(
+            std::make_shared<const CompiledInputMapData>(
+                std::move(recorder.data))));
+  }
+  static const CompiledInputMapData *get(const model::CompiledInputMaps *maps,
+                                         const model::Parameters &parameters) {
+    return maps && maps->matches(parameters) ? maps->data_.get() : nullptr;
+  }
+  static CompiledStepMapView row(const CompiledInputMapData *data,
+                                 std::size_t step,
+                                 const model::Parameters &parameters) {
+    if (!data || step >= data->rows.size())
+      return {};
+    const auto &r = data->rows[step];
+    return {r.count ? data->maps.data() + r.offset : nullptr, r.count,
+            &parameters};
+  }
+};
+
 inline Box centered_step(const Box &b, I acceleration,
                          const model::Parameters &p, double dt, bool rest,
                          const CornerProbe *probe = nullptr,
                          const Box *previous_corners = nullptr,
-                         CornerImage *corner_image = nullptr) {
+                         CornerImage *corner_image = nullptr,
+                         const CompiledStepMapView *maps = nullptr,
+                         CompiledStepMapRecorder *recorder = nullptr) {
   if ((probe != nullptr) != (previous_corners != nullptr) ||
       (probe != nullptr) != (corner_image != nullptr))
     throw std::runtime_error("incomplete corner context");
@@ -496,27 +576,58 @@ inline Box centered_step(const Box &b, I acceleration,
     }
     return result;
   }
+  const CompiledStepMap *compiled = nullptr;
+  if (maps && maps->parameters == &p) {
+    for (std::size_t candidate = 0; candidate < maps->count; ++candidate) {
+      const auto &entry = maps->maps[candidate];
+      if (entry.duration != dt ||
+          (corner_image && !entry.corner_delta_available) ||
+          !std::isfinite(acceleration.lo) || !std::isfinite(acceleration.hi) ||
+          acceleration.lo > acceleration.hi ||
+          acceleration.lo < entry.acceleration.lo ||
+          acceleration.hi > entry.acceleration.hi)
+        continue;
+      bool contained = true;
+      for (std::size_t i = 2; i < 8; ++i)
+        contained = contained && std::isfinite(b[i].lo) &&
+                    std::isfinite(b[i].hi) && b[i].lo <= b[i].hi &&
+                    b[i].lo >= entry.body[i].lo && b[i].hi <= entry.body[i].hi;
+      if (contained) {
+        compiled = &entry;
+        break;
+      }
+    }
+  }
   JS inputs;
   Box center;
   std::array<I, N> offsets{};
   for (size_t i = 2; i < 8; ++i) {
-    const double c = b[i].lo + (b[i].hi - b[i].lo) / 2;
-    inputs[i] = J(b[i]);
+    const double c =
+        compiled ? compiled->center[i].lo : b[i].lo + (b[i].hi - b[i].lo) / 2;
+    inputs[i] = J(compiled ? compiled->body[i] : b[i]);
     inputs[i].d[i - 2] = I(1);
     center[i] = I(c);
     offsets[i - 2] = b[i] - I(c);
   }
-  const double ac = acceleration.lo + (acceleration.hi - acceleration.lo) / 2;
+  const auto parent_acceleration =
+      compiled ? compiled->acceleration : acceleration;
+  const double ac = parent_acceleration.lo +
+                    (parent_acceleration.hi - parent_acceleration.lo) / 2;
   J a(acceleration);
   a.d[6] = I(1);
   offsets[6] = acceleration - I(ac);
-  bool discontinuous = false;
-  J yaw_delta;
-  I point_yaw_delta;
-  const auto range = map(inputs, a, p, dt, rest, &discontinuous,
-                         corner_image ? &yaw_delta : nullptr);
-  const auto point = map(center, I(ac), p, dt, rest, nullptr,
-                         corner_image ? &point_yaw_delta : nullptr);
+  bool discontinuous = compiled ? compiled->discontinuous : false;
+  J yaw_delta = compiled ? compiled->yaw_delta : J{};
+  I point_yaw_delta = compiled ? compiled->point_yaw_delta : I{};
+  const auto range = compiled ? compiled->range
+                              : map(inputs, a, p, dt, rest, &discontinuous,
+                                    corner_image ? &yaw_delta : nullptr);
+  const auto point = compiled ? compiled->point
+                              : map(center, I(ac), p, dt, rest, nullptr,
+                                    corner_image ? &point_yaw_delta : nullptr);
+  if (recorder && recorder->parameters == &p)
+    recorder->record({b, center, point, acceleration, dt, range, yaw_delta,
+                      point_yaw_delta, discontinuous, corner_image != nullptr});
   Box result;
   for (size_t i = 0; i < 8; ++i) {
     I delta;
@@ -539,11 +650,13 @@ inline Box centered_step(const Box &b, I acceleration,
       inputs, center, offsets, yaw_delta, point_yaw_delta, discontinuous);
   return result;
 }
-inline std::vector<Box> step_parts(const Box &b, I a,
-                                   const model::Parameters &p, double dt,
-                                   const CornerProbe *probe = nullptr,
-                                   const Box *previous_corners = nullptr,
-                                   std::vector<CornerImage> *corner_images = nullptr) {
+inline std::vector<Box>
+step_parts(const Box &b, I a, const model::Parameters &p, double dt,
+           const CornerProbe *probe = nullptr,
+           const Box *previous_corners = nullptr,
+           std::vector<CornerImage> *corner_images = nullptr,
+           const CompiledStepMapView *maps = nullptr,
+           CompiledStepMapRecorder *recorder = nullptr) {
   if ((probe != nullptr) != (previous_corners != nullptr) ||
       (probe != nullptr) != (corner_images != nullptr))
     throw std::runtime_error("incomplete corner branches");
@@ -558,7 +671,8 @@ inline std::vector<Box> step_parts(const Box &b, I a,
       return;
     CornerImage image;
     parts.push_back(centered_step(q, wire, p, dt, rest, probe, previous_corners,
-                                 corner_images ? &image : nullptr));
+                                  corner_images ? &image : nullptr, maps,
+                                  recorder));
     if (corner_images) corner_images->push_back(image);
   };
   if (a.lo <= 0) {
@@ -592,11 +706,13 @@ inline bool at_rest(const Box &s) {
 inline Box step(const Box &b, I a, const model::Parameters &p, double dt) {
   return joined(step_parts(b, a, p, dt));
 }
-inline std::vector<Box> advance_partitioned_inputs(std::vector<Box> states,
-                                            const std::vector<I> &inputs,
-                                            const model::Parameters &p,
-                                            double duration, Box *swept,
-                                            CornerPopulation *corners = nullptr) {
+inline std::vector<Box>
+advance_partitioned_inputs(std::vector<Box> states,
+                           const std::vector<I> &inputs,
+                           const model::Parameters &p, double duration,
+                           Box *swept, CornerPopulation *corners = nullptr,
+                           const CompiledStepMapView *maps = nullptr,
+                           CompiledStepMapRecorder *recorder = nullptr) {
   if (corners && corners->states.size() != states.size())
     throw std::runtime_error("corner population mismatch");
   const auto count = model::integration_steps(duration, p.maximum_step_sec);
@@ -618,10 +734,11 @@ inline std::vector<Box> advance_partitioned_inputs(std::vector<Box> states,
     for (const auto &a : inputs)
       for (size_t j = 0; j < states.size(); ++j) {
         std::vector<CornerImage> branch_images;
-        const auto next = step_parts(states[j], a, p, duration / count,
-          corners ? &corners->probe : nullptr,
-          corners ? &corners->states[j] : nullptr,
-          corners ? &branch_images : nullptr);
+        const auto next =
+            step_parts(states[j], a, p, duration / count,
+                       corners ? &corners->probe : nullptr,
+                       corners ? &corners->states[j] : nullptr,
+                       corners ? &branch_images : nullptr, maps, recorder);
         for (size_t i = 0; i < next.size(); ++i) {
           parts.push_back(next[i]);
           if (corners) images.push_back(branch_images[i]);

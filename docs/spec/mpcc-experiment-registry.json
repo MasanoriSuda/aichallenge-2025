@@ -1261,6 +1261,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rest-launch-tangent-evidence.json",
       "replay_ready": true,
       "reason": "r70 rest-source failure and separate first moving deadline; immutable initial-tangent comparisons and full proof."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-current-map-cost",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-map-cost-evidence.json",
+      "replay_ready": true,
+      "reason": "r71 restored moving supply, exact current proof cost and independently compiled local map comparisons."
     }
   ],
   "experiments": [
@@ -15165,6 +15171,118 @@
         "Unconditional coasting-reference seed at complete body rest with a forward objective"
       ],
       "revisit_condition": "New body-state/goal/formulation evidence or integrated failure; do not promote the rejected universal seed, tune budgets or retime original proofs."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-map-cost-r71",
+      "baseline_commit": "11b935277b22d68a9e5f0521f098bfd4948ed7ed",
+      "snapshot_ids": [
+        "20260912-nine-state-current-map-cost"
+      ],
+      "hypothesis": "Reuse local mean-value equations of an independently proved starting domain within the existing complete current observation/history predictor.",
+      "changed_dimension": "Numerical derivative construction only for strictly contained model/duration/state/input branches; no new normal authority or physical/timing relaxation.",
+      "result": "rejected",
+      "reason": "D2moving supply restored; D1decision1070original deadline violated after two full current proofs, no laps.",
+      "production_impact": "Immutable bounded per-domain local equations implemented and locally validated; committed standardr72 and all M4-M6 remain.",
+      "deleted_code": [
+        "Repeated derivative construction for covered current native steps; original fresh computation retained for all uncovered steps"
+      ],
+      "revisit_condition": "New state/world/performance evidence; do not revive rejected old point-future reuse, unchanged micro-optimization, relative-current recomposition or deadline/parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-map-cost-r437",
+      "baseline_commit": "11b935277b22d68a9e5f0521f098bfd4948ed7ed",
+      "snapshot_ids": [
+        "20260912-nine-state-current-map-cost"
+      ],
+      "hypothesis": "Reuse local mean-value equations of an independently proved starting domain within the existing complete current observation/history predictor.",
+      "changed_dimension": "Numerical derivative construction only for strictly contained model/duration/state/input branches; no new normal authority or physical/timing relaxation.",
+      "result": "inconclusive",
+      "reason": "Diagnostic YAML nesting error; retained SIGABRT, no runtime result.",
+      "production_impact": "Immutable bounded per-domain local equations implemented and locally validated; committed standardr72 and all M4-M6 remain.",
+      "deleted_code": [
+        "Repeated derivative construction for covered current native steps; original fresh computation retained for all uncovered steps"
+      ],
+      "revisit_condition": "New state/world/performance evidence; do not revive rejected old point-future reuse, unchanged micro-optimization, relative-current recomposition or deadline/parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-map-cost-r438-r439",
+      "baseline_commit": "11b935277b22d68a9e5f0521f098bfd4948ed7ed",
+      "snapshot_ids": [
+        "20260912-nine-state-current-map-cost"
+      ],
+      "hypothesis": "Reuse local mean-value equations of an independently proved starting domain within the existing complete current observation/history predictor.",
+      "changed_dimension": "Numerical derivative construction only for strictly contained model/duration/state/input branches; no new normal authority or physical/timing relaxation.",
+      "result": "accepted",
+      "reason": "Exact original/current/history and entry-pass/actualbefore-fail; native centered propagation dominates. Timing is isolated/observed, not a bound.",
+      "production_impact": "Immutable bounded per-domain local equations implemented and locally validated; committed standardr72 and all M4-M6 remain.",
+      "deleted_code": [
+        "Repeated derivative construction for covered current native steps; original fresh computation retained for all uncovered steps"
+      ],
+      "revisit_condition": "New state/world/performance evidence; do not revive rejected old point-future reuse, unchanged micro-optimization, relative-current recomposition or deadline/parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-map-cost-r440-domain-bins",
+      "baseline_commit": "11b935277b22d68a9e5f0521f098bfd4948ed7ed",
+      "snapshot_ids": [
+        "20260912-nine-state-current-map-cost"
+      ],
+      "hypothesis": "Reuse local mean-value equations of an independently proved starting domain within the existing complete current observation/history predictor.",
+      "changed_dimension": "Numerical derivative construction only for strictly contained model/duration/state/input branches; no new normal authority or physical/timing relaxation.",
+      "result": "rejected",
+      "reason": "Six independent domain representations either miss measured body membership or reject current wall.",
+      "production_impact": "Immutable bounded per-domain local equations implemented and locally validated; committed standardr72 and all M4-M6 remain.",
+      "deleted_code": [
+        "Repeated derivative construction for covered current native steps; original fresh computation retained for all uncovered steps"
+      ],
+      "revisit_condition": "New state/world/performance evidence; do not revive rejected old point-future reuse, unchanged micro-optimization, relative-current recomposition or deadline/parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-map-cost-r441-relative-current",
+      "baseline_commit": "11b935277b22d68a9e5f0521f098bfd4948ed7ed",
+      "snapshot_ids": [
+        "20260912-nine-state-current-map-cost"
+      ],
+      "hypothesis": "Reuse local mean-value equations of an independently proved starting domain within the existing complete current observation/history predictor.",
+      "changed_dimension": "Numerical derivative construction only for strictly contained model/duration/state/input branches; no new normal authority or physical/timing relaxation.",
+      "result": "rejected",
+      "reason": "Compiled local equations speed prediction, but additional relative-current recomposition loses r71wall even without compilation.",
+      "production_impact": "Immutable bounded per-domain local equations implemented and locally validated; committed standardr72 and all M4-M6 remain.",
+      "deleted_code": [
+        "Repeated derivative construction for covered current native steps; original fresh computation retained for all uncovered steps"
+      ],
+      "revisit_condition": "New state/world/performance evidence; do not revive rejected old point-future reuse, unchanged micro-optimization, relative-current recomposition or deadline/parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-map-cost-r442-existing-current",
+      "baseline_commit": "11b935277b22d68a9e5f0521f098bfd4948ed7ed",
+      "snapshot_ids": [
+        "20260912-nine-state-current-map-cost"
+      ],
+      "hypothesis": "Reuse local mean-value equations of an independently proved starting domain within the existing complete current observation/history predictor.",
+      "changed_dimension": "Numerical derivative construction only for strictly contained model/duration/state/input branches; no new normal authority or physical/timing relaxation.",
+      "result": "accepted",
+      "reason": "Contained local equations within original current history/frame preserve both current physical checks and actual late rejection.",
+      "production_impact": "Immutable bounded per-domain local equations implemented and locally validated; committed standardr72 and all M4-M6 remain.",
+      "deleted_code": [
+        "Repeated derivative construction for covered current native steps; original fresh computation retained for all uncovered steps"
+      ],
+      "revisit_condition": "New state/world/performance evidence; do not revive rejected old point-future reuse, unchanged micro-optimization, relative-current recomposition or deadline/parameter relaxation."
+    },
+    {
+      "experiment_id": "20260912-nine-state-current-map-cost-r443-r445-build113-tests99",
+      "baseline_commit": "11b935277b22d68a9e5f0521f098bfd4948ed7ed",
+      "snapshot_ids": [
+        "20260912-nine-state-current-map-cost"
+      ],
+      "hypothesis": "Reuse local mean-value equations of an independently proved starting domain within the existing complete current observation/history predictor.",
+      "changed_dimension": "Numerical derivative construction only for strictly contained model/duration/state/input branches; no new normal authority or physical/timing relaxation.",
+      "result": "accepted",
+      "reason": "100digit204800body/cornervalues, native15, all26build/2592records/66groups/source105/C5 161, six exact paired built-library cases; original parent/source/current history and clock outcomes maintained.",
+      "production_impact": "Immutable bounded per-domain local equations implemented and locally validated; committed standardr72 and all M4-M6 remain.",
+      "deleted_code": [
+        "Repeated derivative construction for covered current native steps; original fresh computation retained for all uncovered steps"
+      ],
+      "revisit_condition": "New state/world/performance evidence; do not revive rejected old point-future reuse, unchanged micro-optimization, relative-current recomposition or deadline/parameter relaxation."
     }
   ]
 }

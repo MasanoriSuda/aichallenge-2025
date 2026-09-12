@@ -108,12 +108,19 @@ ProgrammeStartingDomainPrediction predict_programme_starting_domain_to_rest(
 /// never with an old point trajectory. Original programme/time/input memory stays.
 struct RelativeProgrammeStartingDomainTube {
   ProgrammeStartingDomainTube normalized;
+  std::shared_ptr<const CompiledInputMaps> compiled_maps{};
 };
 struct RelativeProgrammeStartingDomainPrediction {
   AppliedInputRejectReason reason{AppliedInputRejectReason::InvalidObservation};
   std::optional<RelativeProgrammeStartingDomainTube> tube;
 };
 RelativeProgrammeStartingDomainPrediction predict_relative_programme_domain_to_rest(
+    const ProgrammeStartingDomainRequest &request,
+    const Parameters &parameters) noexcept;
+/// Propagate the same independent domain and retain bounded immutable local
+/// equations during that computation. The parent proof itself is unchanged.
+RelativeProgrammeStartingDomainPrediction
+compile_relative_programme_domain_to_rest(
     const ProgrammeStartingDomainRequest &request,
     const Parameters &parameters) noexcept;
 

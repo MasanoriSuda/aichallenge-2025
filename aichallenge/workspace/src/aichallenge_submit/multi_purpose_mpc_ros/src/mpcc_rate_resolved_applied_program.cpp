@@ -1033,8 +1033,9 @@ std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
         request.body[i].upper = std::max(request.body[i].upper, sample.swept_body[i].upper);
       }
     request.starting_sec.upper = source.rest_sec;
-    auto prediction = vehicle::predict_relative_programme_domain_to_rest(
-      {request, source.rest_sec}, original.plan->execution_artifact->vehicle_model);
+    auto prediction = vehicle::compile_relative_programme_domain_to_rest(
+        {request, source.rest_sec},
+        original.plan->execution_artifact->vehicle_model);
     if (!prediction.tube) return {};
     result->relative_ = std::move(*prediction.tube);
     result->first_window_only_ = false;
@@ -1207,8 +1208,10 @@ bool component_epochs_are_current(const vehicle::ObservationProvenance &old,
 }
 
 std::optional<vehicle::PendingInputTube> prove_current_remaining_program(
-    const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
-    std::size_t index, CurrentWorldCheck &result) {
+    const applied::ScheduledCertificate &certificate,
+    const retained::Request &fresh, std::size_t index,
+    CurrentWorldCheck &result,
+    const std::shared_ptr<const vehicle::CompiledInputMaps> &maps) {
   double follow_reference{};
   std::optional<recovery_footprint::FootprintExtents> footprint;
   if (!prepare_current_world(certificate, fresh, result, follow_reference, footprint)) return std::nullopt;
@@ -1230,8 +1233,9 @@ std::optional<vehicle::PendingInputTube> prove_current_remaining_program(
     catch (const std::exception &) { diagnostic.reason = applied::Reason::InvalidWorld; }
     return diagnostic.reason == applied::Reason::Accepted;
   };
-  auto prediction = vehicle::predict_pending_inputs_to_rest(observation, *remaining,
-    certificate.tube().profile, fresh.plan->execution_artifact->vehicle_model, {}, &validation);
+  auto prediction = vehicle::predict_pending_inputs_to_rest(
+      observation, *remaining, certificate.tube().profile,
+      fresh.plan->execution_artifact->vehicle_model, {}, &validation, maps);
   if (!prediction.tube || !statistics.checked_samples) {
     result.reason = CurrentWorldReason::PhysicalRejected;
     result.physical_reason = prediction.reason == vehicle::AppliedInputRejectReason::ValidationRejected ?
@@ -1290,8 +1294,20 @@ CurrentCheck check_dispatch_evidence(
         domain, *domain_use, result.world, selected_evidence);
     if (!domain_prefix || !*domain_prefix) {
       result.world = CurrentWorldCheck{};
-      *independent = prove_current_remaining_program(certificate, fresh,
-        already_published_suffix_packets, result.world);
+      // Equations are only a numerical aid owned by this independently proved
+      // source domain. Current context/history/world/complete rest remain the
+      // authority of this fresh prediction, even when the broad domain failed.
+      std::shared_ptr<const vehicle::CompiledInputMaps> maps;
+      if (domain && domain->certificate().get() == &certificate &&
+          domain->relative()) {
+        const auto &candidate = domain->relative()->compiled_maps;
+        if (candidate && candidate->source_domain_fingerprint() ==
+                             domain->tube().context_fingerprint)
+          maps = candidate;
+      }
+      *independent = prove_current_remaining_program(
+          certificate, fresh, already_published_suffix_packets, result.world,
+          maps);
     }
   } else {
     result.world = recheck_remaining_world(certificate, fresh);

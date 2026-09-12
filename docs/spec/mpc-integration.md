@@ -4889,3 +4889,11 @@ tests97全2,587/66。別の保存場面のsolver失敗と全体受入れは未�
 Build112全26、tests98全2,589/66、R436でD2source260とD1source350の完全証明を確認。
 D1の公開期限超過1529と全体受入れは別の未解決事項。
 [完全停止時の初期軌道](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rest-launch-tangent-design.md)。
+
+2026-09-12現在再証明の局所数式: 独立したstarting-domainの伝播中に、局所区間Jacobianと
+区間値の中心像を最大4096件保持する。元の証明と所有fingerprintは同じで、現在の
+全履歴からの予測においてmodel/時間刻み/状態/入力が含まれる局所計算だけに使う。
+範囲外は元のnative計算を行い、全車体/四隅/現在世界/完全停止/元の公開期限の判定を維持。
+診断のglobal cacheや現在prefixの追加座標変換は導入しない。Build113全26、tests99全2592、
+保存6ケースの判定保持を確認したが、標準r72と全M4–M6の受入れは未完。
+[局所数式の設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-map-cost-design.md)。

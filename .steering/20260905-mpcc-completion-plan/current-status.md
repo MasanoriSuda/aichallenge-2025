@@ -1,24 +1,25 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。D2完全停止からの初期軌道を修正。次は固定した標準r71。**
+**全体未完。現在再証明の計算負荷を修正・ローカル検証済み。次は固定した標準r72。**
 
-標準r70ではD1の新経路へのsource供給が進み、最大1.177m/s・連続61正加速指令を
-確認したが、decision1529の公開直前に元の期限を超過。callback21.360712msでも
-当該packetの残り窓には収まらなかった。後続の静止1858/27.074336msとは区別する。
-D2は認証済みsourceを生成できず、正加速指令0。両車未完走、保護成果物復元と停止を確認。
+標準r71はD1decision1070の公開期限超過で失敗。新候補と継続候補の再証明が
+約13.789/15.230msを占め、callback30.281ms。期限14.844999702秒に対して公開直前
+14.854999667秒。期限判定は正しい。D2の発進修正は実走でも改善し、最大1.319m/s、
+連続72正加速指令/1.775秒を記録。D1は最大1.065m/s、57指令/1.4秒。未完走。
+元のDLL・ユーザーJSONは復元済み、走行環境は停止済み。
 
-D2の線形QPには解があるがsolverが収束せず、惰性で停止へ戻る初期軌道が寄与。
-一律の加速用初期軌道はD1の通常候補を失敗させるため不採用。全body速度3成分が
-厳密にゼロで前進目標がある場合だけ、元の入力制約内で目標へ向かう初期軌道を生成。
-全コスト・制約・予算・単一権限・物理/適用入力/公開時刻の証明は維持。
-NativeRED1/adapter24、Build112全26、tests98全2,589/66（source105、C5 161）、
-R436本番libraryでD2source260と既存D1source350の候補/完全停止証明が合格。
+事前証明で得た局所数式を不変の所有に保持し、既存の現在履歴・座標・完全再証明で
+範囲が合う計算だけに使用。モデル/時間刻み/状態/入力の範囲外は元の計算を行い、
+現在世界・完全停止・元の公開期限と単一権限を維持。別の現在座標表現R441は不採用。
+100桁精度の12,800点を確認。Build113全26、tests99全2,592/66（source105、C5 161）が合格。
+本番libraryのR445では保存6ケースの判定を維持し、直近2ケースの中央値は
+9.83→6.71ms、7.80→5.19ms。実際の公開時刻での期限拒否も維持。
 
-D1deadline1529の原因修復、全intent/Mission/sibling/Store、実Stop/rest/restart、
+固定した標準r72の実走確認、全intent/Mission/sibling/Store、実Stop/rest/restart、
 Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、dev3/dev4六周、
 gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/rest-launch-tangent-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/current-map-cost-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

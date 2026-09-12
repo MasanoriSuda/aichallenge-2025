@@ -1,5 +1,6 @@
 #pragma once
 
+#include "multi_purpose_mpc_ros/mpcc_compiled_input_maps.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
 
 #include <array>
@@ -323,5 +324,17 @@ PendingInputPrediction predict_pending_inputs_to_rest(
   const InputApplicationProfile &profile, const Parameters &parameters,
   const AppliedInputValidator &validator = {},
   const AppliedFootprintValidation *footprint = nullptr) noexcept;
+
+/// Same complete current observation/history prediction. Optional immutable
+/// local equations may replace derivative construction only for strictly
+/// contained state/input/duration/model domains. All samples and full rest
+/// still require the original validator; absence/mismatch computes afresh.
+PendingInputPrediction predict_pending_inputs_to_rest(
+    const ObservationProvenance &observation,
+    const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters,
+    const AppliedInputValidator &validator,
+    const AppliedFootprintValidation *footprint,
+    const std::shared_ptr<const CompiledInputMaps> &maps) noexcept;
 
 } // namespace multi_purpose_mpc_ros::mpcc_vehicle_model

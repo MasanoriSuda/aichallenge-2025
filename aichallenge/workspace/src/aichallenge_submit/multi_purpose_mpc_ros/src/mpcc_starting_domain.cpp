@@ -195,7 +195,8 @@ starting_domain_context_fingerprint(const StartingDomainRequest &request,
 namespace {
 StartingDomainPrediction predict_domain_to_rest(
     const StartingDomainRequest &request, const Parameters &parameters,
-    const std::uint64_t context) noexcept {
+    const std::uint64_t context,
+    n::CompiledStepMapRecorder *recorder = nullptr) noexcept {
   if (!valid(parameters) || !parameters.nominal_settled_contact)
     return {Reason::InvalidModel, {}};
   if (!context)
@@ -243,9 +244,11 @@ StartingDomainPrediction predict_domain_to_rest(
         return {Reason::HistoryUnavailable, {}};
       assign_steering(population, *inputs, parameters);
       n::Box swept;
+      if (recorder)
+        recorder->step = step;
       population = n::advance_partitioned_inputs(
           std::move(population), acceleration_groups(*inputs), parameters, dt,
-          &swept, &corners);
+          &swept, &corners, nullptr, recorder);
       const auto endpoint = n::joined(population);
       tube.maximum_body_partitions =
           std::max(tube.maximum_body_partitions, population.size());
@@ -310,8 +313,10 @@ ProgrammeStartingDomainPrediction predict_programme_starting_domain_to_rest(
       std::move(*prediction.tube), request.original_rest_sec}};
 }
 
-RelativeProgrammeStartingDomainPrediction predict_relative_programme_domain_to_rest(
-    const ProgrammeStartingDomainRequest &request, const Parameters &parameters) noexcept {
+namespace {
+RelativeProgrammeStartingDomainPrediction
+relative_programme_domain(const ProgrammeStartingDomainRequest &request,
+                          const Parameters &parameters, bool compile) noexcept {
   // Keep original input history, time intervals, footprint and body population.
   // Pose normalization is a separate theorem, not a relaxed global membership.
   if (!finite(request.domain.coordinate_origin) || !valid_ranges(request.domain.body))
@@ -322,14 +327,59 @@ RelativeProgrammeStartingDomainPrediction predict_relative_programme_domain_to_r
     normalized.domain.coordinate_origin.x_m = 0;
     normalized.domain.coordinate_origin.y_m = 0;
     normalized.domain.coordinate_origin.yaw_rad = 0;
-    auto prediction = predict_programme_starting_domain_to_rest(normalized, parameters);
+    std::optional<n::CompiledStepMapRecorder> recorder;
+    if (compile)
+      recorder.emplace(parameters);
+    auto numerical = predict_domain_to_rest(
+        normalized.domain, parameters,
+        programme_starting_domain_context_fingerprint(normalized, parameters),
+        recorder ? &*recorder : nullptr);
+    ProgrammeStartingDomainPrediction prediction{numerical.reason, {}};
+    if (numerical.tube)
+      prediction.tube = ProgrammeStartingDomainTube{
+          std::move(*numerical.tube), normalized.original_rest_sec};
     if (!prediction.tube) return {prediction.reason, {}};
     Hash hash;
     hash.string("independent-relative-programme-body-time-domain-v1");
     hash.integer(prediction.tube->numerical.context_fingerprint);
     prediction.tube->numerical.context_fingerprint = hash.value ? hash.value : 1;
-    return {Reason::None, RelativeProgrammeStartingDomainTube{std::move(*prediction.tube)}};
+    auto maps = recorder ? n::CompiledInputMapAccess::finish(
+                               std::move(*recorder),
+                               prediction.tube->numerical.context_fingerprint)
+                         : nullptr;
+    return {Reason::None, RelativeProgrammeStartingDomainTube{
+                              std::move(*prediction.tube), std::move(maps)}};
   } catch (const std::exception &) { return {Reason::NumericalFailure, {}}; }
+}
+
+} // namespace
+RelativeProgrammeStartingDomainPrediction
+predict_relative_programme_domain_to_rest(
+    const ProgrammeStartingDomainRequest &request,
+    const Parameters &parameters) noexcept {
+  return relative_programme_domain(request, parameters, false);
+}
+RelativeProgrammeStartingDomainPrediction
+compile_relative_programme_domain_to_rest(
+    const ProgrammeStartingDomainRequest &request,
+    const Parameters &parameters) noexcept {
+  return relative_programme_domain(request, parameters, true);
+}
+std::size_t CompiledInputMaps::size() const noexcept {
+  return data_ ? data_->maps.size() : 0;
+}
+std::size_t CompiledInputMaps::storage_bytes() const noexcept {
+  return data_
+             ? data_->maps.capacity() * sizeof(n::CompiledStepMap) +
+                   data_->rows.capacity() * sizeof(n::CompiledInputMapData::Row)
+             : 0;
+}
+std::uint64_t CompiledInputMaps::source_domain_fingerprint() const noexcept {
+  return data_ ? data_->source_domain_fingerprint : 0;
+}
+bool CompiledInputMaps::matches(const Parameters &parameters) const noexcept {
+  return data_ && data_->model_fingerprint &&
+         data_->model_fingerprint == fingerprint(parameters);
 }
 
 std::optional<RelativeDomainTransform> RelativeDomainTransform::build(

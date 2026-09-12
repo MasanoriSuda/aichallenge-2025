@@ -499,14 +499,14 @@ predict_applied_inputs_to_rest(const ObservationProvenance &observation,
   return predict_applied_inputs_to_rest(observation, program, profile, parameters, validator, nullptr);
 }
 
-static AppliedInputPrediction
-predict_inputs_to_rest(const ObservationProvenance &observation,
-                               const PublishedInputProgram &program,
-                               const InputApplicationProfile &profile,
-                               const Parameters &parameters,
-                               const AppliedInputValidator &validator,
-                               const AppliedFootprintValidation *footprint,
-                               const bool scheduled, const bool pending = false) noexcept {
+static AppliedInputPrediction predict_inputs_to_rest(
+    const ObservationProvenance &observation,
+    const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters,
+    const AppliedInputValidator &validator,
+    const AppliedFootprintValidation *footprint, const bool scheduled,
+    const bool pending = false,
+    const CompiledInputMaps *compiled_maps = nullptr) noexcept {
   using Reason = AppliedInputRejectReason;
   if (!valid(parameters) || !parameters.nominal_settled_contact)
     return {Reason::InvalidModel, {}};
@@ -555,6 +555,8 @@ predict_inputs_to_rest(const ObservationProvenance &observation,
       }
       corners = numerical::CornerPopulation{{offsets, yaw}, {seed}, seed};
     }
+    const auto *maps =
+        numerical::CompiledInputMapAccess::get(compiled_maps, parameters);
     tube.maximum_body_partitions = 1;
     const double prefix_duration = observation.now_sec - observation.initial.source_sec;
     const auto prefix_steps = integration_steps(prefix_duration, parameters.maximum_step_sec);
@@ -626,9 +628,12 @@ predict_inputs_to_rest(const ObservationProvenance &observation,
         }
       }
       numerical::Box swept;
+      const auto map_view = numerical::CompiledInputMapAccess::row(
+          in_prefix ? nullptr : maps, in_prefix ? 0 : step - prefix_steps,
+          parameters);
       population = numerical::advance_partitioned_inputs(
           std::move(population), accelerations, parameters, duration, &swept,
-          corners ? &*corners : nullptr);
+          corners ? &*corners : nullptr, map_view.count ? &map_view : nullptr);
       const auto endpoint = numerical::joined(population);
       tube.maximum_body_partitions =
           std::max(tube.maximum_body_partitions, population.size());
@@ -693,7 +698,20 @@ PendingInputPrediction predict_pending_inputs_to_rest(
     const InputApplicationProfile &profile, const Parameters &parameters,
     const AppliedInputValidator &validator,
     const AppliedFootprintValidation *footprint) noexcept {
-  auto result=predict_inputs_to_rest(observation,program,profile,parameters,validator,footprint,true,true);
+  return predict_pending_inputs_to_rest(observation, program, profile,
+                                        parameters, validator, footprint, {});
+}
+
+PendingInputPrediction predict_pending_inputs_to_rest(
+    const ObservationProvenance &observation,
+    const PublishedInputProgram &program,
+    const InputApplicationProfile &profile, const Parameters &parameters,
+    const AppliedInputValidator &validator,
+    const AppliedFootprintValidation *footprint,
+    const std::shared_ptr<const CompiledInputMaps> &maps) noexcept {
+  auto result =
+      predict_inputs_to_rest(observation, program, profile, parameters,
+                             validator, footprint, true, true, maps.get());
   if (!result.tube) return {result.reason,{}};
   return {result.reason,PendingInputTube{std::move(*result.tube)}};
 }

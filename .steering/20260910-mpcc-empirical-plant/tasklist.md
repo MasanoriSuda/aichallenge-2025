@@ -395,3 +395,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R433 exact full-body-rest initial seed restores D2 and preserves moving D1. R434 RED1, r435 adapter24; pureHold/Stop reference input remains.
 - [x] Build112all26, tests98all2589/66/source105/C5 161. R436 original-source built-library A/B/C/D/G complete proofs for D2source260 and D1source350.
 - [ ] Committed standard r71; separate D1deadline1529 original-window/cost repair with exact evidence. All M4-M6 remain open.
+
+2026-09-12 current local-map equations (baseline11b93527):
+- [x] Standardr71 first D1moving1070 late guard; two current proofs13.789/15.230ms. D2moves/max1.319mps/72positive1.775s; no laps; original artifacts restored.
+- [x] R437setupfailure retained; R438exact source/current/history and original late rejection; R439numerical cost attribution. R440six domain alternatives rejected.
+- [x] R441relative-current recomposition rejected; R442local equations inside original full current predictor preserves both cases. R443independent100digitbody/corneroracle12800points.
+- [x] Immutable per-domain4096-map ownership, strict model/duration/state/input containment and existing fresh computation for uncovered steps. Parent proof and sole current authority remain.
+- [x] Native44415tests, build113all26, package99all2592/66/source105/C5 161; built-library445six exact paired cases, old before-clock rejections retained.
+- [ ] Local commit and standardr72 current-proof/worker cost and sustained progress. FullM4-M6/intent/Mission/sibling/Store, Stop/rest/restart, Recovery/Rejoin/Boost/async, final races/gates/submission remain.

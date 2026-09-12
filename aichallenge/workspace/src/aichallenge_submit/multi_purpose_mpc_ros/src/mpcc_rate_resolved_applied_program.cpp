@@ -1038,6 +1038,35 @@ std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
     if (!prediction.tube) return {};
     result->relative_ = std::move(*prediction.tube);
     result->first_window_only_ = false;
+    if (certificate->nominal()->proof().terminal_stop_source_horizon_program) {
+      const auto early_end = vehicle::publication_epoch(
+        certificate->suffix().program, certificate->first_suffix_index(), true);
+      if (early_end) {
+        auto early_request = request;
+        early_request.starting_sec.upper = std::min(*early_end, source.rest_sec);
+        for (std::size_t i = 3; i < early_request.body.size(); ++i)
+          early_request.body[i] = {center[i], center[i]};
+        for (const auto &sample : source.source_to_rest) {
+          if (sample.end_sec < source.observation.now_sec ||
+              sample.begin_sec > early_request.starting_sec.upper) continue;
+          for (std::size_t i = 3; i < early_request.body.size(); ++i) {
+            early_request.body[i].lower = std::min(early_request.body[i].lower, sample.swept_body[i].lower);
+            early_request.body[i].upper = std::max(early_request.body[i].upper, sample.swept_body[i].upper);
+          }
+        }
+        auto early_prediction = vehicle::predict_relative_programme_domain_to_rest(
+          {early_request, source.rest_sec}, original.plan->execution_artifact->vehicle_model);
+        if (early_prediction.tube) {
+          auto early = std::shared_ptr<StartingDomainEvidence>(new StartingDomainEvidence);
+          early->certificate_ = certificate;
+          early->original_rest_sec_ = source.rest_sec;
+          early->includes_pending_prior_ = composite;
+          early->first_window_only_ = false;
+          early->relative_ = std::move(*early_prediction.tube);
+          result->early_ = std::move(early);
+        }
+      }
+    }
   }
   result->certificate_ = std::move(certificate);
   return result;
@@ -1069,7 +1098,8 @@ std::optional<vehicle::PublishedInputProgram> remaining_programme(
 std::optional<vehicle::CurrentInputPrefix> check_current_domain(
     const applied::ScheduledCertificate &certificate, const retained::Request &fresh,
     std::size_t index, const std::shared_ptr<const StartingDomainEvidence> &evidence,
-    DomainUseReason &use, CurrentWorldCheck &result) {
+    DomainUseReason &use, CurrentWorldCheck &result,
+    std::shared_ptr<const StartingDomainEvidence> *selected_evidence) {
   use = DomainUseReason::Missing;
   if (!evidence) return std::nullopt;
   use = DomainUseReason::UnsupportedSuffix;
@@ -1078,6 +1108,17 @@ std::optional<vehicle::CurrentInputPrefix> check_current_domain(
   use = DomainUseReason::SourceMismatch;
   if (evidence->certificate().get() != &certificate ||
       evidence->original_rest_sec() != certificate.tube().rest_sec) return std::nullopt;
+  if (evidence->early()) {
+    DomainUseReason early_use;
+    CurrentWorldCheck early_world;
+    auto prefix = check_current_domain(certificate, fresh, index, evidence->early(),
+      early_use, early_world, selected_evidence);
+    if (prefix) {
+      use = early_use;
+      result = early_world;
+      return prefix;
+    }
+  }
   double follow_reference{};
   std::optional<recovery_footprint::FootprintExtents> footprint;
   use = DomainUseReason::WorldRejected;
@@ -1141,6 +1182,7 @@ std::optional<vehicle::CurrentInputPrefix> check_current_domain(
   result.minimum_follow_gap_m = statistics.minimum_follow_gap_m;
   result.checked_samples = statistics.checked_samples;
   use = DomainUseReason::Accepted;
+  if (selected_evidence) *selected_evidence = evidence;
   return std::move(prediction.prefix);
 }
 
@@ -1214,7 +1256,8 @@ CurrentCheck check_dispatch_evidence(
     std::optional<vehicle::PendingInputTube> *independent,
     const std::shared_ptr<const StartingDomainEvidence> &domain = {},
     std::optional<vehicle::CurrentInputPrefix> *domain_prefix = nullptr,
-    DomainUseReason *domain_use = nullptr) {
+    DomainUseReason *domain_use = nullptr,
+    std::shared_ptr<const StartingDomainEvidence> *selected_evidence = nullptr) {
   CurrentCheck result;
   if (!fresh.publication_prefix || fresh_problem.decision_id != fresh.decision_id ||
       fresh_problem.intent != fresh.current_intent ||
@@ -1244,7 +1287,7 @@ CurrentCheck check_dispatch_evidence(
   if (new_population) {
     if (domain_prefix && domain_use)
       *domain_prefix = check_current_domain(certificate, fresh, already_published_suffix_packets,
-        domain, *domain_use, result.world);
+        domain, *domain_use, result.world, selected_evidence);
     if (!domain_prefix || !*domain_prefix) {
       result.world = CurrentWorldCheck{};
       *independent = prove_current_remaining_program(certificate, fresh,
@@ -1334,13 +1377,15 @@ DispatchResult prepare_dispatch(
   }
   std::optional<vehicle::PendingInputTube> independent;
   std::optional<vehicle::CurrentInputPrefix> domain_prefix;
+  auto selected_domain = domain;
   result.current = check_dispatch_evidence(*certificate, fresh, fresh_problem, current_generation,
-    ledger, original_cursor, prior_sources, index, &independent, domain, &domain_prefix, &result.domain_use);
+    ledger, original_cursor, prior_sources, index, &independent, domain, &domain_prefix,
+    &result.domain_use, &selected_domain);
   if (result.current.reason != CurrentReason::Compatible) {
     result.reason = DispatchReason::CurrentEvidenceRejected; return result;
   }
   if ((independent && *deadline > independent->numerical.rest_sec) ||
-      (domain_prefix && *deadline > domain->tube().rest_sec)) {
+      (domain_prefix && (!selected_domain || *deadline > selected_domain->tube().rest_sec))) {
     result.reason = DispatchReason::RestExpired; return result;
   }
   const auto cursor = ledger.snapshot();
@@ -1365,7 +1410,7 @@ DispatchResult prepare_dispatch(
     physical->observed_ = fresh;
     physical->prefix_ = std::move(*domain_prefix);
     physical->first_suffix_index_ = index;
-    physical->evidence_ = std::move(domain);
+    physical->evidence_ = std::move(selected_domain);
     // Namespace-separated observation identity, never a caller-supplied token.
     std::uint64_t hash = 14695981039346656037ULL;
     for (const std::uint64_t value : {std::uint64_t{0x435552444f4d3031},

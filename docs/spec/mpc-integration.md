@@ -4846,3 +4846,12 @@ Native包含試験、全26 build、2,582 test記録、旧9場面の再生を確�
 Native回帰、全26build、2,583test記録、4生成場面と10履歴場面を検証した。
 標準r63は停止状態が続き完走していない。修正後の標準r64と全体受入れは未完。
 [時間長の所有者と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-duration-design.md)。
+
+2026-09-12 長い入力列の独立証明は、全期間の開始集合に加え、元の前段予約数+1の公開窓
+までの開始時刻・車体集合を別途停止まで伝播する。早期集合を先に現在世界で確認し、
+適用できなければ全期間集合、完全な現在状態の再証明へ進む。実際に確認した証明が
+現在の識別子・停止時刻・snapshotを所有する。元の指令履歴と世代、全壁・車両・形状、
+送信前後25msを維持する。r64D1の保存場面は壁拒否から通過へ変化し、後期の証明と
+r63D2の集合外拒否は維持。全26build、2,584test記録、12再生場面を確認した。
+標準r64は未完走。修正後r65、追加worker時間、残る時計超過と全体受入れは未検証。
+[早期集合と全期間集合](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-window-design.md)。

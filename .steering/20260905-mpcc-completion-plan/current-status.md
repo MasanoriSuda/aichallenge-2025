@@ -1,22 +1,23 @@
 # Current status and remaining completion work
 
-2026-09-12 JST。追加確認なしでM1–M6を自律実行。必要分をローカルcommit、pushなし。
-**全体未完。加速計画の時間長の取り違えを修正・検証。次は標準dev2-r64。**
+2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
+**全体未完。早期の開始集合の独立証明を追加・検証。次は標準dev2-r65。**
 
-25218a0aの標準r63は停滞し、完走なし。D2の送信前拒否3件を保存して停止した。
-送信後違反は観測なし。最初の1818は車体状態が候補集合外で、完全な現在証明の再計算と
-遅い開始により元25ms窓を超過した。元の証明と実履歴・期限判定を再生済み。
+660227c9の標準r64は完走せず、D1最初の957は全期間の車体集合による現在壁拒否から
+完全再計算となり期限超過。D2の1065は現在証明が通っても送信後に元の25msを超過。
+元の証明ID・実履歴・送信前後拒否をR396で再現。記録側のclock受信は別subscriberであり、
+実受信保証や送信後判定の代用にしない。
 
-別の発進不足は、旧入力列の短い検証範囲を新しい長い候補の時間長に使う生成側の欠陥。
-元の計画残時間から候補を作り、その全体と停止までを従来どおり独立検証するよう修正。
-Native回帰は修正前に失敗、修正後159件合格。Build105全26、tests92全2,583/66
-（source105）合格。4場面の生成と10場面の履歴検証を確認し、新しい指令列による
-古い実履歴の流用は拒否される。全物理制約・時計・送信窓・単一authorityを維持。
+早い時刻に未来の最大速度まで開始候補へ含める過大範囲を、早期集合の独立証明で分離。
+全期間証明を維持し、選択した証明自身に現在IDと停止時刻を結び付ける。Build107全26、
+tests93全2,584/66（C5 160、source105）、R400の12履歴場面を確認。r64D1の現在壁判定は
+通過し、r64D2/r60D2の後期証明、r63D2の車体集合外拒否、全元時刻ガードを維持する。
+Native398/399のfixture前提失敗は保存し、最終package検証前に修正済み。
 
-標準r64で修正後の発進・継続性を確認する。車体集合の適用範囲・実行待ち、全intent/
+標準r65で追加worker時間と実採用を確認する。車体集合・時計/実行待ち、全intent/
 Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
 単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-duration-design.md)、
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-window-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

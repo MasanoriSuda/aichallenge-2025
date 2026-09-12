@@ -362,3 +362,9 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R385 identifies old continuation scope truncating a different new programme proposal. R387/390 compare original schedule duration and preserve terminal-wall rejection.
 - [x] Native391 red /392 all159 green. Build105 all26; tests92 all2,583/66/source105. Final producer393 four cases, history395 ten cases with changed-source rejection.
 - [ ] Committed standarddev2-r64, remaining body-domain coverage and scheduling; all M4-M6 and final same-artifact submission/eval.
+
+2026-09-12 early and complete starting populations (baseline660227c9):
+- [x] Standard r64 failed: no laps; D1pre957 full population current-wall rejection, D2post1065 clock overrun. R396 exact source/current/history replay; separate-subscriber clock window evidence preserved.
+- [x] R397 compares four representations on five frozen scenes. Early body/time repairs r64D1's over-broad population; early time alone does not. Late full proof and r63 body rejection retained.
+- [x] Private early/full evidence selection, actual leaf identity/rest ownership, full prefix/body/footprint/history/clock negatives. Build107 all26; tests93 all2,584/66/source105, including160 C5. R400 all12 historical cases.
+- [ ] Committed standarddev2-r65; measure extra worker cost and remaining scheduling/body coverage. All M4-M6 and final same-artifact submission/eval remain.

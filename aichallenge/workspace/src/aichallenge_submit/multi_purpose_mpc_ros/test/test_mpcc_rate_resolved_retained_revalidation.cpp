@@ -4155,7 +4155,9 @@ struct ScheduledDispatchFixture {
   contract::MpccProblemContext context;
 
   explicit ScheduledDispatchFixture(double last_prior_after = 1.075, bool initial_clock_floor = false,
-    contract::ControlIntent intent = contract::ControlIntent::Track, bool no_prior_packets = false) : request(scheduled_request(intent)) {
+    contract::ControlIntent intent = contract::ControlIntent::Track, bool no_prior_packets = false,
+    bool with_velocity_source = false) : request(scheduled_request(intent)) {
+    if (with_velocity_source) attach_velocity_source(request.observed, 4);
     if (no_prior_packets) {
       request.prior_index = request.preceding_packet_count;
       request.preceding_packet_count = 0;
@@ -4932,61 +4934,104 @@ TEST(MpccScheduledDomainDispatch, IndependentlyProvesPoseBehindTheOriginalSource
 
 TEST(MpccScheduledDomainDispatch, RepeatedTailAuthenticatesEveryActualSendAndKeepsPrefixParity)
 {
-  for (bool no_prior : {true, false}) {
-  SCOPED_TRACE(no_prior);
-  ScheduledDispatchFixture f(1.075,false,contract::ControlIntent::Track,no_prior);
-  const auto domain=scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
-  EXPECT_EQ(domain->original_rest_sec(),f.certificate->tube().rest_sec);
-  for (std::size_t index=0;index<5;++index) {
-    SCOPED_TRACE(index);
-    const double epoch=*vehicle::publication_epoch(f.certificate->suffix().program,index);
-    // Advance the real packet clock/history beyond the finite solver stages.
-    // The older world helper asks for a new solver-stage packet and cannot
-    // represent repeated terminal sends.
-    f.fresh.decision_id++; f.fresh.obstacles.generation++;
-    f.fresh.now_sec=epoch; f.fresh.control_origin_sec=epoch+.04;
-    f.fresh.publication_prefix->observation.now_sec=epoch;
-    f.fresh.publication_prefix->observation.control_origin_sec=epoch+.04;
-    if (index==0) f.fresh.publication_prefix->observation.initial.state.x_m+=.001;
-    const auto &previous=f.ledger.latest_transaction()->nominal;
-    f.fresh.previous_published_steering_rad=previous.wire_steering_rad/f.fresh.plan->execution_artifact->vehicle_model.steering_wire_gain;
-    f.fresh.publication_prefix->observation.initial.state.desired_steering_rad=f.fresh.previous_published_steering_rad;
-    f.fresh.obstacles.observed_sec=epoch;
-    f.bind_next(index);
-    const auto prepare=[&](std::size_t i){return scheduled::prepare_dispatch(f.certificate,f.fresh,f.context,
-      f.owner.capture(),f.ledger,*f.original_cursor,f.prior_sources,i,domain);};
-    EXPECT_FALSE(prepare(index+1).candidate);
-    if (index) { EXPECT_FALSE(prepare(index-1).candidate); }
-    const auto result=prepare(index); ASSERT_TRUE(result.candidate) << static_cast<int>(result.current.reason);
-    ASSERT_EQ(result.domain_use,scheduled::DomainUseReason::Accepted);
-    const auto &candidate=*result.candidate; ASSERT_TRUE(candidate.current_domain_proof());
-    EXPECT_EQ(candidate.current_domain_proof()->first_suffix_index(),index);
-    const auto full=f.prepare(index); ASSERT_TRUE(full.candidate); ASSERT_TRUE(full.candidate->current_physical_proof());
-    const auto &prefix=candidate.current_domain_proof()->prefix();
-    const auto &numerical=full.candidate->current_physical_proof()->tube().numerical;
-    ASSERT_TRUE(numerical.publication_footprint);
-    for (std::size_t i=0;i<8;++i) {
-      EXPECT_EQ(prefix.body[i].lower,numerical.publication_body[i].lower);
-      EXPECT_EQ(prefix.body[i].upper,numerical.publication_body[i].upper);
-      EXPECT_EQ(prefix.footprint[i].lower,(*numerical.publication_footprint)[i].lower);
-      EXPECT_EQ(prefix.footprint[i].upper,(*numerical.publication_footprint)[i].upper);
+  for (bool with_velocity_source : {false, true}) {
+    SCOPED_TRACE(with_velocity_source);
+    for (bool no_prior : {true, false}) {
+    SCOPED_TRACE(no_prior);
+    ScheduledDispatchFixture f(1.075,false,contract::ControlIntent::Track,no_prior,with_velocity_source);
+    const auto domain=scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+    ASSERT_EQ(static_cast<bool>(domain->early()),f.certificate->nominal()->proof().terminal_stop_source_horizon_program);
+    EXPECT_EQ(domain->original_rest_sec(),f.certificate->tube().rest_sec);
+    for (std::size_t index=0;index<5;++index) {
+      SCOPED_TRACE(index);
+      const double epoch=*vehicle::publication_epoch(f.certificate->suffix().program,index);
+      // Advance the real packet clock/history beyond the finite solver stages.
+      // The older world helper asks for a new solver-stage packet and cannot
+      // represent repeated terminal sends.
+      f.fresh.decision_id++; f.fresh.obstacles.generation++;
+      f.fresh.now_sec=epoch; f.fresh.control_origin_sec=epoch+.04;
+      f.fresh.publication_prefix->observation.now_sec=epoch;
+      f.fresh.publication_prefix->observation.control_origin_sec=epoch+.04;
+      if (index==0) f.fresh.publication_prefix->observation.initial.state.x_m+=.001;
+      const auto &previous=f.ledger.latest_transaction()->nominal;
+      f.fresh.previous_published_steering_rad=previous.wire_steering_rad/f.fresh.plan->execution_artifact->vehicle_model.steering_wire_gain;
+      f.fresh.publication_prefix->observation.initial.state.desired_steering_rad=f.fresh.previous_published_steering_rad;
+      f.fresh.obstacles.observed_sec=epoch;
+      f.bind_next(index);
+      const auto prepare=[&](std::size_t i){return scheduled::prepare_dispatch(f.certificate,f.fresh,f.context,
+        f.owner.capture(),f.ledger,*f.original_cursor,f.prior_sources,i,domain);};
+      EXPECT_FALSE(prepare(index+1).candidate);
+      if (index) { EXPECT_FALSE(prepare(index-1).candidate); }
+      const auto result=prepare(index); ASSERT_TRUE(result.candidate) << static_cast<int>(result.current.reason);
+      ASSERT_EQ(result.domain_use,scheduled::DomainUseReason::Accepted);
+      const auto &candidate=*result.candidate; ASSERT_TRUE(candidate.current_domain_proof());
+      if (domain->early() && index==0) { EXPECT_EQ(candidate.current_domain_proof()->evidence(),domain->early()); }
+      if (index==4) { EXPECT_EQ(candidate.current_domain_proof()->evidence(),domain); }
+      EXPECT_EQ(candidate.current_domain_proof()->first_suffix_index(),index);
+      const auto full=f.prepare(index); ASSERT_TRUE(full.candidate); ASSERT_TRUE(full.candidate->current_physical_proof());
+      const auto &prefix=candidate.current_domain_proof()->prefix();
+      const auto &numerical=full.candidate->current_physical_proof()->tube().numerical;
+      ASSERT_TRUE(numerical.publication_footprint);
+      for (std::size_t i=0;i<8;++i) {
+        EXPECT_EQ(prefix.body[i].lower,numerical.publication_body[i].lower);
+        EXPECT_EQ(prefix.body[i].upper,numerical.publication_body[i].upper);
+        EXPECT_EQ(prefix.footprint[i].lower,(*numerical.publication_footprint)[i].lower);
+        EXPECT_EQ(prefix.footprint[i].upper,(*numerical.publication_footprint)[i].upper);
+      }
+      EXPECT_EQ(prefix.program.commands.front().published_sec,epoch);
+      EXPECT_EQ(domain->tube().request.program.commands.front().published_sec,no_prior ? 1.1 : 1.05);
+      const auto &packet=candidate.packet();
+      ASSERT_TRUE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
+        epoch,packet.wire_acceleration_mps2,packet.wire_steering_rad));
+      EXPECT_FALSE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
+        *vehicle::publication_epoch(f.certificate->suffix().program,index,true)+1e-9,
+        packet.wire_acceleration_mps2,packet.wire_steering_rad));
+      auto unsafe=f.fresh;
+      unsafe.obstacles.obstacles.push_back({"contact",{unsafe.control_pose.x_m,unsafe.control_pose.y_m,0,0,.2}});
+      EXPECT_FALSE(scheduled::prepare_dispatch(f.certificate,unsafe,f.context,f.owner.capture(),f.ledger,
+        *f.original_cursor,f.prior_sources,index,domain).candidate);
+      ASSERT_TRUE(f.ledger.record(packet,epoch,epoch,2,candidate.source()));
+      EXPECT_TRUE(candidate.matches_after_publication(f.ledger,f.owner.capture()));
     }
-    EXPECT_EQ(prefix.program.commands.front().published_sec,epoch);
-    EXPECT_EQ(domain->tube().request.program.commands.front().published_sec,no_prior ? 1.1 : 1.05);
-    const auto &packet=candidate.packet();
-    ASSERT_TRUE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
-      epoch,packet.wire_acceleration_mps2,packet.wire_steering_rad));
-    EXPECT_FALSE(candidate.matches_before_publication(f.ledger,f.owner.capture(),f.fresh.decision_id,
-      *vehicle::publication_epoch(f.certificate->suffix().program,index,true)+1e-9,
-      packet.wire_acceleration_mps2,packet.wire_steering_rad));
-    auto unsafe=f.fresh;
-    unsafe.obstacles.obstacles.push_back({"contact",{unsafe.control_pose.x_m,unsafe.control_pose.y_m,0,0,.2}});
-    EXPECT_FALSE(scheduled::prepare_dispatch(f.certificate,unsafe,f.context,f.owner.capture(),f.ledger,
-      *f.original_cursor,f.prior_sources,index,domain).candidate);
-    ASSERT_TRUE(f.ledger.record(packet,epoch,epoch,2,candidate.source()));
-    EXPECT_TRUE(candidate.matches_after_publication(f.ledger,f.owner.capture()));
+  }
   }
 }
+
+TEST(MpccScheduledDomainDispatch, SelectedEarlyProofOwnsItsIdentityRestAndOriginalInputMemory)
+{
+  ScheduledDispatchFixture f(1.075,false,contract::ControlIntent::Track,false,true);
+  const auto domain=scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+  const auto early=domain->early(); ASSERT_TRUE(early);
+  EXPECT_FALSE(early->early());
+  EXPECT_EQ(early->certificate(),f.certificate);
+  EXPECT_EQ(early->original_rest_sec(),f.certificate->tube().rest_sec);
+  EXPECT_TRUE(early->includes_pending_prior());
+  EXPECT_FALSE(early->first_window_only());
+  EXPECT_NE(early->tube().context_fingerprint,domain->tube().context_fingerprint);
+  EXPECT_EQ(early->tube().request.starting_sec.upper,
+    *vehicle::publication_epoch(f.certificate->suffix().program,f.certificate->first_suffix_index(),true));
+  const auto &original=f.certificate->tube().program.commands;
+  const auto &memory=early->tube().request.program.commands;
+  ASSERT_EQ(memory.size(),original.size());
+  for (std::size_t i=0;i<memory.size();++i) {
+    EXPECT_EQ(memory[i].published_sec,original[i].published_sec);
+    EXPECT_EQ(memory[i].wire_acceleration_mps2,original[i].wire_acceleration_mps2);
+    EXPECT_EQ(memory[i].wire_steering_rad,original[i].wire_steering_rad);
+  }
+  f.fresh.publication_prefix->observation.initial.state.x_m+=.001;
+  f.bind_next(0);
+  const auto prepare=[&](const auto &evidence) {
+    return scheduled::prepare_dispatch(f.certificate,f.fresh,f.context,f.owner.capture(),
+      f.ledger,*f.original_cursor,f.prior_sources,0,evidence);
+  };
+  const auto selected=prepare(domain), direct=prepare(early);
+  ASSERT_TRUE(selected.candidate); ASSERT_TRUE(direct.candidate);
+  const auto proof=selected.candidate->current_domain_proof(); ASSERT_TRUE(proof);
+  ASSERT_TRUE(direct.candidate->current_domain_proof());
+  EXPECT_EQ(proof->evidence(),early);
+  EXPECT_EQ(proof->physical_input_fingerprint(),direct.candidate->current_domain_proof()->physical_input_fingerprint());
+  EXPECT_EQ(selected.candidate->source().input_context_fingerprint,f.certificate->tube().context_fingerprint);
+  EXPECT_LE(*vehicle::publication_epoch(f.certificate->suffix().program,0,true),proof->evidence()->tube().rest_sec);
 }
 
 TEST(MpccScheduledDispatch, PartialTerminalWindowCannotBorrowAnInstantBeforeProvedRest)
@@ -5068,21 +5113,24 @@ TEST(MpccScheduledCompositeDomain, RetainsPendingInputMemoryAndOriginalSourceIde
 
 TEST(MpccScheduledCompositeDomain, RejectsWrongExpectedPriorSourceCountContextAndFreshWorld)
 {
-  for (int variant = 0; variant < 6; ++variant) {
-    SCOPED_TRACE(variant);
-    ScheduledDispatchFixture f;
-    const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
-    f.fresh.publication_prefix->observation.initial.state.x_m += .001;
-    f.bind_next(0);
-    if (variant == 0) f.prior_sources.pop_back();
-    if (variant == 1) f.prior_sources[0] = vehicle::PublishedProgramSource{9, 8, 7, 6, 0};
-    if (variant == 2) { f.context.stage_geometry_id++; f.context = contract::seal_problem_context(f.context); }
-    if (variant == 3) f.owner.invalidate();
-    if (variant == 4) f.fresh.obstacles.obstacles.push_back({"current-contact",
-      {f.fresh.control_pose.x_m, f.fresh.control_pose.y_m, 0, 0, .2}});
-    if (variant == 5) f.fresh.publication_prefix->observation.commands.back().wire_acceleration_mps2 += .1;
-    EXPECT_FALSE(scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
-      f.ledger, *f.original_cursor, f.prior_sources, 0, domain).candidate);
+  for (bool with_velocity_source : {false, true}) {
+    SCOPED_TRACE(with_velocity_source);
+    for (int variant = 0; variant < 6; ++variant) {
+      SCOPED_TRACE(variant);
+      ScheduledDispatchFixture f(1.075,false,contract::ControlIntent::Track,false,with_velocity_source);
+      const auto domain = scheduled::StartingDomainEvidence::build(f.certificate); ASSERT_TRUE(domain);
+      f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+      f.bind_next(0);
+      if (variant == 0) f.prior_sources.pop_back();
+      if (variant == 1) f.prior_sources[0] = vehicle::PublishedProgramSource{9, 8, 7, 6, 0};
+      if (variant == 2) { f.context.stage_geometry_id++; f.context = contract::seal_problem_context(f.context); }
+      if (variant == 3) f.owner.invalidate();
+      if (variant == 4) f.fresh.obstacles.obstacles.push_back({"current-contact",
+        {f.fresh.control_pose.x_m, f.fresh.control_pose.y_m, 0, 0, .2}});
+      if (variant == 5) f.fresh.publication_prefix->observation.commands.back().wire_acceleration_mps2 += .1;
+      EXPECT_FALSE(scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+        f.ledger, *f.original_cursor, f.prior_sources, 0, domain).candidate);
+    }
   }
 }
 

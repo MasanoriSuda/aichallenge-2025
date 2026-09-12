@@ -56,6 +56,7 @@ public:
   const std::shared_ptr<const applied::ScheduledCertificate> &certificate() const noexcept { return certificate_; }
   const vehicle::StartingDomainTube &tube() const noexcept { return relative_ ? relative_->normalized.numerical : tube_; }
   const std::optional<vehicle::RelativeProgrammeStartingDomainTube> &relative() const noexcept { return relative_; }
+  const std::shared_ptr<const StartingDomainEvidence> &early() const noexcept { return early_; }
   double original_rest_sec() const noexcept { return original_rest_sec_; }
   bool first_window_only() const noexcept { return first_window_only_; }
   bool includes_pending_prior() const noexcept { return includes_pending_prior_; }
@@ -64,6 +65,7 @@ private:
   std::shared_ptr<const applied::ScheduledCertificate> certificate_;
   vehicle::StartingDomainTube tube_;
   std::optional<vehicle::RelativeProgrammeStartingDomainTube> relative_;
+  std::shared_ptr<const StartingDomainEvidence> early_;
   double original_rest_sec_{};
   bool first_window_only_{true};
   bool includes_pending_prior_{false};

@@ -1231,6 +1231,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-duration-evidence.json",
       "replay_ready": true,
       "reason": "Original source schedule versus truncated old continuation: exact runtime/diagnostic/native and final library evidence."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-starting-domain-window",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-window-evidence.json",
+      "replay_ready": true,
+      "reason": "Original r64 failures, four independent population representations and final private early/full evidence replay."
     }
   ],
   "experiments": [
@@ -14805,6 +14811,70 @@
         "Using old continuation endpoint and retained sample count as the new source programme duration/cap"
       ],
       "revisit_condition": "New source schedule/cursor/identity or full physical proof counterexample; runtime evidence needed for separate timing family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-window-dev2-r64-r396",
+      "baseline_commit": "660227c9a07be18a49d1a46e0c61ffe655b0e362",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-window"
+      ],
+      "hypothesis": "Separate early body/time starting population avoids whole-future speeds at early starts while retaining complete late evidence.",
+      "changed_dimension": "Privately composed independent evidence only; no physical/clock/normal-authority change.",
+      "result": "rejected",
+      "reason": "No laps; exact D1 current-wall and D2 after-publication clock failures. Clock recorder timing cannot replace actual final guard.",
+      "production_impact": "Early/full evidence locally validated; standard r65 and overall acceptance pending.",
+      "deleted_code": [
+        "Assuming the supplied root evidence necessarily owns the selected current proof fingerprint/rest horizon"
+      ],
+      "revisit_condition": "Different source/programme/current membership or world; live evidence required for worker-cost/scheduling family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-window-r397-early-time-only",
+      "baseline_commit": "660227c9a07be18a49d1a46e0c61ffe655b0e362",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-window"
+      ],
+      "hypothesis": "Separate early body/time starting population avoids whole-future speeds at early starts while retaining complete late evidence.",
+      "changed_dimension": "Privately composed independent evidence only; no physical/clock/normal-authority change.",
+      "result": "rejected",
+      "reason": "Early time with complete body hull still fails r64D1 current wall; does not remove future speed as early starting state.",
+      "production_impact": "Early/full evidence locally validated; standard r65 and overall acceptance pending.",
+      "deleted_code": [
+        "Assuming the supplied root evidence necessarily owns the selected current proof fingerprint/rest horizon"
+      ],
+      "revisit_condition": "Different source/programme/current membership or world; live evidence required for worker-cost/scheduling family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-window-r397-early-and-complete",
+      "baseline_commit": "660227c9a07be18a49d1a46e0c61ffe655b0e362",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-window"
+      ],
+      "hypothesis": "Separate early body/time starting population avoids whole-future speeds at early starts while retaining complete late evidence.",
+      "changed_dimension": "Privately composed independent evidence only; no physical/clock/normal-authority change.",
+      "result": "accepted",
+      "reason": "Early body/time independently passes r64D1 current wall; retain complete proof for late r64D2/r60D2. R63 body mismatch remains. Full collection of bins not promoted.",
+      "production_impact": "Early/full evidence locally validated; standard r65 and overall acceptance pending.",
+      "deleted_code": [
+        "Assuming the supplied root evidence necessarily owns the selected current proof fingerprint/rest horizon"
+      ],
+      "revisit_condition": "Different source/programme/current membership or world; live evidence required for worker-cost/scheduling family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-starting-domain-window-r398-r400-build107-tests93",
+      "baseline_commit": "660227c9a07be18a49d1a46e0c61ffe655b0e362",
+      "snapshot_ids": [
+        "20260912-nine-state-starting-domain-window"
+      ],
+      "hypothesis": "Separate early body/time starting population avoids whole-future speeds at early starts while retaining complete late evidence.",
+      "changed_dimension": "Privately composed independent evidence only; no physical/clock/normal-authority change.",
+      "result": "accepted",
+      "reason": "Two native fixture assumption failures preserved; final160 C5 and all2,584/66 package records,26build and12 frozen history cases pass. Selected leaf owns identity/rest; source/history/world/clock requirements maintained.",
+      "production_impact": "Early/full evidence locally validated; standard r65 and overall acceptance pending.",
+      "deleted_code": [
+        "Assuming the supplied root evidence necessarily owns the selected current proof fingerprint/rest horizon"
+      ],
+      "revisit_condition": "Different source/programme/current membership or world; live evidence required for worker-cost/scheduling family."
     }
   ]
 }

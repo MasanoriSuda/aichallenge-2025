@@ -5260,6 +5260,66 @@ TEST(MpccSourceReservation, RequiresPublishedSourceAndOriginalPriorProofCoverage
 }
 
 
+TEST(MpccSourceReservation, ProvesIntermediateProgrammeWhenFullDurationCannotStopBeforePeer)
+{
+  scheduled::ContextOwner owner;
+  auto request = scheduled_request();
+  request.preceding_packet_count = 1;
+  request.planned_control_origin_sec = 1.115;
+  attach_velocity_source(request.observed, 4);
+  request.observed.obstacles.obstacles.push_back({"ahead", {
+    request.observed.control_pose.x_m + 1.7, request.observed.control_pose.y_m, 0, 0, .1}});
+  attach_synthetic_source_generation(request, owner.capture());
+  const auto result = scheduled::evaluate(request);
+  ASSERT_TRUE(result.applied.certificate) << retained::to_string(result.reason);
+  const auto &certificate = *result.applied.certificate;
+  const auto &programme = certificate.suffix().program;
+  // The original horizon proposes three positive packets. Its complete applied
+  // stop reaches the peer; two positive packets still have a certified stop.
+  ASSERT_TRUE(certificate.nominal()->proof().terminal_stop_source_horizon_program);
+  ASSERT_EQ(programme.commands.size(), 3U);
+  EXPECT_GT(programme.commands[0].wire_acceleration_mps2, 0);
+  EXPECT_GT(programme.commands[1].wire_acceleration_mps2, 0);
+  EXPECT_DOUBLE_EQ(programme.commands[2].wire_acceleration_mps2, request.observed.minimum_acceleration_mps2);
+  EXPECT_GT(certificate.tube().rest_sec, programme.commands.back().published_sec);
+  EXPECT_EQ(certificate.first_suffix_index(), 1U);
+
+  vehicle::PublishedInputLedger ledger(256);
+  for (const auto &packet : certificate.tube().observation.commands)
+    ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2));
+  const auto cursor = ledger.snapshot();
+  ASSERT_TRUE(cursor);
+  const std::vector<std::optional<vehicle::PublishedProgramSource>> prior_sources{
+    vehicle::PublishedProgramSource{50, 7, 8, 9, 10}};
+  const auto &prior = request.prior_program.commands.front();
+  ASSERT_TRUE(ledger.record(prior, prior.published_sec, prior.published_sec, 2, prior_sources.front()));
+  // This checks the authenticated history contract. Keep the original observed
+  // component epochs; the two-prior measurement fixture has different epochs.
+  auto fresh = certificate.nominal()->forecast().observation;
+  fresh.now_sec = programme.commands.back().published_sec;
+  fresh.control_origin_sec = fresh.now_sec + .04;
+  for (std::size_t i = 0; i < 2; ++i) {
+    fresh.commands = ledger.history();
+    EXPECT_EQ(scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, prior_sources, i),
+      scheduled::PrefixReason::Consistent);
+    const auto source = scheduled::scheduled_program_source(certificate, i);
+    ASSERT_TRUE(source);
+    const auto &packet = programme.commands[i];
+    ASSERT_TRUE(ledger.record(packet, packet.published_sec, packet.published_sec, 2, source));
+  }
+  fresh.commands = ledger.history();
+  EXPECT_EQ(scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, prior_sources, 2),
+    scheduled::PrefixReason::Consistent);
+  auto wrong_sources = prior_sources;
+  wrong_sources.front()->input_context_fingerprint++;
+  EXPECT_EQ(scheduled::check_actual_publication_prefix(certificate, ledger, *cursor, fresh, wrong_sources, 2),
+    scheduled::PrefixReason::ActualPrefixMismatch);
+
+  auto blocked = request;
+  blocked.observed.obstacles.obstacles.front().circle.x_m -= .3;
+  EXPECT_FALSE(scheduled::evaluate(blocked).applied.certificate);
+}
+
 TEST(MpccSourceReservation, SourceHorizonRetainsNormalIntentUntilItsCertifiedBrakeTail)
 {
   auto request = scheduled_request(contract::ControlIntent::Cruise);

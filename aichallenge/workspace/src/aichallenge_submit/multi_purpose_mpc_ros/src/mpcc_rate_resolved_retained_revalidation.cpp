@@ -861,7 +861,8 @@ static Result evaluate_with_stop_profile(
   const bool constant_program = false,
   const bool source_horizon_program = false,
   const mpcc_rate_resolved_applied_program::Certificate * materialized_from = nullptr,
-  const ScheduledNominalContext *scheduled = nullptr)
+  const ScheduledNominalContext *scheduled = nullptr,
+  const std::optional<std::size_t> intermediate_prefix_intervals = std::nullopt)
 {
   const auto evaluation_started = SteadyClock::now();
   Result result;
@@ -1595,6 +1596,13 @@ static Result evaluate_with_stop_profile(
             intervals <= 1 || intervals >= static_cast<double>(program.commands.max_size() - 1U))
             return mpcc_rate_resolved_physical_adapter::StopContingencyResult{};
           prefix_intervals = static_cast<std::size_t>(intervals);
+          if (intermediate_prefix_intervals) {
+            // The full duration was already attempted. Only propose a distinct
+            // shorter programme, never extend the immutable source schedule.
+            if (*intermediate_prefix_intervals <= 1U || *intermediate_prefix_intervals >= prefix_intervals)
+              return mpcc_rate_resolved_physical_adapter::StopContingencyResult{};
+            prefix_intervals = *intermediate_prefix_intervals;
+          }
         }
         for (std::size_t i = 0; i <= prefix_intervals; ++i) {
           auto packet = first;
@@ -1931,6 +1939,18 @@ static Result evaluate_stop_candidates(
     common = evaluate_with_stop_profile(request, nullptr, true, horizon_first, materialized_from, scheduled);
     if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
     if (horizon_available) {
+      if (reserved_source) {
+        // Failure of the entire original horizon does not imply that only one
+        // positive packet can stop safely. Cover the next planning span already
+        // defined by the reserved priors plus this source's first appointment.
+        // This is a newly fingerprinted programme with complete independent
+        // pending-input, current-world and terminal-rest proofs.
+        auto intermediate = evaluate_with_stop_profile(request, nullptr, true, true,
+          materialized_from, scheduled, scheduled->forecast.nominal_prefix.commands.size());
+        accumulate(intermediate, *common);
+        common = std::move(intermediate);
+        if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
+      }
       auto alternative = evaluate_with_stop_profile(request, nullptr, true, !horizon_first, materialized_from, scheduled);
       accumulate(alternative, *common);
       common = std::move(alternative);

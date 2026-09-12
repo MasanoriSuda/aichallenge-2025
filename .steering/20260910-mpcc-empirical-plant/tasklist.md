@@ -368,3 +368,9 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R397 compares four representations on five frozen scenes. Early body/time repairs r64D1's over-broad population; early time alone does not. Late full proof and r63 body rejection retained.
 - [x] Private early/full evidence selection, actual leaf identity/rest ownership, full prefix/body/footprint/history/clock negatives. Build107 all26; tests93 all2,584/66/source105, including160 C5. R400 all12 historical cases.
 - [ ] Committed standarddev2-r65; measure extra worker cost and remaining scheduling/body coverage. All M4-M6 and final same-artifact submission/eval remain.
+
+2026-09-12 intermediate programme population (baseline e7825da8):
+- [x] Preserve r65/r66 standard startup-inconclusive and r67 NullGfx diagnostic no-lap run; full teardown/restoration verified.
+- [x] R401-R403 exact scheduled sources establish missing middle duration; R404 upstream A/B/C/D comparison retains its separate temporal scope.
+- [x] Private prior-count+1 intermediate candidate, original full/short proofs and zero-prior order; native RED408, final161 C5, build108 all26, tests94 all2,585/66/source105, source413 five cases and history411 twelve cases.
+- [ ] Committed standard r68: startup, actual multi-packet acceleration and replenishment, steering, original25ms guards; all M4-M6 and same submission/eval remain.

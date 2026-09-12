@@ -1,23 +1,23 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。早期の開始集合の独立証明を追加・検証。次は標準dev2-r65。**
+**全体未完。中間長の入力候補を追加し局所検証済み。次は標準dev2-r68。**
 
-660227c9の標準r64は完走せず、D1最初の957は全期間の車体集合による現在壁拒否から
-完全再計算となり期限超過。D2の1065は現在証明が通っても送信後に元の25msを超過。
-元の証明ID・実履歴・送信前後拒否をR396で再現。記録側のclock受信は別subscriberであり、
-実受信保証や送信後判定の代用にしない。
+e7825da8の標準r65/r66はUnity初期化後にclock/odom/Startが進まない起動不成立。
+描画なし診断r67は開始できたが未完走。D1は加速1packetごとに制動し、D2最長10packet、
+両車の実測速度は最大約0.165m/s。描画経路の正確な停止原因と実受信時刻は未確定。
 
-早い時刻に未来の最大速度まで開始候補へ含める過大範囲を、早期集合の独立証明で分離。
-全期間証明を維持し、選択した証明自身に現在IDと停止時刻を結び付ける。Build107全26、
-tests93全2,584/66（C5 160、source105）、R400の12履歴場面を確認。r64D1の現在壁判定は
-通過し、r64D2/r60D2の後期証明、r63D2の車体集合外拒否、全元時刻ガードを維持する。
-Native398/399のfixture前提失敗は保存し、最終package検証前に修正済み。
+R401-R403で、予約付きsourceが全期間か1packetしか候補にせず、成立する中間長を
+取りこぼすことを再現。R404の上流solver A/B/C/Dは別の時刻境界と明示して保存した。
+元の予約数+1の期間を独立証明するprivate候補を追加。完全停止・入力記憶・元の速度上限・
+世代と実履歴・現在世界・元の送信前後25msを維持する。Build108全26、tests94全2,585/66
+（C5 161、source105）、R413の5sourceとR411の12実履歴場面を確認した。
+Native/driverの準備失敗も証拠へ保存し、合格へ読み替えていない。
 
-標準r65で追加worker時間と実採用を確認する。車体集合・時計/実行待ち、全intent/
-Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
-単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-window-design.md)、
+標準r68の起動、連続加速・補充・操舵と期限を確認する。全intent/Mission/sibling/Store、
+実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、
+dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-duration-population-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

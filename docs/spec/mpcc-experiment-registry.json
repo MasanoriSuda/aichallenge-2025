@@ -1237,6 +1237,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-window-evidence.json",
       "replay_ready": true,
       "reason": "Original r64 failures, four independent population representations and final private early/full evidence replay."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-programme-duration-population",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-duration-population-evidence.json",
+      "replay_ready": true,
+      "reason": "r65/r66 startup, r67 command series, exact duration comparisons and current-library repair/history proof."
     }
   ],
   "experiments": [
@@ -14875,6 +14881,86 @@
         "Assuming the supplied root evidence necessarily owns the selected current proof fingerprint/rest horizon"
       ],
       "revisit_condition": "Different source/programme/current membership or world; live evidence required for worker-cost/scheduling family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-duration-population-r65-r66-startup",
+      "baseline_commit": "e7825da880a66ea45b58e732f8b80163e7fd1858",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-duration-population"
+      ],
+      "hypothesis": "Existing reserved appointments define an omitted feasible intermediate programme duration.",
+      "changed_dimension": "Private source candidate population; original full physical/current-world/history/clock obligations unchanged.",
+      "result": "inconclusive",
+      "reason": "No advancing clock/odometry/Start; renderer stall exact root unknown. Force-on did not release r66; ptrace unavailable.",
+      "production_impact": "Locally validated source repair; standard r68 and overall M4-M6 pending.",
+      "deleted_code": [
+        "Assumption that failure of the entire source horizon leaves only one positive interval"
+      ],
+      "revisit_condition": "Changed immutable scene/source or new live duration/replenishment/startup evidence; never repeat a rejected timing/retiming proposal without its own revisit condition."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-duration-population-r67-nullgfx",
+      "baseline_commit": "e7825da880a66ea45b58e732f8b80163e7fd1858",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-duration-population"
+      ],
+      "hypothesis": "Existing reserved appointments define an omitted feasible intermediate programme duration.",
+      "changed_dimension": "Private source candidate population; original full physical/current-world/history/clock obligations unchanged.",
+      "result": "rejected",
+      "reason": "Diagnostic startup succeeds, nearly stationary and no laps. Not standard race acceptance.",
+      "production_impact": "Locally validated source repair; standard r68 and overall M4-M6 pending.",
+      "deleted_code": [
+        "Assumption that failure of the entire source horizon leaves only one positive interval"
+      ],
+      "revisit_condition": "Changed immutable scene/source or new live duration/replenishment/startup evidence; never repeat a rejected timing/retiming proposal without its own revisit condition."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-duration-population-r401-r403-duration",
+      "baseline_commit": "e7825da880a66ea45b58e732f8b80163e7fd1858",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-duration-population"
+      ],
+      "hypothesis": "Existing reserved appointments define an omitted feasible intermediate programme duration.",
+      "changed_dimension": "Private source candidate population; original full physical/current-world/history/clock obligations unchanged.",
+      "result": "accepted",
+      "reason": "Three exact scheduled sources safely certify intermediate durations under unchanged complete proof, while entire original horizon fails.",
+      "production_impact": "Locally validated source repair; standard r68 and overall M4-M6 pending.",
+      "deleted_code": [
+        "Assumption that failure of the entire source horizon leaves only one positive interval"
+      ],
+      "revisit_condition": "Changed immutable scene/source or new live duration/replenishment/startup evidence; never repeat a rejected timing/retiming proposal without its own revisit condition."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-duration-population-r404-upstream-abcd",
+      "baseline_commit": "e7825da880a66ea45b58e732f8b80163e7fd1858",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-duration-population"
+      ],
+      "hypothesis": "Existing reserved appointments define an omitted feasible intermediate programme duration.",
+      "changed_dimension": "Private source candidate population; original full physical/current-world/history/clock obligations unchanged.",
+      "result": "inconclusive",
+      "reason": "A accepts3 upstream original solver sources; B/C/D reject unsupported Track intents in2, right accepts Cruise in1 and left rejects. Different temporal boundary from scheduled proof; no replacement or infeasibility conclusion.",
+      "production_impact": "Locally validated source repair; standard r68 and overall M4-M6 pending.",
+      "deleted_code": [
+        "Assumption that failure of the entire source horizon leaves only one positive interval"
+      ],
+      "revisit_condition": "Changed immutable scene/source or new live duration/replenishment/startup evidence; never repeat a rejected timing/retiming proposal without its own revisit condition."
+    },
+    {
+      "experiment_id": "20260912-nine-state-programme-duration-population-r408-r413-build108-tests94",
+      "baseline_commit": "e7825da880a66ea45b58e732f8b80163e7fd1858",
+      "snapshot_ids": [
+        "20260912-nine-state-programme-duration-population"
+      ],
+      "hypothesis": "Existing reserved appointments define an omitted feasible intermediate programme duration.",
+      "changed_dimension": "Private source candidate population; original full physical/current-world/history/clock obligations unchanged.",
+      "result": "accepted",
+      "reason": "NativeRED missing middle; final161 C5,2585/66 records,26build,5source and12 actual-history cases. Setup failures405/409/410 retained explicitly.",
+      "production_impact": "Locally validated source repair; standard r68 and overall M4-M6 pending.",
+      "deleted_code": [
+        "Assumption that failure of the entire source horizon leaves only one positive interval"
+      ],
+      "revisit_condition": "Changed immutable scene/source or new live duration/replenishment/startup evidence; never repeat a rejected timing/retiming proposal without its own revisit condition."
     }
   ]
 }

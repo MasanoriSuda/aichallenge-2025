@@ -4855,3 +4855,12 @@ Native回帰、全26build、2,583test記録、4生成場面と10履歴場面を�
 r63D2の集合外拒否は維持。全26build、2,584test記録、12再生場面を確認した。
 標準r64は未完走。修正後r65、追加worker時間、残る時計超過と全体受入れは未検証。
 [早期集合と全期間集合](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/starting-domain-window-design.md)。
+
+2026-09-12 予約付き入力列の候補に、元の前段予約数+1の公開間隔まで加速し、その後停止する
+中間長を追加した。元の全期間候補が不成立の場合にだけ別証明し、元の期間を超えない。
+従来の短い認証済みStopと予約なし起動時の順序は維持する。指令列の変更は新しい入力IDを
+持ち、既送信の別指令列の履歴を引き継げない。速度上限・入力記憶・全停止・現在世界・
+送信前後25msの条件は維持。保存3場面で加速1回から3回の候補へ変わり、他2場面の拒否と
+12履歴場面の元時刻ガードを確認した。Build108全26、tests94全2,585記録/66group。
+標準r65/r66は起動不成立、描画なし診断r67は未完走。修正後の標準r68と全体受入れは未完。
+[中間長の候補生成](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-duration-population-design.md)。

@@ -518,11 +518,16 @@ LateralClearIntervalResult find_clear_lateral_interval_with_heading(
   double sample_step_m);
 
 /// Heading-aware scan returning every connected collision-free component.
+/// An optional anchor adds its two ends and midpoint to the original sampling
+/// lattice. Each is checked with the same full footprint; it cannot bridge a
+/// blocked sample. This lets a caller include its required origin and guard
+/// without depending on the arbitrary phase of the regular lateral samples.
 LateralClearRunsResult find_clear_lateral_runs_with_heading(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & reference_pose, double lower_lateral_offset_m,
   double upper_lateral_offset_m, double path_heading_offset_rad,
-  double additional_lateral_clearance_m, double sample_step_m);
+  double additional_lateral_clearance_m, double sample_step_m,
+  std::optional<LateralClearRun> sampling_anchor = std::nullopt);
 
 /// Select the component nearest preferred_lateral_offset_m after intersecting
 /// cached runs with the current Mission query interval.

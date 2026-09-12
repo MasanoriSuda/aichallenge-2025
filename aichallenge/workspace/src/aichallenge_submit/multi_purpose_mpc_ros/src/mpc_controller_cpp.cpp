@@ -22398,6 +22398,7 @@ struct MPC
                 rejoin_shadow_requested || (progress_execution_context_active &&
                 mpcc_contract::canonical_normal_intent_requires_execution_side(
                   problem_intent))) ? initial_frenet->lag_m : 0.0;
+              constexpr double kInitialWallBoundaryGuardM = 0.001;
               const auto runs = recovery_footprint::find_clear_lateral_runs_with_heading(
                 *overtake_static_wall_grid_, overtake_static_wall_footprint_,
                 recovery_footprint::Pose2D{
@@ -22405,14 +22406,16 @@ struct MPC
                   current_waypoint_pose.y + initial_lag_m * std::sin(current_waypoint_pose.psi),
                   current_waypoint_pose.psi},
                 scalar_lower_m, scalar_upper_m, initial_frenet->heading_offset_rad,
-                progress_execution_physical_wall_clearance_m, sample_step_m);
-              constexpr double kInitialWallBoundaryGuardM = 0.001;
+                progress_execution_physical_wall_clearance_m, sample_step_m,
+                recovery_footprint::LateralClearRun{
+                  initial_frenet->lateral_m-kInitialWallBoundaryGuardM,
+                  initial_frenet->lateral_m+kInitialWallBoundaryGuardM});
               interval = recovery_footprint::select_lateral_clear_interval(
                 runs, scalar_lower_m, scalar_upper_m, initial_frenet->lateral_m,
                 kInitialWallBoundaryGuardM);
             }
             if (
-              interval.valid && interval.feasible &&
+              interval.valid && interval.feasible && interval.preferred_lateral_contained &&
               std::isfinite(interval.lower_lateral_offset_m) &&
               std::isfinite(interval.upper_lateral_offset_m) &&
               interval.lower_lateral_offset_m <=

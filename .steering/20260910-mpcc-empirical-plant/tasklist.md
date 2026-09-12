@@ -485,4 +485,15 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Separate paired final due/active capture; preserve actual preceding send and actual CurrentCheck.
 - [x] Strengthen source contract; original producer fails, revised106 source tests pass.
 - [x] Native paired recorder regression, build118 all26/package105 all2600, source106, review and evidence sealed.
-- [ ] Standard single-r4 live capture, causal wall/clock/source repair, all remaining M4–M6.
+- [x] Standard single-r4 captures final1022 pair; R503 exact replay. External analysis interruption after stationary stall; no race acceptance.
+- [ ] Remaining current wall/clock/source repairs and all M4–M6.
+
+## Required initial origin after single-r4
+
+- [x] R503 exact final1022 and actual preceding publication reproduced.
+- [x] R504 endpoint samples clear; R506/R508 full original enclosure still rejects. No proof change promoted.
+- [x] R505 source592 A artifact failure; target-free B/C/D/G unavailable/inconclusive.
+- [x] R507/R509 same QP/primal isolate incompatible initial corridor metadata; original hard footprint/guard support clear.
+- [x] Initial sampling includes origin/guard and requires containment; R510 old2 failures/new65 native pass, source106 pass.
+- [x] Build119 all26/package106 all2602, R511 full source pipeline and R512 exact original rejection, evidence sealed.
+- [ ] Fresh single-r5; all original M4–M6 repeated runs/gates/submission/eval.

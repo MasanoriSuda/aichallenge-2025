@@ -1,31 +1,27 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。単車single-r3もReady954の壁証明で未達。最終失敗の観測経路を修正・検証済み。**
+**全体未完。最終失敗の記録は70475357で実走確認。初期区間の生成を修正・検証済み。**
 
-Build117全26、tests104全2599（error/failure/skipは0）、source106、native29が合格。
-R495は元r76の壁拒否を維持、R497は元Follow/Cruiseの完全なsource証明に合格。
-標準dev2-r77はD1 Ready decision934で現在の物理証明に合格した後、元の公開期限を
-約5ms超過して自動停止。Start・完走なし。元DLLとユーザーJSONを復元済み。
-R498は同じsource/history/domainと時刻で物理合格・最終公開拒否を正確に再現。
-R499で計算内訳を測り、R500/R501は既存数値式の検索範囲による再計算減少を確認。
-短縮は約0.5msで未採用。R502局所回転も追加約0.07msに留まり未採用、独立oracle未実施。
-診断r78はD1Ready920、全74MPCスレッドのCPU割当てを検証したr79もD2Ready1438で期限超過。
-初版のスレッド統計は読み取り時刻ラベルが粗く、別保存したr2の確実な前後区間で訂正済み。
-コールバック単体への待ち時間帰属はできない。CPU割当ては採用せず、全runtime停止・復元済み。
-標準single-r3はD1Ready954/source469/job950/index1で現在の壁証明を拒否し停止。
-前回953/index0は実送信済み。最大記録callback20.118ms、公開期限違反なし、Start/周回なし。
-途中の拒否891が観測枠を消費し、最終954の完全snapshotがない。別時刻で代用しない。
-最終due/active両候補を独立枠に保存し、実直前送信と検査実施有無を明示する観測修正を実装。
-Build118全26、tests105全2600（error/failure/skip0）、source106が合格。
-次は修正をcommitした標準single-r4で最終境界を取得する。全体未完。
-[最終失敗の観測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/final-selection-observation-design.md)。
-[スケジューラ観測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r78-scheduling-observation.md)。
-[現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r77-publication-audit.md)、
-[前処理の修正](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-owner.md)。
+single-r4はD1Ready1022/source539/job1018/index1で現在壁証明を拒否。最終due/activeを
+途中の883と独立して保存でき、R503で元source/domain/履歴/直前1021と拒否時刻を再現。
+その後停止し、新source592が軌道データの初期区間不整合で拒否。解析用に中断し未完走。
+raw velocity0.1208、最終odomログ0.07は別時刻の観測で、元の自動停止条件>0.1は未成立。
+元DLLとユーザーJSONは復元済み。Start/周回/840s期限の完了結果はない。
 
-r75 Start/update_v_max失効、候補生成、全M4–M6、同一最終source反復走行・gate・提出/evalは未完。
-追加確認なしで続行。pushなし。
+R506/R508は1022のnative/数値式再利用/既存分岐個別検査でも元の壁拒否を維持。
+R504の4端点はclearだが網羅的な安全証明ではない。現在壁拒否の解消は未完。
+別の592は、50mmサンプルの位相が初期状態を横区間から約1.07mm除外していた。
+初期姿勢と元の1mm guardを全車体で確認し、同じQP/primalの軌道構築が通るR507/R509を保存。
+初期区間の生成でこの支持点を追加し、単なる近傍区間の採用を廃止。全物理/時計条件は維持。
+R510旧2失敗→新65native合格。Build119全26、tests106全2602、source106が合格。
+R511は実ビルドの全source証明に合格、R512は元の1022拒否をそのまま再現。
+次は修正をローカルcommitし、標準single-r5で検証する。pushなし、追加確認なし。
+[最新の設計・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/required-origin-corridor-design.md)。
+
+r75 Start/update_v_max失効、実公開期限、全intent/Mission/sibling/Store、Stop/rest/restart、
+Recovery/Rejoin/Boost/async、同一最終HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、
+同一tar/image/evalは未完。過去の合格を現在の全体受入れとはしない。
 
 以下はr75開始前までの根拠。
 

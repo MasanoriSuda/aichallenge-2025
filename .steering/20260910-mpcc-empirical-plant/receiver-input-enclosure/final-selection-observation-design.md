@@ -43,3 +43,10 @@ branch; recording only follows failure and never grants authority. CurrentCheck
 is bound to the pending candidate at the producer. The next fresh committed
 single-r4 must verify actual final capture and original dynamic acceptance.
 [Sealed run and validation evidence](final-selection-observation-evidence.json).
+
+Live validation on70475357: single-r4 records final1022 due/active pair separately
+from intermediate883. Due is explicitly absent; active current wall6 and actual
+preceding1021/job1018/source539/index0 are preserved. R503 reproduces exact source,
+domain, history, check and rejection time. Raw-velocity moving class differs from
+odometry0.07m/s; the run is an explicitly interrupted stationary stall, not race
+acceptance. [Follow-up audit](required-origin-corridor-design.md).

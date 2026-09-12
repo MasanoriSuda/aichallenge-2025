@@ -3815,3 +3815,6 @@ def test_initial_physical_corridor_uses_semantic_fixed_waypoint_pose() -> None:
     assert "find_clear_lateral_runs_with_heading(" in initial
     assert "progress_execution_physical_wall_clearance_m, sample_step_m" in initial
     assert "kInitialWallBoundaryGuardM = 0.001" in initial
+    assert "initial_frenet->lateral_m-kInitialWallBoundaryGuardM" in initial
+    assert "initial_frenet->lateral_m+kInitialWallBoundaryGuardM" in initial
+    assert "interval.feasible && interval.preferred_lateral_contained" in initial

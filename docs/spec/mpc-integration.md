@@ -4954,3 +4954,12 @@ Build114全26、tests101全2592合格。原因の確定は標準r73へ続く。
 書出しは非同期workerで行い、候補選択・Emergency・壁/他車/停止/時刻条件は維持。
 Build118全26、tests105全2600、source106を確認。実走の記録確認は次のsingle-r4、
 全M4–M6は未完。[設計と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/final-selection-observation-design.md)。
+
+
+2026-09-12 初期壁区間の50mm刻みの検査へ、初期横位置と元の±1mm guard支持点を追加する。
+元の全サンプル、車体・壁余白・外側scalar boundsを保ち、占有/Unknownのサンプルを
+またいで区間を結合しない。選択区間が初期状態を含むことを生成側で必須とする。
+旧処理は最も近い区間を初期区間として採用でき、後の軌道データ構築で拒否されていた。
+他の呼出し側のサンプル格子と全source/current/公開時刻条件は維持する。
+Build119全26、tests106全2602、source106、native65、保存source/current再生を確認。
+標準single-r5と全M4–M6は未完。[初期支持点の根拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/required-origin-corridor-design.md)。

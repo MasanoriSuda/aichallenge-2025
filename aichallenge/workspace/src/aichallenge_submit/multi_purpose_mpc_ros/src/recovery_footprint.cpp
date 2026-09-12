@@ -1435,7 +1435,8 @@ LateralClearRunsResult find_clear_lateral_runs_with_heading(
   const OccupancyGrid & grid, const FootprintExtents & footprint,
   const Pose2D & reference_pose, const double lower_lateral_offset_m,
   const double upper_lateral_offset_m, const double path_heading_offset_rad,
-  const double additional_lateral_clearance_m, const double sample_step_m)
+  const double additional_lateral_clearance_m, const double sample_step_m,
+  const std::optional<LateralClearRun> sampling_anchor)
 {
   LateralClearRunsResult result;
   if (
@@ -1462,15 +1463,38 @@ LateralClearRunsResult find_clear_lateral_runs_with_heading(
     return result;
   }
 
+  std::vector<double> anchored_samples;
+  if (sampling_anchor) {
+    const auto &anchor=*sampling_anchor;
+    if (!finite(anchor.lower_lateral_offset_m) || !finite(anchor.upper_lateral_offset_m) ||
+        anchor.lower_lateral_offset_m>anchor.upper_lateral_offset_m ||
+        anchor.lower_lateral_offset_m<lower_lateral_offset_m ||
+        anchor.upper_lateral_offset_m>upper_lateral_offset_m ||
+        segment_count.value()+4U>kMaximumSamples) return result;
+    anchored_samples.reserve(segment_count.value()+4U);
+    for (std::size_t i=0;i<=segment_count.value();++i) {
+      const double ratio=segment_count.value()==0U ? 0.0 :
+        static_cast<double>(i)/static_cast<double>(segment_count.value());
+      anchored_samples.push_back(lower_lateral_offset_m+
+        ratio*(upper_lateral_offset_m-lower_lateral_offset_m));
+    }
+    anchored_samples.push_back(anchor.lower_lateral_offset_m);
+    anchored_samples.push_back(anchor.lower_lateral_offset_m+
+      0.5*(anchor.upper_lateral_offset_m-anchor.lower_lateral_offset_m));
+    anchored_samples.push_back(anchor.upper_lateral_offset_m);
+    std::sort(anchored_samples.begin(),anchored_samples.end());
+    anchored_samples.erase(std::unique(anchored_samples.begin(),anchored_samples.end()),anchored_samples.end());
+  }
   bool active_run{false};
   double active_run_lower{0.0};
   const double left_x = -std::sin(reference_pose.yaw_rad);
   const double left_y = std::cos(reference_pose.yaw_rad);
   result.valid = true;
-  for (std::size_t index = 0U; index <= segment_count.value(); ++index) {
+  const auto sample_count=sampling_anchor ? anchored_samples.size() : segment_count.value()+1U;
+  for (std::size_t index = 0U; index < sample_count; ++index) {
     const double ratio = segment_count.value() == 0U ? 0.0 :
       static_cast<double>(index) / static_cast<double>(segment_count.value());
-    const double lateral_offset = lower_lateral_offset_m +
+    const double lateral_offset = sampling_anchor ? anchored_samples[index] : lower_lateral_offset_m +
       ratio * (upper_lateral_offset_m - lower_lateral_offset_m);
     const Pose2D candidate_pose{
       reference_pose.x_m + lateral_offset * left_x,
@@ -1488,7 +1512,7 @@ LateralClearRunsResult find_clear_lateral_runs_with_heading(
       const double previous_ratio = index == 0U ? 0.0 :
         static_cast<double>(index - 1U) /
         static_cast<double>(segment_count.value());
-      const double previous_lateral = lower_lateral_offset_m +
+      const double previous_lateral = sampling_anchor ? anchored_samples[index-1U] : lower_lateral_offset_m +
         previous_ratio * (upper_lateral_offset_m - lower_lateral_offset_m);
       result.clear_runs.push_back(
         LateralClearRun{active_run_lower, previous_lateral});

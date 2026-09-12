@@ -1321,6 +1321,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/final-selection-observation-evidence.json",
       "replay_ready": false,
       "reason": "single-r3 final954 lacks exact capture; intermediate891 is separate. Native paired-recorder behavior is reproducible."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-required-origin-corridor",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/required-origin-corridor-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact final1022 and separate stopped source592, original QP/primal and native/full-production comparisons."
     }
   ],
   "experiments": [
@@ -16581,6 +16587,148 @@
         "Default CurrentCheck used by generic final publisher observation"
       ],
       "revisit_condition": "Fresh committed single-r4 captures actual final failure; causal source/current repair and all M4–M6 remain. Do not substitute earlier candidate snapshots."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r503",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Exact final1022 source/current replay",
+      "result": "accepted",
+      "reason": "Original source17878514601746525030/domain4209467226464203769, bit-exact retained history and last actual source; all3 current wall6 rejections at14.314999687 match live.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r504",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Four native endpoint input samples",
+      "result": "inconclusive",
+      "reason": "All four sampled native trajectories remain clear. Not exhaustive input/receiver traces and not a robust safety result.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r505",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Same source592 A/B/C/D/G comparison",
+      "result": "inconclusive",
+      "reason": "A re-solves and reproduces artifact invalid-lateral-corridor. B/C/D/G cannot instantiate a target-free Cruise candidate and are target-unavailable; not a physical infeasibility result.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r506",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Compiled versus native current enclosure",
+      "result": "rejected",
+      "reason": "Both retain current wall6 at14.314999687, original cell631/189. Compiled-map reuse alone is not the cause.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r507",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Saved source592 primal, diagnostic exact-pose boundary search",
+      "result": "accepted",
+      "reason": "Same original QP/primal builds production artifact only after initial derived corridor metadata correction. Independent external-primal proof passes both and is not a substitute for production artifact validation. Boundary-search prototype unpromoted.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r508",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Every existing branch corner image checked separately",
+      "result": "rejected",
+      "reason": "Both variants still reject original cell/time after633 tile checks. No partition/world/clock change promoted.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r509",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Only required origin and its original guard support",
+      "result": "accepted",
+      "reason": "Same original QP/primal builds artifact with minimal initial support including x0 after x0±1mm passes full hard footprint. No budget/tolerance/guard change; diagnostic only.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r510",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Native sampling-phase/occupied/scalar-bound regression",
+      "result": "accepted",
+      "reason": "Baseline adapter retains original sampling behavior and fails2new tests; current65native tests pass. Exact same map SHA as existing r75 crop.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [
+        "Treating nearest clear component as valid support when it excludes semantic initial state"
+      ],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r511",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Built full source solver/artifact/physical/Stop pipeline",
+      "result": "accepted",
+      "reason": "Original592 reproduces artifact rejection; minimally corrected derived initial support with original physical world and solver bounds passes entire production chain. Original scalar sampler window was not serialized; exact live output bounds are not reconstructed.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-required-origin-corridor-r512",
+      "baseline_commit": "704753579d91e01afe4b3f7bf3eef4469027c58c",
+      "snapshot_ids": [
+        "20260912-nine-state-required-origin-corridor"
+      ],
+      "hypothesis": "Separate current input wall proof from incompatible initial corridor metadata and repair its producer",
+      "changed_dimension": "Built-library exact original current1022 replay",
+      "result": "accepted",
+      "reason": "Original input/history/source/domain and all3 observed rejection reasons/times retained after helper rebuild.",
+      "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
     }
   ]
 }

@@ -56,6 +56,66 @@ TEST(RecoveryFootprintInitialCorridor, ActualSourcePosePreservesClearInitialStat
   EXPECT_TRUE(exact.contact_cells.empty());
 }
 
+TEST(RecoveryFootprintInitialCorridor, RequiredOriginDoesNotDependOnSamplingPhase)
+{
+  // single-r4 source592 uses the same exact map/crop as the r75 fixture.
+  // These are its native initial pose and original footprint/clearance/guard.
+  // Two scalar windows isolate the regular lattice phase; neither changes x0.
+  const auto grid=mpcc_r75_corridor_fixture::grid();
+  const recovery::FootprintExtents body{1.615,0.51,0.768,0.768,0.05};
+  constexpr double yaw=2.3341359219410047, lag=0.10968654982746862;
+  constexpr double lateral=0.8620005388329772, heading=0.10590778262941436;
+  constexpr double guard=0.001;
+  const recovery::Pose2D base{89630.30642205999+lag*std::cos(yaw),
+    43130.09448658+lag*std::sin(yaw),yaw};
+  for (double lower:{-4.0,-4.0390625}) {
+    const double upper=lower+6.0;
+    const auto original=recovery::find_clear_lateral_runs_with_heading(
+      grid,body,base,lower,upper,heading,0.2,0.05);
+    const auto old_interval=recovery::select_lateral_clear_interval(original,lower,upper,lateral,guard);
+    ASSERT_TRUE(old_interval.valid && old_interval.feasible);
+    EXPECT_EQ(old_interval.preferred_lateral_contained,lower==-4.0);
+    const auto anchored=recovery::find_clear_lateral_runs_with_heading(
+      grid,body,base,lower,upper,heading,0.2,0.05,
+      recovery::LateralClearRun{lateral-guard,lateral+guard});
+    const auto interval=recovery::select_lateral_clear_interval(anchored,lower,upper,lateral,guard);
+    ASSERT_TRUE(interval.valid && interval.feasible);
+    EXPECT_TRUE(interval.preferred_lateral_contained);
+    auto hard_body=body; hard_body.left_extent_m+=0.2; hard_body.right_extent_m+=0.2;
+    for (double ey:{lateral-guard,lateral,lateral+guard}) {
+      const auto exact=recovery::sample_footprint(grid,hard_body,
+        {base.x_m-ey*std::sin(yaw),base.y_m+ey*std::cos(yaw),yaw+heading});
+      ASSERT_TRUE(exact.valid && !exact.out_of_map);
+      EXPECT_TRUE(exact.contact_cells.empty());
+    }
+  }
+}
+
+TEST(RecoveryFootprintInitialCorridor, AnchorCannotAdmitOccupiedOriginOrExceedScalarBounds)
+{
+  const auto grid=mpcc_r75_corridor_fixture::grid();
+  const recovery::FootprintExtents body{1.615,0.51,0.768,0.768,0.05};
+  constexpr double yaw=2.3341359219410047,lag=0.10968654982746862;
+  constexpr double heading=0.10590778262941436,occupied_lateral=1.0;
+  const recovery::Pose2D base{89630.30642205999+lag*std::cos(yaw),
+    43130.09448658+lag*std::sin(yaw),yaw};
+  auto hard_body=body; hard_body.left_extent_m+=0.2; hard_body.right_extent_m+=0.2;
+  const auto contact=recovery::sample_footprint(grid,hard_body,
+    {base.x_m-occupied_lateral*std::sin(yaw),base.y_m+occupied_lateral*std::cos(yaw),yaw+heading});
+  ASSERT_TRUE(contact.valid && !contact.out_of_map);
+  ASSERT_FALSE(contact.contact_cells.empty());
+  const auto runs=recovery::find_clear_lateral_runs_with_heading(
+    grid,body,base,-4,2,heading,0.2,0.05,recovery::LateralClearRun{.999,1.001});
+  const auto interval=recovery::select_lateral_clear_interval(runs,-4,2,occupied_lateral,.001);
+  EXPECT_FALSE(interval.preferred_lateral_contained);
+  for (const auto anchor:{recovery::LateralClearRun{-.01,.01},
+      recovery::LateralClearRun{.9,1.1},
+      recovery::LateralClearRun{std::numeric_limits<double>::quiet_NaN(),.5}}) {
+    EXPECT_FALSE(recovery::find_clear_lateral_runs_with_heading(
+      grid,body,base,0,1,heading,0.2,0.05,anchor).valid);
+  }
+}
+
 recovery::OccupancyGrid make_grid(
   const std::size_t width = 20U, const std::size_t height = 20U,
   const double resolution_m = 1.0)

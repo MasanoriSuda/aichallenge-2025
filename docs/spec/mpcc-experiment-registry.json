@@ -1309,6 +1309,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r77-evidence.json",
       "replay_ready": true,
       "reason": "Exact first Ready934 final-guard source/current/history/domain and original packet clocks."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-scheduler-observation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r78-r79-scheduler-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen first failures and per-thread scheduler observations, explicit masks, corrected conservative read brackets."
     }
   ],
   "experiments": [
@@ -16465,6 +16471,76 @@
       "production_impact": "None in this audit; all-row lookup and counters diagnostic only.",
       "deleted_code": [],
       "revisit_condition": "New measured representation or causal input; no unchanged retry, tolerance/window relaxation or failed-run acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r77-publication-r502",
+      "baseline_commit": "4998a704",
+      "snapshot_ids": [
+        "20260912-nine-state-r77-publication"
+      ],
+      "hypothesis": "Local yaw covariance makes more native equations reusable without changing physical current frame",
+      "changed_dimension": "Diagnostic rotated compiled equation after strict lookup miss",
+      "result": "rejected",
+      "reason": "Only0.067ms incremental934saving; both observed physical/clock decisions retained. No independent high-precision oracle executed and no promotion.",
+      "production_impact": "None; local rotation and all-row lookup remain diagnostic.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct measured mechanism with material benefit and independent native body/corner oracle; do not retry unchanged prototype."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduler-observation-r78",
+      "baseline_commit": "4998a704f388de0e56748deeced3f78d962cb03b",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduler-observation"
+      ],
+      "hypothesis": "Measure or separate MPC execution and worker competition without changing physical or clock acceptance",
+      "changed_dimension": "Original controller plus read-only process scheduler sampling",
+      "result": "rejected",
+      "reason": "D1Ready920 late;74threadsallCPUs. Observation addsload; noStart/laps.",
+      "production_impact": "No production change; temporary diagnostic processes exited and masks disappeared.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or distinct architecture; do not repeat unchanged failed affinity or claim widened sampling intervals as callback timing."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduler-observation-analysis-r1",
+      "baseline_commit": "4998a704f388de0e56748deeced3f78d962cb03b",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduler-observation"
+      ],
+      "hypothesis": "Measure or separate MPC execution and worker competition without changing physical or clock acceptance",
+      "changed_dimension": "Initial frame-begin counter attribution",
+      "result": "inconclusive",
+      "reason": "Discovery/proc reads delayed actual observation; initial counter brackets can overlap callback and are invalid. Corrected r2 retained separately.",
+      "production_impact": "No production change; temporary diagnostic processes exited and masks disappeared.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or distinct architecture; do not repeat unchanged failed affinity or claim widened sampling intervals as callback timing."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduler-observation-analysis-r2",
+      "baseline_commit": "4998a704f388de0e56748deeced3f78d962cb03b",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduler-observation"
+      ],
+      "hypothesis": "Measure or separate MPC execution and worker competition without changing physical or clock acceptance",
+      "changed_dimension": "Bracket each counter read by successive frame starts",
+      "result": "accepted",
+      "reason": "Use fully-before/fully-after reads; broad81.578/169.622ms outerwindows, not exactcallbackattribution.",
+      "production_impact": "No production change; temporary diagnostic processes exited and masks disappeared.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or distinct architecture; do not repeat unchanged failed affinity or claim widened sampling intervals as callback timing."
+    },
+    {
+      "experiment_id": "20260912-nine-state-scheduler-observation-r79",
+      "baseline_commit": "4998a704f388de0e56748deeced3f78d962cb03b",
+      "snapshot_ids": [
+        "20260912-nine-state-scheduler-observation"
+      ],
+      "hypothesis": "Measure or separate MPC execution and worker competition without changing physical or clock acceptance",
+      "changed_dimension": "Distinct verified all-owned-MPC-thread physical core partition",
+      "result": "rejected",
+      "reason": "All74 masks assigned beforeReady; D2Ready1438 still misses originaldeadline. Other runtime/host tasks notexcluded; noaffinitypromotion.",
+      "production_impact": "No production change; temporary diagnostic processes exited and masks disappeared.",
+      "deleted_code": [],
+      "revisit_condition": "New causal evidence or distinct architecture; do not repeat unchanged failed affinity or claim widened sampling intervals as callback timing."
     }
   ]
 }

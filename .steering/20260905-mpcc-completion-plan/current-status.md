@@ -9,8 +9,12 @@ R495は元r76の壁拒否を維持、R497は元Follow/Cruiseの完全なsource�
 約5ms超過して自動停止。Start・完走なし。元DLLとユーザーJSONを復元済み。
 R498は同じsource/history/domainと時刻で物理合格・最終公開拒否を正確に再現。
 R499で計算内訳を測り、R500/R501は既存数値式の検索範囲による再計算減少を確認。
-短縮は約0.5msで、実走期限を満たしたとは扱わず未採用。次は向きの違いによる数値式の
-再利用不可を、物理座標系を保った局所方程式として改善できるか比較する。
+短縮は約0.5msで未採用。R502局所回転も追加約0.07msに留まり未採用、独立oracle未実施。
+診断r78はD1Ready920、全74MPCスレッドのCPU割当てを検証したr79もD2Ready1438で期限超過。
+初版のスレッド統計は読み取り時刻ラベルが粗く、別保存したr2の確実な前後区間で訂正済み。
+コールバック単体への待ち時間帰属はできない。CPU割当ては採用せず、全runtime停止・復元済み。
+次は未確認の高速域を標準single-r3で検証する。制御source1241e0cfは維持。
+[スケジューラ観測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r78-scheduling-observation.md)。
 [現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r77-publication-audit.md)、
 [前処理の修正](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-owner.md)。
 

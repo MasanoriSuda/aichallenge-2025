@@ -13,7 +13,8 @@
     "R499/R501 instrumentation adds overhead; use R498/R500 uninstrumented replay for standalone cost.",
     "R500 all-row lookup changes the numerical enclosure and keeps all original tests; r76 wall rejection shifts earlier by one5ms step. No live authority or production promotion.",
     "Modest standalone lookup savings do not establish the live deadline or integrated race acceptance.",
-    "No source/timing/parameter change in this audit; numerical owner1241e0cf validation remains build117/tests104."
+    "No source/timing/parameter change in this audit; numerical owner1241e0cf validation remains build117/tests104.",
+    "R502 local yaw-covariant compiled equation prototype saves only0.067ms on934 relative to all-row search, so rejected for promotion. High-precision rotated-map oracle was not run; no numerical validity claim beyond the observed two full-pipeline outcomes."
   ],
   "sha256": {
     "output/20260910-nine-state-dev2-r77/artifact-restoration.json": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c",
@@ -722,6 +723,19 @@
     "output/20260912-nine-state-r77-audit/mpcc-r499-current-profile.log": "d8d0644462c7d2e07156837c171836e9a34e5ae7900f0fa7699d669aba96dbac",
     "output/20260912-nine-state-r77-audit/mpcc-r500-map-lookup.log": "c1c55424e27d3fbff4e604267014b024a8336956005244a63f6f173525785461",
     "output/20260912-nine-state-r77-audit/mpcc-r501-map-misses.log": "aafad3a19d4fd71856ca45e8a2cc85933233e6dd0c01c6204ae7ea04c8a7432a",
-    "output/20260912-nine-state-r77-audit/seal.py": "7acb76b24625bcc654d0dfb75412aa8cfc4f36af1edcf9f87babb0e3b6b9ba92"
+    "output/20260912-nine-state-r77-audit/seal.py": "7acb76b24625bcc654d0dfb75412aa8cfc4f36af1edcf9f87babb0e3b6b9ba92",
+    "output/20260912-nine-state-rotated-maps-r502/generator.py": "ad0b268fdf64cd3b28997f17be42a9091917a4e6719e4d3c77e8c4c2f0e3e0fb",
+    "output/20260912-nine-state-rotated-maps-r502/results.json": "a0781680324d07d9e7ecf92e446e1ab7d3535a8895e376ebff04ba1e559893c5",
+    "output/20260912-nine-state-rotated-maps-r502/replay-production": "c2e2a1bb24099eff2e7aed45e9c900d839aa9fe38b2e64babd5bb82bc8fd3c3e",
+    "output/20260912-nine-state-rotated-maps-r502/r77-current934.yaml": "e29be9c13494fe60b13a64f403e62ae3b88b8cae146211163dd99599000b863a",
+    "output/20260912-nine-state-rotated-maps-r502/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260912-nine-state-rotated-maps-r502/run.log": "71b359b77d4fc6da2bfd3732e4bf00328a0bc58ecfb812798e39531ec7103e27",
+    "output/20260912-nine-state-rotated-maps-r502/driver.cpp": "7542b55cfb79a47c38625332a7ed01f894fc573e83702fcc6b358d9503883558",
+    "output/20260912-nine-state-rotated-maps-r502/compile-command.json": "980601b988bf043249f22830452851723ca66fcff83fd837b1460ed5d54b3ce1",
+    "output/20260912-nine-state-rotated-maps-r502/r76-current3999.yaml": "a0235010e5eee77d6dbd9c9b84ee30af2b603d23c71e5a5a025124b46b15e232",
+    "output/20260912-nine-state-rotated-maps-r502/r76-current3999.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260912-nine-state-rotated-maps-r502/prediction.cpp": "2d8b4f1e35393b075e29c25e448827b42ece4424931e8b99b708d0916bb21c2c",
+    "output/20260912-nine-state-rotated-maps-r502/r77-current934.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260912-nine-state-rotated-maps-r502/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp": "f803a7d54d8d44874a24f1a270b687ae40969fc699c61cfbcd16db11cc63b03e"
   }
 }

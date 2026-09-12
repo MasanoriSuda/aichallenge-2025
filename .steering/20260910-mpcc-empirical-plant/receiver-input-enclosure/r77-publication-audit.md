@@ -62,14 +62,27 @@ samples1330/1278, maxima22.626601/22.293306ms, none over25ms; neither result neg
 the actual ROS deadline failure. D1's later1110 before-window failure is separate.
 Publication is not simulator application acknowledgement.
 
-Next compare numerical equation representations against these exact worlds.
-Yaw-dependent lookup misses suggest local rotation covariance of the native map,
-not a change to the current population's physical frame or its certified world.
-This is a hypothesis only: any prototype requires exact containment, independent
-high-precision body/corner oracle, unchanged rejected physical/clock cases and a
-material cost improvement before a production proposal. Existing all-row lookup
-alone is unpromoted. No rerun of unchanged failed experiments for acceptance.
+R502 tests local rotation covariance only in stored native equations, while keeping
+actual current body/corner coordinates and full world checks. Both recorded physical/
+clock outcomes remain appropriate, but934 median4.858→4.791ms is only0.067ms extra
+saving;3999 still rejects at98.614997805. Reject for promotion. The independent
+rotated-map oracle was not run after the performance result, so no general numeric
+validity claim or production change follows. Old R441 full-current recomposition
+remains rejected and is not restored.
+
+R78/R79 now observe OS runqueue/runtime and CPU masks of the two owned controller processes
+and their threads during diagnostic r78. Existing R36 main-affinity experiment
+failed and did not establish thread inheritance/competition. R77's phase counters
+show6 involuntary switches and7.1ms non-CPU time inside934 proof; which owned tasks
+compete is unmeasured. The new run changes no affinity, priority, controller or
+criteria. Process sampling adds load and cannot establish production race timing.
+This is additional causal observation, not an unchanged rerun for a pass.
 
 All intents/Mission/sibling/Store, actual Stop/rest/restart, Recovery/Rejoin/Boost/
 async and faults, same-final-source single/dev2 repeats, dev3/dev4 six laps, gates
 and same-artifact submission/image/eval remain open. [Evidence](r77-evidence.json).
+
+[Completed scheduler diagnostics and corrected counter brackets](r78-scheduling-observation.md):
+R78D1Ready920 and R79D2Ready1438 both fail original deadlines. R79 verifies all74
+MPC thread masks before Ready but has no promotion. Next standard single-r3 covers
+high-speed behavior of the already validated numerical owner.

@@ -469,3 +469,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R499 current-cost profile; R500 all-row lookup and R501 component miss attribution, diagnostic only.
 - [ ] Compare a causally distinct local numerical map representation; preserve original frame/model/world/current/clock checks and independent oracle.
 - [ ] Material validated production improvement, fresh live acceptance and remaining M4–M6.
+
+## Scheduler observation after r77
+
+- [x] R502 local numerical rotation compared; negligible gain, unpromoted, independent oracle unexecuted.
+- [x] R78 owned-thread scheduler observation; r2 fixes frame-label attribution. Original failed analysis retained.
+- [x] R79 all74 MPC thread masks verified before Ready; D2deadline1438 still fails, no affinity promotion.
+- [x] Both completed bags analyzed, standard stop/protected restoration, no Start/laps.
+- [ ] Standard single-r3 high-speed regression of native numerical owner.
+- [ ] Material producer/architecture improvement and full M4–M6 completion.

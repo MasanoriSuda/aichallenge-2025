@@ -605,5 +605,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R633/R634exact current999replay/cost, R635bounded coordinate-conjugation comparison; R636separate source1020wall rejection.
 - [x] R637old reuse regression fails; R638216native tests, build12626packages/package1132622records/source112pass.
 - [x] R639full1986positive/768000native comparisons, R640current clock result and R641–R643historical/same-run negatives preserved.
-- [ ] Seal/review/local commit, fresh bounded single-r11 current timing/restart/authority; no margin/clock changes.
+- [x] Seal/review/local commit fdee0b8f; single-r11/R645–R651:4255callbacks max19.92ms,zero guard rejections; source804/805wall failure and no restart remain.
 - [ ] Source1020wall/model/measurement and all remainingM4–M6 acceptance, same final artifact/image/eval.
+
+## single-r11source boundary
+
+- [x] R645–R649same-run timing, provenance, source replay and original final1048RestExpired.
+- [x] R650near-stationary witnesses distinguished from useful progress; R651four preparation/launch candidates rejected. No promotion/infeasibility claim.
+- [ ] Exact occupied-cell/body geometry and target-free nonlinear source comparison, then supported constraint/geometry repair and full validation.
+- [ ] Independent measurement/contact/Recovery eligibility and all remainingM4–M6; no additional confirmation needed.

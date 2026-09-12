@@ -1,0 +1,345 @@
+{
+  "schema_version": 1,
+  "authority": false,
+  "baseline_commit": "fdee0b8f8cba863f888cb37f84bbc98af115bbea",
+  "native_model_commit": "8d9810e0",
+  "run_id": "20260913-nine-state-single-r11",
+  "integrated_acceptance": false,
+  "live": {
+    "publication_rejections": [],
+    "callback_samples": 4255,
+    "callback_max_ms": 19.919364,
+    "callback_over25": [],
+    "scheduled_publications": 509,
+    "last_publication": {
+      "dispatch": 1047,
+      "job": 1031,
+      "source": 651,
+      "index": 13,
+      "nominal": 14.024999828,
+      "before": 14.029999686,
+      "after": 14.029999686,
+      "deadline": 14.049999828,
+      "programme_input": 17279117850389252261,
+      "physical_input": 17279117850389252261,
+      "independent": 0
+    },
+    "window_violations": [],
+    "states": [
+      "spawned",
+      "grounded",
+      "ready"
+    ],
+    "post_motion_pairs": 1,
+    "post_motion_decisions": [
+      1048
+    ],
+    "last_source_supply": "[mpc_controller_cpp-10] [INFO] [1789251038.453376787] [mpc_controller]: MPCC source supply: decision=4223, now=103.799997679, draft=available, scheduled=observed-request-rejected, successor=normal-submitted, plans=1/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=3722/rejected:2, worker=3722/2034/2033/running:1/pending:1/exceptions:0, mailbox=7153/7145/invalid:0, store=651/accepted:420/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=3/0/0, generation_rejected=0/invalid:0, invalidation=861/decision:791/site:reset_overtake_line_state, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=current-steering/attempts=2/total_ms=56.917877/certified=0, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=17.0171m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1634/cache_hits=20/cache_misses=0/cache_scanned=0/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, exa, authority=observation-only"
+  },
+  "public": {
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789250944716373709,
+      "stamp_ns": 10149999773,
+      "v": 0.9972107410430908,
+      "vy": 0.030546128749847412,
+      "heading_rate": 0.17619474232196808
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 2907,
+        "scope_source_sec": [
+          2.9749999330000003,
+          104.68499766000001
+        ],
+        "source_hz": 28.571429209938636,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 2906,
+        "scope_source_sec": [
+          3.0099999320000004,
+          104.68499766000001
+        ],
+        "source_hz": 28.571429209877426,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 2033,
+        "scope_source_sec": [
+          3.0499999310000003,
+          104.64999766000001
+        ],
+        "source_hz": 20.000000447047253,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 5082,
+        "scope_source_sec": [
+          3.044999931,
+          104.68499766000001
+        ],
+        "source_hz": 49.99016247075619,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.04,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 101,
+        "scope_source_sec": [
+          4.00499991,
+          104.00499767500001
+        ],
+        "source_hz": 1.0000000223500005,
+        "median_source_period_sec": 0.9999999780000001,
+        "max_source_gap_sec": 1.004999977,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 3666,
+        "scope_source_sec": [
+          3.0149999320000003,
+          104.68499766000001
+        ],
+        "source_hz": 36.04799923183884,
+        "median_source_period_sec": 0.029999999000000003,
+        "max_source_gap_sec": 0.049999998000000004,
+        "nonpositive_source_steps": 20
+      },
+      "/clock": {
+        "rows": 20334,
+        "scope_source_sec": [
+          3.019999932,
+          104.68499766000001
+        ],
+        "source_hz": 200.00000446958157,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r11/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "b55617acb8608a9b32bf5d216b113981154241816aa0900975e310398587dcc1"
+    }
+  },
+  "final": [
+    {
+      "total_ms": 0.000711,
+      "dispatch_reason": 5,
+      "candidate": false,
+      "domain_use": 0,
+      "current_reason": 1,
+      "world_reason": 1,
+      "physical_reason": 4,
+      "checked_samples": 0,
+      "rejected_sec": null,
+      "rejected_peer": "",
+      "context_reason": 3,
+      "measurement_reason": 1,
+      "prefix_reason": 3,
+      "observed_check_exact": true,
+      "observed_rejection_time_exact": true
+    },
+    {
+      "total_ms": 0.000111,
+      "dispatch_reason": 5,
+      "candidate": false,
+      "domain_use": 0,
+      "current_reason": 1,
+      "world_reason": 1,
+      "physical_reason": 4,
+      "checked_samples": 0,
+      "rejected_sec": null,
+      "rejected_peer": "",
+      "context_reason": 3,
+      "measurement_reason": 1,
+      "prefix_reason": 3,
+      "observed_check_exact": true,
+      "observed_rejection_time_exact": true
+    },
+    {
+      "total_ms": 8e-05,
+      "dispatch_reason": 5,
+      "candidate": false,
+      "domain_use": 0,
+      "current_reason": 1,
+      "world_reason": 1,
+      "physical_reason": 4,
+      "checked_samples": 0,
+      "rejected_sec": null,
+      "rejected_peer": "",
+      "context_reason": 3,
+      "measurement_reason": 1,
+      "prefix_reason": 3,
+      "observed_check_exact": true,
+      "observed_rejection_time_exact": true
+    }
+  ],
+  "protected_unchanged": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "experiments": {
+    "645": {
+      "path": "output/20260913-nine-state-transport-live-audit-r645",
+      "result": "accepted",
+      "reason": "single-r11/fdee0b8f120s:4255callbacks max19.919364ms,zero late guard rejections and zero out-of-window normal sends.509normal sends end1047/source651/index13; final1048does not resume. Ready only, no Start/laps."
+    },
+    "646": {
+      "path": "output/20260913-nine-state-transport-public-r646",
+      "result": "accepted",
+      "reason": "Same-run publicmax0.997210741mps; velocity/tire28.571Hz,IMU20Hz,localization49.99Hz,trajectory1Hz,command36.048Hz,clock200Hz over whole recorded source-time range. No force/true-body instrumentation."
+    },
+    "647": {
+      "path": "output/20260913-nine-state-transport-source-inputs-r647",
+      "result": "accepted",
+      "reason": "Two immutable source804/805captures at actual post-motion final1048/14.054999685. Both original initialization policies solve but outer exact physical wall rejects stage71. No exact original failed QP was recorded for these source-only captures."
+    },
+    "648": {
+      "path": "output/20260913-nine-state-transport-source-replay-r648",
+      "result": "inconclusive",
+      "reason": "Cold whole-source A reproduces outer wall at stage71for both policies; native rollout available. B/C/D/G require a dynamic target and are unavailable in this target-free Cruise scene. Not an all-architecture or physical infeasibility proof."
+    },
+    "649": {
+      "path": "output/20260913-nine-state-transport-final-r649",
+      "result": "accepted",
+      "reason": "Original current1048/source651/index14replays3times as RestExpired; exact source/domain/current history/last actual source and observed classification. Stop expiry detects absent replenishment and is not a grace-period defect."
+    },
+    "650": {
+      "path": "output/20260913-nine-state-transport-native-oracles-r650",
+      "result": "rejected",
+      "reason": "Fixed6native input witnesses: quarter-drive +/-steering certify but maxu only0.003423mps/6mm displacement. Half/full drive fail wall or artifact corridor. No useful forward-restart witness and no production promotion."
+    },
+    "651": {
+      "path": "output/20260913-nine-state-transport-preparation-oracles-r651",
+      "result": "rejected",
+      "reason": "Hold acceleration0while same bounded steering reaches its endpoint, then launch on next original stage. All4fixed half/full +/-steering candidates fail wall or artifact corridor. No margin/input/model/timing change; no infeasibility claim."
+    }
+  },
+  "sha256": {
+    "output/20260913-nine-state-transport-live-audit-r645/generator.py": "fb35daedcc16f2903fa46af082e7bcbaecd6e6ede3a49075185e58ca4ad6a1ff",
+    "output/20260913-nine-state-transport-live-audit-r645/report.json": "9596c6a522c201562719382080baf8d1c2270622fdf8910e0458c4000c89841c",
+    "output/20260913-nine-state-transport-public-r646/generator.py": "9d727374de7cf84ae18d4edc8bc115dc5f46f66926784984ce138ce5494c8a46",
+    "output/20260913-nine-state-transport-public-r646/report.json": "e7efa2accfb86a6f1f030066cfb810bf5c7ca093296ec52580c584b6d4de2c3b",
+    "output/20260913-nine-state-transport-public-r646/d1.json": "07fd0fddf2a8fbeeda28d620322750bfc8243ce4d3c3d317c973e5ec3bc2ea75",
+    "output/20260913-nine-state-transport-source-inputs-r647/generator.py": "019eb9c2c8bd9caecb17d2a0029a83e18190f73a00f88876afd766f2872539bf",
+    "output/20260913-nine-state-transport-source-inputs-r647/report.json": "e35d660ea9428c6173b6909ed23dd94a83721124df82d3728e85f61a53840bb5",
+    "output/20260913-nine-state-transport-source-replay-r648/generator.py": "f8abf801955b0202c08e31ccda2f62ec8dd78c272ec783755d3151bf4647dff4",
+    "output/20260913-nine-state-transport-source-replay-r648/results.json": "c5c28b55548a904c9f23d262819c157cd3048ebae4a6b6b54452b32e159b29b3",
+    "output/20260913-nine-state-transport-source-replay-r648/replay": "99d84fc3a168f3d5858bedccb4fccfcef5f0178328d8787cdcaf4769df88d696",
+    "output/20260913-nine-state-transport-source-replay-r648/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-transport-source-replay-r648/driver.cpp": "94555b7a49311ebfe617a95c264eda6e511fc968f36c5eb786256d49aab08b5d",
+    "output/20260913-nine-state-transport-source-replay-r648/compile-command.json": "ba2640aa214e8f7db79d32fa72f39dd9c791514399ca040405a5df6ae43b9e66",
+    "output/20260913-nine-state-transport-source-replay-r648/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-transport-source-replay-r648/000000000804-5bb11f21d0e78e1f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-transport-source-replay-r648/000000000804-5bb11f21d0e78e1f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "9c5d1e136678427869e6dc364485822a687b0e7129ca6a497cebe323fd555221",
+    "output/20260913-nine-state-transport-source-replay-r648/000000000805-c6f1d33df2774dcc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-transport-source-replay-r648/000000000805-c6f1d33df2774dcc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "e1acf604cd2042f1e37bd3a72bebdc72e78d0bc87689755ddd548a33314f541c",
+    "output/20260913-nine-state-transport-final-r649/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-transport-final-r649/result.json": "c2ee5d9c95a439cf5f558fd51c5e9298c345e3dc12594591a6511852a3622fe0",
+    "output/20260913-nine-state-transport-final-r649/runner.py": "4977e1c807725c5141f93d94982ba5b5df4d77c47f88fb05cd3152c8dba60345",
+    "output/20260913-nine-state-transport-final-r649/report.yaml": "8847b79c9725b2650d63f755d63fc2904d9fa5ed4e4b254e4a84d03efebc070e",
+    "output/20260913-nine-state-transport-native-oracles-r650/generator.py": "dc4570a79cc8439d1d4b4d72b3df59c928171b94fd2ce11e5895acfd09123878",
+    "output/20260913-nine-state-transport-native-oracles-r650/results.json": "932d0d25aadddc3fffd28a6deac95592531198f9b93a033d85bd1fedb480db35",
+    "output/20260913-nine-state-transport-native-oracles-r650/replay": "bacff0ed694ce774f6bb46b7cbe770d3c98109cb35e7dfd818309d5a7ff657e6",
+    "output/20260913-nine-state-transport-native-oracles-r650/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-transport-native-oracles-r650/driver.cpp": "633d5ef9e7db096cee2ae694a65ee68b0d76e19ed1f7da40bff5db3b0ab49549",
+    "output/20260913-nine-state-transport-native-oracles-r650/compile-command.json": "01f32fd05cab2e75c43063e77c45f4bf82e0b611d29d38532c34463214cf9b46",
+    "output/20260913-nine-state-transport-native-oracles-r650/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-transport-native-oracles-r650/declared-plan.json": "6de62b3cf208f367b0c3aa302d91c3ce1238e5353a81fa794de2da37db96632a",
+    "output/20260913-nine-state-transport-native-oracles-r650/000000000805-c6f1d33df2774dcc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-transport-native-oracles-r650/000000000805-c6f1d33df2774dcc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "3c978248abdcb7bb442f8efc9be14b29e541e0aad478d923a02fffdf67baa3ff",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/generator.py": "5c9aaeac28ffec89153dcb2256c6e9d7a062e2c8ceb8baa2bc0b990225dfbaf1",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/results.json": "ebc6e342705861d32593ac77486ddf68c1a120857439f00d9821d79ad268f90b",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/replay": "9fe37c2e1315c63a10d1356a60abfe98736ffd065f21727d9b081eb1c3df7290",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/driver.cpp": "706725ad936d3edd6977bde7c64f0f0432673b35e04fcae9f45674c81b556979",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/compile-command.json": "54e1e9e7595e6e9a043bfbdfb2fb7e86739de6255104a84966381fc87b72910d",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/declared-plan.json": "408d711e972f193d8c989d83aa5bafcd0355e43d56dd03e1bd02d20a578fc10d",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/000000000805-c6f1d33df2774dcc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-transport-preparation-oracles-r651/000000000805-c6f1d33df2774dcc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "7839a421ae11426afbe817a1b7beab7f26367d6192e21227876ec3fde4f3b77e",
+    "output/20260913-nine-state-single-r11/manifest.json": "0a95b68f2624aa46d85ff8818ed3ca209b7a5f543d1d4e4d8827dcda18dd2f84",
+    "output/20260913-nine-state-single-r11/monitor-summary.json": "95b273db2308b27fddd7458e6c051917719a9c9305d5528e5b48f0ec3f84c8e4",
+    "output/20260913-nine-state-single-r11/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-single-r11/d1/autoware.log": "7dceb733e5f2d5ef01775efd55a2be51102f8c7a50eaaf455df23f7dfe37ac19",
+    "output/20260913-nine-state-single-r11/launch.log": "82c0cd64da0d32c5f562514d614dce6608ee610c315a70f49b9e2b02c3626cf5",
+    "output/20260913-nine-state-single-r11/down.log": "7783783e173b85efee1e2904de138f2a660a2b5786313953540cb132d485c34f",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000515-pre-stationary/snapshot.yaml": "7107c0bbb88ebc391705eb02bcf201eb7bd4a1426931b7df159ef5ea1ca4d721",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000515-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000515-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000515-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000503-pre-stationary/snapshot.yaml": "e906a31f0369aca9cc10b7989c0ace829e72571789468a6841ca1f099d7806f5",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000503-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000503-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000503-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/000000000452-60cef3fbb372a042-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "526bd82a43f8079290c4ec0869dc1a421c02b319a6bc2c44f5c1fc9743176714",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/000000000452-60cef3fbb372a042-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001048-pre-stationary/snapshot.yaml": "f4d678e87026a4ce721c585095267124c05f621ea05b889c5025be11ebccd819",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001048-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001048-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001048-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001048-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001048-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001048-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000792-pre-stationary/snapshot.yaml": "f22a9f0099d197dab501c46d0d6ded1912153c01cc412a49c42cbd81af612461",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000792-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000792-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000792-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000792-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000792-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000792-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/due/after-normal-motion/publication-000000001048-pre-stationary/snapshot.yaml": "256d879a8b8fd1a6d1059384e803709e99c19892d0509e12579676b0c2d704a2",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000792-pre-stationary/snapshot.yaml": "db3d079515e33fdd5739967ddfb0ecdbe1c1a2fda5a2c2de92f4c2a2680db6f4",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000894-pre-moving/snapshot.yaml": "1e553bd22ac5a03dc1d787f2bf6dae1d70142989b46e794d7e2e94e3ad5e4f95",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000894-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000894-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000894-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001013-pre-stationary/snapshot.yaml": "5f084ec0ab5b8706c7bd5e4ae3af9969fcb37e33dea0daa17cf553f9d00bb9b6",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001013-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001013-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001013-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000844-pre-moving/snapshot.yaml": "8366b55acd2da7749b4a53766e3bb5ed117790c67357ef61782283e5484f40fb",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000844-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000844-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000844-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000844-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000844-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000844-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/000000000552-54fd700980656418-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "a888dc6158f247d969ffd73bdfc622699a77a373463d33117e4541bf2541e01b",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/000000000552-54fd700980656418-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000805-c6f1d33df2774dcc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "3d472b51e5a9c8b52bec4eb7d7259a2f85e36acc2d40b0c21606d06c5c116ef9",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000805-c6f1d33df2774dcc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000000804-5bb11f21d0e78e1f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "307d2b4570a21268e42f15fdb64dfcd1f7530947859ba5ed7032c2c2919bd878",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000000804-5bb11f21d0e78e1f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000955-pre-moving/snapshot.yaml": "0c94d9023ce5f4ac8c3680da23f39faa33493e1927ed0d60484a99b7e261a8fd",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000955-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000955-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000955-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000792-pre-stationary/snapshot.yaml": "18ed7b9312ac89a1536b402b3b810f2ca86b7e6ff18d244bced70a763685553d",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000792-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000792-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000792-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000792-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000792-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000792-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-startup/active/publication-000000000500-pre-stationary/snapshot.yaml": "b20267950576a33f8948e8721b0fa4cbc41aa778c73d970d568325757d31747f",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/scheduled-final-startup/due/publication-000000000500-pre-stationary/snapshot.yaml": "b20267950576a33f8948e8721b0fa4cbc41aa778c73d970d568325757d31747f",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/000000000332-ee15c82c028b40dc-cruise-side-neutral-initial-solve-rejected/snapshot.yaml": "f9ac33cc21f615ccfee52ee7730dba4a9387c060715ed37143f272825e7fc44e",
+    "output/20260913-nine-state-single-r11/d1/mpcc_architecture_snapshots/000000000332-ee15c82c028b40dc-cruise-side-neutral-initial-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+  },
+  "limits": [
+    "One120srun without missed guards is prospective local timing evidence, not universal timing or repeated-race acceptance.",
+    "Native fixed-input oracles cannot execute and their rejection is not physical infeasibility.",
+    "Current source stays651throughend; this differs from r9fresh source supply after final1342.",
+    "Readyphase Recovery remains race-inactive by existing state gate; do not enable it to relabel source proof as repaired.",
+    "Next inspect exact occupied-cell/footprint geometry and compare a target-free nonlinear source formulation. Avoid another fixed steering/drive grid or grace/threshold changes. M4–M6open."
+  ]
+}

@@ -1441,6 +1441,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compiled-coordinate-transport-evidence.json",
       "replay_ready": true,
       "reason": "single-r10exact current/source failures, measured numerical cost, original-map coordinate conjugation and native/full verification."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-transport-live-audit-r652",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/transport-single-r11-evidence.json",
+      "replay_ready": true,
+      "reason": "Prospective single-r11after numeric map transport, actual final/source provenance, fixed native witnesses rejected for useful restart."
     }
   ],
   "experiments": [
@@ -18757,6 +18763,104 @@
         "Unconditional cache miss for a supported physical-to-query-frame transformation"
       ],
       "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-transport-live-audit-r652-r645",
+      "baseline_commit": "fdee0b8f",
+      "snapshot_ids": [
+        "20260913-nine-state-transport-live-audit-r652"
+      ],
+      "hypothesis": "Separate current timing, source physical wall and ability to resume from the actual stopped world.",
+      "changed_dimension": "transport-live-audit",
+      "result": "accepted",
+      "reason": "single-r11/fdee0b8f120s:4255callbacks max19.919364ms,zero late guard rejections and zero out-of-window normal sends.509normal sends end1047/source651/index13; final1048does not resume. Ready only, no Start/laps.",
+      "production_impact": "None after fdee0b8f. Fixed native candidates diagnostic only; no source or supervision promotion.",
+      "deleted_code": [],
+      "revisit_condition": "A changed immutable world or a structurally different target-free native source/constraint formulation; no repetition of failed fixed steering/acceleration grids, margin/window tuning or suppressed proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-transport-live-audit-r652-r646",
+      "baseline_commit": "fdee0b8f",
+      "snapshot_ids": [
+        "20260913-nine-state-transport-live-audit-r652"
+      ],
+      "hypothesis": "Separate current timing, source physical wall and ability to resume from the actual stopped world.",
+      "changed_dimension": "transport-public",
+      "result": "accepted",
+      "reason": "Same-run publicmax0.997210741mps; velocity/tire28.571Hz,IMU20Hz,localization49.99Hz,trajectory1Hz,command36.048Hz,clock200Hz over whole recorded source-time range. No force/true-body instrumentation.",
+      "production_impact": "None after fdee0b8f. Fixed native candidates diagnostic only; no source or supervision promotion.",
+      "deleted_code": [],
+      "revisit_condition": "A changed immutable world or a structurally different target-free native source/constraint formulation; no repetition of failed fixed steering/acceleration grids, margin/window tuning or suppressed proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-transport-live-audit-r652-r647",
+      "baseline_commit": "fdee0b8f",
+      "snapshot_ids": [
+        "20260913-nine-state-transport-live-audit-r652"
+      ],
+      "hypothesis": "Separate current timing, source physical wall and ability to resume from the actual stopped world.",
+      "changed_dimension": "transport-source-inputs",
+      "result": "accepted",
+      "reason": "Two immutable source804/805captures at actual post-motion final1048/14.054999685. Both original initialization policies solve but outer exact physical wall rejects stage71. No exact original failed QP was recorded for these source-only captures.",
+      "production_impact": "None after fdee0b8f. Fixed native candidates diagnostic only; no source or supervision promotion.",
+      "deleted_code": [],
+      "revisit_condition": "A changed immutable world or a structurally different target-free native source/constraint formulation; no repetition of failed fixed steering/acceleration grids, margin/window tuning or suppressed proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-transport-live-audit-r652-r648",
+      "baseline_commit": "fdee0b8f",
+      "snapshot_ids": [
+        "20260913-nine-state-transport-live-audit-r652"
+      ],
+      "hypothesis": "Separate current timing, source physical wall and ability to resume from the actual stopped world.",
+      "changed_dimension": "transport-source-replay",
+      "result": "inconclusive",
+      "reason": "Cold whole-source A reproduces outer wall at stage71for both policies; native rollout available. B/C/D/G require a dynamic target and are unavailable in this target-free Cruise scene. Not an all-architecture or physical infeasibility proof.",
+      "production_impact": "None after fdee0b8f. Fixed native candidates diagnostic only; no source or supervision promotion.",
+      "deleted_code": [],
+      "revisit_condition": "A changed immutable world or a structurally different target-free native source/constraint formulation; no repetition of failed fixed steering/acceleration grids, margin/window tuning or suppressed proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-transport-live-audit-r652-r649",
+      "baseline_commit": "fdee0b8f",
+      "snapshot_ids": [
+        "20260913-nine-state-transport-live-audit-r652"
+      ],
+      "hypothesis": "Separate current timing, source physical wall and ability to resume from the actual stopped world.",
+      "changed_dimension": "transport-final",
+      "result": "accepted",
+      "reason": "Original current1048/source651/index14replays3times as RestExpired; exact source/domain/current history/last actual source and observed classification. Stop expiry detects absent replenishment and is not a grace-period defect.",
+      "production_impact": "None after fdee0b8f. Fixed native candidates diagnostic only; no source or supervision promotion.",
+      "deleted_code": [],
+      "revisit_condition": "A changed immutable world or a structurally different target-free native source/constraint formulation; no repetition of failed fixed steering/acceleration grids, margin/window tuning or suppressed proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-transport-live-audit-r652-r650",
+      "baseline_commit": "fdee0b8f",
+      "snapshot_ids": [
+        "20260913-nine-state-transport-live-audit-r652"
+      ],
+      "hypothesis": "Separate current timing, source physical wall and ability to resume from the actual stopped world.",
+      "changed_dimension": "transport-native-oracles",
+      "result": "rejected",
+      "reason": "Fixed6native input witnesses: quarter-drive +/-steering certify but maxu only0.003423mps/6mm displacement. Half/full drive fail wall or artifact corridor. No useful forward-restart witness and no production promotion.",
+      "production_impact": "None after fdee0b8f. Fixed native candidates diagnostic only; no source or supervision promotion.",
+      "deleted_code": [],
+      "revisit_condition": "A changed immutable world or a structurally different target-free native source/constraint formulation; no repetition of failed fixed steering/acceleration grids, margin/window tuning or suppressed proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-transport-live-audit-r652-r651",
+      "baseline_commit": "fdee0b8f",
+      "snapshot_ids": [
+        "20260913-nine-state-transport-live-audit-r652"
+      ],
+      "hypothesis": "Separate current timing, source physical wall and ability to resume from the actual stopped world.",
+      "changed_dimension": "transport-preparation-oracles",
+      "result": "rejected",
+      "reason": "Hold acceleration0while same bounded steering reaches its endpoint, then launch on next original stage. All4fixed half/full +/-steering candidates fail wall or artifact corridor. No margin/input/model/timing change; no infeasibility claim.",
+      "production_impact": "None after fdee0b8f. Fixed native candidates diagnostic only; no source or supervision promotion.",
+      "deleted_code": [],
+      "revisit_condition": "A changed immutable world or a structurally different target-free native source/constraint formulation; no repetition of failed fixed steering/acceleration grids, margin/window tuning or suppressed proof."
     }
   ]
 }

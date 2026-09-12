@@ -715,7 +715,7 @@ def test_stop_keeps_the_same_canonical_pipeline_warm_without_normal_authority() 
     control = _cpp_function("MpcControlCycleResult get_control(")
     assert "ControlIntent::Stop || control_intent == mpcc_contract::ControlIntent::Hold" in control
     dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
-    assert "packet.wire_acceleration_mps2 > 0) return false" in dispatch
+    assert 'packet.wire_acceleration_mps2 > 0) return capture_rejection("positive-packet-for-stop-intent")' in dispatch
     assert "consider(scheduled_active_)" in dispatch
     assert "canonical_normal_emergency_stop(" in dispatch
 
@@ -3579,7 +3579,7 @@ def test_pass_to_return_requires_causal_certified_gate_a() -> None:
     assert "rate_resolved_return_gate_a_proposal->certified_plan" in submit
     dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
     assert "scheduled_control::prepare_dispatch(" in dispatch
-    assert "if (!context) return false" in dispatch
+    assert 'if (!context) return capture_rejection("proposed-context-unavailable"' in dispatch
 
 
 
@@ -3655,7 +3655,7 @@ def test_shiftout_to_pass_requires_causal_certified_gate_a() -> None:
     assert "rate_resolved_pass_gate_a_proposal->certified_plan" in submit
     dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
     assert "scheduled_control::prepare_dispatch(" in dispatch
-    assert "if (!context) return false" in dispatch
+    assert 'if (!context) return capture_rejection("proposed-context-unavailable"' in dispatch
 
 
 
@@ -3676,16 +3676,25 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
 
 
 def test_final_normal_authority_loss_is_frozen_without_control_authority() -> None:
-    """Preserve the actual scheduled boundary without doing filesystem I/O in control."""
+    """Earlier rejected candidates must not consume final authority-loss evidence."""
     dispatch = _cpp_function("MpcControlCycleResult scheduled_normal_control(")
-    assert "current-evidence" in dispatch
-    assert "scheduled_failure_capture(" in dispatch
-    assert "->submit(std::move(observation))" in dispatch
+    final = dispatch.index("if (!consider(due) && !consider(scheduled_active_))")
+    submit = dispatch.index("->submit_selection_failure(")
+    reset = dispatch.index("scheduled_active_.reset();", final)
+    assert final < submit < reset
+    assert "scheduled_active_final_recorder_ : scheduled_final_recorder_" in dispatch[final:submit]
+    assert "*selection_failures[i]" in dispatch[final:submit]
+    assert '"final-current-evidence"' in dispatch[final:submit]
+    assert "failure->current_check=result.current" in dispatch[:final]
+    assert "failure->current_check_observed=true" in dispatch[:final]
     for forbidden in ("ofstream", "create_directories", "record_publication_failure(", "record_authority_failure("):
         assert forbidden not in dispatch
     capture = _cpp_function("std::shared_ptr<mpcc_architecture_snapshot::ScheduledFailureCapture> scheduled_failure_capture(")
-    assert "capture->original=entry->request" in capture
-    assert "capture->transactions=ledger.since(*entry->cursor)" in capture
+    assert "ledger.latest_transaction()" in capture
+    assert "capture->last_publication=*last" in capture
+    publication = SOURCE[SOURCE.index("void record_scheduled_publication_failure("):SOURCE.index("std::optional<double> publish_control_command(")]
+    assert "capture->current_check=mpc_->pending_scheduled_check_" in publication
+    assert "capture->current_check_observed=true" in publication
 
 
 

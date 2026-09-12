@@ -1,7 +1,7 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。9状態の数値前処理は1241e0cfで修正。標準r77はReadyの公開期限で未達。**
+**全体未完。単車single-r3もReady954の壁証明で未達。最終失敗の観測経路を修正・検証済み。**
 
 Build117全26、tests104全2599（error/failure/skipは0）、source106、native29が合格。
 R495は元r76の壁拒否を維持、R497は元Follow/Cruiseの完全なsource証明に合格。
@@ -13,7 +13,13 @@ R499で計算内訳を測り、R500/R501は既存数値式の検索範囲によ�
 診断r78はD1Ready920、全74MPCスレッドのCPU割当てを検証したr79もD2Ready1438で期限超過。
 初版のスレッド統計は読み取り時刻ラベルが粗く、別保存したr2の確実な前後区間で訂正済み。
 コールバック単体への待ち時間帰属はできない。CPU割当ては採用せず、全runtime停止・復元済み。
-次は未確認の高速域を標準single-r3で検証する。制御source1241e0cfは維持。
+標準single-r3はD1Ready954/source469/job950/index1で現在の壁証明を拒否し停止。
+前回953/index0は実送信済み。最大記録callback20.118ms、公開期限違反なし、Start/周回なし。
+途中の拒否891が観測枠を消費し、最終954の完全snapshotがない。別時刻で代用しない。
+最終due/active両候補を独立枠に保存し、実直前送信と検査実施有無を明示する観測修正を実装。
+Build118全26、tests105全2600（error/failure/skip0）、source106が合格。
+次は修正をcommitした標準single-r4で最終境界を取得する。全体未完。
+[最終失敗の観測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/final-selection-observation-design.md)。
 [スケジューラ観測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r78-scheduling-observation.md)。
 [現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r77-publication-audit.md)、
 [前処理の修正](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-owner.md)。

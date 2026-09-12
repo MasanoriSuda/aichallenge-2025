@@ -6,6 +6,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -197,6 +198,11 @@ public:
   FirstPublicationFailureRecorder(const FirstPublicationFailureRecorder &) = delete;
   FirstPublicationFailureRecorder & operator=(const FirstPublicationFailureRecorder &) = delete;
   ObservationAdmission submit(PublicationFailureObservation observation);
+  /// Admit both failed selection attempts in one fixed bucket. Call only after
+  /// neither due nor active programme supplies normal authority. A separate
+  /// recorder owns these events so intermediate rejections cannot consume them.
+  ObservationAdmission submit_selection_failure(
+    std::array<PublicationFailureObservation, 2> observations);
   void stop() noexcept;
 private:
   struct Impl;

@@ -2933,6 +2933,9 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
       node["current_check"]=std::vector<int>{static_cast<int>(capture.current_check.reason),static_cast<int>(capture.current_check.context),
         static_cast<int>(capture.current_check.measurement.reason),static_cast<int>(capture.current_check.prefix),
         static_cast<int>(capture.current_check.world.reason),static_cast<int>(capture.current_check.world.physical_reason)};
+      node["current_check_observed"]=capture.current_check_observed;
+      if (capture.source_context_active_at_capture)
+        node["source_context_active_at_capture"]=*capture.source_context_active_at_capture;
       node["measurement_rejected_source_sec"]=capture.current_check.measurement.rejected_source_sec;
       node["world_rejected_sec"]=capture.current_check.world.rejected_sec;
       node["world_rejected_peer"]=capture.current_check.world.rejected_peer_id;
@@ -2942,7 +2945,7 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         node["original_cursor_clock_sec"]=capture.original_cursor->last_clock_sec();
       }
       node["ledger_continuous"]=capture.transactions.has_value();
-      if (capture.transactions) for (const auto &event:*capture.transactions) {
+      const auto transaction_node=[](const auto &event) {
         YAML::Node item;
         item["sequence"]=event.sequence;
         item["nominal_wire_acceleration_wire_steering_before_after"]=std::vector<double>{event.nominal.published_sec,
@@ -2950,8 +2953,12 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         item["recorded_publication_sec"]=event.published.published_sec;
         if (event.source) item["source_job_solution_problem_input_index"]=std::vector<std::uint64_t>{event.source->decision_id,
           event.source->solution_id,event.source->problem_fingerprint,event.source->input_context_fingerprint,event.source->packet_index};
-        node["transactions"].push_back(item);
-      }
+        return item;
+      };
+      if (capture.transactions) for (const auto &event:*capture.transactions)
+        node["transactions"].push_back(transaction_node(event));
+      if (capture.last_publication)
+        node["last_actual_publication"]=transaction_node(*capture.last_publication);
       if (capture.certificate) {
         const auto &certificate=*capture.certificate;
         node["program"]=mpcc_vehicle_model::encode_input_program(certificate.suffix().program);
@@ -3060,6 +3067,27 @@ ObservationAdmission FirstPublicationFailureRecorder::submit(PublicationFailureO
   if (impl_->admitted[bucket]) return ObservationAdmission::Duplicate;
   impl_->pending.push_back(std::move(observation));
   impl_->admitted[bucket] = true;
+  impl_->condition.notify_one();
+  return ObservationAdmission::Queued;
+}
+ObservationAdmission FirstPublicationFailureRecorder::submit_selection_failure(
+  std::array<PublicationFailureObservation, 2> observations)
+{
+  const auto &first=observations.front();
+  for (const auto &o:observations) {
+    if (!o.decision_id || o.output_root.empty() || !o.scheduled_capture ||
+        o.decision_id!=first.decision_id || o.moving!=first.moving ||
+        o.after_publication || o.scheduled_capture->boundary!="final-current-evidence")
+      return ObservationAdmission::Invalid;
+  }
+  if (first.output_root==observations.back().output_root)
+    return ObservationAdmission::Invalid;
+  const auto bucket=first.moving ? 2U : 0U;
+  std::lock_guard<std::mutex> lock(impl_->mutex);
+  if (impl_->stopping) return ObservationAdmission::Stopped;
+  if (impl_->admitted[bucket]) return ObservationAdmission::Duplicate;
+  for (auto &o:observations) impl_->pending.push_back(std::move(o));
+  impl_->admitted[bucket]=true;
   impl_->condition.notify_one();
   return ObservationAdmission::Queued;
 }

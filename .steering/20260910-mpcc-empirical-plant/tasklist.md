@@ -476,5 +476,13 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R78 owned-thread scheduler observation; r2 fixes frame-label attribution. Original failed analysis retained.
 - [x] R79 all74 MPC thread masks verified before Ready; D2deadline1438 still fails, no affinity promotion.
 - [x] Both completed bags analyzed, standard stop/protected restoration, no Start/laps.
-- [ ] Standard single-r3 high-speed regression of native numerical owner.
+- [x] Standard single-r3 executed: D1Ready954 physical wall rejection; no high-speed/lap acceptance. Exact final snapshot missing.
 - [ ] Material producer/architecture improvement and full M4–M6 completion.
+
+## Final selection observation after single-r3
+
+- [x] Identify intermediate slot consumption hiding D1final954 and earlier r75D2final2274.
+- [x] Separate paired final due/active capture; preserve actual preceding send and actual CurrentCheck.
+- [x] Strengthen source contract; original producer fails, revised106 source tests pass.
+- [x] Native paired recorder regression, build118 all26/package105 all2600, source106, review and evidence sealed.
+- [ ] Standard single-r4 live capture, causal wall/clock/source repair, all remaining M4–M6.

@@ -5349,6 +5349,82 @@ TEST(MpccSourceReservation, SourceHorizonRetainsNormalIntentUntilItsCertifiedBra
 }
 
 
+TEST(MpccSourceReservation, FinalSelectionCapturesBothAttemptsAfterIntermediateSlotsAreConsumed)
+{
+  namespace capture = multi_purpose_mpc_ros::mpcc_architecture_snapshot;
+  ScheduledDispatchFixture f;
+  const auto directory=std::filesystem::temp_directory_path() / ("mpcc-final-selection-"+
+    std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::vector<capture::RecordResult> records;
+  const auto parent_thread=std::this_thread::get_id();
+  bool callback_on_worker=true;
+  capture::FirstPublicationFailureRecorder intermediate;
+  capture::FirstPublicationFailureRecorder final([&](const auto &,const auto &record) {
+    callback_on_worker &= std::this_thread::get_id()!=parent_thread;
+    records.push_back(record);
+  });
+  const vehicle::PublishedProgramSource actual{29,31,37,41,11};
+  const vehicle::PublishedCommand packet{1.05,-3,0};
+  for (bool moving:{false,true}) {
+    std::array<capture::PublicationFailureObservation,2> pair;
+    for (std::size_t i=0;i<pair.size();++i) {
+      auto evidence=std::make_shared<capture::ScheduledFailureCapture>();
+      // Due may be absent; active's exact source/current still needs recording.
+      if (i==1) {
+        evidence->original=f.request;
+        evidence->certificate=f.certificate;
+        auto current=f.request.observed;
+        current.decision_id=954;
+        evidence->current=std::make_shared<const retained::Request>(std::move(current));
+        evidence->current_context=f.request.observed.plan->execution_artifact->identity.source_context;
+        evidence->current_check_observed=true;
+        evidence->source_context_active_at_capture=false;
+        evidence->current_check.world.rejected_sec=1.234;
+      }
+      evidence->boundary="final-current-evidence";
+      evidence->detail=i==0 ? "programme-unavailable" : "current-evidence";
+      evidence->last_publication=vehicle::PublicationTransaction{17,packet,packet,1.05,1.06,actual};
+      pair[i].decision_id=954;
+      pair[i].moving=moving;
+      pair[i].output_root=directory/(i==0 ? "due" : "active");
+      pair[i].scheduled_capture=std::move(evidence);
+    }
+    auto earlier=pair[1];
+    earlier.decision_id=891; earlier.output_root=directory/"intermediate";
+    EXPECT_EQ(intermediate.submit(earlier),capture::ObservationAdmission::Queued);
+    auto invalid=pair;
+    invalid[1].decision_id=955;
+    EXPECT_EQ(final.submit_selection_failure(invalid),capture::ObservationAdmission::Invalid);
+    EXPECT_EQ(final.submit_selection_failure(pair),capture::ObservationAdmission::Queued);
+    for (auto &o:pair) o.decision_id=1015;
+    EXPECT_EQ(final.submit_selection_failure(pair),capture::ObservationAdmission::Duplicate);
+  }
+  intermediate.stop(); final.stop();
+  ASSERT_EQ(records.size(),4U);
+  EXPECT_TRUE(callback_on_worker);
+  for (const auto &record:records) {
+    ASSERT_EQ(record.status,capture::RecordStatus::Written) << record.detail;
+    const auto doc=YAML::LoadFile(record.snapshot_file.string());
+    EXPECT_FALSE(doc["authority"].as<bool>());
+    EXPECT_EQ(doc["boundary"]["decision_id"].as<std::uint64_t>(),954U);
+    const auto node=doc["scheduled"];
+    EXPECT_EQ(node["boundary"].as<std::string>(),"final-current-evidence");
+    const bool active=node["detail"].as<std::string>()=="current-evidence";
+    EXPECT_EQ(node["current_check_observed"].as<bool>(),active);
+    if (active) {
+      EXPECT_FALSE(node["source_context_active_at_capture"].as<bool>());
+      EXPECT_DOUBLE_EQ(node["world_rejected_sec"].as<double>(),1.234);
+      EXPECT_EQ(node["current_request"]["status"].as<std::string>(),"present");
+    }
+    const auto publication=node["last_actual_publication"];
+    EXPECT_EQ(publication["sequence"].as<std::uint64_t>(),17U);
+    EXPECT_EQ(publication["source_job_solution_problem_input_index"].as<std::vector<std::uint64_t>>(),
+      (std::vector<std::uint64_t>{29,31,37,41,11}));
+    EXPECT_DOUBLE_EQ(publication["nominal_wire_acceleration_wire_steering_before_after"][4].as<double>(),1.06);
+  }
+  std::filesystem::remove_all(directory);
+}
+
 TEST(MpccSourceReservation, SnapshotPreservesDeclaredPriorIdsSeparatelyFromActualTransactions)
 {
   namespace capture = multi_purpose_mpc_ros::mpcc_architecture_snapshot;

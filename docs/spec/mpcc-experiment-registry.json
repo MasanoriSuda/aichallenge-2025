@@ -1315,6 +1315,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r78-r79-scheduler-evidence.json",
       "replay_ready": true,
       "reason": "Frozen first failures and per-thread scheduler observations, explicit masks, corrected conservative read brackets."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-final-selection-observation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/final-selection-observation-evidence.json",
+      "replay_ready": false,
+      "reason": "single-r3 final954 lacks exact capture; intermediate891 is separate. Native paired-recorder behavior is reproducible."
     }
   ],
   "experiments": [
@@ -16541,6 +16547,40 @@
       "production_impact": "No production change; temporary diagnostic processes exited and masks disappeared.",
       "deleted_code": [],
       "revisit_condition": "New causal evidence or distinct architecture; do not repeat unchanged failed affinity or claim widened sampling intervals as callback timing."
+    },
+    {
+      "experiment_id": "20260912-nine-state-final-selection-observation-single-r3",
+      "baseline_commit": "f06938a681cd931cc6a11e917b8c6708b2462312",
+      "snapshot_ids": [
+        "20260912-nine-state-final-selection-observation"
+      ],
+      "hypothesis": "Observe final authority loss independently of intermediate candidate rejection",
+      "changed_dimension": "Original standard single on1241e0cf production",
+      "result": "rejected",
+      "reason": "D1Ready954 current wall6 rejects at0.53m/s; exact final snapshot absent after intermediate891 consumed slot. No Start/laps or deadline failures.",
+      "production_impact": "Diagnostic producer only; all normal and Emergency decisions/strict gates retained.",
+      "deleted_code": [
+        "Premature intermediate slot treated as final-loss observation",
+        "Default CurrentCheck used by generic final publisher observation"
+      ],
+      "revisit_condition": "Fresh committed single-r4 captures actual final failure; causal source/current repair and all M4–M6 remain. Do not substitute earlier candidate snapshots."
+    },
+    {
+      "experiment_id": "20260912-nine-state-final-selection-observation-recorder",
+      "baseline_commit": "f06938a681cd931cc6a11e917b8c6708b2462312",
+      "snapshot_ids": [
+        "20260912-nine-state-final-selection-observation"
+      ],
+      "hypothesis": "Observe final authority loss independently of intermediate candidate rejection",
+      "changed_dimension": "Independent paired final-selection observation and actual-check/last-send provenance",
+      "result": "accepted",
+      "reason": "Final branch after both due/active reject; fixed bounded worker buckets and native pair persistence pass. Build118 all26, package105 all2600, source106; live validation pending.",
+      "production_impact": "Diagnostic producer only; all normal and Emergency decisions/strict gates retained.",
+      "deleted_code": [
+        "Premature intermediate slot treated as final-loss observation",
+        "Default CurrentCheck used by generic final publisher observation"
+      ],
+      "revisit_condition": "Fresh committed single-r4 captures actual final failure; causal source/current repair and all M4–M6 remain. Do not substitute earlier candidate snapshots."
     }
   ]
 }

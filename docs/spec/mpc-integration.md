@@ -4945,3 +4945,12 @@ Build114全26、tests101全2592合格。原因の確定は標準r73へ続く。
 近似の寄与を確認した段階であり、全体の物理的不成立や修正完了とはしない。
 元の25ms公開期限、0.2m壁clearance、solver/tolerance、全物理証明とnormal authorityを維持。
 [現在の監査と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r73-r74-wall-source-audit.md)。
+
+
+2026-09-12 最終的な通常指令の喪失は、予定済み新規候補と継続中候補の両方が不成立に
+なった分岐で、一組として記録する。途中の候補拒否とは独立した起動/活動・静止/移動の
+固定枠を使い、各候補の元入力・現在入力・文脈・検査結果と実際の直前送信を保持する。
+検査未実施は明示し、公開期限違反も候補を作った実検査結果を記録する。
+書出しは非同期workerで行い、候補選択・Emergency・壁/他車/停止/時刻条件は維持。
+Build118全26、tests105全2600、source106を確認。実走の記録確認は次のsingle-r4、
+全M4–M6は未完。[設計と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/final-selection-observation-design.md)。

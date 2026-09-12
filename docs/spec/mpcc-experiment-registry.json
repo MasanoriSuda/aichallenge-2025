@@ -1345,6 +1345,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r6-evidence.json",
       "replay_ready": true,
       "reason": "Exact final784/968/source642 and native/full-source programme/public-component comparisons."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-force-contact-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-model-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact force-run950 source/current, actual applied input/force, fixed-model and temporal contact comparisons."
     }
   ],
   "experiments": [
@@ -17015,6 +17021,104 @@
       "production_impact": "None after8d9810e0",
       "deleted_code": [],
       "revisit_condition": "Causal producer repair or explicitly different diagnostic observation; unchanged standard rerun is not a repair."
+    },
+    {
+      "experiment_id": "20260912-nine-state-force-contact-audit-r531",
+      "baseline_commit": "e866ecf7e6187b916a3c4d025f32e93b800961ca",
+      "snapshot_ids": [
+        "20260912-nine-state-force-contact-audit"
+      ],
+      "hypothesis": "Separate contact averaging, actual application and future physical prediction",
+      "changed_dimension": "Extract force observation with existing physical-force reconstruction",
+      "result": "accepted",
+      "reason": "1931 force rows. Moving wheel sum vs accumulated force component MAE3.97e-6N. Raw yaw-inertia division warning retained; no universal raw yaw validation.",
+      "production_impact": "None after8d9810e0. No observer/model/clock/receiver/physical or solver limit change.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal public observation or physically represented uncertainty with independent old/new windows and complete source/native/Stop/current identity. Do not repeat unchanged all-grounded replacement or assume pointwise positive contact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-force-contact-audit-r532",
+      "baseline_commit": "e866ecf7e6187b916a3c4d025f32e93b800961ca",
+      "snapshot_ids": [
+        "20260912-nine-state-force-contact-audit"
+      ],
+      "hypothesis": "Separate contact averaging, actual application and future physical prediction",
+      "changed_dimension": "Original built native derivative vs all-grounded fixed model and private current-contact oracle",
+      "result": "accepted",
+      "reason": "807 eligible pre-failure samples. Original positive/braking next-speed MAE0.000877900/0.003153406mps vs private oracle0.000137331/0.000137444. Contact averaging contributes; planar gravity/contact-solver effects remain. No future oracle feature or rollout containment claim.",
+      "production_impact": "None after8d9810e0. No observer/model/clock/receiver/physical or solver limit change.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal public observation or physically represented uncertainty with independent old/new windows and complete source/native/Stop/current identity. Do not repeat unchanged all-grounded replacement or assume pointwise positive contact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-force-contact-audit-r533",
+      "baseline_commit": "e866ecf7e6187b916a3c4d025f32e93b800961ca",
+      "snapshot_ids": [
+        "20260912-nine-state-force-contact-audit"
+      ],
+      "hypothesis": "Separate contact averaging, actual application and future physical prediction",
+      "changed_dimension": "Exact current proof for instrumented Ready950",
+      "result": "accepted",
+      "reason": "Source632/job945/index2, original domain/history/last actual/checks/rejected time exact on3repeats. Full current wall rejection12.519999728,3.42–3.63ms offline. Different world from single-r6.",
+      "production_impact": "None after8d9810e0. No observer/model/clock/receiver/physical or solver limit change.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal public observation or physically represented uncertainty with independent old/new windows and complete source/native/Stop/current identity. Do not repeat unchanged all-grounded replacement or assume pointwise positive contact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-force-contact-audit-r534",
+      "baseline_commit": "e866ecf7e6187b916a3c4d025f32e93b800961ca",
+      "snapshot_ids": [
+        "20260912-nine-state-force-contact-audit"
+      ],
+      "hypothesis": "Separate contact averaging, actual application and future physical prediction",
+      "changed_dimension": "Globally replace original contact averages with all-grounded fixed coefficients",
+      "result": "rejected",
+      "reason": "497 anchors, both models given identical actual future applied wire/tire, no future body/contact. New low-speed speed improves, old single holdout1sspeed MAE0.111252→0.283845mps and yaw0.032699→0.138534rad worsen; oldD1 also worsens. Fixed windows/populations retained; no global replacement.",
+      "production_impact": "None after8d9810e0. No observer/model/clock/receiver/physical or solver limit change.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal public observation or physically represented uncertainty with independent old/new windows and complete source/native/Stop/current identity. Do not repeat unchanged all-grounded replacement or assume pointwise positive contact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-force-contact-audit-r535",
+      "baseline_commit": "e866ecf7e6187b916a3c4d025f32e93b800961ca",
+      "snapshot_ids": [
+        "20260912-nine-state-force-contact-audit"
+      ],
+      "hypothesis": "Separate contact averaging, actual application and future physical prediction",
+      "changed_dimension": "Extract same-run public state and command observations",
+      "result": "accepted",
+      "reason": "Bag velocity/steering/IMU/pose/clock/control retained with source and receipt times. No assumption these times equal controller delivery or force FixedUpdate.",
+      "production_impact": "None after8d9810e0. No observer/model/clock/receiver/physical or solver limit change.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal public observation or physically represented uncertainty with independent old/new windows and complete source/native/Stop/current identity. Do not repeat unchanged all-grounded replacement or assume pointwise positive contact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-force-contact-audit-r536",
+      "baseline_commit": "e866ecf7e6187b916a3c4d025f32e93b800961ca",
+      "snapshot_ids": [
+        "20260912-nine-state-force-contact-audit"
+      ],
+      "hypothesis": "Separate contact averaging, actual application and future physical prediction",
+      "changed_dimension": "Join direct application to receiver sequence/source stamp/float bits",
+      "result": "accepted",
+      "reason": "All165applications strictly joined,711received and544overwritten before final apply.564public signatures associateD1. Applied selected-source age0.000242447–0.046480135s; update intervals0.099999721–0.175136691s include startup/teardown and are not future bounds.",
+      "production_impact": "None after8d9810e0. No observer/model/clock/receiver/physical or solver limit change.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal public observation or physically represented uncertainty with independent old/new windows and complete source/native/Stop/current identity. Do not repeat unchanged all-grounded replacement or assume pointwise positive contact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-force-contact-audit-r537",
+      "baseline_commit": "e866ecf7e6187b916a3c4d025f32e93b800961ca",
+      "snapshot_ids": [
+        "20260912-nine-state-force-contact-audit"
+      ],
+      "hypothesis": "Separate contact averaging, actual application and future physical prediction",
+      "changed_dimension": "Fixed temporal contact availability and privileged past-duty forecast comparison",
+      "result": "accepted",
+      "reason": "Old single training/holdout contains71zero-wheel and568one-wheel ticks; holdout maximum zero-contact35ms/at-most-one60ms. Holdout100/250/1000ms minimum mean wheel count0.60/1.28/1.96, not future bounds. Private past-duty forecasts do not uniformly improve independent axle/horizon scores; no public observer or contact assumption promoted.",
+      "production_impact": "None after8d9810e0. No observer/model/clock/receiver/physical or solver limit change.",
+      "deleted_code": [],
+      "revisit_condition": "Distinct causal public observation or physically represented uncertainty with independent old/new windows and complete source/native/Stop/current identity. Do not repeat unchanged all-grounded replacement or assume pointwise positive contact."
     }
   ]
 }

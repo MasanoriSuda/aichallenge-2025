@@ -523,5 +523,14 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Exact final784/968 and native upper-input wall witnessesR525/R526; no safety relaxation.
 - [x] Original tube/current observation and same-bag component auditR527/R529/R530; exclude post-Emergency comparisons.
 - [x] R528 bounded future steering comparison: rate3 certified offline, longer programmes fail. No production promotion.
-- [ ] Bounded force/application observation on committed current controller; separate nominal plant/contact/application and sensor epochs before any model or steering-programme fix.
+- [x] Bounded force-single-r1 and R531–R537 distinguish actual application/contact effects; no model promotion. Component epoch versus force prediction remains open.
 - [ ] Complete remaining M4–M6, same-final-HEAD races/gates and same submitted artifact/image/eval.
+
+## Force/contact model boundary
+
+- [x] Existing seven-call DLL validated and observed current controller; Ready950 exact failure, automatic teardown/restoration.
+- [x] R531–R533 physical-force reconstruction and native per-step contact contribution, source/current replay.
+- [x] R534 all-grounded fixed model rejected on independent old windows; no production parameters changed.
+- [x] R535/R536 exact receiver/application provenance; R537 temporal contact statistics and privileged past forecast. No new future timing/contact guarantee.
+- [ ] Exact component-epoch/model containment attribution; explicit observer/uncertainty architecture before further model changes.
+- [ ] Current wall/source/real publication deadline repairs and all remaining M4–M6 acceptance.

@@ -1,24 +1,23 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。8d9810e0の単車標準走行r6は、D1Ready決定968の壁証明拒否で停止。**
+**全体未完。現行の単車走行は壁証明で停止。接地の平均化による予測誤差を確認したが、採用できる修正は未確定。**
 
-ビルド120全26、package107全2610は合格。r6では初期軌道候補の供給が続くが、
-source642/job961/index4の現在証明が12.629999725で壁を拒否。直前967/index3の実指令・
-履歴・世代と同一の再生で再現し、許容入力の端点2つも同じ壁セルに接触した。
-元の予測は後の観測速度・向きを包含していない。R530はEmergency直前までの同一bagで
-成分時刻を分けて確認した。モデル・接触・実際の指令適用・センサ時刻差は未分離。
+本番8d9810e0、build120全26、package107全2610合格。標準single-r6の決定968は
+元の予測範囲から後の速度・向きが外れ、現在の壁証明を拒否した。別世界のforce-single-r1も
+D1Ready950/source632/job945/index2で停止。R533は同一の履歴・世代・実指令で再現した。
 
-R528は一定舵角の将来列と解由来の操舵速度列を比較。短い3区間は双方認証できるが、
-長い8/16区間の壁拒否は解消しない。診断だけで本番へ昇格しない。
-次は既存の検証済みforce/application観測を現在コミットの単車へ適用して原因を絞る。
-r6はStart/周回なし、全1166callbackは25ms未満だが過去の実公開期限問題は未解決。
-元DLL・ユーザーJSON復元済み。追加確認/pushなし。
-[現在の監査・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r6-current-audit.md)。
+R531–R537で実際の力と適用指令を解析。接地変動は短時間の予測誤差に寄与するが、
+全輪接地モデルへの置換は独立した過去区間の誤差を悪化させるため棄却。
+過去のholdoutには全輪非接地が最大35msあり、直前の接地状態も将来予測を一貫して
+改善しない。観測値を将来の保証へ転用せず、モデル・安全条件は変更していない。
+次は正確なセンサ成分時刻とモデル誤差を分離し、公開観測・不確かさの表現を比較する。
+[接地モデル監査・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-model-audit.md)。
 
-r75 Start/update_v_max失効、全intent/Mission/sibling/Store、Stop/rest/restart、Recovery/
-Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/
-image/evalは未完。局所合格を全体受入れとしない。
+両runはStart/周回なし。元DLL・ユーザーJSON復元済み、runtime停止。追加確認/pushなし。
+過去の実公開期限問題、r75 Start/update_v_max、全intent/Mission/sibling/Store、Stop/rest/
+restart、Recovery/Rejoin/Boost/async、同一最終HEADの単車/dev2各3回、dev3/dev4六周、
+gate1–3、同一tar/image/evalは未完。局所合格を全体受入れとしない。
 
 以下はr75開始前までの根拠。
 

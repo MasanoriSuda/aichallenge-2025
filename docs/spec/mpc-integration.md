@@ -4990,3 +4990,11 @@ Build120全26/package107全2610/source106、R522全6sourceとR523/R524元判定�
 R527/R530では元の予測範囲を後の観測が外れる。R528の操舵列比較だけでは長い列の拒否を
 解消せず、本番は変更しない。次の力・指令適用観測で原因を分離する。
 [現在の根拠と未検証事項](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r6-current-audit.md)。
+
+
+2026-09-12 force-single-r1/R531–R537（本番8d9810e0/build120）は、接地平均化が
+短時間の物理予測誤差に寄与することを示した。全輪接地への一律置換は独立区間の
+速度・旋回誤差を悪化させるため棄却。実測の接地率や最長非接地時間を将来の保証に
+転用しない。直接観測した指令適用とセンサ成分時刻は別の境界として維持する。
+モデル・安全条件は未変更、全体受入れは未達。
+[接地監査と比較・限界](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-model-audit.md)。

@@ -33,6 +33,7 @@
 #include <multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp>
+#include <multi_purpose_mpc_ros/mpcc_native_initialization.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
@@ -152,6 +153,7 @@ namespace external_speed_loss = ::multi_purpose_mpc_ros::external_speed_loss;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_stage_geometry = ::multi_purpose_mpc_ros::mpc_stage_geometry;
 namespace mpcc_contract = ::multi_purpose_mpc_ros::mpcc_execution_contract;
+namespace mpcc_native_initialization = ::multi_purpose_mpc_ros::mpcc_native_initialization;
 namespace race_mpcc = ::multi_purpose_mpc_ros::race_mpcc_foundation;
 namespace mpc_velocity_limit = ::multi_purpose_mpc_ros::mpc_velocity_limit;
 namespace mpc_waypoint_association = ::multi_purpose_mpc_ros::mpc_waypoint_association;
@@ -7263,7 +7265,9 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   const std::shared_ptr<BoundedSingleJobExecutor> &
   overtake_sibling_executor,
   const std::shared_ptr<rate_resolved_overtake_branch_bank::Bank> &
-  overtake_branch_bank)
+  overtake_branch_bank,
+  const std::optional<std::uint64_t> native_second_sequence,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> & native_reference_solver_context)
 {
   const auto started = SteadyClock::now();
   const auto rejected_pipeline = [&source, &started](
@@ -7364,6 +7368,42 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
       population.detail + ", pipeline=" +
       population.pipeline.solver.detail;
     return std::move(population.pipeline);
+  }
+  if (native_second_sequence) {
+    const auto population = mpcc_native_initialization::build(source, *native_second_sequence);
+    if (!population || !physical_source || !solver_context || !native_reference_solver_context ||
+        solver_context == native_reference_solver_context) {
+      return rejected_pipeline(rate_resolved_shadow::Outcome::BuildRejected,
+        "native initializer population identity/physical source/owners unavailable");
+    }
+    const std::array<std::shared_ptr<rate_resolved_shadow::SolverContext>, 2> owners{
+      native_reference_solver_context, solver_context};
+    RateResolvedPipelineEvaluation selected;
+    const std::shared_ptr<rate_resolved_certified::Store> no_store;
+    // Both immutable candidates already exist. Each may be solved once in
+    // this fixed order; only a fully certified member can reach the Store.
+    for (std::size_t index = 0; index < population->candidates.size(); ++index) {
+      const auto & candidate = population->candidates[index];
+      auto physical = *physical_source;
+      physical.identity.artifact = candidate.identity;
+      selected = evaluate_rate_resolved_pipeline(candidate, std::move(physical), owners[index], no_store);
+      const bool certified = selected.solver.outcome == rate_resolved_shadow::Outcome::Solved &&
+        selected.physical && selected.physical->outcome == rate_resolved_physical_wall::Outcome::Accepted &&
+        selected.certified_plan.plan != nullptr;
+      const double total_ms = std::chrono::duration<double, std::milli>(SteadyClock::now() - started).count();
+      selected.solver.detail = std::string("native-initialization/policy=") +
+        (index == 0 ? "reference-rest" : "current-steering") + "/attempts=" +
+        std::to_string(index + 1) + "/total_ms=" + std::to_string(total_ms) +
+        "/certified=" + (certified ? "1" : "0") + ", pipeline=" + selected.solver.detail;
+      if (certified) {
+        if (certified_plan_store) {
+          const auto stored = certified_plan_store->replace(selected.certified_plan.plan);
+          selected.solver.detail += std::string(", native-initialization-store=") + rate_resolved_certified::to_string(stored);
+        }
+        return selected;
+      }
+    }
+    return selected;
   }
   return evaluate_rate_resolved_pipeline(
     source, std::move(physical_source), solver_context,
@@ -8363,6 +8403,8 @@ struct MPC
       scheduled_final_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       scheduled_active_final_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       rate_resolved_track_cruise_shadow_solver_context_ =
+        std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_native_reference_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_course_support_tolerance_ =
           rate_resolved_track_cruise_shadow_solver_context_
@@ -26060,6 +26102,7 @@ struct MPC
       rate_resolved_track_cruise_shadow_worker_ == nullptr ||
       rate_resolved_track_cruise_shadow_mailbox_ == nullptr ||
       rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
+      rate_resolved_native_reference_solver_context_ == nullptr ||
       rate_resolved_normal_avoidance_negative_solver_context_ == nullptr ||
       rate_resolved_normal_avoidance_positive_solver_context_ == nullptr ||
       rate_resolved_normal_avoidance_sibling_worker_ == nullptr ||
@@ -26085,6 +26128,16 @@ struct MPC
         submission_reject_count;
       return false;
     }
+    // Reserve both identities on the owning thread before either candidate
+    // can enter the worker. A failed reservation never reuses an old ID.
+    std::optional<std::uint64_t> native_second_sequence;
+    if (mpcc_native_initialization::eligible(*snapshot)) {
+      if (rate_resolved_track_cruise_shadow_next_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
+        ++rate_resolved_track_cruise_shadow_telemetry_window_.submission_reject_count;
+        return false;
+      }
+      native_second_sequence = rate_resolved_track_cruise_shadow_next_sequence_++;
+    }
     RateResolvedPhysicalShadowEvaluation physical_snapshot_rejection;
     auto physical_snapshot =
       build_rate_resolved_track_cruise_physical_snapshot(
@@ -26098,8 +26151,14 @@ struct MPC
         snapshot.value(), physical_snapshot.value());
       bind_rate_resolved_replay_world(
         snapshot.value(), physical_snapshot.value(), now_sec);
-      physical_registered = physical_mailbox->register_submission(
-        physical_snapshot->identity);
+      if (native_second_sequence) {
+        std::array<rate_resolved_physical_wall::Identity, 2> identities{
+          physical_snapshot->identity, physical_snapshot->identity};
+        identities[1].artifact.sequence = *native_second_sequence;
+        physical_registered = physical_mailbox->register_population(identities);
+      } else {
+        physical_registered = physical_mailbox->register_submission(physical_snapshot->identity);
+      }
       if (!physical_registered) {
         ++rate_resolved_track_cruise_shadow_telemetry_window_.
           physical_submission_reject_count;
@@ -26124,7 +26183,7 @@ struct MPC
           std::move(physical_snapshot_rejection);
       }
     }
-    if (!rate_resolved_track_cruise_shadow_mailbox_->register_submission(sequence)) {
+    if (!rate_resolved_track_cruise_shadow_mailbox_->register_submission(native_second_sequence.value_or(sequence))) {
       ++rate_resolved_track_cruise_shadow_telemetry_window_.
         submission_reject_count;
       return false;
@@ -26132,6 +26191,7 @@ struct MPC
     const auto mailbox = rate_resolved_track_cruise_shadow_mailbox_;
     const auto solver_context =
       rate_resolved_track_cruise_shadow_solver_context_;
+    const auto native_reference_solver_context = rate_resolved_native_reference_solver_context_;
     const auto normal_negative_solver_context =
       rate_resolved_normal_avoidance_negative_solver_context_;
     const auto normal_positive_solver_context =
@@ -26159,6 +26219,7 @@ struct MPC
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
       [current_world_snapshot, mailbox, solver_context,
+        native_second_sequence, native_reference_solver_context,
         normal_negative_solver_context, normal_positive_solver_context,
         normal_sibling_worker,
         normal_homotopy_owner, normal_branch_bank,
@@ -26178,7 +26239,7 @@ struct MPC
           certified_plan_store, normal_branch_bank,
           overtake_negative_solver_context, overtake_positive_solver_context,
           overtake_sibling_executor,
-          overtake_branch_bank);
+          overtake_branch_bank, native_second_sequence, native_reference_solver_context);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
           static_cast<void>(physical_mailbox->publish(
@@ -32084,6 +32145,8 @@ struct MPC
   rate_resolved_preentry_right_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_track_cruise_shadow_solver_context_;
+  std::shared_ptr<rate_resolved_shadow::SolverContext>
+  rate_resolved_native_reference_solver_context_;
   std::optional<persistent_osqp::PhysicalConstraintTolerance>
       rate_resolved_course_support_tolerance_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>

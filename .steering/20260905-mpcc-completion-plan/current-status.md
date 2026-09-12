@@ -1,23 +1,25 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。最新標準single-r5と保存入力の比較を完了し、単純な初期軌道の置換を棄却。**
+**全体未完。通常Cruiseの初期軌道を2候補にし、ビルド・テスト・保存入力の検証を完了。**
 
-本番候補f9aa990a/build119全26/tests106全2602は維持。single-r5はD1Ready1122の
-実公開期限を超過。独立した現在物理証明は通るが、25msのROS期限には間に合わない。
-R513でsource/domain/実履歴/直前送信と判定を再現。壁時計callback5.784msの間に
-ROSは30ms進む。bag受信時刻とcontroller配信時刻を区別し、過去のCPU割当て失敗も保存。
-解析用に明示中断し、元DLL/ユーザーJSONを復元。Start/周回/完走の受入れはない。
+単純な初期軌道の置換は既存source586を失うため棄却。事前に定めた
+「目標操舵・予測中の停止からの発進」と「元の初期軌道」の2候補を、同じ9状態問題で
+順に最大1回ずつ解く。制約と全物理証明を通った最初の1候補だけを既存Storeへ渡す。
+対象は他車ターゲットを持たないCruise。候補IDはworker実行前に別々に予約し、前回解・
+保存データ・非同期結果の所有を分離。最終指令の権限・現在証明・公開期限は維持。
 
-別の、1122より前のsource373/573では、初期軌道の操舵と予測中の停止・発進が候補生成に
-影響する。R515–R517では同じ状態・壁・制約で全証明が通る候補を得たが、R518で
-既存の成功source586を失うことが判明。単純な全体置換は棄却し、本番へ入れていない。
-次は有界な初期軌道候補集合の方式比較・生成責務・計算量を調べる。追加確認/pushなし。
-[最新の時系列・比較・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r5-current-audit.md)。
+Build120全26、package107全2610（エラー/失敗/skip 0）、source106が合格。
+R521は旧3失敗→新31native合格。R522は実ビルドの6source全証明を確認し、
+元のFollow673/dynamicCruise3454は従来の1候補、586は2候補目で認証できる。
+R523は元のsingle-r5決定1122の実公開期限超過、R524は元のsingle-r4決定1022の
+壁拒否を、同じsource/domain/実履歴/直前送信・時刻で維持。時計問題は未解決。
+次はローカルcommit後の標準single-r6。実走行の計算量・source補充・期限を検証する。
+[設計と検証の根拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-seed-candidates-design.md)。
 
 r75 Start/update_v_max失効、実公開期限、全intent/Mission/sibling/Store、Stop/rest/restart、
 Recovery/Rejoin/Boost/async、同一最終HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、
-同一tar/image/evalは未完。過去の合格を現在の全体受入れとはしない。
+同一tar/image/evalは未完。過去の合格を現在の全体受入れとはしない。追加確認/pushなし。
 
 以下はr75開始前までの根拠。
 

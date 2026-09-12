@@ -274,4 +274,48 @@ TEST(MpccRateResolvedPhysicalWall, MailboxRejectsSupersededCompletion)
   EXPECT_EQ(mailbox.publish(wall::evaluate(second)), wall::PublishReason::Accepted);
 }
 
+
+TEST(MpccRateResolvedPhysicalWall, PopulationPublishesExactlyOneReservedMember)
+{
+  auto first = snapshot();
+  auto second = first;
+  ++second.identity.artifact.sequence;
+  for (bool choose_first : {true, false}) {
+    wall::Mailbox mailbox;
+    ASSERT_TRUE(mailbox.register_population({first.identity,second.identity}));
+    auto chosen = wall::evaluate(choose_first ? first : second);
+    EXPECT_EQ(mailbox.publish(chosen), wall::PublishReason::Accepted);
+    const auto latest = mailbox.latest_after(0U);
+    ASSERT_TRUE(latest);
+    EXPECT_EQ(latest->identity.artifact.sequence, chosen.identity.artifact.sequence);
+    EXPECT_EQ(mailbox.state().latest_published_sequence, chosen.identity.artifact.sequence);
+    EXPECT_NE(mailbox.publish(wall::evaluate(choose_first ? second : first)), wall::PublishReason::Accepted);
+    EXPECT_EQ(mailbox.state().accepted_count, 1U);
+  }
+}
+
+TEST(MpccRateResolvedPhysicalWall, PopulationCannotMixWorldsOrSurviveNewerSubmission)
+{
+  auto first = snapshot();
+  auto second = first;
+  ++second.identity.artifact.sequence;
+  wall::Mailbox mailbox;
+  auto foreign = second.identity;
+  ++foreign.pose_snapshot_id;
+  EXPECT_FALSE(mailbox.register_population({first.identity,foreign}));
+  EXPECT_FALSE(mailbox.register_population({second.identity,first.identity}));
+  EXPECT_FALSE(mailbox.register_population({first.identity,first.identity}));
+  ASSERT_TRUE(mailbox.register_population({first.identity,second.identity}));
+  auto changed = wall::evaluate(first);
+  ++changed.identity.pose_snapshot_id;
+  EXPECT_EQ(mailbox.publish(changed), wall::PublishReason::IdentityMismatch);
+  auto newer = second;
+  ++newer.identity.artifact.sequence;
+  ASSERT_TRUE(mailbox.register_submission(newer.identity));
+  EXPECT_EQ(mailbox.publish(wall::evaluate(first)), wall::PublishReason::Superseded);
+  EXPECT_EQ(mailbox.publish(wall::evaluate(second)), wall::PublishReason::Superseded);
+  EXPECT_FALSE(mailbox.register_population({first.identity,second.identity}));
+  EXPECT_EQ(mailbox.publish(wall::evaluate(newer)), wall::PublishReason::Accepted);
+}
+
 }  // namespace

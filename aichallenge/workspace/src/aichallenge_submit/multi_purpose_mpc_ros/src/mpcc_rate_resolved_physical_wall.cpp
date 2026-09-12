@@ -498,6 +498,7 @@ const char * to_string(const PublishReason reason) noexcept
     case PublishReason::SequenceNotSubmitted: return "sequence-not-submitted";
     case PublishReason::Superseded: return "superseded";
     case PublishReason::IdentityMismatch: return "identity-mismatch";
+    case PublishReason::PopulationCompleted: return "population-completed";
   }
   return "unknown";
 }
@@ -513,6 +514,27 @@ bool Mailbox::register_submission(const Identity & identity)
   }
   latest_submitted_sequence_ = identity.artifact.sequence;
   latest_submitted_identity_ = identity;
+  latest_submitted_population_.reset();
+  population_completed_ = false;
+  return true;
+}
+
+bool Mailbox::register_population(const std::array<Identity, 2> & identities)
+{
+  const auto & first = identities[0];
+  const auto & second = identities[1];
+  if (!identity_valid(first) || !identity_valid(second) ||
+      second.artifact.sequence <= first.artifact.sequence ||
+      second.artifact.sequence - first.artifact.sequence != 1U) return false;
+  auto same_source = first;
+  same_source.artifact.sequence = second.artifact.sequence;
+  if (!same_identity(same_source, second)) return false;
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (first.artifact.sequence <= latest_submitted_sequence_) return false;
+  latest_submitted_sequence_ = second.artifact.sequence;
+  latest_submitted_identity_ = second;
+  latest_submitted_population_ = identities;
+  population_completed_ = false;
   return true;
 }
 
@@ -536,19 +558,34 @@ PublishReason Mailbox::publish(Result result)
     last_reason_ = PublishReason::SequenceNotSubmitted;
     return last_reason_;
   }
-  if (sequence < latest_submitted_sequence_) {
+  const Identity * expected = latest_submitted_identity_ ? &*latest_submitted_identity_ : nullptr;
+  bool population_member = false;
+  if (latest_submitted_population_) {
+    for (const auto & member : *latest_submitted_population_) {
+      if (member.artifact.sequence == sequence) {
+        expected = &member;
+        population_member = true;
+        break;
+      }
+    }
+  }
+  if (sequence < latest_submitted_sequence_ && !population_member) {
     ++superseded_count_;
     last_reason_ = PublishReason::Superseded;
     return last_reason_;
   }
   if (
-    !latest_submitted_identity_.has_value() ||
-    !same_identity(result.identity, latest_submitted_identity_.value()))
+    expected == nullptr || !same_identity(result.identity, *expected))
   {
     ++identity_mismatch_count_;
     last_reason_ = PublishReason::IdentityMismatch;
     return last_reason_;
   }
+  if (population_member && population_completed_) {
+    last_reason_ = PublishReason::PopulationCompleted;
+    return last_reason_;
+  }
+  if (population_member) population_completed_ = true;
   latest_published_sequence_ = sequence;
   latest_result_ = std::move(result);
   ++accepted_count_;

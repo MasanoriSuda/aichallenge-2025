@@ -1345,7 +1345,16 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     persistent_start = normal_population.index(
         "return evaluate_rate_resolved_pipeline(", overtake_start
     )
-    overtake_branch = normal_population[overtake_start:persistent_start]
+    native_start = normal_population.index("if (native_second_sequence)", overtake_start)
+    overtake_branch = normal_population[overtake_start:native_start]
+    native_branch = normal_population[native_start:persistent_start]
+    assert "mpcc_native_initialization::build(source, *native_second_sequence)" in native_branch
+    assert native_branch.index("mpcc_native_initialization::build(") < native_branch.index("for (std::size_t index")
+    assert "index < population->candidates.size()" in native_branch
+    assert "owners[index], no_store" in native_branch
+    assert "selected.certified_plan.plan != nullptr" in native_branch
+    assert "if (certified)" in native_branch
+    assert "certified_plan_store->replace(selected.certified_plan.plan)" in native_branch
     assert "return std::move(population.pipeline);" in overtake_branch
     assert "evaluate_rate_resolved_pipeline(" not in overtake_branch
 

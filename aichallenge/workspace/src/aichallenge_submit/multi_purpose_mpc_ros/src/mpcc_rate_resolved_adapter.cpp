@@ -338,6 +338,7 @@ std::optional<Result> build(
     };
   const int horizon = request.horizon_steps;
   if (
+    !initial_tangent_policy_valid(request.initial_tangent_policy) ||
     horizon <= 0 || !request.initial_state.allFinite() ||
     !std::isfinite(request.current_steering_rad) ||
     !std::isfinite(request.current_response_steering_rad) ||
@@ -720,14 +721,17 @@ std::optional<Result> build(
   // the model's rest transition. Seed a forward objective with reachable
   // acceleration instead. Moving bodies and pure Hold/Stop objectives keep
   // their existing reference-input seed; this selects no executable control.
-  const bool launch_from_rest =
-    problem.initial_state[model::kVelocityIndex] == 0.0 &&
-    problem.initial_state[model::kLateralVelocityIndex] == 0.0 &&
-    problem.initial_state[model::kYawRateIndex] == 0.0 &&
+  const bool forward_objective =
     std::any_of(request.states.begin() + 1, request.states.end(), [](const StateStage & stage) {
       return std::clamp(stage.reference[model::kVelocityIndex],
         stage.lower[model::kVelocityIndex], stage.upper[model::kVelocityIndex]) > 0.0;
     });
+  const bool launch_from_rest = forward_objective &&
+    problem.initial_state[model::kVelocityIndex] == 0.0 &&
+    problem.initial_state[model::kLateralVelocityIndex] == 0.0 &&
+    problem.initial_state[model::kYawRateIndex] == 0.0;
+  const bool reference_initialization = request.initial_tangent_policy ==
+    InitialTangentPolicy::ReferenceSteeringWithRestLaunch;
   auto tangent_state = problem.initial_state;
   problem.linearizations.reserve(static_cast<std::size_t>(horizon));
   for (int stage = 0; stage < horizon; ++stage) {
@@ -737,8 +741,15 @@ std::optional<Result> build(
     const auto & next_state = request.states[static_cast<std::size_t>(stage + 1)];
     const double speed_target = std::clamp(next_state.reference[model::kVelocityIndex],
       next_state.lower[model::kVelocityIndex], next_state.upper[model::kVelocityIndex]);
+    // A moving observation can reach native full rest within this seed.
+    // The reference candidate may launch from that later state as well. Keep
+    // the original continuously accelerating seed when initially at rest.
+    const bool later_rest_launch = reference_initialization && forward_objective &&
+      tangent_state[model::kVelocityIndex] == 0.0 &&
+      tangent_state[model::kLateralVelocityIndex] == 0.0 &&
+      tangent_state[model::kYawRateIndex] == 0.0;
     const double acceleration = std::clamp(
-      launch_from_rest ? (speed_target - tangent_state[model::kVelocityIndex]) / dt :
+      (launch_from_rest || later_rest_launch) ? (speed_target - tangent_state[model::kVelocityIndex]) / dt :
       problem.input_reference[input + model::kAccelerationIndex],
       problem.input_lower[input + model::kAccelerationIndex],
       problem.input_upper[input + model::kAccelerationIndex]);
@@ -754,7 +765,13 @@ std::optional<Result> build(
     if (rate_lower > rate_upper) {
       return reject(RejectReason::LinearizationUnavailable, stage);
     }
-    const double steering_rate = std::clamp(0.0, rate_lower, rate_upper);
+    const double seed_target = std::clamp(
+      result.steering_reference_rad[static_cast<std::size_t>(stage + 1)],
+      request.current_steering_rad + prefix.minimum_cumulative_delta_rad,
+      request.current_steering_rad + prefix.maximum_cumulative_delta_rad);
+    const double steering_rate = std::clamp(reference_initialization ?
+      (seed_target - tangent_state[model::kSteeringIndex]) / dt : 0.0,
+      rate_lower, rate_upper);
     const double projected_speed =
       tangent_state[model::kVelocityIndex] * std::cos(tangent_state[model::kHeadingIndex]) -
       tangent_state[model::kLateralVelocityIndex] * std::sin(tangent_state[model::kHeadingIndex]);

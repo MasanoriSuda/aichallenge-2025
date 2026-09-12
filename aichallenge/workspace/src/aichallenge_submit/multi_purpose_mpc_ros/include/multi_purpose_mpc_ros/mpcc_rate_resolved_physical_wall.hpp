@@ -8,6 +8,7 @@
 #include "multi_purpose_mpc_ros/race_mpcc_foundation.hpp"
 #include "multi_purpose_mpc_ros/recovery_footprint.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -131,6 +132,7 @@ enum class PublishReason
   SequenceNotSubmitted,
   Superseded,
   IdentityMismatch,
+  PopulationCompleted,
 };
 
 const char * to_string(PublishReason reason) noexcept;
@@ -153,6 +155,9 @@ class Mailbox
 {
 public:
   bool register_submission(const Identity & identity);
+  /// One immutable source epoch with two reserved numerical candidates.
+  /// At most one member may publish; a newer submission revokes the group.
+  bool register_population(const std::array<Identity, 2> & identities);
   PublishReason publish(Result result);
   std::optional<Result> latest_after(std::uint64_t consumed_sequence) const;
   MailboxState state() const;
@@ -169,6 +174,8 @@ private:
   std::uint64_t identity_mismatch_count_{};
   PublishReason last_reason_{PublishReason::InvalidResult};
   std::optional<Identity> latest_submitted_identity_;
+  std::optional<std::array<Identity, 2>> latest_submitted_population_;
+  bool population_completed_{false};
   std::optional<Result> latest_result_;
 };
 

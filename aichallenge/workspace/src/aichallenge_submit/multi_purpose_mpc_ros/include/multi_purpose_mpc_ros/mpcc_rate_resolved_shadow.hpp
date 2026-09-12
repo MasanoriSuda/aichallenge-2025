@@ -719,6 +719,8 @@ struct RecedingWarmStartSeed
   double course_progress_origin_m{};
   std::vector<double> stage_durations_sec;
   Eigen::VectorXd primal;
+  mpcc_rate_resolved_adapter::InitialTangentPolicy initial_tangent_policy{
+    mpcc_rate_resolved_adapter::InitialTangentPolicy::CurrentSteering};
 };
 
 struct RecedingWarmStartResolution

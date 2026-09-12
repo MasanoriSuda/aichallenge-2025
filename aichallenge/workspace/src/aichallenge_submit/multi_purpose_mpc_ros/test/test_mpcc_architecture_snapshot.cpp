@@ -1295,5 +1295,34 @@ TEST(MpccArchitectureSnapshot, RefusesUnsupportedIntentCapture)
   EXPECT_EQ(result.status, RecordStatus::UnsupportedIntent);
 }
 
+
+TEST(MpccArchitectureSnapshot, NativeInitializerIsSerializedAndBoundToFingerprint)
+{
+  const auto root = output_root("native-initializer-roundtrip");
+  std::filesystem::remove_all(root);
+  auto snapshot = make_interaction_snapshot(mpcc_execution_contract::ControlIntent::Pass);
+  const auto original_fingerprint = fingerprint_interaction_snapshot(snapshot);
+  snapshot.request.initial_tangent_policy = mpcc_rate_resolved_adapter::InitialTangentPolicy::ReferenceSteeringWithRestLaunch;
+  const auto reference_fingerprint = fingerprint_interaction_snapshot(snapshot);
+  ASSERT_NE(reference_fingerprint, 0U);
+  EXPECT_NE(reference_fingerprint, original_fingerprint);
+  const auto written = record_failure(snapshot,make_assembly_request(),make_valid_problem(),std::nullopt,
+    persistent_osqp::SolveOutcome{},PipelineStage::Initial,"native-initializer","intentional test",root);
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+  const auto loaded = load_recorded_interaction_snapshot(written.snapshot_file);
+  ASSERT_TRUE(loaded);
+  EXPECT_EQ(loaded->source.request.initial_tangent_policy,snapshot.request.initial_tangent_policy);
+  EXPECT_EQ(loaded->interaction_fingerprint,reference_fingerprint);
+  auto mutated = loaded->source;
+  mutated.request.initial_tangent_policy = mpcc_rate_resolved_adapter::InitialTangentPolicy::CurrentSteering;
+  EXPECT_FALSE(interaction_snapshot_matches_fingerprint(mutated,reference_fingerprint));
+  mutated.request.initial_tangent_policy = static_cast<mpcc_rate_resolved_adapter::InitialTangentPolicy>(99);
+  EXPECT_FALSE(interaction_snapshot_complete(mutated));
+  auto document = YAML::LoadFile(written.snapshot_file.string());
+  document["source"]["semantic_request"]["initial_tangent_policy"] = 99;
+  { std::ofstream file(written.snapshot_file); file << document; }
+  EXPECT_FALSE(load_recorded_interaction_snapshot(written.snapshot_file));
+}
+
 }  // namespace
 }  // namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot

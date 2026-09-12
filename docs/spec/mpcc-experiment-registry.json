@@ -1333,6 +1333,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r5-evidence.json",
       "replay_ready": true,
       "reason": "Exact final1122 plus distinct earlier source302/373/573 and existing certified source regressions."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-native-initializer-population",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/native-seed-candidates-evidence.json",
+      "replay_ready": true,
+      "reason": "Bounded native initializer population, cold source comparisons, API red/green, full build/package and original current regressions."
     }
   ],
   "experiments": [
@@ -16819,6 +16825,92 @@
       "production_impact": "None; all initial-tangent prototypes unpromoted and simple replacement rejected. Existing source and safety parameters unchanged.",
       "deleted_code": [],
       "revisit_condition": "Only a materially distinct bounded candidate architecture with explicit source identity, warm-state ownership, cost and physical proof can revisit seed replacement. Clock scheduling retries require new causal evidence; do not repeat rejected partitions unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-native-initializer-population-r519",
+      "baseline_commit": "ff7671afa4b3b63854bf6eeb563d0e7fc2e32dc1",
+      "snapshot_ids": [
+        "20260912-nine-state-native-initializer-population"
+      ],
+      "hypothesis": "Predeclare a bounded native initialization population while retaining original successful source candidates and all proof/authority requirements",
+      "changed_dimension": "Predeclared fixed two-initializer source population",
+      "result": "accepted",
+      "reason": "All6 sources certify, five first-reference and586 second-original. Distinct reserved identities and total cold elapsed26.757–61.795ms; diagnostic source generator mode is recorded externally, no live integration claim.",
+      "production_impact": "Target-free Cruise two-candidate generator only; explicit immutable source IDs/policy/warm owners and internal physical mailbox groups. Single existing normal authority and all safety/timing limits retained.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard single-r6 for measured total source availability and original current/publication checks. Do not promote rejected global replacements or repeat old scheduler experiments unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-native-initializer-population-r520",
+      "baseline_commit": "ff7671afa4b3b63854bf6eeb563d0e7fc2e32dc1",
+      "snapshot_ids": [
+        "20260912-nine-state-native-initializer-population"
+      ],
+      "hypothesis": "Predeclare a bounded native initialization population while retaining original successful source candidates and all proof/authority requirements",
+      "changed_dimension": "Standalone baseline/current API regression build",
+      "result": "inconclusive",
+      "reason": "Copied test source could not find mpcc_vehicle_model_fixture.hpp; compilation failed before test execution. Corrected only include search inR521.",
+      "production_impact": "Target-free Cruise two-candidate generator only; explicit immutable source IDs/policy/warm owners and internal physical mailbox groups. Single existing normal authority and all safety/timing limits retained.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard single-r6 for measured total source availability and original current/publication checks. Do not promote rejected global replacements or repeat old scheduler experiments unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-native-initializer-population-r521",
+      "baseline_commit": "ff7671afa4b3b63854bf6eeb563d0e7fc2e32dc1",
+      "snapshot_ids": [
+        "20260912-nine-state-native-initializer-population"
+      ],
+      "hypothesis": "Predeclare a bounded native initialization population while retaining original successful source candidates and all proof/authority requirements",
+      "changed_dimension": "Native API-adapted baseline red/current green",
+      "result": "accepted",
+      "reason": "Old initializer behavior under the new request layout fails all3 new tests; current all31 adapter tests pass. Original objectives/free controls/bounds, native steering tangent and later-rest launch are checked; unknown policy rejects.",
+      "production_impact": "Target-free Cruise two-candidate generator only; explicit immutable source IDs/policy/warm owners and internal physical mailbox groups. Single existing normal authority and all safety/timing limits retained.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard single-r6 for measured total source availability and original current/publication checks. Do not promote rejected global replacements or repeat old scheduler experiments unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-native-initializer-population-r522",
+      "baseline_commit": "ff7671afa4b3b63854bf6eeb563d0e7fc2e32dc1",
+      "snapshot_ids": [
+        "20260912-nine-state-native-initializer-population"
+      ],
+      "hypothesis": "Predeclare a bounded native initialization population while retaining original successful source candidates and all proof/authority requirements",
+      "changed_dimension": "Built production candidate builder and full solver/artifact/physical/Stop chain",
+      "result": "accepted",
+      "reason": "All6 original source fingerprints exact. Only target-freeCruise receives two candidates; original Follow673/dynamicCruise3454 use one unchanged original candidate. All certify;586 selects second-original. Total cold wall26.409–62.147ms, not a live bound.",
+      "production_impact": "Target-free Cruise two-candidate generator only; explicit immutable source IDs/policy/warm owners and internal physical mailbox groups. Single existing normal authority and all safety/timing limits retained.",
+      "deleted_code": [
+        "Exclusive single-initializer path for eligible target-free Cruise"
+      ],
+      "revisit_condition": "Fresh committed standard single-r6 for measured total source availability and original current/publication checks. Do not promote rejected global replacements or repeat old scheduler experiments unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-native-initializer-population-r523",
+      "baseline_commit": "ff7671afa4b3b63854bf6eeb563d0e7fc2e32dc1",
+      "snapshot_ids": [
+        "20260912-nine-state-native-initializer-population"
+      ],
+      "hypothesis": "Predeclare a bounded native initialization population while retaining original successful source candidates and all proof/authority requirements",
+      "changed_dimension": "Built-library original single-r5 current1122 replay",
+      "result": "accepted",
+      "reason": "Original source/domain/.63s history/last actual send and all3 current checks exact. Broad domain rejects; independent full current physics accepts; original actual before-publication guard rejects.",
+      "production_impact": "Target-free Cruise two-candidate generator only; explicit immutable source IDs/policy/warm owners and internal physical mailbox groups. Single existing normal authority and all safety/timing limits retained.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard single-r6 for measured total source availability and original current/publication checks. Do not promote rejected global replacements or repeat old scheduler experiments unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-native-initializer-population-r524",
+      "baseline_commit": "ff7671afa4b3b63854bf6eeb563d0e7fc2e32dc1",
+      "snapshot_ids": [
+        "20260912-nine-state-native-initializer-population"
+      ],
+      "hypothesis": "Predeclare a bounded native initialization population while retaining original successful source candidates and all proof/authority requirements",
+      "changed_dimension": "Built-library original unsafe single-r4 current1022 replay",
+      "result": "accepted",
+      "reason": "Original source/domain/history/last actual send and all3 current checks exact. The original current wall6 at14.314999687 remains rejected. No safety condition relaxed.",
+      "production_impact": "Target-free Cruise two-candidate generator only; explicit immutable source IDs/policy/warm owners and internal physical mailbox groups. Single existing normal authority and all safety/timing limits retained.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh committed standard single-r6 for measured total source availability and original current/publication checks. Do not promote rejected global replacements or repeat old scheduler experiments unchanged."
     }
   ]
 }

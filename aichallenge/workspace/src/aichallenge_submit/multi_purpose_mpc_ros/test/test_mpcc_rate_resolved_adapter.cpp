@@ -1010,3 +1010,85 @@ TEST(MpccRateResolvedAdapter, FullRestWithoutAForwardGoalKeepsTheDeclaredBraking
     EXPECT_TRUE(next.isZero(1e-12));
   }
 }
+
+
+TEST(MpccRateResolvedAdapter, ReferenceInitializerUsesNativeSteeringWithoutChangingTheQpObjectiveOrBounds)
+{
+  auto request = curved_request();
+  const auto original = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(original);
+  request.initial_tangent_policy = adapter::InitialTangentPolicy::ReferenceSteeringWithRestLaunch;
+  const auto reference = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(reference);
+  const auto & p = reference->problem;
+  EXPECT_TRUE((p.state_reference.array() == original->problem.state_reference.array()).all());
+  EXPECT_TRUE((p.state_weight.array() == original->problem.state_weight.array()).all());
+  EXPECT_TRUE((p.input_reference.array() == original->problem.input_reference.array()).all());
+  EXPECT_TRUE((p.input_weight.array() == original->problem.input_weight.array()).all());
+  EXPECT_TRUE((p.additional_linear_cost.array() == original->problem.additional_linear_cost.array()).all());
+  EXPECT_TRUE((p.state_lower.array() == original->problem.state_lower.array()).all());
+  EXPECT_TRUE((p.state_upper.array() == original->problem.state_upper.array()).all());
+  EXPECT_TRUE((p.input_lower.array() == original->problem.input_lower.array()).all());
+  EXPECT_TRUE((p.input_upper.array() == original->problem.input_upper.array()).all());
+  const auto & input = request.inputs.front();
+  ASSERT_GT(reference->steering_reference_rad[1] / input.stage_dt_sec,
+    p.input_upper[model::kSteeringRateIndex]);
+  const auto & x = p.initial_state;
+  const auto expected = model::linearize_temporal_frenet(
+    model::LinearizationRequest{x[0],x[1],x[2],x[3],x[4],x[5],x[6],
+      0.0,p.input_upper[model::kSteeringRateIndex],x[3],input.path_curvature_radpm,
+      request.wheelbase_m,input.stage_dt_sec,request.minimum_frenet_denominator,
+      request.minimum_stage_dt_sec,request.maximum_stage_dt_sec,request.course_frame,
+      x[7],x[8],request.vehicle_model});
+  ASSERT_TRUE(expected);
+  EXPECT_TRUE(p.linearizations.front().state_matrix.isApprox(expected->state_matrix, 1e-12));
+  EXPECT_TRUE(p.linearizations.front().input_matrix.isApprox(expected->input_matrix, 1e-12));
+  EXPECT_TRUE(p.linearizations.front().equality_offset.isApprox(expected->equality_offset, 1e-12));
+  EXPECT_FALSE(p.linearizations.front().state_matrix.isApprox(original->problem.linearizations.front().state_matrix, 1e-12));
+}
+
+TEST(MpccRateResolvedAdapter, ReferenceInitializerCanLaunchAfterNativePredictionReachesRest)
+{
+  auto request = curved_request();
+  request.initial_state.setZero();
+  request.initial_state[model::kVelocityIndex] = 0.0037;
+  for (auto & input : request.inputs) {
+    input.reference[adapter::kLegacyCurvatureIndex] = 0.0;
+    input.path_curvature_radpm = 0.0;
+  }
+  request.initial_tangent_policy = adapter::InitialTangentPolicy::ReferenceSteeringWithRestLaunch;
+  const auto built = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(built);
+  const auto & p = built->problem;
+  const auto & x = p.initial_state;
+  const auto & first = request.inputs.front();
+  const auto coast = model::evaluate_temporal_frenet_transition(
+    model::LinearizationRequest{x[0],x[1],x[2],x[3],x[4],x[5],x[6],0,0,x[3],0,
+      request.wheelbase_m,first.stage_dt_sec,request.minimum_frenet_denominator,
+      request.minimum_stage_dt_sec,request.maximum_stage_dt_sec,request.course_frame,
+      x[7],x[8],request.vehicle_model});
+  ASSERT_TRUE(coast);
+  const auto & rest = coast->next_state;
+  ASSERT_DOUBLE_EQ(rest[model::kVelocityIndex], 0.0);
+  ASSERT_DOUBLE_EQ(rest[model::kLateralVelocityIndex], 0.0);
+  ASSERT_DOUBLE_EQ(rest[model::kYawRateIndex], 0.0);
+  const double acceleration = p.input_upper[model::kInputDimension + model::kAccelerationIndex];
+  const auto launch = model::evaluate_temporal_frenet_transition(
+    model::LinearizationRequest{rest[0],rest[1],rest[2],rest[3],rest[4],rest[5],rest[6],
+      acceleration,0,0,0,request.wheelbase_m,request.inputs[1].stage_dt_sec,
+      request.minimum_frenet_denominator,request.minimum_stage_dt_sec,request.maximum_stage_dt_sec,
+      request.course_frame,rest[7],rest[8],request.vehicle_model});
+  ASSERT_TRUE(launch);
+  ASSERT_GT(launch->next_state[model::kVelocityIndex], 0.0);
+  model::InputVector u; u << acceleration, 0.0, 0.0;
+  const auto & tangent = p.linearizations[1];
+  EXPECT_TRUE((tangent.state_matrix * rest + tangent.input_matrix * u - tangent.equality_offset)
+    .isApprox(launch->next_state, 1e-8));
+}
+
+TEST(MpccRateResolvedAdapter, UnknownInitializerIsRejected)
+{
+  auto request = curved_request();
+  request.initial_tangent_policy = static_cast<adapter::InitialTangentPolicy>(99);
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance));
+}

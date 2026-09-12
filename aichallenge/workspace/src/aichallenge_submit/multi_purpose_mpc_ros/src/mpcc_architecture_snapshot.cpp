@@ -275,6 +275,7 @@ YAML::Node semantic_request_node(
   node["current_yaw_rate_radps"] = request.current_yaw_rate_radps;
   node["vehicle_model"] = mpcc_vehicle_model::encode_parameters(request.vehicle_model);
   node["maximum_braking_feasibility"] = request.maximum_braking_feasibility;
+  node["initial_tangent_policy"] = static_cast<int>(request.initial_tangent_policy);
   if (request.observation_provenance) {
     node["observation_provenance"] = observation_provenance_node(*request.observation_provenance);
   }
@@ -992,6 +993,10 @@ std::optional<mpcc_rate_resolved_adapter::Request> load_semantic_request(
   if (!vehicle) return std::nullopt;
   request.vehicle_model = *vehicle;
   request.maximum_braking_feasibility = node["maximum_braking_feasibility"].as<bool>(false);
+  request.initial_tangent_policy = static_cast<mpcc_rate_resolved_adapter::InitialTangentPolicy>(
+    node["initial_tangent_policy"].as<int>(0));
+  if (!mpcc_rate_resolved_adapter::initial_tangent_policy_valid(request.initial_tangent_policy))
+    return std::nullopt;
   if (node["observation_provenance"]) {
     request.observation_provenance = load_observation_provenance(node["observation_provenance"]);
     if (!request.observation_provenance) return std::nullopt;
@@ -1553,6 +1558,7 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
       !mpcc_vehicle_model::valid(request.vehicle_model) ||
       (request.observation_provenance &&
       !mpcc_vehicle_model::valid(*request.observation_provenance)) ||
+      !mpcc_rate_resolved_adapter::initial_tangent_policy_valid(request.initial_tangent_policy) ||
       source.identity.source_context.vehicle_model_fingerprint !=
       mpcc_vehicle_model::fingerprint(request.vehicle_model) ||
       !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
@@ -1907,6 +1913,12 @@ std::uint64_t fingerprint_interaction_snapshot(
   builder.append_double(request.current_yaw_rate_radps);
   builder.append_u64(mpcc_vehicle_model::fingerprint(request.vehicle_model));
   builder.append_bool(request.maximum_braking_feasibility);
+  // Preserve old default snapshots byte-for-byte; non-default numerical
+  // candidates explicitly bind their initialization to replay provenance.
+  if (request.initial_tangent_policy != mpcc_rate_resolved_adapter::InitialTangentPolicy::CurrentSteering) {
+    builder.append_string("native-initial-tangent-policy-v1");
+    builder.append_i64(static_cast<int>(request.initial_tangent_policy));
+  }
   builder.append_bool(request.observation_provenance.has_value());
   if (request.observation_provenance) {
     builder.append_string(YAML::Dump(observation_provenance_node(*request.observation_provenance)));

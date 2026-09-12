@@ -13,6 +13,20 @@
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_adapter
 {
 
+/// Numerical initialization only. Both policies leave every QP control free
+/// and require the same solved-trajectory and physical certificates.
+enum class InitialTangentPolicy
+{
+  CurrentSteering = 0,
+  ReferenceSteeringWithRestLaunch = 1,
+};
+
+constexpr bool initial_tangent_policy_valid(InitialTangentPolicy policy) noexcept
+{
+  return policy == InitialTangentPolicy::CurrentSteering ||
+         policy == InitialTangentPolicy::ReferenceSteeringWithRestLaunch;
+}
+
 inline constexpr int kLegacyStateDimension = 5;
 inline constexpr int kLegacyInputDimension = 3;
 inline constexpr int kLegacyCurvatureIndex = 1;
@@ -81,6 +95,7 @@ struct Request
   bool maximum_braking_feasibility{false};
   /// Absent only for explicitly synthetic/offline problems.
   std::optional<mpcc_vehicle_model::ObservationProvenance> observation_provenance;
+  InitialTangentPolicy initial_tangent_policy{InitialTangentPolicy::CurrentSteering};
 };
 
 struct Result

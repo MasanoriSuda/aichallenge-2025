@@ -507,3 +507,13 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R515–R518 native tangent/steering/progress/rest ablations and six-source regression; simple global replacement rejected because original586 loses wall proof.
 - [ ] Original publication timing, later stationary source failure and full M4–M6; no local slice substitutes for acceptance.
 - [ ] Compare a bounded predeclared native seed set with exact candidate/warm-start identity, one final normal authority, same objective/hard constraints and measured source cost; no retry or raw seed execution.
+
+## Bounded native initialization population
+
+- [x] R519 predeclared ordered two-source comparison certifies all six frozen cases, including retained original586; source cost measured, no live claim.
+- [x] Implement explicit seed provenance, distinct reserved IDs/solver owners, single Store selection and one-result physical mailbox population.
+- [x] R520 setup failure retained; R521 old3 red/current31 native green. Existing source106 plus strengthened branch boundaries pass.
+- [x] Build120 all26/package107 all2610, native31/source106; R522 six full source chains and R523/R524 original current guard/wall rejections pass.
+- [x] Source review and evidence/registry sealed; local commit then original single-r6 below.
+- [ ] All remaining M4–M6, repeated final-source races/gates and same submission/eval.
+- [ ] Local commit and standard single-r6 on the committed candidate; original timing/source availability and all remaining M4–M6.

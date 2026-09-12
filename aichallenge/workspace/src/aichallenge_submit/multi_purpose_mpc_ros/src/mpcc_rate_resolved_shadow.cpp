@@ -583,6 +583,13 @@ RecedingWarmStartResolution resolve_receding_warm_start(
     resolution.reason = RecedingWarmStartReason::InvalidCurrent;
     return resolution;
   }
+  if (!mpcc_rate_resolved_adapter::initial_tangent_policy_valid(previous.initial_tangent_policy) ||
+      !mpcc_rate_resolved_adapter::initial_tangent_policy_valid(current.request.initial_tangent_policy) ||
+      previous.initial_tangent_policy != current.request.initial_tangent_policy) {
+    resolution.reason = RecedingWarmStartReason::SemanticMismatch;
+    resolution.diagnostic = "initial-tangent-policy";
+    return resolution;
+  }
   const std::size_t horizon = static_cast<std::size_t>(
     current_problem.horizon_steps);
   const std::size_t previous_horizon =
@@ -4740,6 +4747,7 @@ Result SolverContext::evaluate_impl(
   result.latest_state_feedback_preparation = std::move(feedback_preparation);
   RecedingWarmStartSeed next_warm_start;
   next_warm_start.identity = snapshot.identity;
+  next_warm_start.initial_tangent_policy = snapshot.request.initial_tangent_policy;
   next_warm_start.control_prediction_origin_sec =
     snapshot.control_prediction_origin_sec;
   next_warm_start.course_progress_origin_m =

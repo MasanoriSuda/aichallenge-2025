@@ -4970,3 +4970,16 @@ R513は同じsource/domain/実履歴/直前送信で判定を再現。初期軌�
 R515–R517は別の保存source373/573を改善したが、R518で既存source586の壁証明を
 失うため、単純な生成方式の置換は棄却した。本番制御・各制限はf9aa990aを維持。
 [現在境界と候補比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r5-current-audit.md)。
+
+
+2026-09-12 他車ターゲットを持たない通常Cruiseは、9状態の初期軌道を事前に2候補持つ。
+最初は元の目標操舵を使い、初期または予測途中のモデル内完全停止から発進を初期軌道へ
+含める。次は従来の現在操舵・参照入力による初期軌道。各候補でQP入力を固定せず、
+元の数値制限と全物理証明を要求し、最初の認証済み1候補だけを既存Storeへ渡す。
+初期軌道を指令として使わない。候補のsource IDをworker前に予約し、初期化の種類を
+再生データとfingerprintへ保存する。前回解とsolver ownerを分離し、物理結果のmailboxは
+同じ候補集合の1件だけを受け取り、新しい集合への移行時に古い両候補を失効させる。
+従来のターゲット付き候補、最終公開権限、40Hz/25ms/受信250ms等の全条件は維持する。
+総source処理には最大2候補の費用がかかり、実走行の補充能力は新しいrunで確認する。
+Build120全26/package107全2610/source106、R522全6sourceとR523/R524元判定を確認。
+[2候補の根拠と未完の受入れ](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/native-seed-candidates-design.md)。

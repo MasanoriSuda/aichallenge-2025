@@ -1399,6 +1399,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/force-frame-observability-evidence.json",
       "replay_ready": true,
       "reason": "Preserved R576–R582force and public measurement-definition comparisons, fixed baselines/candidates and explicit unavailable samples. No integrated acceptance."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-post-motion-observation-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-observation-evidence.json",
+      "replay_ready": true,
+      "reason": "Bounded post-motion final stationary recorder tests and exact historical current/guard replays; live witness pending."
     }
   ],
   "experiments": [
@@ -17839,6 +17845,62 @@
       "production_impact": "None; only diagnostic evidence/design and specification clarification.",
       "deleted_code": [],
       "revisit_condition": "Structurally different supported measurement/body/contact model or corrected input semantics, with original hard negatives and no private future state; no unchanged rejected contact/phase fit or blind live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-motion-observation-audit-r583",
+      "baseline_commit": "64dac49765d6c30f6b22f8a405a22ac54b70a23d",
+      "snapshot_ids": [
+        "20260913-nine-state-post-motion-observation-audit"
+      ],
+      "hypothesis": "Startup stationary capture must not consume the first stationary final failure after actual normal motion",
+      "changed_dimension": "Old/new paired failure recorder regression",
+      "result": "inconclusive",
+      "reason": "Old recorder loses later stationary pair. Candidate admission and invalid-witness cases work; expected baseline failure left a shared temporary fixture directory, making the candidate writer return already-exists. Preserve initial setup failure.",
+      "production_impact": "Diagnostic fifth fixed bucket and actual moving-send witness only; original buckets, model, authority and physical/timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New recorder or motion-witness regression; do not repeat unchanged setup failures or count recording as restart/race acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-motion-observation-audit-r584",
+      "baseline_commit": "64dac49765d6c30f6b22f8a405a22ac54b70a23d",
+      "snapshot_ids": [
+        "20260913-nine-state-post-motion-observation-audit"
+      ],
+      "hypothesis": "Startup stationary capture must not consume the first stationary final failure after actual normal motion",
+      "changed_dimension": "Identical old/new objects with independent temporary fixture directories",
+      "result": "accepted",
+      "reason": "Old2fail/new2pass: original startup/moving pairs plus bounded post-motion pair retained. Invalid/future/same-decision/stationary/unsourced/mismatched witnesses do not consume the new slot. All admitted callbacks run on the worker; shutdown drains, duplicates remain bounded.",
+      "production_impact": "Diagnostic fifth fixed bucket and actual moving-send witness only; original buckets, model, authority and physical/timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New recorder or motion-witness regression; do not repeat unchanged setup failures or count recording as restart/race acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-motion-observation-audit-r585",
+      "baseline_commit": "64dac49765d6c30f6b22f8a405a22ac54b70a23d",
+      "snapshot_ids": [
+        "20260913-nine-state-post-motion-observation-audit"
+      ],
+      "hypothesis": "Startup stationary capture must not consume the first stationary final failure after actual normal motion",
+      "changed_dimension": "Standalone replay setup",
+      "result": "inconclusive",
+      "reason": "Compilation stopped because the existing replay driver includes /steering/replay sources and that read-only mount was omitted. No runtime execution or production failure; preserved.",
+      "production_impact": "Diagnostic fifth fixed bucket and actual moving-send witness only; original buckets, model, authority and physical/timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New recorder or motion-witness regression; do not repeat unchanged setup failures or count recording as restart/race acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-motion-observation-audit-r586",
+      "baseline_commit": "64dac49765d6c30f6b22f8a405a22ac54b70a23d",
+      "snapshot_ids": [
+        "20260913-nine-state-post-motion-observation-audit"
+      ],
+      "hypothesis": "Startup stationary capture must not consume the first stationary final failure after actual normal motion",
+      "changed_dimension": "Fresh build122 original physical and deadline replays",
+      "result": "accepted",
+      "reason": "All3 original source/domain/history/prior publication/check/rejection-time identities exact. Original force-r2 and single-r6 wall rejections and single-r5 actual before-publication deadline rejection preserved.",
+      "production_impact": "Diagnostic fifth fixed bucket and actual moving-send witness only; original buckets, model, authority and physical/timing gates unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "New recorder or motion-witness regression; do not repeat unchanged setup failures or count recording as restart/race acceptance."
     }
   ]
 }

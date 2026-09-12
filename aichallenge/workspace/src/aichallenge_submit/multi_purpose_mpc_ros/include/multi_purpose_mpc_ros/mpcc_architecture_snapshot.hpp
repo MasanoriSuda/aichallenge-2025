@@ -5,6 +5,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
+#include "multi_purpose_mpc_ros/mpcc_publication_ledger.hpp"
 
 #include <array>
 #include <filesystem>
@@ -167,6 +168,16 @@ struct PublicationCallTiming
   double final_publish_wall_ms{};
 };
 
+/// Diagnostic witness of movement at an authenticated normal send. It grants
+/// no authority and is not a claim of restart or a terminal failure.
+struct PublishedNormalMotionObservation
+{
+  std::uint64_t decision_id{};
+  double pose_sec{};
+  double forward_velocity_mps{};
+  mpcc_vehicle_model::PublicationTransaction publication;
+};
+
 struct PublicationFailureObservation
 {
   std::shared_ptr<const mpcc_rate_resolved_applied_program::Certificate> certificate;
@@ -182,11 +193,13 @@ struct PublicationFailureObservation
   std::filesystem::path output_root{"mpcc_architecture_snapshots"};
   std::shared_ptr<const ScheduledFailureCapture> scheduled_capture{};
   std::optional<PublicationCallTiming> call_timing{};
+  std::optional<PublishedNormalMotionObservation> prior_normal_motion{};
 };
 
 RecordResult record_publication_failure(const PublicationFailureObservation &) noexcept;
 
-/// Four fixed buckets: first stationary/moving x pre/post publication failure.
+/// Four original fixed buckets: stationary/moving x pre/post failure, plus
+/// one paired stationary final loss with an earlier normal-motion witness.
 /// Later events never replace admitted evidence. Shutdown drains the queue.
 class FirstPublicationFailureRecorder
 {

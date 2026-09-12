@@ -3109,6 +3109,15 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         node["transactions"].push_back(transaction_node(event));
       if (capture.last_publication)
         node["last_actual_publication"]=transaction_node(*capture.last_publication);
+      if (o.prior_normal_motion) {
+        const auto &motion=*o.prior_normal_motion;
+        auto witness=boundary["prior_normal_motion"];
+        witness["authority"]=false;
+        witness["decision_id"]=motion.decision_id;
+        witness["pose_sec"]=motion.pose_sec;
+        witness["forward_velocity_mps"]=motion.forward_velocity_mps;
+        witness["actual_publication"]=transaction_node(motion.publication);
+      }
       if (capture.certificate) {
         const auto &certificate=*capture.certificate;
         node["program"]=mpcc_vehicle_model::encode_input_program(certificate.suffix().program);
@@ -3200,7 +3209,7 @@ struct FirstPublicationFailureRecorder::Impl
   std::mutex mutex;
   std::condition_variable condition;
   std::deque<PublicationFailureObservation> pending;
-  std::array<bool, 4> admitted{};
+  std::array<bool, 5> admitted{};
   bool stopping{false};
   std::thread worker;
 };
@@ -3210,7 +3219,7 @@ FirstPublicationFailureRecorder::FirstPublicationFailureRecorder(Completion comp
 FirstPublicationFailureRecorder::~FirstPublicationFailureRecorder() {stop();}
 ObservationAdmission FirstPublicationFailureRecorder::submit(PublicationFailureObservation observation)
 {
-  if (!observation.decision_id || observation.output_root.empty()) return ObservationAdmission::Invalid;
+  if (!observation.decision_id || observation.output_root.empty() || observation.prior_normal_motion) return ObservationAdmission::Invalid;
   const auto bucket = (observation.moving ? 2U : 0U) + (observation.after_publication ? 1U : 0U);
   std::lock_guard<std::mutex> lock(impl_->mutex);
   if (impl_->stopping) return ObservationAdmission::Stopped;
@@ -3227,12 +3236,51 @@ ObservationAdmission FirstPublicationFailureRecorder::submit_selection_failure(
   for (const auto &o:observations) {
     if (!o.decision_id || o.output_root.empty() || !o.scheduled_capture ||
         o.decision_id!=first.decision_id || o.moving!=first.moving ||
-        o.after_publication || o.scheduled_capture->boundary!="final-current-evidence")
+        o.after_publication || o.scheduled_capture->boundary!="final-current-evidence" ||
+        o.prior_normal_motion.has_value()!=first.prior_normal_motion.has_value())
       return ObservationAdmission::Invalid;
   }
   if (first.output_root==observations.back().output_root)
     return ObservationAdmission::Invalid;
-  const auto bucket=first.moving ? 2U : 0U;
+  if (first.prior_normal_motion) {
+    for (const auto &o:observations) {
+      const auto &motion=*o.prior_normal_motion;
+      const auto &event=motion.publication;
+      const auto &original=*first.prior_normal_motion;
+      if (o.moving || !motion.decision_id || motion.decision_id>=o.decision_id ||
+          !std::isfinite(motion.pose_sec) || !std::isfinite(motion.forward_velocity_mps) ||
+          std::abs(motion.forward_velocity_mps)<=0.1 || !event.sequence || !event.source ||
+          !event.source->decision_id || !event.source->solution_id ||
+          !event.source->problem_fingerprint || !event.source->input_context_fingerprint ||
+          !std::isfinite(event.nominal.published_sec) || !std::isfinite(event.published.published_sec) ||
+          !std::isfinite(event.nominal.wire_acceleration_mps2) || !std::isfinite(event.nominal.wire_steering_rad) ||
+          event.nominal.wire_acceleration_mps2!=event.published.wire_acceleration_mps2 ||
+          event.nominal.wire_steering_rad!=event.published.wire_steering_rad ||
+          !std::isfinite(event.before_clock_sec) || !std::isfinite(event.after_clock_sec) ||
+          !std::isfinite(o.decision_clock_sec) || motion.pose_sec>event.before_clock_sec ||
+          event.before_clock_sec>event.after_clock_sec || event.after_clock_sec>o.decision_clock_sec ||
+          motion.decision_id!=original.decision_id || motion.pose_sec!=original.pose_sec ||
+          motion.forward_velocity_mps!=original.forward_velocity_mps ||
+          event.sequence!=original.publication.sequence ||
+          event.before_clock_sec!=original.publication.before_clock_sec ||
+          event.after_clock_sec!=original.publication.after_clock_sec)
+        return ObservationAdmission::Invalid;
+    }
+    const auto &a=first.prior_normal_motion->publication;
+    const auto &b=observations.back().prior_normal_motion->publication;
+    if ((a.source->decision_id!=b.source->decision_id || a.source->solution_id!=b.source->solution_id ||
+         a.source->problem_fingerprint!=b.source->problem_fingerprint ||
+         a.source->input_context_fingerprint!=b.source->input_context_fingerprint ||
+         a.source->packet_index!=b.source->packet_index) ||
+        a.nominal.published_sec!=b.nominal.published_sec ||
+        a.nominal.wire_acceleration_mps2!=b.nominal.wire_acceleration_mps2 ||
+        a.nominal.wire_steering_rad!=b.nominal.wire_steering_rad ||
+        a.published.published_sec!=b.published.published_sec ||
+        a.published.wire_acceleration_mps2!=b.published.wire_acceleration_mps2 ||
+        a.published.wire_steering_rad!=b.published.wire_steering_rad)
+      return ObservationAdmission::Invalid;
+  }
+  const auto bucket=first.prior_normal_motion ? 4U : first.moving ? 2U : 0U;
   std::lock_guard<std::mutex> lock(impl_->mutex);
   if (impl_->stopping) return ObservationAdmission::Stopped;
   if (impl_->admitted[bucket]) return ObservationAdmission::Duplicate;

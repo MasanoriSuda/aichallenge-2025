@@ -31361,7 +31361,14 @@ struct MPC
           observation.output_root="mpcc_architecture_snapshots/scheduled-final-"+phase+(i==0 ? "/due" : "/active");
           observation.scheduled_capture=std::move(capture);
         }
-        static_cast<void>(final_recorder->submit_selection_failure(std::move(observations)));
+        static_cast<void>(final_recorder->submit_selection_failure(observations));
+        if (last_moving_normal_observation_ && !observations.front().moving) {
+          for (auto &observation:observations) {
+            observation.prior_normal_motion=last_moving_normal_observation_;
+            observation.output_root/="after-normal-motion";
+          }
+          static_cast<void>(final_recorder->submit_selection_failure(std::move(observations)));
+        }
       }
       scheduled_active_.reset();
       return canonical_normal_emergency_stop(problem,intent,"scheduled current evidence unavailable");
@@ -31407,6 +31414,14 @@ struct MPC
         !pending_scheduled_dispatch_->matches_after_publication(ledger, current_normal_context_generation())) return;
     last_scheduled_publication_=pending_scheduled_dispatch_->publication_identity(ledger, current_normal_context_generation());
     if (!last_scheduled_publication_) return;
+    if (vehicle_observation_provenance_ &&
+        std::abs(vehicle_observation_provenance_->initial.state.forward_velocity_mps)>0.1) {
+      if (const auto *actual=ledger.latest_transaction()) {
+        last_moving_normal_observation_=mpcc_architecture_snapshot::PublishedNormalMotionObservation{
+          active_control_decision_id_,vehicle_observation_provenance_->initial.source_sec,
+          vehicle_observation_provenance_->initial.state.forward_velocity_mps,*actual};
+      }
+    }
     const auto entry=pending_scheduled_entry_;
     const auto &certificate=*entry->result.applied.certificate;
     if (entry->sent==0) {
@@ -31466,6 +31481,10 @@ struct MPC
     const double now_sec, const std::uint64_t decision_id)
   {
     active_control_decision_id_ = decision_id;
+    // Diagnostic epoch only; never carry a movement witness across clock reset.
+    if (!std::isfinite(now_sec) || (std::isfinite(normal_motion_observation_clock_sec_) &&
+        now_sec<normal_motion_observation_clock_sec_)) last_moving_normal_observation_.reset();
+    normal_motion_observation_clock_sec_=now_sec;
     source_supply_draft_ = "not-reached";
     source_supply_scheduled_ = "post-send-not-reached";
     source_supply_successor_ = "not-reached";
@@ -31760,6 +31779,8 @@ struct MPC
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_context_recorder_;
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_final_recorder_;
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_active_final_recorder_;
+  std::optional<mpcc_architecture_snapshot::PublishedNormalMotionObservation> last_moving_normal_observation_;
+  double normal_motion_observation_clock_sec_{std::numeric_limits<double>::quiet_NaN()};
   mutable scheduled_control::ContextOwner normal_context_owner_;
   // Control-thread observation only; these values never participate in
   // adoption.

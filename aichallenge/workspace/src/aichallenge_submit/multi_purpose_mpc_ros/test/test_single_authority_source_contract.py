@@ -3698,6 +3698,19 @@ def test_final_normal_authority_loss_is_frozen_without_control_authority() -> No
     assert "failure->current_check_observed=true" in dispatch[:final]
     for forbidden in ("ofstream", "create_directories", "record_publication_failure(", "record_authority_failure("):
         assert forbidden not in dispatch
+    ordinary = dispatch.index("->submit_selection_failure(observations)")
+    post_motion = dispatch.index("observation.prior_normal_motion=last_moving_normal_observation_")
+    assert ordinary < post_motion < reset
+    assert '!observations.front().moving' in dispatch[ordinary:post_motion]
+    assert 'observation.output_root/="after-normal-motion"' in dispatch[post_motion:reset]
+    actual = _cpp_function("void record_scheduled_final_command(")
+    assert actual.index("matches_after_publication(") < actual.index("if (!last_scheduled_publication_) return;")
+    assert actual.index("if (!last_scheduled_publication_) return;") < actual.index("last_moving_normal_observation_=")
+    assert "ledger.latest_transaction()" in actual
+    cycle = _cpp_function("MpcControlCycleResult get_control(")
+    assert "!std::isfinite(now_sec)" in cycle
+    assert "now_sec<normal_motion_observation_clock_sec_" in cycle
+    assert "last_moving_normal_observation_.reset()" in cycle
     capture = _cpp_function("std::shared_ptr<mpcc_architecture_snapshot::ScheduledFailureCapture> scheduled_failure_capture(")
     assert "ledger.latest_transaction()" in capture
     assert "capture->last_publication=*last" in capture

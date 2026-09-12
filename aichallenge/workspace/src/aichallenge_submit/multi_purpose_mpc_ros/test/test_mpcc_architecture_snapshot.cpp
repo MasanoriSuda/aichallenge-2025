@@ -10,6 +10,7 @@
 #include <Eigen/Sparse>
 #include <yaml-cpp/yaml.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -305,6 +306,104 @@ TEST(MpccArchitectureSnapshot, InvalidReceivedBodiesDoNotDiscardValidReplayEvide
     EXPECT_FALSE(reloaded->source.received_body_observation);
     EXPECT_EQ(reloaded->interaction_fingerprint, identity);
   }
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, PostMotionStationaryPairSurvivesStartupAndMovingSlots)
+{
+  const auto root=output_root("post-motion-final-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::vector<RecordResult> records;
+  const auto parent=std::this_thread::get_id();
+  bool worker_only=true;
+  FirstPublicationFailureRecorder recorder([&](const auto &,const auto &result) {
+    worker_only &= std::this_thread::get_id()!=parent;
+    records.push_back(result);
+  });
+  std::array<PublicationFailureObservation,2> pair;
+  for (std::size_t i=0;i<2;++i) {
+    auto capture=std::make_shared<ScheduledFailureCapture>();
+    capture->boundary="final-current-evidence";
+    capture->detail=i==0 ? "programme-unavailable" : "active-rejected";
+    pair[i].decision_id=10;
+    pair[i].decision_clock_sec=1;
+    pair[i].output_root=root/(i==0 ? "due" : "active");
+    pair[i].scheduled_capture=capture;
+  }
+  EXPECT_EQ(recorder.submit_selection_failure(pair),ObservationAdmission::Queued);
+  for (auto &o:pair) {o.decision_id=20; o.moving=true; o.decision_clock_sec=2;}
+  EXPECT_EQ(recorder.submit_selection_failure(pair),ObservationAdmission::Queued);
+  for (auto &o:pair) {o.decision_id=40; o.moving=false; o.decision_clock_sec=4;}
+  EXPECT_EQ(recorder.submit_selection_failure(pair),ObservationAdmission::Duplicate);
+  const mpcc_vehicle_model::PublishedCommand command{3,-3,.01};
+  const mpcc_vehicle_model::PublishedProgramSource source{29,31,37,41,11};
+  const PublishedNormalMotionObservation motion{30,2.99,-.2,{17,command,command,3,3.01,source}};
+  for (auto &o:pair) {o.prior_normal_motion=motion; o.output_root/="after-normal-motion";}
+  EXPECT_EQ(recorder.submit_selection_failure(pair),ObservationAdmission::Queued);
+  for (auto &o:pair) o.decision_id=50;
+  EXPECT_EQ(recorder.submit_selection_failure(pair),ObservationAdmission::Duplicate);
+  recorder.stop();
+  ASSERT_EQ(records.size(),6U);
+  EXPECT_TRUE(worker_only);
+  for (const auto &result:records) {
+    ASSERT_EQ(result.status,RecordStatus::Written) << result.detail;
+    const auto doc=YAML::LoadFile(result.snapshot_file.string());
+    EXPECT_FALSE(doc["authority"].as<bool>());
+    const auto boundary=doc["boundary"];
+    const auto witness=boundary["prior_normal_motion"];
+    if (boundary["decision_id"].as<std::uint64_t>()==40) {
+      ASSERT_TRUE(witness);
+      EXPECT_FALSE(witness["authority"].as<bool>());
+      EXPECT_EQ(witness["decision_id"].as<std::uint64_t>(),30U);
+      EXPECT_DOUBLE_EQ(witness["pose_sec"].as<double>(),2.99);
+      EXPECT_DOUBLE_EQ(witness["forward_velocity_mps"].as<double>(),-.2);
+      const auto actual=witness["actual_publication"];
+      EXPECT_EQ(actual["sequence"].as<std::uint64_t>(),17U);
+      EXPECT_EQ(actual["source_job_solution_problem_input_index"].as<std::vector<std::uint64_t>>(),
+        (std::vector<std::uint64_t>{29,31,37,41,11}));
+      EXPECT_DOUBLE_EQ(actual["nominal_wire_acceleration_wire_steering_before_after"][4].as<double>(),3.01);
+    } else EXPECT_FALSE(witness);
+  }
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, PostMotionPairRejectsInvalidWitnessWithoutConsumingSlot)
+{
+  const auto root=output_root("post-motion-invalid-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  FirstPublicationFailureRecorder recorder;
+  std::array<PublicationFailureObservation,2> pair;
+  const mpcc_vehicle_model::PublishedCommand command{3,-3,.01};
+  const mpcc_vehicle_model::PublishedProgramSource source{29,31,37,41,11};
+  for (std::size_t i=0;i<2;++i) {
+    auto capture=std::make_shared<ScheduledFailureCapture>();
+    capture->boundary="final-current-evidence";
+    pair[i].decision_id=40; pair[i].decision_clock_sec=4;
+    pair[i].output_root=root/(i==0 ? "due" : "active");
+    pair[i].scheduled_capture=capture;
+    pair[i].prior_normal_motion=PublishedNormalMotionObservation{30,2.99,.2,{17,command,command,3,3.01,source}};
+  }
+  for (int fault=0;fault<11;++fault) {
+    auto invalid=pair;
+    auto &o=invalid[1];
+    auto &motion=*o.prior_normal_motion;
+    switch (fault) {
+      case 0: o.prior_normal_motion.reset(); break;
+      case 1: motion.decision_id=40; break;
+      case 2: motion.publication.after_clock_sec=5; break;
+      case 3: motion.forward_velocity_mps=.1; break;
+      case 4: motion.forward_velocity_mps=std::numeric_limits<double>::quiet_NaN(); break;
+      case 5: motion.publication.source.reset(); break;
+      case 6: motion.publication.source->solution_id++; break;
+      case 7: motion.publication.sequence++; break;
+      case 8: motion.pose_sec=3.02; break;
+      case 9: motion.publication.published.wire_steering_rad=0; break;
+      case 10: o.moving=true; break;
+    }
+    EXPECT_EQ(recorder.submit_selection_failure(invalid),ObservationAdmission::Invalid) << fault;
+  }
+  EXPECT_EQ(recorder.submit(pair[0]),ObservationAdmission::Invalid);
+  EXPECT_EQ(recorder.submit_selection_failure(pair),ObservationAdmission::Queued);
+  recorder.stop();
+  EXPECT_EQ(recorder.submit_selection_failure(pair),ObservationAdmission::Stopped);
   std::filesystem::remove_all(root);
 }
 

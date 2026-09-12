@@ -16,7 +16,12 @@ force-r3/R567–R569で位置時刻の物理状態と比較した。25判断の�
 分離できた。R576–R582で接地方向・3D成分を切り分け、542区間で候補を比較したが、
 単独の時刻修正と追加接地モデルは過去区間の反例から未採用。公開IMU姿勢は物理姿勢と
 一致する一方、角速度は5msの姿勢差分であり、力学モデルが使う瞬時角速度とは差がある。
-次はこの測定定義を含めた観測・車体・接地の契約を整合させ、固定記録で修正を検証する。
+この測定定義を含む観測・車体・接地の契約整合は、引き続き未解決。
+先に独立したStop/rest/restartの記録欠落を修正した。起動時の停止が保存枠を使うため、
+実際の正常送信で走行した後の停止を、送信証拠付きの追加固定枠へ保存する。
+R584旧2失敗/新2合格、source106、build122全26/package109全2615、R586過去3判定保持。
+次はローカルcommit後の120秒上限single-r8で停止時のdue/active判断と再発進を確認する。
+[記録欠落の修正と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-observation-design.md)。
 [力の向き・公開観測・残る測定モデル](../20260910-mpcc-empirical-plant/receiver-input-enclosure/force-frame-observability-audit.md)。
 [再構成の棄却・時刻訂正・入力切り分け](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-event-phase-audit.md)。
 [物理比較と次の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-pose-truth-audit.md)。

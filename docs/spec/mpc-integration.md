@@ -5061,3 +5061,11 @@ reader既定値・記録・予測・安全境界は変えない。実適用入�
 フィルタ済み自己位置のroll/pitch・vertical twistも直接の車体状態へ転用しない。
 観測・力学・派生状態の定義と受信証拠を整合させてから本番へ反映する。全M4–M6未完。
 [測定定義と比較・限界](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/force-frame-observability-audit.md)。
+
+
+2026-09-13走行後停止の診断: 起動時のstationary枠と別に、実際の認証済み正常送信で
+観測速度の絶対値が0.1m/sを超えた後、停止状態でdue/active双方が失敗した最初の判断を
+追加の固定枠へ保存する。0.1は既存の診断分類で、制御条件ではない。以前の判断・位置時刻・
+速度・実送信台帳を証拠に付け、時計逆行で証拠を破棄する。保存枠は再補充せず、従来記録を
+上書きしない。通常権限・安全判定・指令は不変。build122全26/package109全2615合格。
+[設計と未完の実走確認](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-observation-design.md)。

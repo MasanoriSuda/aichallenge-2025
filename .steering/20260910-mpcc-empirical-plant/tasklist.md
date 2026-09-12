@@ -575,3 +575,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R579 conditional contact-force law compared on unchanged4200training rows; rejected on oldD1/holdout, no further feature scan or R3acceptance run.
 - [x] R580–R582 public3Dcontent/measurement audit: attitude observable, vertical odometry not direct heave; IMUfinite pose rate differs from instantaneous Rigidbody omega.
 - [ ] Explicit causal full-message measurement model and body/contact state semantics; no raw gyro substitution for momentum, no private future normal input.
+
+## Post-motion stationary final evidence,2026-09-13
+
+- [x] Identify original stationary slot consumption at startup/Ready as a detection gap for single-r7 final1012 and force-r3 final1149.
+- [x] Preserve all original buckets; add one bounded paired stationary final loss after authenticated moving normal send, with actual source/clock witness and clock-reset isolation.
+- [x] R583 fixture collision preserved; R584 old2fail/new2pass; source106; build122 all26/package109 all2615; R586 unchanged old wall/deadline replays.
+- [ ] Commit and bounded single-r8: capture first post-motion stationary failure and analyze any restart, exact due/active rejection and source supply. Then causal repair and remaining M4–M6.

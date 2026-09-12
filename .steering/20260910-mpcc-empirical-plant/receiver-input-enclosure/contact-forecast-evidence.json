@@ -1,0 +1,210 @@
+{
+  "baseline_commit": "38dd7216c56df8c16fc22180f5259f7bffdddf4c",
+  "production_commit": "8d9810e0",
+  "build": 120,
+  "package_test": 107,
+  "package_records": 2610,
+  "production_change": false,
+  "integrated_acceptance": false,
+  "training_coverage": [
+    {
+      "dataset": "old_high",
+      "path": "output/20260909-force-step-analysis-single-r1/physics.npz",
+      "window_sec": [
+        16.0,
+        35.0
+      ],
+      "samples": 3800,
+      "speed_range_mps": [
+        5.231776924752503,
+        8.341886729095469
+      ],
+      "wire_range_mps2": [
+        1.329594373703003,
+        1.329598069190979
+      ],
+      "wire_std_mps2": 3.34786549388007e-07
+    },
+    {
+      "dataset": "new_low_r1",
+      "path": "output/20260912-nine-state-force-analysis-r531/physics.npz",
+      "window_sec": [
+        8.0,
+        10.0
+      ],
+      "samples": 400,
+      "speed_range_mps": [
+        0.18291752856894403,
+        1.1528222151672356
+      ],
+      "wire_range_mps2": [
+        -3.0,
+        1.3295992612838745
+      ],
+      "wire_std_mps2": 1.3941955367032741
+    }
+  ],
+  "experiments": [
+    {
+      "id": 545,
+      "result": "inconclusive",
+      "changed_dimension": "Global joint16-state and independent binary contact transitions",
+      "reason": "MLE from3799old training transitions,453R544anchors; last1/past20private-contact initial distributions, no future contact/body features.1753baseline scores exactly matchR544. Nominal improvement is small and initial contact remains unavailable publicly; no physical/source/current/Stop proof or promotion."
+    },
+    {
+      "id": 546,
+      "result": "inconclusive",
+      "changed_dimension": "Mirror-symmetric contact transition counts",
+      "reason": "Reflects the same training pairs to enforce existing vehicle left/right symmetry.1753baseline scores exact. New1sspeed MAE0.138748→0.135281 for binary-last, oldholdout position0.170395→0.168636m; small improvements, no containment/production acceptance."
+    },
+    {
+      "id": 547,
+      "result": "inconclusive",
+      "changed_dimension": "Contact probabilities conditioned on wire and lateral load",
+      "reason": "Training wire spans only1.329594374–1.329598069mps2, standard deviation3.35e-7; longitudinal design condition2.984e7. Numerical full rank/BFGS convergence does not identify a braking response. Longitudinal/combined fits are not supported for that claim. Lateral-only gives limited nominal gains, no promotion."
+    },
+    {
+      "id": 548,
+      "result": "inconclusive",
+      "changed_dimension": "Contact probabilities conditioned on own predicted speed and lateral load",
+      "reason": "Old training3800samples speed5.232–8.342mps only; mirror-tied axle MLE, no future contact/body feature,453same anchors. New1sspeed0.138748→0.074906mps and oldholdout position0.170395→0.153570m improve. OldD1.5sposition/yaw worsen on6anchors,1s has only1anchor; low-speed extrapolation and all full proof/closed-loop gates remain open."
+    },
+    {
+      "id": 549,
+      "result": "inconclusive",
+      "changed_dimension": "Add explicitly named low-speed calibration, freeze before new force-r2 observation",
+      "reason": "Adds ONLY r1awakeDrive8..10s400samples (u0.183–1.153, wire-3..1.3296) to old3800high-speed samples. Fits mirror-tied speed/lateral with/without wire; conditions15.71/122.28.500correct-base_link anchors; r1training overlap/later known regressions split, no untouched-data claim. Exact programme145msspeed error0.027035→0.002049/0.003193mps, but oldD1regressions and exact-source yaw remain. No production candidate promoted; coefficients frozen for prospective force-r2."
+    }
+  ],
+  "prospective_force_r2_forecasts": {
+    "output/20260912-nine-state-contact-load-r548/frozen-load-model.json": "33b1353b6ae74f01e795964c6e17c3e510fae91b9f75f402b8e3911045fc397c",
+    "output/20260912-nine-state-contact-load-r548/coefficients.txt": "f18667769d2e2968130ff06f35b372d236e0a8547dc060fe6fb5169ce487ca42",
+    "output/20260912-nine-state-contact-load-r548/driver.cpp": "39bbefec0585ab78812e802864eb7145e459eb9ab69bba556a112db946c5a2c8",
+    "output/20260913-nine-state-contact-mixed-r549/frozen-mixed-model.json": "92b952a19d563e40aaad5c8b8001ca1f1e915be268ddb4a312b142e19bc3810f",
+    "output/20260913-nine-state-contact-mixed-r549/coefficients.txt": "ea63d923ab3fdbb71c31eb1b81408e5380f41621e35cebc79c63e1d52ee1f158",
+    "output/20260913-nine-state-contact-mixed-r549/driver.cpp": "1df037035c5f12e1ef77e12bf9e235109e44f93b60c7ca3d5615ef6f23996a9f"
+  },
+  "protected_restored": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "sha256": {
+    "output/20260912-nine-state-contact-markov-r545/build-generator.py": "8287c6c2e6747d0f93be4d37fa16a69fb11c129d882b8e14b93e3c5feb079880",
+    "output/20260912-nine-state-contact-markov-r545/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260912-nine-state-contact-markov-r545/command.json": "76284acddbf10930f0e6cc75a2330134933bd8d4ce1cb6b8025929c2e1f86d34",
+    "output/20260912-nine-state-contact-markov-r545/compile.json": "e05a83011578c076a5af81a067bc69f2884f8761c0bb9e2af94070ef338f1fc8",
+    "output/20260912-nine-state-contact-markov-r545/driver.cpp": "a8d529ce3c18fd8d122a7cf0d948f22f4842dae2f16ef80681aa127f3b0d9f87",
+    "output/20260912-nine-state-contact-markov-r545/errors.json": "5157655294edb44948f8f75b9a6bc558449c0ca9e5763f22cc5be9186556d8fe",
+    "output/20260912-nine-state-contact-markov-r545/frozen-transition-model.json": "e7fe8e8bce646334669b65a2d484cee8d1e42201c1f03ee30629c6e2411b883c",
+    "output/20260912-nine-state-contact-markov-r545/input-generator.py": "2d23ff96466c83ce9e5477193f71f9e8f4add400f869c2855aea5a79e68a9480",
+    "output/20260912-nine-state-contact-markov-r545/inputs.txt": "fb5342d910da0c53546a465a756b27fe4308d3de455ce97a55d743d6a0af0c01",
+    "output/20260912-nine-state-contact-markov-r545/model.yaml": "c536f16a28ba9b9a0a8e3e4657a837440b9536009a8f87570e77a20a1c920c9f",
+    "output/20260912-nine-state-contact-markov-r545/native-output.txt": "20f4cec85b9a5e8fd1146d55b7c56b4bc4d422a878a9453f3330e93b2e0d7757",
+    "output/20260912-nine-state-contact-markov-r545/physics_observations.py": "a019e587ec6b7051ab598501783f93aa2bbc4d8740a696ef56f4ee69c7d3f9c2",
+    "output/20260912-nine-state-contact-markov-r545/report.json": "c40525f9b9d89b3c046d692c8271224e0492070bfe495704d943bc34dffa3101",
+    "output/20260912-nine-state-contact-markov-r545/rollout-native": "c9584b073ead4b33fed0541ec306addded3d8b54004610719ac75f1779230be0",
+    "output/20260912-nine-state-contact-markov-r545/score-generator.py": "f55c0a4f065fb41d21bea2f7fd9144aee7565f1c9c5ea64afae87853fc8ab390",
+    "output/20260912-nine-state-contact-markov-r545/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260912-nine-state-contact-markov-r545/truth.json": "c8f85256619c41901a971a1ad268cf2c4bb6a44da606471f7493b8996f610763",
+    "output/20260912-nine-state-contact-markov-r546/build-generator.py": "095c0e7ea6994e2d866dbd90658b01abed637e296a21cb4b2a97692f48c4ce64",
+    "output/20260912-nine-state-contact-markov-r546/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260912-nine-state-contact-markov-r546/command.json": "afba68add5d8cc7c9d158c2f9082fde98ae0a57d21139f9e40a347a532f0bfee",
+    "output/20260912-nine-state-contact-markov-r546/compile.json": "bddcd4ee8d081de55eccbf1c7b24490d32c5f5fa2334efc84bcae03b2726dc1f",
+    "output/20260912-nine-state-contact-markov-r546/driver.cpp": "a8d529ce3c18fd8d122a7cf0d948f22f4842dae2f16ef80681aa127f3b0d9f87",
+    "output/20260912-nine-state-contact-markov-r546/errors.json": "4bace2aa2f75ee8916d649548f1239f2589abce2b90f5575bde26f0b53091fe6",
+    "output/20260912-nine-state-contact-markov-r546/frozen-transition-model.json": "5ed0b1dfd383469a25cb9d013a34f1cc6a7a11cfa30a06c09c22794a8c0dbd89",
+    "output/20260912-nine-state-contact-markov-r546/input-generator.py": "b3020888b04b1ab7395458ac2a62a837c442b05f7dc29fe6cebe7832388da8aa",
+    "output/20260912-nine-state-contact-markov-r546/inputs.txt": "6613425313a0010c4cb6ebaf59eade6bd373b81f90d1558e333ecdab98bbf9f4",
+    "output/20260912-nine-state-contact-markov-r546/model.yaml": "c536f16a28ba9b9a0a8e3e4657a837440b9536009a8f87570e77a20a1c920c9f",
+    "output/20260912-nine-state-contact-markov-r546/native-output.txt": "505819fc25d73e8964e2ad0d7aecda9533a81b59dca3bd6d2e6997a14b4084cb",
+    "output/20260912-nine-state-contact-markov-r546/physics_observations.py": "a019e587ec6b7051ab598501783f93aa2bbc4d8740a696ef56f4ee69c7d3f9c2",
+    "output/20260912-nine-state-contact-markov-r546/report.json": "0ec98649e6543d02039e6522e79bd6365b341077f828be9ce9ab1a72fb1854c8",
+    "output/20260912-nine-state-contact-markov-r546/rollout-native": "c9584b073ead4b33fed0541ec306addded3d8b54004610719ac75f1779230be0",
+    "output/20260912-nine-state-contact-markov-r546/score-generator.py": "3d2972ad5b369a7f43f22098b72218b4dd1ecff46cd738670ba0c4ec0fb4bded",
+    "output/20260912-nine-state-contact-markov-r546/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260912-nine-state-contact-markov-r546/truth.json": "fe830f14c16107d56b980292da67087f83eb5739a8ccd19763cb78a6e1c0fa99",
+    "output/20260912-nine-state-contact-load-r547/build-generator.py": "c90b7ecc7ce99ca288009e85e1745ef533d1f76082d1733ef4a60be5d0c69ce9",
+    "output/20260912-nine-state-contact-load-r547/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260912-nine-state-contact-load-r547/coefficients.txt": "4b073de28f747ba6446a01da2f751e7204377e6dc33dc6ffef8d6cc373202fa2",
+    "output/20260912-nine-state-contact-load-r547/command.json": "8f989136a3bdbee42e0da1553aab35134c6c604f75398d70376753d716b957af",
+    "output/20260912-nine-state-contact-load-r547/compile.json": "2873bfd266a91a82223b454176cbfb6753bdb1b8c78a53fab16884b58b0a0cf8",
+    "output/20260912-nine-state-contact-load-r547/driver.cpp": "4d7e10f822998e5649965ca24b6509c920f00fbd06b069b90480a18485e47d9c",
+    "output/20260912-nine-state-contact-load-r547/errors.json": "fed210454c7f900b91cca0c532c3d14fda00e919c5dc33a99d134f26c504f249",
+    "output/20260912-nine-state-contact-load-r547/frozen-load-model.json": "4d53b042518cc3cc2f6dc7c76a5573a490b1260ce00917c0d500244bc62d3e89",
+    "output/20260912-nine-state-contact-load-r547/input-generator.py": "842f27914df82469100bb3ea424d03fda415e2640bd3d17d9fd5875a8a9a3123",
+    "output/20260912-nine-state-contact-load-r547/inputs.txt": "9fb8cad1279e9c9da4c841c5e1ed855697b675959c51d6b47bfafb85b62d2004",
+    "output/20260912-nine-state-contact-load-r547/model.yaml": "c536f16a28ba9b9a0a8e3e4657a837440b9536009a8f87570e77a20a1c920c9f",
+    "output/20260912-nine-state-contact-load-r547/native-output.txt": "5771e8f62f533cb4c2bc9a96847f9217fd5d44806c8e16f0e844d55cc1df4b94",
+    "output/20260912-nine-state-contact-load-r547/physics_observations.py": "a019e587ec6b7051ab598501783f93aa2bbc4d8740a696ef56f4ee69c7d3f9c2",
+    "output/20260912-nine-state-contact-load-r547/report.json": "5f60299b62195eeed9f30d6baeff03bd32be3a04102b0a46d55be8336812ebf1",
+    "output/20260912-nine-state-contact-load-r547/rollout-native": "9ccede9240d7b6ea1a9248460c7ee4fd4aba7ce7c30d6db14096a2a4cb2ecd9c",
+    "output/20260912-nine-state-contact-load-r547/score-generator.py": "4b99d1d87b400301e7e7c12c53cb51109c96d2a153e71d4c18977bc9cab9d97e",
+    "output/20260912-nine-state-contact-load-r547/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260912-nine-state-contact-load-r547/truth.json": "ffd89f0d5888cbbdf62488d8e190f6dfbb7772885edbcb6b6454860c58fb3b17",
+    "output/20260912-nine-state-contact-load-r548/build-generator.py": "bb42f8f439d250f02f8bef88bfb824033ee8cfb04b6d31e12c627571527f7935",
+    "output/20260912-nine-state-contact-load-r548/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260912-nine-state-contact-load-r548/coefficients.txt": "f18667769d2e2968130ff06f35b372d236e0a8547dc060fe6fb5169ce487ca42",
+    "output/20260912-nine-state-contact-load-r548/command.json": "181ccc1670e64cfdc1ad780d95a345129707be707d855aa531371ff9b5799fa1",
+    "output/20260912-nine-state-contact-load-r548/compile.json": "8de7cf478680e768b99616691b4e6442520d85dbf46d1a1fba7175db096100af",
+    "output/20260912-nine-state-contact-load-r548/driver.cpp": "39bbefec0585ab78812e802864eb7145e459eb9ab69bba556a112db946c5a2c8",
+    "output/20260912-nine-state-contact-load-r548/errors.json": "8109cb27ba2468506ea1823367be496802f4acc48a8f080dba3e84246cc166b1",
+    "output/20260912-nine-state-contact-load-r548/frozen-load-model.json": "33b1353b6ae74f01e795964c6e17c3e510fae91b9f75f402b8e3911045fc397c",
+    "output/20260912-nine-state-contact-load-r548/input-generator.py": "a40904d86fadeeed4225c773b5461d47f7a5f05d13857fc195703a6a1157c1aa",
+    "output/20260912-nine-state-contact-load-r548/inputs.txt": "9fb8cad1279e9c9da4c841c5e1ed855697b675959c51d6b47bfafb85b62d2004",
+    "output/20260912-nine-state-contact-load-r548/model.yaml": "c536f16a28ba9b9a0a8e3e4657a837440b9536009a8f87570e77a20a1c920c9f",
+    "output/20260912-nine-state-contact-load-r548/native-output.txt": "b4bff63e42f1d98957411339c003654c0517447019992ac3b40b8731509391b9",
+    "output/20260912-nine-state-contact-load-r548/physics_observations.py": "a019e587ec6b7051ab598501783f93aa2bbc4d8740a696ef56f4ee69c7d3f9c2",
+    "output/20260912-nine-state-contact-load-r548/report.json": "3bca53e919869010db23fce06335190ea35e5f823ddab7eda95a7620f7d99bec",
+    "output/20260912-nine-state-contact-load-r548/rollout-native": "700e01de5e9350224375da7586f79bd502cf3e668e865936ac4ef54d31b60b56",
+    "output/20260912-nine-state-contact-load-r548/score-generator.py": "18a033bda1546b916cbb3b21c5cf50e41b0d3b8b33464b918506f4b769aea382",
+    "output/20260912-nine-state-contact-load-r548/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260912-nine-state-contact-load-r548/truth.json": "4a9eb1ef743255e1bb1420deea11b0c7758055ba5098421c5d2c3b60a57ae9b1",
+    "output/20260913-nine-state-contact-mixed-r549/build-generator.py": "fba8ee01dc23bd0af4d66f93ac289c6374b38f4956bbf7f03d2343b135958f8e",
+    "output/20260913-nine-state-contact-mixed-r549/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-contact-mixed-r549/coefficients.txt": "ea63d923ab3fdbb71c31eb1b81408e5380f41621e35cebc79c63e1d52ee1f158",
+    "output/20260913-nine-state-contact-mixed-r549/command.json": "c9c4a571767ce0a7023c4f374ffb36ef44584e46ce66714c73aa6e463914dbcb",
+    "output/20260913-nine-state-contact-mixed-r549/compile.json": "3283620cd0def6ce94608237cdd9a210b7ba967ec39f2509df2c509c846afca5",
+    "output/20260913-nine-state-contact-mixed-r549/driver.cpp": "1df037035c5f12e1ef77e12bf9e235109e44f93b60c7ca3d5615ef6f23996a9f",
+    "output/20260913-nine-state-contact-mixed-r549/errors.json": "08dee444580a0277ba3696461eb2c8dd3d567d4e8190f599bb6f90cc58b660f8",
+    "output/20260913-nine-state-contact-mixed-r549/frozen-mixed-model.json": "92b952a19d563e40aaad5c8b8001ca1f1e915be268ddb4a312b142e19bc3810f",
+    "output/20260913-nine-state-contact-mixed-r549/input-generator.py": "6b936fd1a1d1cc2a276ab2304a1e918ec34300c17f35c51834033459500aaebb",
+    "output/20260913-nine-state-contact-mixed-r549/inputs.txt": "cac3d30f2551758fde86be67526197daf1db0154583976eb66458e004297f5d9",
+    "output/20260913-nine-state-contact-mixed-r549/model.yaml": "c536f16a28ba9b9a0a8e3e4657a837440b9536009a8f87570e77a20a1c920c9f",
+    "output/20260913-nine-state-contact-mixed-r549/native-output.txt": "56a07b9ea8c47476922b019b262b5c2bd168d5ac4e8cee651718919aed4d8ca3",
+    "output/20260913-nine-state-contact-mixed-r549/physics_observations.py": "a019e587ec6b7051ab598501783f93aa2bbc4d8740a696ef56f4ee69c7d3f9c2",
+    "output/20260913-nine-state-contact-mixed-r549/report.json": "9794c4cd897f3e1067fa7a34ae1569726c771d10f4d9d1ac1b2457bc2c0fc2be",
+    "output/20260913-nine-state-contact-mixed-r549/rollout-native": "8f7af1d9b4f820c2c81606d49b099212baa2e3c1b0a5681fae5f71d9b5b48da5",
+    "output/20260913-nine-state-contact-mixed-r549/score-generator.py": "8c20c8c01219e65841f0bd21aa776f646fe58feb415c4fa5f355b799db47efa0",
+    "output/20260913-nine-state-contact-mixed-r549/status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-contact-mixed-r549/truth.json": "bcd43ab1618a87b59ae62fdae3008b7aae5bf28fd639e54b082ae7584be9e646",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r545-markov-build.log": "591c73d40a2d7c91e10d939b47b5cf18c138c06eff149686b232dcf2414ca787",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r545-markov-inputs.log": "8880c9e19f287e0fa6407f2c35b6feb0bc53257a320e4a8ef438318acf39c629",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r545-markov-score.log": "f20ea878d05cde74555099ed387d83762797e155ffedfa39a3063712af484d85",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r546-markov-build.log": "b3bcf18e852cb2d8e09fcbf14f53ce27a16e7544423bcee397789c4e9bea26df",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r546-markov-inputs.log": "8880c9e19f287e0fa6407f2c35b6feb0bc53257a320e4a8ef438318acf39c629",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r546-markov-score.log": "6039eb8c6e907c281d7a6461457ff79c3419e4bffb57d9506841734626d6939d",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r547-contact-load-build.log": "226cd1bf983664edc4e1d8a37ea24688edc8dafd593bbb44ae545d418872cfdb",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r547-contact-load-inputs.log": "00c1a6ec0c5e250e13fbcb5c9805cf5b7f965e10bbbc45d68ed128fd5043a9d1",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r547-contact-load-score.log": "97d91e2b4e0e83a9f62624ddbccab89c2f8cba5f389201e15a8d1b4654e932b6",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r548-contact-load-build.log": "f2c5dca2635f1c203bfbe8ea7810d3eb9ef2e98de2b7920470a3884ea6222f18",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r548-contact-load-inputs.log": "382a66fb9911fb4813bf646eabc3758ad51124f22f2d59f35c4cb598694ac5ee",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r548-contact-load-score.log": "9b0d49b6770a27b3b10c3d6e26efa49b0b6c9dfff29783da3d71d7cec0a3b1b4",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r549-mixed-contact-build.log": "1d14fc0274c4475b45bdaad8be99db1018be01792907a6856e01e4d0d4aeeb24",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r549-mixed-contact-inputs.log": "6499bd69adba44a7bad9f374948739e51d37ebfbe5c7833c2d901615990bd833",
+    "output/20260913-nine-state-contact-forecast-audit/mpcc-r549-mixed-contact-score.log": "f85ac71fd9b8da64fc5e72fae12106171db9e7265200abf95422b967f1769201",
+    "output/20260913-nine-state-contact-forecast-audit/seal.py": "59f95cc5adc553ed6ac0db17f910e268b0a6a818cda21da00230f667b3e13c43"
+  },
+  "limitations": [
+    "Previously inspected r1/old regressions are not untouched validation.",
+    "All offline rollouts prescribe future applied wire/tire; this is not public actuation prediction.",
+    "R545/R546 use private past contact; R547–R549 use own predicted state, no future body/contact.",
+    "No learned nominal probability is a physical contact bound or full Rest certificate.",
+    "All original physical, receiver250ms, publication25ms, origin130ms, steering100ms and solver gates remain.",
+    "Existing source/current/timing failures and all M4–M6 remain open."
+  ],
+  "report_metadata_corrections": {
+    "output/20260913-nine-state-contact-mixed-r549/report.json": "The last generic limit line says old training only; that inherited wording is stale. The frozen model, scope, second limit and recorded coverage correctly specify old3800 plus r1 8..10s400samples. Numeric scores and candidate coefficients are unchanged."
+  },
+  "native_baseline_exact_predictions_r549": 4398
+}

@@ -160,3 +160,15 @@ observer or production candidate. Training windows, model identity, independent
 regression windows, no-future-feature checks and promotion/deletion boundary must
 be fixed before execution. An observed contact statistic supplies no universal
 Rest guarantee. All normal/current/Stop and original timing gates still apply.
+
+## Forecast and calibration coverage (R545–R549)
+
+Global transition forecasts only slightly improve the common cohort. The old
+training has no meaningful acceleration variation and no low-speed samples;
+R547's numerical convergence does not identify braking dependence. Speed/lateral
+R548 improves new low-speed and oldholdout nominal scores but regresses oldD1.
+R549 adds explicitly separated r1low-speed calibration and freezes two models
+before a new force-r2 observation. Exact-source speed improves, yaw/oldD1do not
+close. No production promotion or physical bound is claimed. Previously inspected
+regressions, training overlap and the prospective new world remain distinct.
+[Fixed protocol, comparison and remaining gates](contact-low-speed-design.md).

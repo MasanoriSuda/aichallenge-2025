@@ -1357,6 +1357,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-prediction-evidence.json",
       "replay_ready": true,
       "reason": "Exact force-run tube/input, initialization/contact oracle and corrected-base_link/past forecast comparisons."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-contact-forecast-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-forecast-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen empirical contact forecasts and prospective validation boundary; all are diagnostic only."
     }
   ],
   "experiments": [
@@ -17223,6 +17229,76 @@
       "production_impact": "No controller change after8d9810e0. Explicit-reference diagnostic reader only; all physical, solver and timing gates unchanged.",
       "deleted_code": [],
       "revisit_condition": "Explicit temporal contact forecast or physically grounded uncertainty with causal public observation, corrected base_link, independent regression and full model/Stop/current identity. Do not repeat static-past substitution or Euler-rate-as-body-rate."
+    },
+    {
+      "experiment_id": "20260913-nine-state-contact-forecast-audit-r545",
+      "baseline_commit": "38dd7216c56df8c16fc22180f5259f7bffdddf4c",
+      "snapshot_ids": [
+        "20260913-nine-state-contact-forecast-audit"
+      ],
+      "hypothesis": "Temporal/load-dependent contact forecast with explicit calibration coverage",
+      "changed_dimension": "Global joint16-state and independent binary contact transitions",
+      "result": "inconclusive",
+      "reason": "MLE from3799old training transitions,453R544anchors; last1/past20private-contact initial distributions, no future contact/body features.1753baseline scores exactly matchR544. Nominal improvement is small and initial contact remains unavailable publicly; no physical/source/current/Stop proof or promotion.",
+      "production_impact": "None after8d9810e0. No physical, solver, receiver or clock gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Prospective frozen-model observation, identifiable new physical regime or a structurally different causal model. Preserve oldD1/yaw regressions and do not treat rank/convergence or nominal probabilities as a physical guarantee."
+    },
+    {
+      "experiment_id": "20260913-nine-state-contact-forecast-audit-r546",
+      "baseline_commit": "38dd7216c56df8c16fc22180f5259f7bffdddf4c",
+      "snapshot_ids": [
+        "20260913-nine-state-contact-forecast-audit"
+      ],
+      "hypothesis": "Temporal/load-dependent contact forecast with explicit calibration coverage",
+      "changed_dimension": "Mirror-symmetric contact transition counts",
+      "result": "inconclusive",
+      "reason": "Reflects the same training pairs to enforce existing vehicle left/right symmetry.1753baseline scores exact. New1sspeed MAE0.138748→0.135281 for binary-last, oldholdout position0.170395→0.168636m; small improvements, no containment/production acceptance.",
+      "production_impact": "None after8d9810e0. No physical, solver, receiver or clock gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Prospective frozen-model observation, identifiable new physical regime or a structurally different causal model. Preserve oldD1/yaw regressions and do not treat rank/convergence or nominal probabilities as a physical guarantee."
+    },
+    {
+      "experiment_id": "20260913-nine-state-contact-forecast-audit-r547",
+      "baseline_commit": "38dd7216c56df8c16fc22180f5259f7bffdddf4c",
+      "snapshot_ids": [
+        "20260913-nine-state-contact-forecast-audit"
+      ],
+      "hypothesis": "Temporal/load-dependent contact forecast with explicit calibration coverage",
+      "changed_dimension": "Contact probabilities conditioned on wire and lateral load",
+      "result": "inconclusive",
+      "reason": "Training wire spans only1.329594374–1.329598069mps2, standard deviation3.35e-7; longitudinal design condition2.984e7. Numerical full rank/BFGS convergence does not identify a braking response. Longitudinal/combined fits are not supported for that claim. Lateral-only gives limited nominal gains, no promotion.",
+      "production_impact": "None after8d9810e0. No physical, solver, receiver or clock gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Prospective frozen-model observation, identifiable new physical regime or a structurally different causal model. Preserve oldD1/yaw regressions and do not treat rank/convergence or nominal probabilities as a physical guarantee."
+    },
+    {
+      "experiment_id": "20260913-nine-state-contact-forecast-audit-r548",
+      "baseline_commit": "38dd7216c56df8c16fc22180f5259f7bffdddf4c",
+      "snapshot_ids": [
+        "20260913-nine-state-contact-forecast-audit"
+      ],
+      "hypothesis": "Temporal/load-dependent contact forecast with explicit calibration coverage",
+      "changed_dimension": "Contact probabilities conditioned on own predicted speed and lateral load",
+      "result": "inconclusive",
+      "reason": "Old training3800samples speed5.232–8.342mps only; mirror-tied axle MLE, no future contact/body feature,453same anchors. New1sspeed0.138748→0.074906mps and oldholdout position0.170395→0.153570m improve. OldD1.5sposition/yaw worsen on6anchors,1s has only1anchor; low-speed extrapolation and all full proof/closed-loop gates remain open.",
+      "production_impact": "None after8d9810e0. No physical, solver, receiver or clock gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Prospective frozen-model observation, identifiable new physical regime or a structurally different causal model. Preserve oldD1/yaw regressions and do not treat rank/convergence or nominal probabilities as a physical guarantee."
+    },
+    {
+      "experiment_id": "20260913-nine-state-contact-forecast-audit-r549",
+      "baseline_commit": "38dd7216c56df8c16fc22180f5259f7bffdddf4c",
+      "snapshot_ids": [
+        "20260913-nine-state-contact-forecast-audit"
+      ],
+      "hypothesis": "Temporal/load-dependent contact forecast with explicit calibration coverage",
+      "changed_dimension": "Add explicitly named low-speed calibration, freeze before new force-r2 observation",
+      "result": "inconclusive",
+      "reason": "Adds ONLY r1awakeDrive8..10s400samples (u0.183–1.153, wire-3..1.3296) to old3800high-speed samples. Fits mirror-tied speed/lateral with/without wire; conditions15.71/122.28.500correct-base_link anchors; r1training overlap/later known regressions split, no untouched-data claim. Exact programme145msspeed error0.027035→0.002049/0.003193mps, but oldD1regressions and exact-source yaw remain. No production candidate promoted; coefficients frozen for prospective force-r2.",
+      "production_impact": "None after8d9810e0. No physical, solver, receiver or clock gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Prospective frozen-model observation, identifiable new physical regime or a structurally different causal model. Preserve oldD1/yaw regressions and do not treat rank/convergence or nominal probabilities as a physical guarantee."
     }
   ]
 }

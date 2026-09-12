@@ -5006,3 +5006,10 @@ R534/R539の位置評価には診断側の車体原点/base_link混同があり�
 本番のCOM/base_link原点は変更せず、今後の物理解析は明示的な原点・Domainを要求する
 共通readerを使う。速度・旋回比較と全輪接地案の棄却は訂正前後で変わらない。
 [訂正した比較と未解決の予測契約](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-model-audit.md)。
+
+
+2026-09-13 R545–R549: 接地の時間遷移・速度/旋回依存を比較したが、本番へ採用して
+いない。旧校正は5.232–8.342m/s・ほぼ一定加速で、制動応答の識別には不足する。
+低速校正を明示して加えた診断候補は、新しいforce-r2を観測する前に係数を固定する。
+平均誤差の改善、接地の保証、全安全証明、走行受入れは別であり、全M4–M6は未完。
+[校正範囲と固定した次回観測](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-low-speed-design.md)。

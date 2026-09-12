@@ -540,5 +540,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Actual wire union containment; original speed departure and private future-contact contribution reproduced.
 - [x] Correct R534/R539 diagnostic position origin via immutable R542 rescore; production origin unchanged. Explicit shared reader checked on four physical streams.
 - [x] R544 fixed past-contact forecasts rejected on old holdout despite new low-speed improvements; no production substitution.
-- [ ] Compare temporally evolving contact-mode prediction with fixed train/validation protocol; separate privileged past observation from deployable public input and Stop assumptions.
+- [x] R545/R546 fixed contact transitions compared; R547 calibration identifiability, R548/R549 state/load and explicit low-speed calibration. No production promotion.
 - [ ] Causal production repair, original physical/timing validation and all remaining M4–M6.
+
+## Prospective contact-regime validation
+
+- [x] R545–R549 fixed protocols, baseline parity, separated calibration/known regressions and frozen coefficient identities.
+- [ ] Force-single-r2 on unchanged committed controller, with frozen R548/R549 forecasts; direct/public/first-failure extraction, no r2refit.
+- [ ] Explain remaining contact-regime and yaw errors before model promotion. Coherent full proof/identity and remaining M4–M6 remain required.

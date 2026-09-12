@@ -3,6 +3,7 @@
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
+#include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
 
 #include <gtest/gtest.h>
 
@@ -193,6 +194,166 @@ std::filesystem::path output_root(const std::string & name)
 {
   return std::filesystem::path{::testing::TempDir()} /
     ("mpcc-architecture-snapshot-" + name);
+}
+
+mpcc_vehicle_model::ObservationProvenance received_body_selected()
+{
+  return {{19.8, {1, 2, .1, 2, .2, .3, .05, .04}}, 19.79, 19.8, 19.78,
+    20.0, 20.1, 0, .1, {{19.0, 1.0, .1}, {19.9, -3.0, .2}}};
+}
+
+ReceivedBodyObservation received_body_fixture(const std::uint64_t decision)
+{
+  ReceivedBodyObservation value;
+  value.control_decision_id = decision;
+  // Above double's exact integer range: receipt timestamps must remain integers.
+  value.captured_steady_ns = 9007199254740999LL;
+  value.now_sec = 20;
+  value.pose_source_sec = 19.8;
+  value.selected_component_source_sec = {19.79, 19.8, 19.78};
+  value.selected_x_y_yaw_u_vy_r_desired_tire = {1, 2, .1, 2, .2, .3, .05, .04};
+  value.histories[0] = {{19.79, value.captured_steady_ns - 3, 2, .2},
+    {19.85, value.captured_steady_ns - 5, 2.1, .25},
+    {20.1, value.captured_steady_ns - 1, 2.2, .27}};
+  value.histories[1] = {{19.8, value.captured_steady_ns - 4, .3, 0},
+    {19.9, value.captured_steady_ns - 2, .35, 0}};
+  value.histories[2] = {{19.78, value.captured_steady_ns - 6, .04, 0}};
+  return value;
+}
+
+TEST(MpccArchitectureSnapshot, ReceivedBodiesPreserveUnselectedSamplesWithoutChangingIdentity)
+{
+  const auto root = output_root("received-body-roundtrip");
+  std::filesystem::remove_all(root);
+  auto snapshot = make_interaction_snapshot(mpcc_execution_contract::ControlIntent::Pass);
+  snapshot.request.observation_provenance = received_body_selected();
+  const auto identity = fingerprint_interaction_snapshot(snapshot);
+  ASSERT_NE(identity, 0U);
+  const auto expected = received_body_fixture(99);
+  snapshot.received_body_observation = std::make_shared<const ReceivedBodyObservation>(expected);
+  EXPECT_EQ(fingerprint_interaction_snapshot(snapshot), identity);
+  const auto recorded = record_authority_failure(snapshot, "received-body", "test observation", {}, root);
+  ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+  auto document = YAML::LoadFile(recorded.snapshot_file.string());
+  const auto diagnostic = document["source"]["received_body_observation"];
+  ASSERT_TRUE(diagnostic);
+  EXPECT_EQ(diagnostic["status"].as<std::string>(), "valid");
+  EXPECT_FALSE(diagnostic["authority"].as<bool>());
+  EXPECT_TRUE(diagnostic["selected_observation_matches"].as<bool>());
+  std::string detail;
+  auto loaded = load_recorded_interaction_snapshot(recorded.snapshot_file, &detail);
+  ASSERT_TRUE(loaded) << detail;
+  ASSERT_TRUE(loaded->source.received_body_observation);
+  const auto & actual = *loaded->source.received_body_observation;
+  EXPECT_EQ(actual.control_decision_id, 99U);
+  EXPECT_NE(actual.control_decision_id, snapshot.identity.sequence);
+  EXPECT_EQ(actual.captured_steady_ns, expected.captured_steady_ns);
+  for (std::size_t i = 0; i < expected.histories.size(); ++i) {
+    ASSERT_EQ(actual.histories[i].size(), expected.histories[i].size());
+    for (std::size_t j = 0; j < expected.histories[i].size(); ++j) {
+      EXPECT_DOUBLE_EQ(actual.histories[i][j].source_sec, expected.histories[i][j].source_sec);
+      EXPECT_EQ(actual.histories[i][j].received_steady_ns, expected.histories[i][j].received_steady_ns);
+      EXPECT_DOUBLE_EQ(actual.histories[i][j].first, expected.histories[i][j].first);
+      EXPECT_DOUBLE_EQ(actual.histories[i][j].second, expected.histories[i][j].second);
+    }
+  }
+  EXPECT_GT(actual.histories[0][1].source_sec, actual.pose_source_sec);
+  EXPECT_GT(actual.histories[0][2].source_sec, actual.now_sec);
+  EXPECT_EQ(loaded->interaction_fingerprint, identity);
+  // Historical records without this optional observation remain replayable.
+  document["source"].remove("received_body_observation");
+  const auto legacy = recorded.snapshot_file.parent_path() / "legacy.yaml";
+  {std::ofstream stream(legacy); stream << document;}
+  loaded = load_recorded_interaction_snapshot(legacy, &detail);
+  ASSERT_TRUE(loaded) << detail;
+  EXPECT_FALSE(loaded->source.received_body_observation);
+  EXPECT_EQ(loaded->interaction_fingerprint, identity);
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, InvalidReceivedBodiesDoNotDiscardValidReplayEvidence)
+{
+  const auto root = output_root("received-body-invalid");
+  std::filesystem::remove_all(root);
+  auto snapshot = make_interaction_snapshot(mpcc_execution_contract::ControlIntent::Pass);
+  snapshot.request.observation_provenance = received_body_selected();
+  const auto identity = fingerprint_interaction_snapshot(snapshot);
+  for (int defect = 0; defect < 4; ++defect) {
+    auto value = received_body_fixture(99);
+    if (defect == 0) value.histories[0].erase(value.histories[0].begin());
+    if (defect == 1) value.histories[0].back().received_steady_ns = value.captured_steady_ns + 1;
+    if (defect == 2) value.histories[1][0].first = std::numeric_limits<double>::quiet_NaN();
+    if (defect == 3) value.histories[2].resize(257, value.histories[2].front());
+    snapshot.received_body_observation = std::make_shared<const ReceivedBodyObservation>(value);
+    const auto recorded = record_authority_failure(snapshot, "invalid-" + std::to_string(defect),
+      "test invalid optional diagnostic", {}, root);
+    ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+    auto document = YAML::LoadFile(recorded.snapshot_file.string());
+    ASSERT_TRUE(document["source"]["received_body_observation"]);
+    EXPECT_EQ(document["source"]["received_body_observation"]["status"].as<std::string>(), "invalid");
+    std::string detail;
+    const auto loaded = load_recorded_interaction_snapshot(recorded.snapshot_file, &detail);
+    ASSERT_TRUE(loaded) << detail;
+    EXPECT_FALSE(loaded->source.received_body_observation);
+    EXPECT_EQ(loaded->interaction_fingerprint, identity);
+    // Also exercise malformed optional input from disk, independently of writer validation.
+    document["source"]["received_body_observation"] = "malformed-diagnostic";
+    const auto malformed = recorded.snapshot_file.parent_path() / "malformed.yaml";
+    {std::ofstream stream(malformed); stream << document;}
+    const auto reloaded = load_recorded_interaction_snapshot(malformed, &detail);
+    ASSERT_TRUE(reloaded) << detail;
+    EXPECT_FALSE(reloaded->source.received_body_observation);
+    EXPECT_EQ(reloaded->interaction_fingerprint, identity);
+  }
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, ReceivedBodiesKeepProgrammeAndCurrentOwnersSeparate)
+{
+  const auto root = output_root("received-body-owners");
+  std::filesystem::remove_all(root);
+  auto original = received_body_fixture(99);
+  auto current = received_body_fixture(103);
+  current.histories[0].push_back({20.2, current.captured_steady_ns, 2.3, .28});
+  auto capture = std::make_shared<ScheduledFailureCapture>();
+  capture->source_received_body_observation = std::make_shared<const ReceivedBodyObservation>(original);
+  capture->current_received_body_observation = std::make_shared<const ReceivedBodyObservation>(current);
+  capture->raw_observation = received_body_selected();
+  capture->original.observed.decision_id = 99;
+  // A new queue value and later decision cannot mutate already captured source ownership.
+  original.histories[0].clear();
+  current.control_decision_id = 999;
+  PublicationFailureObservation observation;
+  observation.decision_id = 103;
+  observation.output_root = root;
+  observation.scheduled_capture = capture;
+  auto recorded = record_publication_failure(observation);
+  ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+  auto document = YAML::LoadFile(recorded.snapshot_file.string());
+  const auto source = document["scheduled"]["source_received_body_observation"];
+  const auto now = document["scheduled"]["current_received_body_observation"];
+  ASSERT_TRUE(source);
+  ASSERT_TRUE(now);
+  EXPECT_TRUE(source["control_decision_matches"].as<bool>());
+  EXPECT_TRUE(now["control_decision_matches"].as<bool>());
+  EXPECT_FALSE(source["selected_observation_matches"].as<bool>());  // no source prefix supplied
+  EXPECT_TRUE(now["selected_observation_matches"].as<bool>());
+  EXPECT_EQ(source["velocity_u_vy"].size(), 3U);
+  EXPECT_EQ(now["velocity_u_vy"].size(), 4U);
+  EXPECT_EQ(source["control_decision_id"].as<std::uint64_t>(), 99U);
+  EXPECT_EQ(now["control_decision_id"].as<std::uint64_t>(), 103U);
+  // Missing programme data must not be filled from current. Stale current data
+  // is retained with explicit mismatched decision/observation association.
+  capture->source_received_body_observation.reset();
+  capture->raw_observation->initial.state.forward_velocity_mps += .1;
+  ++observation.decision_id;
+  recorded = record_publication_failure(observation);
+  ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+  document = YAML::LoadFile(recorded.snapshot_file.string());
+  EXPECT_EQ(document["scheduled"]["source_received_body_observation"]["status"].as<std::string>(), "missing");
+  EXPECT_FALSE(document["scheduled"]["current_received_body_observation"]["control_decision_matches"].as<bool>());
+  EXPECT_FALSE(document["scheduled"]["current_received_body_observation"]["selected_observation_matches"].as<bool>());
+  std::filesystem::remove_all(root);
 }
 
 TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)

@@ -557,3 +557,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [ ] Establish actual per-decision received histories, including values discarded by pose cutoff; bounded failure observation if needed, with source/receipt/reset identities.
 - [ ] Select a current causal reconstruction and contact/lateral model with original hard proof and clock constraints; coherent QP/native/Stop/current/async implementation and new dynamic acceptance.
 - [ ] Full remaining M4–M6, repeated final-source races/gates and same submission/eval.
+
+## Received-body observation implementation,2026-09-13
+
+- [x] Separate immutable semantic/programme/current queue captures, exact source/steady receipt, optional writer/loader outside proof fingerprints; original selections unchanged.
+- [x] R559/R560 setup failures preserved; R561 old3fail/new3pass; build121 all26/package108 all2613; R562 original2wall+1actualdeadline rejection identities retained.
+- [ ] Committed bounded single-r7: actual received-but-unselected values, callback costs and reset/epoch associations; update evidence and local commit.
+- [ ] Repair supported causal observation/model producer, preserve all physical/timing negatives, then complete remaining M4–M6 and same submission/eval.

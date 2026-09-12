@@ -1369,6 +1369,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-prospective-evidence.json",
       "replay_ready": true,
       "reason": "Same-run fresh frozen-model validation, direct application and exact original current replay; no model/observer promotion."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-received-observation-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-body-observation-evidence.json",
+      "replay_ready": true,
+      "reason": "Bounded optional observation ownership tests and fresh unchanged historical current/guard replay; live observation pending."
     }
   ],
   "experiments": [
@@ -17445,6 +17451,62 @@
       "production_impact": "None after8d9810e0; all original physical, solver and clock gates remain.",
       "deleted_code": [],
       "revisit_condition": "New actual received-history or causal physical-model evidence with explicit epochs and negative regressions; do not refit on r2 and call it untouched validation or promote mean-error gains as safety proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-received-observation-audit-r559",
+      "baseline_commit": "8d83511f0c2a6b05591f269b84fb5d4910e6f147",
+      "snapshot_ids": [
+        "20260913-nine-state-received-observation-audit"
+      ],
+      "hypothesis": "Preserve all actually received body inputs without changing control decisions",
+      "changed_dimension": "Standalone native diagnostic setup",
+      "result": "inconclusive",
+      "reason": "Missing direct ReceivedBodyObservation include in scheduled failure header. Compile failed before runtime; fixed explicitly, original failed output preserved.",
+      "production_impact": "Optional diagnostic queue ownership and serialization only; no component selection/model/authority/physical or timing gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh received-history, association or diagnostic regression evidence; no repeat of unchanged setup failures or promotion as race acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-received-observation-audit-r560",
+      "baseline_commit": "8d83511f0c2a6b05591f269b84fb5d4910e6f147",
+      "snapshot_ids": [
+        "20260913-nine-state-received-observation-audit"
+      ],
+      "hypothesis": "Preserve all actually received body inputs without changing control decisions",
+      "changed_dimension": "Old/new writer regression initial fixture",
+      "result": "inconclusive",
+      "reason": "The relocated shared test fixture resolved config under /output/config. Two tests failed from setup in both arms; owner-separation already fails old/passes new. No full pass claimed; old output preserved.",
+      "production_impact": "Optional diagnostic queue ownership and serialization only; no component selection/model/authority/physical or timing gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh received-history, association or diagnostic regression evidence; no repeat of unchanged setup failures or promotion as race acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-received-observation-audit-r561",
+      "baseline_commit": "8d83511f0c2a6b05591f269b84fb5d4910e6f147",
+      "snapshot_ids": [
+        "20260913-nine-state-received-observation-audit"
+      ],
+      "hypothesis": "Preserve all actually received body inputs without changing control decisions",
+      "changed_dimension": "Bounded received-body writer/loader and separate owners",
+      "result": "accepted",
+      "reason": "Corrected fixture layout, same old/new objects and headers. Old writer fails all3 assertions from missing metadata; new passes all3. Preserves unselected samples newer than pose/now, exact int64 receipt, source/current owners, immutable copies, legacy replay, invalid diagnostics without identity or authority change.",
+      "production_impact": "Optional diagnostic queue ownership and serialization only; no component selection/model/authority/physical or timing gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh received-history, association or diagnostic regression evidence; no repeat of unchanged setup failures or promotion as race acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-received-observation-audit-r562",
+      "baseline_commit": "8d83511f0c2a6b05591f269b84fb5d4910e6f147",
+      "snapshot_ids": [
+        "20260913-nine-state-received-observation-audit"
+      ],
+      "hypothesis": "Preserve all actually received body inputs without changing control decisions",
+      "changed_dimension": "Fresh build121 exact prior current/guard replay",
+      "result": "accepted",
+      "reason": "Driver rebuilt for new Snapshot layout. Force-r2 wall12.599999726 and single-r6 wall12.629999725 remain rejected. Single-r5 actual before-publication clock remains rejected after physical acceptance. All3 source/domain/history/prior actual/checks/rejection times exact; each run once.",
+      "production_impact": "Optional diagnostic queue ownership and serialization only; no component selection/model/authority/physical or timing gate change.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh received-history, association or diagnostic regression evidence; no repeat of unchanged setup failures or promotion as race acceptance."
     }
   ]
 }

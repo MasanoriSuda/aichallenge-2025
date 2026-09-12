@@ -1,4 +1,5 @@
 #pragma once
+#include "multi_purpose_mpc_ros/mpcc_received_body_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot {
@@ -18,6 +19,8 @@ struct ScheduledFailureCapture {
   std::optional<mpcc_vehicle_model::PublicationTransaction> last_publication;
   std::size_t suffix_index{};
   std::optional<mpcc_vehicle_model::ObservationProvenance> raw_observation;
+  std::shared_ptr<const ReceivedBodyObservation> source_received_body_observation;
+  std::shared_ptr<const ReceivedBodyObservation> current_received_body_observation;
   std::shared_ptr<const mpcc_rate_resolved_scheduled::CurrentPhysicalProof> current_physical_proof;
   std::shared_ptr<const mpcc_rate_resolved_scheduled::StartingDomainEvidence> starting_domain;
   std::shared_ptr<const mpcc_rate_resolved_scheduled::CurrentDomainProof> current_domain_proof;

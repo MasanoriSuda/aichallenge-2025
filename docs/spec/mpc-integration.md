@@ -5022,3 +5022,11 @@ R534/R539の位置評価には診断側の車体原点/base_link混同があり�
 受信時刻、補間に使った両端、再構成の有効時刻は別の証拠として保持する。観測誤差を
 安全余裕や送信期限の緩和で吸収しない。全M4–M6は未完。
 [新規検証・次の実装条件](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/contact-prospective-audit.md)。
+
+
+2026-09-13受信履歴の診断: 位置時刻より新しいため選択しなかった速度・IMU・操舵も、
+既存の各256件の受信キューから保存する。元の解・送信計画・現在の判断は別々の不変な
+記録を持ち、source時刻とプロセス内steady受信時刻を区別する。診断は安全判定の
+識別値へ含めず、欠落・不正でも元の再生記録を保持する。build121全26、package108
+全2613、R561旧3失敗/新3合格、R562過去3判定保持を確認。実走single-r7と全M4–M6は未完。
+[設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-body-observation-design.md)。

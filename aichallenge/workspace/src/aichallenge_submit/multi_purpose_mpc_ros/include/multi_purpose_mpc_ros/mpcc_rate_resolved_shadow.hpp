@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_SHADOW_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
+#include "multi_purpose_mpc_ros/mpcc_received_body_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_context.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
@@ -148,6 +149,9 @@ struct Snapshot
   /// CertifiedPlan's solver_source_snapshot preserve it; serialized historical
   /// inputs deliberately have no current-session authority.
   mpcc_rate_resolved_scheduled::ContextSnapshot normal_context_generation{};
+  /// Observation-only payload, excluded from interaction/solver fingerprints.
+  std::shared_ptr<const mpcc_architecture_snapshot::ReceivedBodyObservation>
+    received_body_observation;
 };
 
 /// Immutable output of the asynchronous preparation phase.  It is numerical

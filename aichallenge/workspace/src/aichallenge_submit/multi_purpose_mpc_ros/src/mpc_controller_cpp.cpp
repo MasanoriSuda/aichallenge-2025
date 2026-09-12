@@ -8347,6 +8347,8 @@ struct CertifiedStopSuccessorTelemetryWindow
 struct ScheduledProductionOutcome
 {
   scheduled_control::Request request;
+  std::shared_ptr<const mpcc_architecture_snapshot::ReceivedBodyObservation>
+    received_body_observation;
   scheduled_control::Result result;
   std::shared_ptr<const scheduled_control::StartingDomainEvidence> starting_domain;
   double starting_domain_ms{};
@@ -8561,6 +8563,7 @@ struct MPC
       command_control_origin_steering_rad_;
     snapshot->physical_control_origin_lateral_velocity_mps_ = physical_control_origin_lateral_velocity_mps_;
     snapshot->vehicle_observation_provenance_ = vehicle_observation_provenance_;
+    snapshot->received_body_observation_ = received_body_observation_;
     snapshot->physical_control_origin_yaw_rate_radps_ = physical_control_origin_yaw_rate_radps_;
     snapshot->physical_control_origin_response_steering_rad_ =
       physical_control_origin_response_steering_rad_;
@@ -8896,9 +8899,11 @@ struct MPC
   }
 
   void update_vehicle_observation_provenance(
-    const mpcc_vehicle_model::ObservationProvenance & provenance)
+    const mpcc_vehicle_model::ObservationProvenance & provenance,
+    std::shared_ptr<const mpcc_architecture_snapshot::ReceivedBodyObservation> received = {})
   {
     vehicle_observation_provenance_ = provenance;
+    received_body_observation_ = std::move(received);
   }
 
   void update_response_steering_state_for_execution_contract(
@@ -25499,6 +25504,7 @@ struct MPC
     snapshot.control_prediction_origin_sec =
       bound_submission.control_prediction_origin_sec;
     snapshot.request = bound_submission.request;
+    snapshot.received_body_observation = received_body_observation_;
     snapshot.execution_prefix_steps =
       bound_submission.execution_prefix_steps;
     snapshot.course_progress_origin_m =
@@ -30870,6 +30876,8 @@ struct MPC
   {
     if (!entry) return nullptr;
     auto capture=std::make_shared<mpcc_architecture_snapshot::ScheduledFailureCapture>();
+    capture->source_received_body_observation=entry->received_body_observation;
+    capture->current_received_body_observation=received_body_observation_;
     capture->original=entry->request; capture->certificate=entry->result.applied.certificate; capture->starting_domain=entry->starting_domain;
     capture->original_proposed_context=entry->proposed_context;
     capture->original_cursor=entry->cursor; capture->prior_sources=entry->prior_sources;
@@ -31079,10 +31087,12 @@ struct MPC
       mailbox->in_flight = true;
     }
     const auto job_cursor = reservation ? reservation->cursor() : *cursor;
-    const auto submitted = scheduled_worker_->submit_latest([requests=std::move(requests),cursor=job_cursor,context,anchor,mailbox,reservation]() mutable {
+    const auto received_body = received_body_observation_;
+    const auto submitted = scheduled_worker_->submit_latest([requests=std::move(requests),cursor=job_cursor,context,anchor,mailbox,reservation,received_body]() mutable {
       const ScheduledProductionCompletion completion{mailbox};
       const auto started = SteadyClock::now();
       auto outcome = std::make_shared<ScheduledProductionOutcome>();
+      outcome->received_body_observation = received_body;
       outcome->cursor = cursor; outcome->reservation = reservation;
       if (reservation) outcome->prior_sources = reservation->prior_sources();
       outcome->proposed_context = context; outcome->follow_anchor = anchor;
@@ -31131,6 +31141,7 @@ struct MPC
           if (const auto *last=ledger.latest_transaction()) failure->last_publication=*last;
         }
         if (vehicle_observation_provenance_) failure->raw_observation=*vehicle_observation_provenance_;
+        failure->current_received_body_observation=received_body_observation_;
         failure->detail=detail;
         return false;
       };
@@ -31336,6 +31347,7 @@ struct MPC
             if (vehicle_observation_provenance_) capture->raw_observation=*vehicle_observation_provenance_;
             if (const auto *last=ledger.latest_transaction()) capture->last_publication=*last;
           }
+          capture->current_received_body_observation=received_body_observation_;
           capture->boundary="final-current-evidence";
           auto &observation=observations[i];
           observation.decision_id=active_control_decision_id_;
@@ -31610,6 +31622,8 @@ struct MPC
   std::optional<double> physical_control_origin_response_steering_rad_;
   std::optional<double> physical_control_origin_lateral_velocity_mps_;
   std::optional<mpcc_vehicle_model::ObservationProvenance> vehicle_observation_provenance_;
+  std::shared_ptr<const mpcc_architecture_snapshot::ReceivedBodyObservation>
+    received_body_observation_;
   std::optional<double> physical_control_origin_yaw_rate_radps_;
   std::optional<RateResolvedSerializedPredecessor>
   last_rate_resolved_serialized_predecessor_;
@@ -55619,6 +55633,38 @@ private:
     return prediction;
   }
 
+  std::shared_ptr<const mpcc_architecture_snapshot::ReceivedBodyObservation>
+  capture_received_body_observation(
+    const mpcc_vehicle_model::ObservationProvenance & selected) const
+  {
+    auto capture = std::make_shared<mpcc_architecture_snapshot::ReceivedBodyObservation>();
+    capture->control_decision_id = active_control_decision_id_;
+    capture->now_sec = selected.now_sec;
+    capture->pose_source_sec = selected.initial.source_sec;
+    capture->selected_component_source_sec = {
+      selected.velocity_source_sec, selected.yaw_rate_source_sec, selected.tire_source_sec};
+    const auto & s = selected.initial.state;
+    capture->selected_x_y_yaw_u_vy_r_desired_tire = {
+      s.x_m, s.y_m, s.yaw_rad, s.forward_velocity_mps, s.lateral_velocity_mps,
+      s.yaw_rate_radps, s.desired_steering_rad, s.tire_steering_rad};
+    // Copy the existing bounded queues, including values which latest_at did
+    // not select. No selection, interpolation or fingerprint consumes this data.
+    const std::array<const std::deque<VehicleObservation> *, 3> histories{
+      &velocity_observations_, &yaw_rate_observations_, &tire_observations_};
+    for (std::size_t i = 0; i < histories.size(); ++i) {
+      auto & history = capture->histories[i];
+      history.reserve(histories[i]->size());
+      for (const auto & value : *histories[i]) {
+        history.push_back({value.source_sec,
+          std::chrono::duration_cast<std::chrono::nanoseconds>(
+            value.received.time_since_epoch()).count(), value.first, value.second});
+      }
+    }
+    capture->captured_steady_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      SteadyClock::now().time_since_epoch()).count();
+    return capture;
+  }
+
   void publish_failsafe_command(const rclcpp::Time & stamp, const char * reason)
   {
     const bool reverse_possible = recovery_may_be_in_reverse();
@@ -59565,7 +59611,8 @@ private:
       publish_failsafe_command(control_time, "missing causal body/tire/input observation");
       return;
     }
-    mpc_->update_vehicle_observation_provenance(prediction->provenance);
+    mpc_->update_vehicle_observation_provenance(
+      prediction->provenance, capture_received_body_observation(prediction->provenance));
     if (const auto * event = published_input_ledger_.latest_transaction()) {
       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
         "MPCC publication ledger: sequence=%lu, records=%zu, history=%zu, discontinuities=%lu, "

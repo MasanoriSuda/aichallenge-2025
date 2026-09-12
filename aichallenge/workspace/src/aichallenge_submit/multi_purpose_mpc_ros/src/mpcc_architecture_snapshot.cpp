@@ -262,6 +262,129 @@ std::optional<mpcc_vehicle_model::ObservationProvenance> load_observation_proven
   return mpcc_vehicle_model::decode_observation_provenance(node);
 }
 
+bool received_body_valid(const ReceivedBodyObservation & value)
+{
+  if (value.control_decision_id == 0 || value.captured_steady_ns < 0 ||
+    !std::isfinite(value.now_sec) || !std::isfinite(value.pose_source_sec) ||
+    value.pose_source_sec < 0 || value.now_sec < value.pose_source_sec) return false;
+  for (const double x : value.selected_x_y_yaw_u_vy_r_desired_tire) {
+    if (!std::isfinite(x)) return false;
+  }
+  for (std::size_t i = 0; i < value.histories.size(); ++i) {
+    const auto & history = value.histories[i];
+    const double selected = value.selected_component_source_sec[i];
+    if (!std::isfinite(selected) || selected < 0 || selected > value.pose_source_sec ||
+      history.empty() || history.size() > 256U) return false;
+    double previous = -1;
+    bool selected_present = false;
+    for (const auto & sample : history) {
+      if (!std::isfinite(sample.source_sec) || sample.source_sec < 0 ||
+        sample.source_sec <= previous || sample.received_steady_ns < 0 ||
+        sample.received_steady_ns > value.captured_steady_ns ||
+        !std::isfinite(sample.first) || !std::isfinite(sample.second)) return false;
+      previous = sample.source_sec;
+      if (sample.source_sec == selected) {
+        const auto & state = value.selected_x_y_yaw_u_vy_r_desired_tire;
+        selected_present = i == 0 ? sample.first == state[3] && sample.second == state[4] :
+          sample.first == state[i == 1 ? 5 : 7];
+      }
+    }
+    if (!selected_present) return false;
+  }
+  return true;
+}
+
+bool received_body_matches(
+  const ReceivedBodyObservation & value,
+  const mpcc_vehicle_model::ObservationProvenance * selected)
+{
+  if (!selected) return false;
+  const auto & s = selected->initial.state;
+  return value.pose_source_sec == selected->initial.source_sec &&
+    value.now_sec == selected->now_sec &&
+    value.selected_component_source_sec == std::array<double, 3>{
+      selected->velocity_source_sec, selected->yaw_rate_source_sec, selected->tire_source_sec} &&
+    value.selected_x_y_yaw_u_vy_r_desired_tire == std::array<double, 8>{
+      s.x_m, s.y_m, s.yaw_rad, s.forward_velocity_mps, s.lateral_velocity_mps,
+      s.yaw_rate_radps, s.desired_steering_rad, s.tire_steering_rad};
+}
+
+constexpr std::array<const char *, 3> kReceivedBodyChannels{
+  "velocity_u_vy", "imu_body_yaw_rate", "physical_tire_steering"};
+
+YAML::Node received_body_node(
+  const std::shared_ptr<const ReceivedBodyObservation> & capture,
+  const mpcc_vehicle_model::ObservationProvenance * selected,
+  const std::uint64_t expected_decision = 0)
+{
+  YAML::Node node;
+  node["schema"] = "mpcc-received-body-observations/v1";
+  node["authority"] = false;
+  const bool valid = capture && received_body_valid(*capture);
+  node["status"] = !capture ? "missing" : valid ? "valid" : "invalid";
+  if (!valid) return node;
+  const auto & value = *capture;
+  node["control_decision_id"] = value.control_decision_id;
+  node["captured_steady_ns"] = value.captured_steady_ns;
+  node["now_sec"] = value.now_sec;
+  node["pose_source_sec"] = value.pose_source_sec;
+  node["selected_observation_matches"] = received_body_matches(value, selected);
+  if (expected_decision != 0) {
+    node["expected_control_decision_id"] = expected_decision;
+    node["control_decision_matches"] = value.control_decision_id == expected_decision;
+  }
+  node["selected_component_source_sec"] = std::vector<double>(
+    value.selected_component_source_sec.begin(), value.selected_component_source_sec.end());
+  node["selected_x_y_yaw_u_vy_r_desired_tire"] = std::vector<double>(
+    value.selected_x_y_yaw_u_vy_r_desired_tire.begin(),
+    value.selected_x_y_yaw_u_vy_r_desired_tire.end());
+  node["columns"] = std::vector<std::string>{"source_sec", "received_steady_ns", "first", "second"};
+  node["meaning"] = "All resident received samples, including values excluded by the pose cutoff. Steady timestamps are process-local; no bag receipt or input authority.";
+  for (std::size_t i = 0; i < value.histories.size(); ++i) {
+    YAML::Node history(YAML::NodeType::Sequence);
+    for (const auto & sample : value.histories[i]) {
+      YAML::Node row;
+      row.push_back(sample.source_sec); row.push_back(sample.received_steady_ns);
+      row.push_back(sample.first); row.push_back(sample.second);
+      history.push_back(row);
+    }
+    node[kReceivedBodyChannels[i]] = history;
+  }
+  return node;
+}
+
+std::shared_ptr<const ReceivedBodyObservation> load_received_body(const YAML::Node & node)
+{
+  // Optional diagnostics cannot make an otherwise valid historical input fail.
+  try {
+    if (!node || !node.IsMap() || node["schema"].as<std::string>() !=
+      "mpcc-received-body-observations/v1" || node["status"].as<std::string>() != "valid" ||
+      node["authority"].as<bool>()) return nullptr;
+    auto value = std::make_shared<ReceivedBodyObservation>();
+    value->control_decision_id = node["control_decision_id"].as<std::uint64_t>();
+    value->captured_steady_ns = node["captured_steady_ns"].as<std::int64_t>();
+    value->now_sec = node["now_sec"].as<double>();
+    value->pose_source_sec = node["pose_source_sec"].as<double>();
+    const auto stamps = node["selected_component_source_sec"];
+    const auto state = node["selected_x_y_yaw_u_vy_r_desired_tire"];
+    if (!stamps.IsSequence() || stamps.size() != 3 || !state.IsSequence() || state.size() != 8) return nullptr;
+    for (std::size_t i = 0; i < 3; ++i) value->selected_component_source_sec[i] = stamps[i].as<double>();
+    for (std::size_t i = 0; i < 8; ++i) value->selected_x_y_yaw_u_vy_r_desired_tire[i] = state[i].as<double>();
+    for (std::size_t i = 0; i < 3; ++i) {
+      const auto history = node[kReceivedBodyChannels[i]];
+      if (!history.IsSequence() || history.size() > 256U) return nullptr;
+      for (const auto & row : history) {
+        if (!row.IsSequence() || row.size() != 4) return nullptr;
+        value->histories[i].push_back({row[0].as<double>(), row[1].as<std::int64_t>(),
+          row[2].as<double>(), row[3].as<double>()});
+      }
+    }
+    return received_body_valid(*value) ? value : nullptr;
+  } catch (const YAML::Exception &) {
+    return nullptr;
+  }
+}
+
 YAML::Node semantic_request_node(
   const mpcc_rate_resolved_adapter::Request & request)
 {
@@ -470,6 +593,10 @@ YAML::Node source_node(
   node["publication_interval_sec"] = source.publication_interval_sec;
   node["problem_context"] = problem_context_node(context);
   node["semantic_request"] = semantic_request_node(source.request);
+  if (source.received_body_observation) {
+    node["received_body_observation"] = received_body_node(source.received_body_observation,
+      source.request.observation_provenance ? &*source.request.observation_provenance : nullptr);
+  }
   node["nominal_path_distance_m"] = std_vector_node(
     source.nominal_path_distance_m);
   node["progress_aligned_wall_refinement_active"] =
@@ -1408,6 +1535,7 @@ std::optional<shadow::Snapshot> load_source_snapshot(
       });
     source.replay_world = std::move(world);
   }
+  source.received_body_observation = load_received_body(node["received_body_observation"]);
   return source;
 }
 
@@ -2879,6 +3007,16 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
       auto node=root["scheduled"];
       node["boundary"]=capture.boundary; node["detail"]=capture.detail;
       if (capture.raw_observation) node["raw_current_observation"]=mpcc_vehicle_model::encode_observation_provenance(*capture.raw_observation);
+      node["source_received_body_observation"] = received_body_node(
+        capture.source_received_body_observation,
+        capture.original.observed.publication_prefix ?
+        &capture.original.observed.publication_prefix->observation : nullptr,
+        capture.original.observed.decision_id);
+      node["current_received_body_observation"] = received_body_node(
+        capture.current_received_body_observation,
+        capture.raw_observation ? &*capture.raw_observation :
+        capture.current && capture.current->publication_prefix ?
+        &capture.current->publication_prefix->observation : nullptr, o.decision_id);
       node["source_request"]=revalidation_evidence_node(&capture.original.observed,true,"scheduled-",
         scheduled_inspected,scheduled_observed,scheduled_certified);
       node["prior_program"]=mpcc_vehicle_model::encode_input_program(capture.original.prior_program);

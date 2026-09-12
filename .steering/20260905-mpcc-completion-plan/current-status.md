@@ -1,20 +1,22 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。追加確認なしでM1–M6を自律実行。必要分をローカルcommit、pushなし。
-**全体未完。独立した相対座標証明を実装・検証。次は標準dev2-r63。**
+**全体未完。加速計画の時間長の取り違えを修正・検証。次は標準dev2-r64。**
 
-旧r62 D1 pre894の集合全体による壁拒否と、旧r60 D2 pre489の位置集合外を再生。
-位置・向きと車体運動を分離した独立証明へ接続し、全四隅・車体状態の包含を検証した。
-個別25ms送信窓、受信250ms、原点130ms、操舵100ms、全物理制約と単一authorityを維持。
-Native数値10/C5 158、build104全26、tests91全2,582/66（source105）合格。
-保存済み9場面の元ID・実際の前段履歴・送信期限拒否を再生した。新しい現在証明IDは
-意図的に区別する。Test90で発見したワーカー初期化競合は84155a70で別途修正済み。
+25218a0aの標準r63は停滞し、完走なし。D2の送信前拒否3件を保存して停止した。
+送信後違反は観測なし。最初の1818は車体状態が候補集合外で、完全な現在証明の再計算と
+遅い開始により元25ms窓を超過した。元の証明と実履歴・期限判定を再生済み。
 
-r62は完走しておらず、実行待ち・最終publish中の元期限超過と、加速指令列の継続性は
-未解決。新しい証明の実走行は標準dev2-r63で確認する。全intent/Mission/sibling/Store、
-実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalも未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/relative-domain-design.md)、
+別の発進不足は、旧入力列の短い検証範囲を新しい長い候補の時間長に使う生成側の欠陥。
+元の計画残時間から候補を作り、その全体と停止までを従来どおり独立検証するよう修正。
+Native回帰は修正前に失敗、修正後159件合格。Build105全26、tests92全2,583/66
+（source105）合格。4場面の生成と10場面の履歴検証を確認し、新しい指令列による
+古い実履歴の流用は拒否される。全物理制約・時計・送信窓・単一authorityを維持。
+
+標準r64で修正後の発進・継続性を確認する。車体集合の適用範囲・実行待ち、全intent/
+Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの
+単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-duration-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

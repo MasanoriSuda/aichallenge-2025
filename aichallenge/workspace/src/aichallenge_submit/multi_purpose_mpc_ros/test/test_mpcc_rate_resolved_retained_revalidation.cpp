@@ -5281,3 +5281,60 @@ TEST(MpccSourceReservation, SnapshotPreservesDeclaredPriorIdsSeparatelyFromActua
   EXPECT_EQ(document["scheduled"]["expected_prior_sources"].size(), 0U);
   std::filesystem::remove_all(directory);
 }
+
+namespace
+{
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  SourceHorizonDurationIsIndependentOfOldContinuationScope)
+{
+  for (double y : {.99, .998, .9995}) {
+    auto request = source_horizon_request();
+    auto observation = request.publication_prefix->observation;
+    // Change the fresh pose only. The old corridor eventually excludes the
+    // changing-input suffix at .998, while a separately proved constant-input
+    // programme remains clear of the actual wall through body rest.
+    observation.initial.state.y_m = y;
+    const auto packet = request.publication_prefix->proposed_packet;
+    request.publication_prefix = vehicle::predict_prospective_publication(
+      observation, packet, request.plan->execution_artifact->vehicle_model);
+    ASSERT_TRUE(request.publication_prefix);
+    const auto & predicted = *request.publication_prefix;
+    const auto & origin = predicted.control_origin;
+    request.control_pose = {origin.x_m, origin.y_m, origin.yaw_rad};
+    request.control_origin_physical_progress_m = origin.x_m;
+    request.current_speed_mps = predicted.current.forward_velocity_mps;
+    request.control_origin_speed_mps = origin.forward_velocity_mps;
+    request.current_steering_rad = origin.desired_steering_rad;
+    request.current_response_steering_rad = origin.tire_steering_rad;
+    request.current_lateral_velocity_mps = origin.lateral_velocity_mps;
+    request.current_yaw_rate_radps = origin.yaw_rate_radps;
+    request.measured_to_control_path.clear();
+    request.measured_to_control_elapsed_sec.clear();
+    for (const auto & item : predicted.current_to_control) {
+      request.measured_to_control_path.push_back(
+        {item.state.x_m, item.state.y_m, item.state.yaw_rad});
+      request.measured_to_control_elapsed_sec.push_back(item.source_sec - request.now_sec);
+    }
+    request.obstacles.obstacles.front().circle.y_m = origin.y_m;
+    const auto result = retained::evaluate(request);
+    SCOPED_TRACE(y);
+    if (y == .9995) {
+      EXPECT_FALSE(result.proof);
+      EXPECT_EQ(result.reason, retained::Reason::ContinuationRejected);
+      continue;
+    }
+    ASSERT_TRUE(result.proof && result.proof->applied_program) << retained::to_string(result.reason);
+    using Scope = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::ContinuationProofScope;
+    EXPECT_EQ(result.continuation_scope,
+      y == .998 ? Scope::PublisherIntervalPrefix : Scope::FullSuffix);
+    EXPECT_TRUE(result.terminal_stop_source_horizon_program);
+    const auto & program = result.proof->applied_program->prepared().program;
+    EXPECT_GT(program.commands.size(), 2U);
+    EXPECT_GT(program.commands.front().wire_acceleration_mps2, 0);
+    EXPECT_LT(program.commands.back().wire_acceleration_mps2, 0);
+    EXPECT_TRUE(result.terminal_stop_certified);
+    EXPECT_TRUE(result.terminal_stop_path_clearance.clear);
+  }
+}
+}  // namespace

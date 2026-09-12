@@ -1579,17 +1579,23 @@ static Result evaluate_with_stop_profile(
     const auto terminal_stop = [&]() {
       if (constant_program && first_packet) {
         const auto first = *first_packet;
+        mpcc_vehicle_model::PublishedInputProgram program{execution.publication_interval_sec, {}, true};
         std::size_t prefix_intervals = 1U;
         if (source_horizon_program) {
           result.terminal_stop_forward_velocity_ceiling_mps = source_horizon_velocity_ceiling(request);
-          const double intervals = std::floor(continuation_trajectory.elapsed_time_sec.back() /
-            execution.publication_interval_sec);
+          // The old changing-input continuation may prove only one publisher
+          // interval. Its proof scope does not shorten the original schedule
+          // used to propose this different constant-input programme. The full
+          // new programme and its terminal stop are independently proved below.
+          double source_remaining_sec = -command_cursor.stage_elapsed_sec;
+          for (std::size_t i = command_cursor.control_stage_index; i < execution.control_stages.size(); ++i)
+            source_remaining_sec += execution.control_stages[i].duration_sec;
+          const double intervals = std::floor(source_remaining_sec / execution.publication_interval_sec);
           if (!result.terminal_stop_forward_velocity_ceiling_mps || !std::isfinite(intervals) ||
-            intervals <= 1 || intervals > continuation.actuation_samples.size())
+            intervals <= 1 || intervals >= static_cast<double>(program.commands.max_size() - 1U))
             return mpcc_rate_resolved_physical_adapter::StopContingencyResult{};
           prefix_intervals = static_cast<std::size_t>(intervals);
         }
-        mpcc_vehicle_model::PublishedInputProgram program{execution.publication_interval_sec, {}, true};
         for (std::size_t i = 0; i <= prefix_intervals; ++i) {
           auto packet = first;
           packet.published_sec += i * execution.publication_interval_sec;

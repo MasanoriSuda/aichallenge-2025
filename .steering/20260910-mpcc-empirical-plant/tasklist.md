@@ -356,3 +356,9 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Build104 all 26; package91 all 2,582/66, source 105. Historical actual-library replay380/381 all nine source/prefix/late outcomes; intermediate failures preserved.
 - [x] Independent bounded-worker initialization repair 84155a70; real test90 timeout, widened diagnostic interleaving and 500 reconstruction iterations preserved.
 - [ ] Standard dev2-r63; resolve remaining scheduling and sustained positive programme availability, then all M4-M6 and same-artifact submission/eval.
+
+2026-09-12 source horizon duration ownership (baseline25218a0a):
+- [x] Standard dev2-r63 bounded stationary capture and exact first D2pre1818 replay; no laps, three before rejects, no observed after violation. Original artifacts restored.
+- [x] R385 identifies old continuation scope truncating a different new programme proposal. R387/390 compare original schedule duration and preserve terminal-wall rejection.
+- [x] Native391 red /392 all159 green. Build105 all26; tests92 all2,583/66/source105. Final producer393 four cases, history395 ten cases with changed-source rejection.
+- [ ] Committed standarddev2-r64, remaining body-domain coverage and scheduling; all M4-M6 and final same-artifact submission/eval.

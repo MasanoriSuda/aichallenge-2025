@@ -4838,3 +4838,11 @@ D1初回は事前集合の現在壁判定が不合格となり全再計算で期
 Snapshotの任意項目 relative_pose_composition が新しい集合の意味を示す。
 Native包含試験、全26 build、2,582 test記録、旧9場面の再生を確認。統合走行は未検証。
 [数式・設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/relative-domain-design.md)。
+
+2026-09-12 長い一定入力候補の時間長は、元の計画の残り制御区間と消費済み時間から
+決める。別の旧入力列の再検証が1公開区間へ短縮されても、新しい候補の長さまで流用して
+短縮しない。候補全体と停止までを独立して再証明し、壁・車両・速度上限と実際の指令履歴、
+元の送信窓は維持する。新しい候補のIDで古い指令列の実履歴を引き継ぐことはできない。
+Native回帰、全26build、2,583test記録、4生成場面と10履歴場面を検証した。
+標準r63は停止状態が続き完走していない。修正後の標準r64と全体受入れは未完。
+[時間長の所有者と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-duration-design.md)。

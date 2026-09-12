@@ -1225,6 +1225,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/relative-domain-evidence.json",
       "replay_ready": true,
       "reason": "Independent whole body/time theorem and current whole-pose composition; native/build/package and historical guards verified."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-source-horizon-duration",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-duration-evidence.json",
+      "replay_ready": true,
+      "reason": "Original source schedule versus truncated old continuation: exact runtime/diagnostic/native and final library evidence."
     }
   ],
   "experiments": [
@@ -14735,6 +14741,70 @@
         "NonFollow global-pose full-programme proof superseded by independent relative body/time proof"
       ],
       "revisit_condition": "New model/corner/time/source/current-world counterexample or standard runtime evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-horizon-duration-dev2-r63",
+      "baseline_commit": "25218a0a8d4f6652926999209d142e67d58be4a5",
+      "snapshot_ids": [
+        "20260912-nine-state-source-horizon-duration"
+      ],
+      "hypothesis": "A different independently proved constant-input proposal uses remaining original schedule time, not the shortened proof scope of the old changing-input suffix.",
+      "changed_dimension": "Proposal duration ownership only; no physical/clock/authority changes.",
+      "result": "rejected",
+      "reason": "Bounded stationary capture, no laps; three D2 before-publication rejects, no observed after violation. No integrated acceptance.",
+      "production_impact": "Generator defect repaired and locally validated; standard dev2-r64 and overall acceptance pending.",
+      "deleted_code": [
+        "Using old continuation endpoint and retained sample count as the new source programme duration/cap"
+      ],
+      "revisit_condition": "New source schedule/cursor/identity or full physical proof counterexample; runtime evidence needed for separate timing family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-horizon-duration-r385-r390",
+      "baseline_commit": "25218a0a8d4f6652926999209d142e67d58be4a5",
+      "snapshot_ids": [
+        "20260912-nine-state-source-horizon-duration"
+      ],
+      "hypothesis": "A different independently proved constant-input proposal uses remaining original schedule time, not the shortened proof scope of the old changing-input suffix.",
+      "changed_dimension": "Proposal duration ownership only; no physical/clock/authority changes.",
+      "result": "accepted",
+      "reason": "Old prefix proof30ms caps a different candidate before its own proof. Original remaining schedule restores57-packet D1 candidate; D2 terminal wall still rejects. R388 setup failure retained.",
+      "production_impact": "Generator defect repaired and locally validated; standard dev2-r64 and overall acceptance pending.",
+      "deleted_code": [
+        "Using old continuation endpoint and retained sample count as the new source programme duration/cap"
+      ],
+      "revisit_condition": "New source schedule/cursor/identity or full physical proof counterexample; runtime evidence needed for separate timing family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-horizon-duration-r391-r392-build105-tests92",
+      "baseline_commit": "25218a0a8d4f6652926999209d142e67d58be4a5",
+      "snapshot_ids": [
+        "20260912-nine-state-source-horizon-duration"
+      ],
+      "hypothesis": "A different independently proved constant-input proposal uses remaining original schedule time, not the shortened proof scope of the old changing-input suffix.",
+      "changed_dimension": "Proposal duration ownership only; no physical/clock/authority changes.",
+      "result": "accepted",
+      "reason": "Behavioral regression fails before the fix; final159 C5, all26build and2,583/66 package records pass with source105.",
+      "production_impact": "Generator defect repaired and locally validated; standard dev2-r64 and overall acceptance pending.",
+      "deleted_code": [
+        "Using old continuation endpoint and retained sample count as the new source programme duration/cap"
+      ],
+      "revisit_condition": "New source schedule/cursor/identity or full physical proof counterexample; runtime evidence needed for separate timing family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-horizon-duration-r393-r395",
+      "baseline_commit": "25218a0a8d4f6652926999209d142e67d58be4a5",
+      "snapshot_ids": [
+        "20260912-nine-state-source-horizon-duration"
+      ],
+      "hypothesis": "A different independently proved constant-input proposal uses remaining original schedule time, not the shortened proof scope of the old changing-input suffix.",
+      "changed_dimension": "Proposal duration ownership only; no physical/clock/authority changes.",
+      "result": "accepted",
+      "reason": "Four final producer cases; nine unchanged historical source/current/late outcomes and one newly identified source correctly rejected against old actual suffix IDs.",
+      "production_impact": "Generator defect repaired and locally validated; standard dev2-r64 and overall acceptance pending.",
+      "deleted_code": [
+        "Using old continuation endpoint and retained sample count as the new source programme duration/cap"
+      ],
+      "revisit_condition": "New source schedule/cursor/identity or full physical proof counterexample; runtime evidence needed for separate timing family."
     }
   ]
 }

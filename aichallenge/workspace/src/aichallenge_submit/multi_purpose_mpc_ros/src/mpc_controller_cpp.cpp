@@ -9632,6 +9632,8 @@ struct MPC
     const double final_wire_steering_rad, const double now_sec,
     const bool normal_successor_allowed)
   {
+    [[maybe_unused]] const auto supply_observation = make_scope_exit([this, now_sec]() { log_source_supply_observation(now_sec); });
+    source_supply_successor_ = "no-pending-draft";
     std::optional<RateResolvedSerializedPredecessor> predecessor;
     if (
       current_physical_steering_state_.has_value() &&
@@ -9677,6 +9679,7 @@ struct MPC
     {
       publication_reject_reason = "serialized-steering-mismatch";
     }
+    source_supply_successor_ = publication_reject_reason ? publication_reject_reason : "no-normal-draft";
     if (
       publication_reject_reason != nullptr)
     {
@@ -9704,10 +9707,11 @@ struct MPC
         bind_rate_resolved_track_cruise_submission(
         pending.normal_draft.value(), predecessor.value());
       if (bound_submission.has_value()) {
-        static_cast<void>(submit_rate_resolved_track_cruise_shadow(
-            pending.source_problem, bound_submission.value(),
-            pending.snapshot_sec));
+        const bool accepted = submit_rate_resolved_track_cruise_shadow(
+          pending.source_problem, bound_submission.value(), pending.snapshot_sec);
+        source_supply_successor_ = accepted ? "normal-submitted" : "normal-submit-rejected";
       } else {
+        source_supply_successor_ = "predecessor-binding-rejected";
         ++rate_resolved_track_cruise_shadow_telemetry_window_.
           submission_reject_count;
       }
@@ -30807,18 +30811,55 @@ struct MPC
     return std::pair{std::move(prior), next_index};
   }
 
+  void log_source_supply_observation(const double now_sec)
+  {
+    if (!std::isfinite(now_sec) || (std::isfinite(source_supply_last_log_sec_) &&
+        now_sec >= source_supply_last_log_sec_ && now_sec - source_supply_last_log_sec_ <
+        cfg.v2x_behavior.overtake_line.mpcc_lite_shadow_log_interval_sec)) return;
+    source_supply_last_log_sec_ = now_sec;
+    const auto worker = rate_resolved_track_cruise_shadow_worker_ ?
+      rate_resolved_track_cruise_shadow_worker_->stats() : LatestOnlyWorker::Stats{};
+    const auto mailbox = rate_resolved_track_cruise_shadow_mailbox_ ?
+      rate_resolved_track_cruise_shadow_mailbox_->state() : rate_resolved_shadow::MailboxState{};
+    const auto store = rate_resolved_track_cruise_certified_plan_store_ ?
+      rate_resolved_track_cruise_certified_plan_store_->state() : rate_resolved_certified::StoreState{};
+    const auto &window = rate_resolved_track_cruise_shadow_telemetry_window_;
+    RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
+      "MPCC source supply: decision=%lu, now=%.9f, draft=%s, scheduled=%s, successor=%s, "
+      "plans=%zu/contexts_rejected:%zu/requests:%zu, geometry=%lu, "
+      "normal_submitted=%lu/rejected:%lu, worker=%lu/%lu/%lu/running:%d/pending:%d/exceptions:%lu, "
+      "mailbox=%lu/%lu/invalid:%lu, store=%lu/accepted:%lu/cert_rejected:%lu/invalid:%lu/stale:%lu/reason:%d, "
+      "last_solver=%s/physical:%s, authority=observation-only",
+      static_cast<unsigned long>(active_control_decision_id_), now_sec, source_supply_draft_.c_str(),
+      source_supply_scheduled_, source_supply_successor_, source_supply_plans_, source_supply_context_rejects_,
+      source_supply_requests_, static_cast<unsigned long>(source_supply_geometry_),
+      static_cast<unsigned long>(window.submission_count), static_cast<unsigned long>(window.submission_reject_count),
+      static_cast<unsigned long>(worker.submitted), static_cast<unsigned long>(worker.started),
+      static_cast<unsigned long>(worker.completed), worker.running ? 1 : 0, worker.pending ? 1 : 0,
+      static_cast<unsigned long>(worker.exceptions), static_cast<unsigned long>(mailbox.latest_submitted_sequence),
+      static_cast<unsigned long>(mailbox.latest_published_sequence), static_cast<unsigned long>(mailbox.invalid_result_count),
+      static_cast<unsigned long>(store.latest_certified_sequence), static_cast<unsigned long>(store.accepted_count),
+      static_cast<unsigned long>(store.certification_reject_count), static_cast<unsigned long>(store.invalid_plan_count),
+      static_cast<unsigned long>(store.stale_sequence_count), static_cast<int>(store.last_reason),
+      window.last_result_available ? rate_resolved_shadow::to_string(window.last_result.outcome) : "unobserved",
+      window.last_physical.detail.c_str());
+  }
+
   void submit_scheduled_post_publication(
     const mpcc_vehicle_model::PublishedPrediction &actual,
     const mpcc_vehicle_model::PublishedInputLedger &ledger)
   {
+    source_supply_scheduled_ = "missing-dependency-or-draft";
     // Only the main callback reads the live world/ledger. The worker owns values.
     if (!scheduled_worker_ || scheduled_waiting_ || !pending_rate_resolved_publication_successor_ ||
         !pending_rate_resolved_publication_successor_->normal_draft || !rate_resolved_track_cruise_certified_plan_store_)
       return;
+    source_supply_scheduled_ = "scheduled-busy";
     {
       std::lock_guard<std::mutex> lock(scheduled_mailbox_->mutex);
       if (scheduled_mailbox_->in_flight || scheduled_mailbox_->latest) return;
     }
+    source_supply_scheduled_ = "missing-observation-frame-or-history";
     const auto cursor = ledger.snapshot(); const auto *last = ledger.latest_transaction();
     const auto frame = scheduled_progress_frame();
     if (!cursor || !last || !frame || actual.provenance.commands.size() != ledger.history().size()) return;
@@ -30826,11 +30867,15 @@ struct MPC
     const auto &context = pending.normal_draft->source_context;
     const auto anchor = scheduled_follow_anchor(pending.source_problem);
     std::vector<std::shared_ptr<const rate_resolved_certified::CertifiedPlan>> plans;
+    source_supply_scheduled_ = "no-compatible-source";
     const auto add = [&](const auto &plan) {
-      if (plan && plan->execution_artifact && plan->solver_source_snapshot &&
-          plan->solver_source_snapshot->normal_context_generation.same_generation(current_normal_context_generation()) &&
-          scheduled_control::select_new_source_context(plan->execution_artifact->identity.source_context, context).has_value() &&
-          std::none_of(plans.begin(),plans.end(),[&](const auto &p) { return p == plan; })) plans.push_back(plan);
+      if (!plan || !plan->execution_artifact || !plan->solver_source_snapshot ||
+          !plan->solver_source_snapshot->normal_context_generation.same_generation(current_normal_context_generation())) return;
+      if (!scheduled_control::select_new_source_context(plan->execution_artifact->identity.source_context, context)) {
+        ++source_supply_context_rejects_;
+        return;
+      }
+      if (std::none_of(plans.begin(),plans.end(),[&](const auto &p) { return p == plan; })) plans.push_back(plan);
     };
     // Tactical proposals are source candidates only; their old synchronous
     // current-world joins no longer write normal commands.
@@ -30845,7 +30890,9 @@ struct MPC
     add(bank.plan); add(bank.sibling_plan);
     add(rate_resolved_track_cruise_certified_plan_store_->published_bundle_source_snapshot().plan);
     add(rate_resolved_track_cruise_certified_plan_store_->executed_snapshot().plan);
+    source_supply_plans_ = plans.size();
     if (plans.empty()) return;
+    source_supply_scheduled_ = "missing-next-appointment";
     const auto next = next_scheduled_publication(ledger);
     if (!next) return;
     const auto &prior = next->first;
@@ -30860,6 +30907,7 @@ struct MPC
     const auto appointment = mpcc_vehicle_model::publication_epoch(prior,next_index + prior_count);
     const auto control_origin=scheduled_control::publication_control_origin(
       prior,next_index + prior_count,execution_prediction_delay_sec_);
+    source_supply_scheduled_ = "invalid-or-past-appointment";
     if (!appointment || !control_origin || *appointment < actual.provenance.now_sec) return;
     std::vector<scheduled_control::Request> requests;
     for (const auto &plan : plans) {
@@ -30874,7 +30922,10 @@ struct MPC
       request.progress_frame = *frame;
       requests.push_back(std::move(request));
     }
+    source_supply_requests_ = requests.size();
+    source_supply_scheduled_ = "observed-request-rejected";
     if (requests.empty()) return;
+    source_supply_scheduled_ = "scheduled-busy-at-submit";
     const auto mailbox = scheduled_mailbox_;
     {
       std::lock_guard<std::mutex> lock(mailbox->mutex);
@@ -30902,6 +30953,7 @@ struct MPC
       if (!mailbox->latest || mailbox->latest->request.observed.decision_id < context.decision_id)
         mailbox->latest = std::move(outcome);
     });
+    source_supply_scheduled_ = submitted.accepted ? "submitted" : "worker-rejected";
     if (!submitted.accepted) {
       std::lock_guard<std::mutex> lock(mailbox->mutex);
       mailbox->in_flight = false;
@@ -31160,6 +31212,8 @@ struct MPC
     const auto source_intent=problem.stop_shadow_requested ? problem.problem_intent : intent;
     std::string draft_reject_reason, preentry_reject_reason;
     auto draft=build_rate_resolved_track_cruise_submission_draft(problem,source_intent,now_sec,draft_reject_reason);
+    source_supply_draft_ = draft ? "available" : draft_reject_reason;
+    source_supply_geometry_ = draft ? draft->source_context.stage_geometry_id : 0;
     auto preentry=build_rate_resolved_preentry_execution_draft(last_v2x_behavior_output_,now_sec,preentry_reject_reason);
     std::optional<mpcc_contract::MpccProblemContext> current_context;
     if (draft) current_context=draft->source_context;
@@ -31174,6 +31228,13 @@ struct MPC
     return output;
   }
 
+  double source_supply_last_log_sec_{std::numeric_limits<double>::quiet_NaN()};
+  std::string source_supply_draft_{"not-reached"};
+  const char *source_supply_scheduled_{"not-reached"};
+  const char *source_supply_successor_{"not-reached"};
+  std::size_t source_supply_plans_{}, source_supply_context_rejects_{}, source_supply_requests_{};
+  std::uint64_t source_supply_geometry_{};
+
   double last_problem_initialization_ms{};
   NormalJoinTimingObservation last_normal_join_timing;
   ScheduledPhaseTimingObservation last_scheduled_phase_timing;
@@ -31182,6 +31243,11 @@ struct MPC
     const double now_sec, const std::uint64_t decision_id)
   {
     active_control_decision_id_ = decision_id;
+    source_supply_draft_ = "not-reached";
+    source_supply_scheduled_ = "post-send-not-reached";
+    source_supply_successor_ = "not-reached";
+    source_supply_plans_ = source_supply_context_rejects_ = source_supply_requests_ = 0;
+    source_supply_geometry_ = 0;
     last_problem_initialization_ms = 0.0;
     last_normal_join_timing = {};
     last_scheduled_phase_timing = {};

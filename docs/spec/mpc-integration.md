@@ -4864,3 +4864,11 @@ r63D2の集合外拒否は維持。全26build、2,584test記録、12再生場面
 12履歴場面の元時刻ガードを確認した。Build108全26、tests94全2,585記録/66group。
 標準r65/r66は起動不成立、描画なし診断r67は未完走。修正後の標準r68と全体受入れは未完。
 [中間長の候補生成](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-duration-population-design.md)。
+
+2026-09-12 標準r68では連続加速と実移動を確認したが、両車とも停止し未完走。
+新規候補の旧経路文脈は正しく拒否され、D1の別の停止候補は元入力で壁拒否を再現した。
+停止後の新規候補欠落を区別するため、送信後のdraft・候補選別・予定時刻・worker投入・
+前段指令への束縛とStore統計を既存の状態ログ間隔で観測する。独立した統計読出しは
+単一の非同期取引ではない。制御候補や権限・時計・壁条件は変えない。Build109全26、
+tests95全2,585記録/66group。r69で供給境界と実周期を確認する。
+[供給境界の観測](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r68-source-supply-design.md)。

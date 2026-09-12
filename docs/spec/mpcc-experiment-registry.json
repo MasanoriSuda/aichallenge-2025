@@ -1243,6 +1243,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-duration-population-evidence.json",
       "replay_ready": true,
       "reason": "r65/r66 startup, r67 command series, exact duration comparisons and current-library repair/history proof."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-source-supply-observation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r68-source-supply-evidence.json",
+      "replay_ready": true,
+      "reason": "r68 exact source/current-history context and wall rejection; source lifecycle observation pending live diagnosis."
     }
   ],
   "experiments": [
@@ -14961,6 +14967,48 @@
         "Assumption that failure of the entire source horizon leaves only one positive interval"
       ],
       "revisit_condition": "Changed immutable scene/source or new live duration/replenishment/startup evidence; never repeat a rejected timing/retiming proposal without its own revisit condition."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-supply-observation-r68-standard",
+      "baseline_commit": "165de6edf3fb9afb6d14aa3b0be05272cf2c1c94",
+      "snapshot_ids": [
+        "20260912-nine-state-source-supply-observation"
+      ],
+      "hypothesis": "Unobserved source lifecycle boundary explains sustained source loss after geometry changes or complete Stop.",
+      "changed_dimension": "Post-publication lifecycle telemetry only; existing status interval, same authority and all guards.",
+      "result": "rejected",
+      "reason": "Standard starts and moves, D1 max1.17mps, both stop without laps. Zero observed callback overruns or final-window violations; no integrated acceptance.",
+      "production_impact": "Observation only; source repair is not yet proposed.",
+      "deleted_code": [],
+      "revisit_condition": "New source/worker/Store/draft observation supports one producer cause; rejected context/clock bypasses remain forbidden."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-supply-observation-r414-r415",
+      "baseline_commit": "165de6edf3fb9afb6d14aa3b0be05272cf2c1c94",
+      "snapshot_ids": [
+        "20260912-nine-state-source-supply-observation"
+      ],
+      "hypothesis": "Unobserved source lifecycle boundary explains sustained source loss after geometry changes or complete Stop.",
+      "changed_dimension": "Post-publication lifecycle telemetry only; existing status interval, same authority and all guards.",
+      "result": "inconclusive",
+      "reason": "Source geometry rejection is correct; original complete Stop rejects occupied cell476325. No wall bug or physical infeasibility proven; missing fresh source root unknown.",
+      "production_impact": "Observation only; source repair is not yet proposed.",
+      "deleted_code": [],
+      "revisit_condition": "New source/worker/Store/draft observation supports one producer cause; rejected context/clock bypasses remain forbidden."
+    },
+    {
+      "experiment_id": "20260912-nine-state-source-supply-observation-build109-tests95-observation",
+      "baseline_commit": "165de6edf3fb9afb6d14aa3b0be05272cf2c1c94",
+      "snapshot_ids": [
+        "20260912-nine-state-source-supply-observation"
+      ],
+      "hypothesis": "Unobserved source lifecycle boundary explains sustained source loss after geometry changes or complete Stop.",
+      "changed_dimension": "Post-publication lifecycle telemetry only; existing status interval, same authority and all guards.",
+      "result": "accepted",
+      "reason": "Only lifecycle observations;26build and2585/66/source105 pass. Live reachability and cost pending standardr69.",
+      "production_impact": "Observation only; source repair is not yet proposed.",
+      "deleted_code": [],
+      "revisit_condition": "New source/worker/Store/draft observation supports one producer cause; rejected context/clock bypasses remain forbidden."
     }
   ]
 }

@@ -374,3 +374,9 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R401-R403 exact scheduled sources establish missing middle duration; R404 upstream A/B/C/D comparison retains its separate temporal scope.
 - [x] Private prior-count+1 intermediate candidate, original full/short proofs and zero-prior order; native RED408, final161 C5, build108 all26, tests94 all2,585/66/source105, source413 five cases and history411 twelve cases.
 - [ ] Committed standard r68: startup, actual multi-packet acceleration and replenishment, steering, original25ms guards; all M4-M6 and same submission/eval remain.
+
+2026-09-12 source supply observation (baseline165de6ed):
+- [x] Standard r68 starts and achieves D1 moving61 positive packets/1.5s/max1.17mps, then both stop with no laps. Callback zero overruns; full cleanup/restoration.
+- [x] R414 exact source/current/history: geometry mismatch correctly rejects old new-source; D1job936/source423 applied wall failure at12.339999736. R415 all candidate wall failures cell476325; no infeasibility claim.
+- [x] Observe draft, scheduled submission exits, predecessor binding and normal worker/mailbox/Store without authority changes. Build109 all26, tests95 all2,585/66/source105/C5 161.
+- [ ] Committed standard r69: identify first missing fresh compatible source boundary, observe logger timing; causal fix and all M4-M6 remain.

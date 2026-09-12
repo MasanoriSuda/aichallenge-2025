@@ -1,23 +1,23 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。中間長の入力候補を追加し局所検証済み。次は標準dev2-r68。**
+**全体未完。標準r68で実移動、停止後の候補供給は未解明。次は観測付き標準r69。**
 
-e7825da8の標準r65/r66はUnity初期化後にclock/odom/Startが進まない起動不成立。
-描画なし診断r67は開始できたが未完走。D1は加速1packetごとに制動し、D2最長10packet、
-両車の実測速度は最大約0.165m/s。描画経路の正確な停止原因と実受信時刻は未確定。
+165de6edの中間長候補でD1は61回・1.5秒の連続加速、最大1.17m/s。D2は移動中30回、
+最大0.56m/s。両車とも停止し未完走。標準描画は今回起動できたが、直前のmonitor復帰と
+前回の停止原因の因果は未確定。全callback4123/4096のoverrunは0、元の最終公開窓違反も
+記録上0。既存成果物とDLLの復元、コンテナ終了を確認した。
 
-R401-R403で、予約付きsourceが全期間か1packetしか候補にせず、成立する中間長を
-取りこぼすことを再現。R404の上流solver A/B/C/Dは別の時刻境界と明示して保存した。
-元の予約数+1の期間を独立証明するprivate候補を追加。完全停止・入力記憶・元の速度上限・
-世代と実履歴・現在世界・元の送信前後25msを維持する。Build108全26、tests94全2,585/66
-（C5 161、source105）、R413の5sourceとR411の12実履歴場面を確認した。
-Native/driverの準備失敗も証拠へ保存し、合格へ読み替えていない。
+R414は新規候補の旧経路文脈の正当な拒否と、D1job936/source423の元入力による
+壁拒否を再現。R415は4候補の拒否セル476325を記録し、物理的不成立とは断定しない。
+停止後の新規source欠落を区別する観測を追加。draft・選別・予定・worker投入・
+前段束縛・worker/mailbox/Store統計を既存ログ間隔で記録し、制御権限や合格条件は維持。
+Build109全26、tests95全2,585/66（C5 161、source105）。標準r69で観測到達と周期を検証する。
 
-標準r68の起動、連続加速・補充・操舵と期限を確認する。全intent/Mission/sibling/Store、
-実Stop/rest/restart、Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、
-dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/programme-duration-population-design.md)、
+供給producerの原因確定・回帰と修正、全intent/Mission/sibling/Store、実Stop/rest/restart、
+Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、
+同一tar/image/evalは未完。
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r68-source-supply-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

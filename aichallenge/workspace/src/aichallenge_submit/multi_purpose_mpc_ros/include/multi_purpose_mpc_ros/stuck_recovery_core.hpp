@@ -8,6 +8,19 @@
 namespace multi_purpose_mpc_ros::stuck_recovery
 {
 
+struct OperatingSessionRequest
+{
+  bool race_started{false};
+  bool simulation_environment{false};
+  bool state_tracking_enabled{false};
+  bool ready_state{false};
+  bool prepared_ready_rollout{false};
+};
+
+/// Ready can already authorize motion in AWSIM. This only selects the session;
+/// control, engagement, freshness, gear, footprint and actuation guards remain.
+bool operating_session_active(const OperatingSessionRequest & request) noexcept;
+
 // V2X source stamps can use simulation time while the receiving ROS node uses
 // a wall/system clock. Receipt freshness must therefore be checked with the
 // receiver clock, and source ordering must be checked only within the source
@@ -29,7 +42,7 @@ struct FaultRetryInput
 {
   double now_sec{};
   bool simulation_environment{false};
-  bool race_started{false};
+  bool session_active{false};
   bool control_enabled{false};
   bool odometry_fresh_and_finite{false};
   bool command_finite{false};
@@ -563,7 +576,7 @@ struct DetectorConfig
 struct DetectorInput
 {
   double now_sec{};
-  bool race_started{false};
+  bool session_active{false};
   bool control_enabled{false};
   bool odometry_fresh{false};
   bool solver_fallback{false};
@@ -951,7 +964,7 @@ struct RecoveryInput
 {
   double now_sec{};
   DetectorDecision detector;
-  bool race_active{false};
+  bool session_active{false};
   bool control_enabled{false};
   bool odometry_valid{false};
   bool solver_healthy{false};

@@ -14,11 +14,16 @@ R647/R648で、停止判断1048の両初期化候補804/805が軌道stage71の�
 R650の小加速2候補は0.0034m/s・約6mmにとどまり再発進の根拠にならない。
 より強い加速と、R651の停止操舵準備4候補は壁/軌道条件で拒否。安全条件を変えず記録した。
 既存B/C/D/G比較は対象車なしのCruiseに未対応で、走行不能とは判定できない。
-次は実際の制約セル・車体部位を特定し、対象車なしで使える非線形計画と元の最適化を比較する。
-ReadyではRecoveryがrace-inactiveとなる点も別の境界。Recoveryで計画修正済みと扱わない。
-物理モデル・入力集合・壁余裕・期限・唯一の認証済み通常権限を維持。全M4–M6は未完。
-[最新実走と原因・次作業](../20260910-mpcc-empirical-plant/receiver-input-enclosure/transport-single-r11-audit.md)。
-[計算短縮の設計・検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/compiled-coordinate-transport-design.md)。
+R653で最初の壁は左前方cell476325と特定。R655非線形3初期値比較は、合格候補が約4.5cmに
+とどまり再発進を確認できず。走行不能とはしない。R654の診断サンプル対応不備も保持。
+別の適用漏れとして、準備済みsimulation ReadyをRecovery動作セッションへ接続し、
+LowSpeedRejoinの直接速度・加速・操舵生成を除去。速度上限を最適化へ渡し、
+現在認証済みRejoin/Stopの原指令だけを通常dispatcherへ戻す。元のStart reset/gear/
+launch/Boost/安全条件は維持。R656native228/source115、build127/package114合格。
+次はcommit固定single-r12でRecoveryから通常走行への復帰と公開期限を検証する。
+source壁問題・物理観測誤差・全M4–M6は未完。追加確認は不要。
+[設計と局所検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-session-rejoin-design.md)、
+[停止source比較](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-cell-native-feasibility-audit.md)。
 
 以下は先行runの履歴。現在の次作業は上記とする。
 

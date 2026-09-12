@@ -9,6 +9,13 @@
 
 namespace multi_purpose_mpc_ros::stuck_recovery
 {
+bool operating_session_active(const OperatingSessionRequest & request) noexcept
+{
+  return request.race_started ||
+         (request.simulation_environment && request.state_tracking_enabled &&
+         request.ready_state && request.prepared_ready_rollout);
+}
+
 namespace
 {
 
@@ -507,7 +514,7 @@ FaultRetryGate::FaultRetryGate(FaultRetryConfig config)
 bool FaultRetryGate::update(const FaultRetryInput & input)
 {
   const bool healthy = config_.enabled && input.simulation_environment &&
-    input.race_started && input.control_enabled && input.odometry_fresh_and_finite &&
+    input.session_active && input.control_enabled && input.odometry_fresh_and_finite &&
     input.command_finite && input.drive_gear_fresh && input.boost_inactive &&
     input.v2x_complete && input.bounded_maneuver_available && !input.collision_worsening;
   if (!std::isfinite(input.now_sec) || !healthy) {
@@ -1297,7 +1304,7 @@ DetectorDecision StuckDetector::update(const DetectorInput & input)
       return reject(input, verdict, reason, forward_intent, evidence);
     };
 
-  if (!input.race_started) {
+  if (!input.session_active) {
     return reject_and_reset(StuckVerdict::NotEligible, StuckRejectReason::RaceNotStarted);
   }
   if (!input.control_enabled) {
@@ -1506,7 +1513,7 @@ RecoveryAction RecoverySupervisor::update(const RecoveryInput & input)
   }
   last_update_sec_ = input.now_sec;
 
-  if (!input.race_active) {
+  if (!input.session_active) {
     reset_session();
     last_update_sec_ = input.now_sec;
     state_entered_sec_ = input.now_sec;
@@ -2567,7 +2574,7 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   RecoveryInput recovery = input.recovery;
   recovery.now_sec = input.detector.now_sec;
   recovery.detector = output.detector;
-  recovery.race_active = input.detector.race_started;
+  recovery.session_active = input.detector.session_active;
   recovery.control_enabled = input.detector.control_enabled;
   recovery.odometry_valid = input.detector.odometry_fresh &&
     std::isfinite(input.detector.signed_speed_mps);
@@ -2583,13 +2590,11 @@ CoreOutput StuckRecoveryCore::update(const CoreInput & input)
   if (confirmed_solver_fallback_candidate) {
     solver_fallback_recovery_episode_ = true;
   }
-  // The normal MPC solver is not used while the recovery supervisor exclusively
-  // owns the stop, gear-shift, maneuver, and low-speed rejoin commands. A
-  // solver-qualified episode must retain that qualification until rejoin is
-  // complete; otherwise its first measured motion clears the detector timer
-  // and creates a circular wait for the failed solver before external rejoin.
-  // A solver failure that starts during a non-solver recovery still uses the
-  // bounded LowSpeedRejoin hold/timeout in RecoverySupervisor.
+  // The supervisor owns stop, gear shifts and bounded escape maneuvers.
+  // Keep the episode qualified while LowSpeedRejoin awaits normal planning;
+  // the adapter releases motion only through a current certified Rejoin command.
+  // This flag permits supervision, not solver-independent normal actuation.
+  // A failure during a non-solver episode retains the existing bounded hold/timeout.
   recovery.solver_healthy = !input.detector.solver_fallback ||
     recovery_no_longer_depends_on_solver ||
     confirmed_solver_fallback_candidate ||

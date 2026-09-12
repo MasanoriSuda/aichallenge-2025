@@ -9425,6 +9425,14 @@ struct MPC
     return transition;
   }
 
+  void set_recovery_rejoin_requested(const bool requested)
+  {
+    if (recovery_rejoin_requested_ != requested) {
+      recovery_rejoin_requested_ = requested;
+      invalidate_scheduled_context("Recovery Rejoin intent changed");
+    }
+  }
+
   bool start_grid_ready_rollout_active() const noexcept
   {
     return start_grid_grace_guard_.phase() == start_grid_grace::Phase::Prepared;
@@ -31972,19 +31980,22 @@ struct MPC
             mpcc_lite_same_side_max_lateral_adjustment))});
   }
 
+  bool recovery_rejoin_requested_{false};
+
   mpcc_contract::ControlIntent current_control_intent() const noexcept
   {
     if (!last_overtake_authority_trace_.has_value()) {
-      return v2x_race_session_active_ ?
-        mpcc_contract::ControlIntent::Cruise :
-        mpcc_contract::ControlIntent::Track;
+      return mpcc_contract::resolve_recovery_rejoin_intent(
+        v2x_race_session_active_ ? mpcc_contract::ControlIntent::Cruise :
+        mpcc_contract::ControlIntent::Track, recovery_rejoin_requested_);
     }
     const auto resolution =
       overtake_orchestrator::resolve_canonical_control_intent(
       last_overtake_authority_trace_->request,
       last_overtake_authority_trace_->resolution);
-    return resolution.valid ? resolution.intent :
-      mpcc_contract::ControlIntent::Unknown;
+    return mpcc_contract::resolve_recovery_rejoin_intent(
+      resolution.valid ? resolution.intent : mpcc_contract::ControlIntent::Unknown,
+      recovery_rejoin_requested_);
   }
 
   static bool has_coherent_follow_front_observation(
@@ -55149,7 +55160,7 @@ private:
             last_commanded_recovery_gear_ = stuck_recovery::Gear::Drive;
             if (recovery_waiting_for_drive_after_reset_) {
               recovery_waiting_for_drive_after_reset_ = false;
-              recovery_fault_latched_ = !race_started_;
+              recovery_fault_latched_ = !recovery_session_active();
               recovery_reset_drive_request_count_ = 0U;
               recovery_reset_stopped_since_.reset();
               RCLCPP_INFO(
@@ -57749,6 +57760,15 @@ private:
     recovery_forward_fallback_unlocked_ = false;
   }
 
+  bool recovery_session_active() const noexcept
+  {
+    return stuck_recovery::operating_session_active(
+      stuck_recovery::OperatingSessionRequest{
+        race_started_, use_sim_time_, awsim_state_tracking_enabled_,
+        last_awsim_state_ == "ready",
+        mpc_ && mpc_->start_grid_ready_rollout_active()});
+  }
+
   std::optional<stuck_recovery::CoreOutput> evaluate_stuck_recovery(
     const Pose2D & pose, const double actual_v, const Eigen::Vector2d & normal_u,
     const double normal_acc, const double path_forward_intent_speed_mps,
@@ -58300,7 +58320,7 @@ private:
     stuck_recovery::CoreInput input;
     input.simulation_environment = use_sim_time_;
     input.detector.now_sec = steady_seconds(steady_now);
-    input.detector.race_started = race_started_;
+    input.detector.session_active = recovery_session_active();
     input.detector.control_enabled = enable_control_;
     input.detector.odometry_fresh = true;
     input.detector.solver_fallback = mpc_fallback_active;
@@ -59222,7 +59242,10 @@ private:
 
   bool apply_stuck_recovery_arbitration(
     const stuck_recovery::CoreOutput & output, const double actual_v,
-    const rclcpp::Time & stamp, Eigen::Vector2d & u, double & acc)
+    const rclcpp::Time & stamp, Eigen::Vector2d & u, double & acc,
+    const std::optional<mpcc_contract::CanonicalNormalCommand> & normal_command,
+    const bool normal_execution_active,
+    const mpcc_contract::ControlIntent publication_intent)
   {
     if (!output.actuation_allowed ||
       output.action.type == stuck_recovery::RecoveryActionType::NormalControl)
@@ -59230,30 +59253,31 @@ private:
       return false;
     }
 
-    if (mpc_)
-      mpc_->invalidate_scheduled_context(__func__);
     recovery_boost_suppressed_for_session_ = true;
     if (output.action.type == stuck_recovery::RecoveryActionType::LowSpeedRejoin) {
-      if (recovery_rejoin_hold_cycle_) {
-        const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
-        u[0] = 0.0;
-        u[1] = clip(0.0, last_u_[1] - max_steering_step, last_u_[1] + max_steering_step);
-        acc = mpc_cfg_.a_min;
-        recovery_rejoin_hold_cycle_ = false;
-        return true;
+      if (!recovery_rejoin_hold_cycle_ && normal_execution_active && normal_command &&
+        mpcc_contract::canonical_rejoin_command_within_limit(
+          *normal_command, publication_intent, output.action.rejoin_speed_limit_mps))
+      {
+        // Keep the solved actuation and scheduled publication proof intact.
+        return false;
       }
-      // LowSpeedRejoin is entered only after the bounded escape distance, Drive report,
-      // static swept-footprint, V2X, and solver gates have all passed. The normal MPC
-      // can still request zero after a physical contact; taking min(normal, limit) then
-      // leaves the vehicle stationary until the rejoin timeout. Treat the configured
-      // low-speed value as the recovery target while those gates remain continuously clear.
-      u[0] = output.action.rejoin_speed_limit_mps;
-      const double steering_gain = mpc_cfg_.steering_tire_angle_gain_var;
-      u[1] = output.action.steering_tire_angle_rad / steering_gain;
-      acc = clip(100.0 * (u[0] - actual_v), mpc_cfg_.a_min, mpc_cfg_.a_max);
+      // Preserve asynchronous Rejoin candidates while awaiting certification.
+      // The phase/intent transition already invalidated the old normal context.
+      if (!recovery_rejoin_hold_cycle_ && normal_execution_active && normal_command &&
+        publication_intent == mpcc_contract::ControlIntent::Stop)
+      {
+        return false;  // The original certified Stop keeps its own normal authority.
+      }
+      const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
+      u[0] = 0.0;
+      u[1] = clip(0.0, last_u_[1] - max_steering_step, last_u_[1] + max_steering_step);
+      acc = mpc_cfg_.a_min;
+      recovery_rejoin_hold_cycle_ = false;
       return true;
     }
 
+    if (mpc_) mpc_->invalidate_scheduled_context(__func__);
     const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
     u[0] = 0.0;
     u[1] = clip(0.0, last_u_[1] - max_steering_step, last_u_[1] + max_steering_step);
@@ -59352,7 +59376,7 @@ private:
       (safety.current_footprint_clear && safety.rejoin_forward_static_clear));
     const bool retry_ready = recovery_fault_retry_gate_->update(
       stuck_recovery::FaultRetryInput{
-        steady_seconds(steady_now), use_sim_time_, race_started_, enable_control_, true,
+        steady_seconds(steady_now), use_sim_time_, recovery_session_active(), enable_control_, true,
         last_u_.allFinite() && std::isfinite(last_acc_), drive_gear_fresh,
         safety.boost_inactive_confirmed, safety.v2x_message_complete,
         bounded_maneuver_available, safety.collision_worsening});
@@ -59840,6 +59864,14 @@ private:
       const double ref_vel_kmph = ref_vel_configulator_->get_ref_vel(mpc_->model->wp_id);
       effective_v_max = std::min(kmh_to_m_per_sec(ref_vel_kmph), effective_v_max);
     }
+    const bool recovery_rejoin_requested = stuck_recovery_core_ &&
+      stuck_recovery_core_->supervisor().state() ==
+      stuck_recovery::RecoveryState::LowSpeedRejoin;
+    mpc_->set_recovery_rejoin_requested(recovery_rejoin_requested);
+    if (recovery_rejoin_requested) {
+      effective_v_max = std::min(
+        effective_v_max, cfg_.stuck_recovery.core.supervisor.rejoin_speed_limit_mps);
+    }
     mpc_->update_v_max(effective_v_max);
     reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), effective_v_max));
 
@@ -59927,7 +59959,9 @@ private:
       canonical_normal_execution_active);
     const bool recovery_command_active = recovery_output.has_value() &&
       apply_stuck_recovery_arbitration(
-      recovery_output.value(), actual_v, current_time, u, acc);
+      recovery_output.value(), actual_v, current_time, u, acc,
+      canonical_normal_command, canonical_normal_execution_active,
+      mpc_cycle.published_authority_intent);
     if (!canonical_normal_execution_active || recovery_command_active) {
       acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
       u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
@@ -59968,10 +60002,7 @@ private:
       publish_failsafe_command(current_time, reason_text.c_str());
       return;
     }
-    const bool recovery_uses_normal_model =
-      recovery_output.has_value() &&
-      recovery_output->action.type == stuck_recovery::RecoveryActionType::LowSpeedRejoin;
-    if (!recovery_command_active || recovery_uses_normal_model) {
+    if (!recovery_command_active) {
       car_->drive(Eigen::Vector2d(actual_v, u[1]));
     }
     const auto published_steering = publish_control_command(

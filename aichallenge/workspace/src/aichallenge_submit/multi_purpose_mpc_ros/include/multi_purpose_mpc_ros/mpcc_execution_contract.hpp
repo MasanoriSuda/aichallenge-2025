@@ -562,6 +562,16 @@ bool canonical_normal_command_matches_actuation(
   const CanonicalNormalCommand & command, double target_speed_mps,
   double acceleration_mps2, double steering_tire_angle_rad) noexcept;
 
+/// Recovery requests a normal Rejoin problem; deliberate stops keep priority.
+ControlIntent resolve_recovery_rejoin_intent(
+  ControlIntent normal_intent, bool rejoin_requested) noexcept;
+
+/// Additional handoff check on an already current-world-certified command.
+/// This neither certifies a command nor permits altering its actuation values.
+bool canonical_rejoin_command_within_limit(
+  const CanonicalNormalCommand & command, ControlIntent publication_intent,
+  double speed_limit_mps) noexcept;
+
 /// Verify the physical command after calibrated serialization into the ROS
 /// control message. The canonical command remains in model/physical units;
 /// only this boundary applies the plant's wire calibration. The Ackermann

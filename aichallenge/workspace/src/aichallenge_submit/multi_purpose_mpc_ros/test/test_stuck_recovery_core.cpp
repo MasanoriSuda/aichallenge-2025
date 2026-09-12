@@ -829,7 +829,7 @@ TEST(StuckRecoveryFaultRetry, RequiresContinuousHealthySimulationWindow)
   FaultRetryGate gate(FaultRetryConfig{true, 0.5, 0.2});
   FaultRetryInput input;
   input.simulation_environment = true;
-  input.race_started = true;
+  input.session_active = true;
   input.control_enabled = true;
   input.odometry_fresh_and_finite = true;
   input.command_finite = true;
@@ -852,7 +852,7 @@ TEST(StuckRecoveryFaultRetry, ResetsOnUnsafeConditionOrObservationGap)
   FaultRetryGate gate(FaultRetryConfig{true, 0.5, 0.2});
   FaultRetryInput input;
   input.simulation_environment = true;
-  input.race_started = true;
+  input.session_active = true;
   input.control_enabled = true;
   input.odometry_fresh_and_finite = true;
   input.command_finite = true;
@@ -876,7 +876,7 @@ TEST(StuckRecoveryFaultRetry, NeverRetriesOutsideSimulation)
 {
   FaultRetryGate gate(FaultRetryConfig{true, 0.0, 0.2});
   FaultRetryInput input;
-  input.race_started = true;
+  input.session_active = true;
   input.control_enabled = true;
   input.odometry_fresh_and_finite = true;
   input.command_finite = true;
@@ -1245,7 +1245,7 @@ DetectorInput eligible_detector_input(const double now_sec)
 {
   DetectorInput input;
   input.now_sec = now_sec;
-  input.race_started = true;
+  input.session_active = true;
   input.control_enabled = true;
   input.odometry_fresh = true;
   input.requested_forward_speed_mps = 2.0;
@@ -1293,7 +1293,7 @@ RecoveryInput healthy_recovery_input(const double now_sec)
   RecoveryInput input;
   input.now_sec = now_sec;
   input.detector = confirmed_decision();
-  input.race_active = true;
+  input.session_active = true;
   input.control_enabled = true;
   input.odometry_valid = true;
   input.solver_healthy = true;
@@ -1894,7 +1894,7 @@ TEST(StuckDetector, ExcludesIntentionalAndUnsafeConditions)
     };
 
   auto input = eligible_detector_input(0.0);
-  input.race_started = false;
+  input.session_active = false;
   check(input, StuckRejectReason::RaceNotStarted);
   input = eligible_detector_input(0.0);
   input.control_enabled = false;
@@ -3697,7 +3697,7 @@ TEST(RecoverySupervisor, SessionResetClearsLatchedStopTimersAndAttempts)
   EXPECT_EQ(supervisor.attempt_count(), 0U);
 
   input = healthy_recovery_input(0.0);
-  input.race_active = false;
+  input.session_active = false;
   const auto action = supervisor.update(input);
   EXPECT_EQ(action.type, RecoveryActionType::NormalControl);
   EXPECT_EQ(action.reason, RecoveryReason::RaceInactive);
@@ -4341,3 +4341,48 @@ TEST(StuckRecoveryDemand, OnlyCurrentUnencumberedNormalAuthorityCanDeferRollouts
 }
 
 }  // namespace
+
+TEST(StuckRecoverySession, ReadyRequiresTrackedPreparedSimulationRollout)
+{
+  namespace recovery = multi_purpose_mpc_ros::stuck_recovery;
+  for (unsigned bits = 0; bits < 32U; ++bits) {
+    const recovery::OperatingSessionRequest request{
+      bool(bits & 1U), bool(bits & 2U), bool(bits & 4U), bool(bits & 8U), bool(bits & 16U)};
+    const bool expected = (bits & 1U) || ((bits & 30U) == 30U);
+    SCOPED_TRACE(bits);
+    EXPECT_EQ(recovery::operating_session_active(request), expected);
+  }
+}
+
+TEST(StuckRecoverySession, ReadyCollectsEvidenceButRetainsControlAndEngagementGuards)
+{
+  namespace recovery = multi_purpose_mpc_ros::stuck_recovery;
+  const recovery::OperatingSessionRequest ready{false, true, true, true, true};
+  auto input = eligible_detector_input(0.0);
+  StuckDetector detector(detector_config());
+  input.session_active = ready.race_started;
+  EXPECT_EQ(detector.update(input).reject_reason, StuckRejectReason::RaceNotStarted);
+  input.session_active = recovery::operating_session_active(ready);
+  EXPECT_EQ(detector.update(input).reject_reason, StuckRejectReason::ObservationWindowIncomplete);
+  input.now_sec = 1.1;
+  EXPECT_EQ(detector.update(input).verdict, StuckVerdict::Confirmed);
+  for (int guard = 0; guard < 4; ++guard) {
+    StuckDetector guarded(detector_config());
+    auto blocked = input;
+    StuckRejectReason reason{};
+    switch (guard) {
+      case 0: blocked.control_enabled = false; reason = StuckRejectReason::ControlDisabled; break;
+      case 1: blocked.odometry_fresh = false; reason = StuckRejectReason::OdometryStale; break;
+      case 2: blocked.deliberate_stop = true; reason = StuckRejectReason::DeliberateStop; break;
+      case 3: blocked.gear_transition_active = true; reason = StuckRejectReason::GearTransition; break;
+    }
+    SCOPED_TRACE(guard);
+    EXPECT_EQ(guarded.update(blocked).reject_reason, reason);
+  }
+  input.session_active = false;
+  input.now_sec = 1.2;
+  EXPECT_EQ(detector.update(input).reject_reason, StuckRejectReason::RaceNotStarted);
+  input.session_active = true;
+  input.now_sec = 1.3;
+  EXPECT_EQ(detector.update(input).reject_reason, StuckRejectReason::ObservationWindowIncomplete);
+}

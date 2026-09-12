@@ -932,6 +932,39 @@ bool canonical_normal_command_matches_actuation(
     steering_tire_angle_rad == command.steering_tire_angle_rad;
 }
 
+ControlIntent resolve_recovery_rejoin_intent(
+  const ControlIntent normal_intent, const bool rejoin_requested) noexcept
+{
+  if (!rejoin_requested || normal_intent == ControlIntent::Hold ||
+    normal_intent == ControlIntent::Stop ||
+    !canonical_normal_intent_supported(normal_intent))
+  {
+    return normal_intent;
+  }
+  return ControlIntent::Rejoin;
+}
+
+bool canonical_rejoin_command_within_limit(
+  const CanonicalNormalCommand & command, const ControlIntent publication_intent,
+  const double speed_limit_mps) noexcept
+{
+  return command.intent == ControlIntent::Rejoin &&
+         publication_intent == ControlIntent::Rejoin &&
+         command.formulation == Formulation::VelocitySteeringTireBodyProgress9State &&
+         (command.source == CanonicalNormalAuthoritySource::FreshCertified ||
+         command.source == CanonicalNormalAuthoritySource::RetainedCertified) &&
+         command.decision_id != 0U && command.execution_plan_id != 0U &&
+         command.execution_certificate_decision_id == command.decision_id &&
+         command.problem_fingerprint != 0U && command.solution_id != 0U &&
+         std::isfinite(speed_limit_mps) && speed_limit_mps > 0.0 &&
+         std::isfinite(command.predicted_speed_mps) &&
+         command.predicted_speed_mps >= 0.0 && command.predicted_speed_mps <= speed_limit_mps &&
+         std::isfinite(command.acceleration_mps2) && std::isfinite(command.curvature_radpm) &&
+         std::isfinite(command.steering_tire_angle_rad) &&
+         std::isfinite(command.virtual_progress_speed_mps) &&
+         command.virtual_progress_speed_mps >= 0.0;
+}
+
 bool canonical_normal_command_matches_serialized_actuation(
   const CanonicalNormalCommand & command, const double target_speed_mps,
   const double acceleration_mps2,

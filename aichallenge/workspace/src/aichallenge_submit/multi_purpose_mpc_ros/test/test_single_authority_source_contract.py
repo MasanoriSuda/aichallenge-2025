@@ -3847,3 +3847,37 @@ def test_initial_physical_corridor_uses_semantic_fixed_waypoint_pose() -> None:
     assert "initial_frenet->lateral_m-kInitialWallBoundaryGuardM" in initial
     assert "initial_frenet->lateral_m+kInitialWallBoundaryGuardM" in initial
     assert "interval.feasible && interval.preferred_lateral_contained" in initial
+
+
+def test_recovery_rejoin_cannot_synthesize_a_second_normal_command():
+    arbitration = SOURCE.split('bool apply_stuck_recovery_arbitration(', 1)[1].split(
+        'bool maybe_clear_recovery_fault_latch(', 1
+    )[0]
+    assert 'u[0] = output.action.rejoin_speed_limit_mps' not in arbitration
+    rejoin = arbitration.split('RecoveryActionType::LowSpeedRejoin', 1)[1].split(
+        'const bool reverse_reported_fresh', 1
+    )[0]
+    assert 'u[1] = output.action.steering_tire_angle_rad / steering_gain' not in rejoin
+    assert 'canonical_rejoin_command_within_limit' in arbitration
+    assert arbitration.index('canonical_rejoin_command_within_limit') < arbitration.index(
+        'invalidate_scheduled_context'
+    )
+
+
+def test_recovery_rejoin_intent_and_limit_enter_before_the_normal_solve():
+    callback = SOURCE.split('double effective_v_max = speed_resolution.speed_mps;', 1)[1]
+    solve = callback.index('mpc_->get_control(')
+    prefix = callback[:solve]
+    assert 'set_recovery_rejoin_requested' in prefix
+    assert 'core.supervisor.rejoin_speed_limit_mps' in prefix
+    assert prefix.index('core.supervisor.rejoin_speed_limit_mps') < prefix.index('mpc_->update_v_max(')
+    intent = SOURCE.split('mpcc_contract::ControlIntent current_control_intent()', 1)[1].split(
+        'static bool has_coherent_follow_front_observation', 1
+    )[0]
+    assert 'resolve_recovery_rejoin_intent' in intent
+
+
+def test_ready_recovery_uses_the_same_operating_session_at_each_gate():
+    assert 'input.detector.session_active = recovery_session_active();' in SOURCE
+    assert 'use_sim_time_, recovery_session_active(), enable_control_' in SOURCE
+    assert 'recovery_fault_latched_ = !recovery_session_active();' in SOURCE

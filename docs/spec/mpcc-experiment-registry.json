@@ -1447,6 +1447,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/transport-single-r11-evidence.json",
       "replay_ready": true,
       "reason": "Prospective single-r11after numeric map transport, actual final/source provenance, fixed native witnesses rejected for useful restart."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-recovery-audit-r657",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-session-rejoin-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact stopped source cell, target-free native feasibility and separate Recovery session/Rejoin authority regression."
     }
   ],
   "experiments": [
@@ -18861,6 +18867,79 @@
       "production_impact": "None after fdee0b8f. Fixed native candidates diagnostic only; no source or supervision promotion.",
       "deleted_code": [],
       "revisit_condition": "A changed immutable world or a structurally different target-free native source/constraint formulation; no repetition of failed fixed steering/acceleration grids, margin/window tuning or suppressed proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-audit-r657-r653",
+      "baseline_commit": "3e674523",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-audit-r657"
+      ],
+      "hypothesis": "Separate exact source geometry/feasibility from Recovery eligibility and canonical Rejoin authority.",
+      "changed_dimension": "20260913-nine-state-source-cell-geometry-r653",
+      "result": "accepted",
+      "reason": "Exact full footprint contact identifies cell476325front-left; initial3.19cm X separation consumed after4.24cm. Geometric derivatives are not control feasibility.",
+      "production_impact": "R653-R655diagnostic only. R656Ready Recovery and canonical Rejoin; native model/enclosure/proofs unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Changed immutable pose/world or a structurally different geometry constraint."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-audit-r657-r654",
+      "baseline_commit": "3e674523",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-audit-r657"
+      ],
+      "hypothesis": "Separate exact source geometry/feasibility from Recovery eligibility and canonical Rejoin authority.",
+      "changed_dimension": "20260913-nine-state-native-feasibility-r654",
+      "result": "inconclusive",
+      "reason": "Diagnostic pose reader omitted sample0; parity fails before optimization. Original output preserved.",
+      "production_impact": "R653-R655diagnostic only. R656Ready Recovery and canonical Rejoin; native model/enclosure/proofs unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Correct native sample indexing; satisfied by R655."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-audit-r657-r655",
+      "baseline_commit": "3e674523",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-audit-r657"
+      ],
+      "hypothesis": "Separate exact source geometry/feasibility from Recovery eligibility and canonical Rejoin authority.",
+      "changed_dimension": "20260913-nine-state-native-feasibility-r655",
+      "result": "inconclusive",
+      "reason": "Three declared native SLSQPseeds: only4.496cm fully certified, other two fail wall/semantic steering after80iterations. No useful restart or infeasibility certificate.",
+      "production_impact": "R653-R655diagnostic only. R656Ready Recovery and canonical Rejoin; native model/enclosure/proofs unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Changed source/constraint architecture or physical world; not larger seed/iteration/margin sweeps."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-audit-r657-r656",
+      "baseline_commit": "3e674523",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-audit-r657"
+      ],
+      "hypothesis": "Separate exact source geometry/feasibility from Recovery eligibility and canonical Rejoin authority.",
+      "changed_dimension": "20260913-nine-state-recovery-regression-r656",
+      "result": "accepted",
+      "reason": "Separate Ready session defect and raw Rejoin owner removed; old3source gates fail, new115source tests and228native tests pass. Build127/package114passed; simulator acceptance still pending.",
+      "production_impact": "R653-R655diagnostic only. R656Ready Recovery and canonical Rejoin; native model/enclosure/proofs unchanged.",
+      "deleted_code": [
+        "Direct LowSpeedRejoin target speed, proportional acceleration and steering publication",
+        "Per-callback Rejoin cancellation and special non-normal rejoin model update"
+      ],
+      "revisit_condition": "A failing operating-session/Rejoin authority regression or new integrated run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-audit-r657-r658",
+      "baseline_commit": "3e674523",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-audit-r657"
+      ],
+      "hypothesis": "Separate exact source geometry/feasibility from Recovery eligibility and canonical Rejoin authority.",
+      "changed_dimension": "20260913-nine-state-recovery-source-wall-r658",
+      "result": "accepted",
+      "reason": "New binary preserves original source805wall rejection at stage71/cell476325; original world/model/hard proof unchanged.",
+      "production_impact": "R653-R655diagnostic only. R656Ready Recovery and canonical Rejoin; native model/enclosure/proofs unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "A change to source geometry, model, physical proof or authority."
     }
   ]
 }

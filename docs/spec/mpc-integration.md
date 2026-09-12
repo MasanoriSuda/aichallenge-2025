@@ -8,6 +8,25 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## ReadyのRecoveryと認証済みRejoin（2026-09-13）
+
+Recoveryは従来のStart後に加え、AWSIM状態追跡が有効なシミュレーションで、
+Readyかつstart-grid rollout準備済みの場合を動作セッションとする。
+制御有効、発進確認、観測/V2X鮮度、停止・gear report、壁/contact、Boost、距離・時間予算の
+各guardは維持する。Start進入時のRecovery resetと停止確認後のDrive復帰も従来どおり。
+
+LowSpeedRejoinでは既存速度上限を最適化前に適用し、canonical9状態のRejoinを要求する。
+現在の完全な認証を持つRejoin指令だけを値を変えず通常dispatcherへ渡す。
+認証済みStopはStopとして保持できる。認証待ち・不合格時は停止し、直接速度目標、
+比例加速度、専用操舵で通常指令を置き換えない。非同期候補を待機周期ごとに取り消さない。
+以下の過去日付の専用Rejoin feedbackは廃止履歴であり、現行の通常実行には適用しない。
+
+R653–R655でsingle-r11停止source805の左前方壁セルを特定し、非線形比較を実施。
+認証済み候補は約4.5cmにとどまり、再発進も走行不能も確定していない。
+この監督/権限修正でsource壁問題を修正済みと扱わない。実走・全M4–M6の受入れは未完。
+[設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-session-rejoin-design.md)、
+[停止source比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-cell-native-feasibility-audit.md)。
+
 ## 9状態共通モデルへの移行中（2026-09-10）
 
 現在の作業候補は`VelocitySteeringTireBodyProgress9State`であり、状態順は
@@ -718,8 +737,9 @@ map invalid、out-of-map、unknown、solver fallback、V2X不完全ではこのf
 Recoveryがcommand ownerになった後はfallback継続だけで途中abortしない。通常設定の
 LowSpeedRejoinではsolver復帰を必須とし、solver fallback自体を起点に全hard gateを通過した
 episodeだけ資格をcoreへラッチする。`aggressive_sim_recovery_enabled=true`のdev3では、
-LowSpeedRejoinが専用の低速速度・操舵feedbackを直接出力することを利用し、episode起点に関係なく
-solver healthを再合流条件から外す。この例外は`simulation_only: true`との組み合わせでしか起動できない。
+episode起点に関係なくsolver healthを監督状態の継続条件から外す。これは認証待ちを許すだけで、
+2026-09-13以降の通常Rejoin駆動には必ず認証済みcanonical9状態指令を要求する。
+この監督設定は`simulation_only: true`との組み合わせでしか起動できない。
 
 通常V2X behaviorの`deliberate_stop`はRecovery開始前の誤検知除外に限定する。Followは実front
 vehicleに対する`follow_speed_limit`、moving-front clearance cap、またはpath前進要求を下回る有限の
@@ -858,7 +878,8 @@ MPC prediction / control history / solver fallback、V2X behavior、OvertakeLine
 lockをresetする。再合流へ入る前にFront / Sideはepisode実測2.0 m、Rearは実測0.30 mの
 escapeと車体clearanceを必須とする。未達でDriveへ戻った場合は`escape_not_confirmed`で
 SafeStopする。再合流中もV2X completeを必須とし、欠落時は停止保持する。通常MPCが接触後に
-0 m/sを返す場合も、全hard gateが成立しているLowSpeedRejoinだけは設定値を専用の前進目標にする。
+0 m/sを返す場合も値を上書きしない。LowSpeedRejoin設定値は最適化の速度上限として渡し、
+実行は現在認証済みRejoinまたは認証済みStopの原指令に限る。
 参照曲率feedforwardと横偏差・heading誤差feedbackからrate-limit後のtire angleを求め、同じ値で
 0.8 mの前進swept footprintと実commandを評価する。lateral / heading errorが所定時間閾値内に
 入るまで継続し、速度設定値0以下は起動時に拒否する。

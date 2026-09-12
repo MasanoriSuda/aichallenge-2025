@@ -1610,3 +1610,81 @@ TEST(MpccExecutionContract, PreentryIdentityFailsClosedOnContradiction)
     contract::PreentryTacticalIdentityReason::TacticalSequenceRegression);
   EXPECT_FALSE(resolution.current_world_observation_permitted);
 }
+
+TEST(MpccExecutionContract, RecoveryRejoinPreservesDeliberateStopAndInvalidIntent)
+{
+  for (const auto intent : {contract::ControlIntent::Track, contract::ControlIntent::Cruise,
+    contract::ControlIntent::Follow, contract::ControlIntent::ShiftOut,
+    contract::ControlIntent::Pass, contract::ControlIntent::Return,
+    contract::ControlIntent::Rejoin})
+  {
+    EXPECT_EQ(contract::resolve_recovery_rejoin_intent(intent, false), intent);
+    EXPECT_EQ(contract::resolve_recovery_rejoin_intent(intent, true), contract::ControlIntent::Rejoin);
+  }
+  for (const auto intent : {contract::ControlIntent::Unknown, contract::ControlIntent::Hold,
+    contract::ControlIntent::Stop, static_cast<contract::ControlIntent>(99)})
+  {
+    EXPECT_EQ(contract::resolve_recovery_rejoin_intent(intent, true), intent);
+  }
+}
+
+TEST(MpccExecutionContract, RejoinHandoffAcceptsOnlyUnchangedCertifiedNormalWithinCap)
+{
+  contract::CanonicalNormalCommand command;
+  command.decision_id = 42U;
+  command.execution_certificate_decision_id = 42U;
+  command.execution_plan_id = 23U;
+  command.problem_fingerprint = 1234U;
+  command.solution_id = 91U;
+  command.formulation = contract::Formulation::VelocitySteeringTireBodyProgress9State;
+  command.intent = contract::ControlIntent::Rejoin;
+  command.predicted_speed_mps = 0.25;
+  command.acceleration_mps2 = 0.8;
+  command.curvature_radpm = -0.12;
+  command.steering_tire_angle_rad = -0.31;
+  command.virtual_progress_speed_mps = 0.4;
+  for (const auto source : {contract::CanonicalNormalAuthoritySource::FreshCertified,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified})
+  {
+    command.source = source;
+    EXPECT_TRUE(contract::canonical_rejoin_command_within_limit(
+      command, contract::ControlIntent::Rejoin, 0.25));
+    EXPECT_DOUBLE_EQ(command.predicted_speed_mps, 0.25);
+    EXPECT_DOUBLE_EQ(command.acceleration_mps2, 0.8);
+    EXPECT_DOUBLE_EQ(command.steering_tire_angle_rad, -0.31);
+  }
+  const auto reject = [](const contract::CanonicalNormalCommand & candidate) {
+      EXPECT_FALSE(contract::canonical_rejoin_command_within_limit(
+        candidate, contract::ControlIntent::Rejoin, 0.25));
+    };
+  for (int fault = 0; fault < 15; ++fault) {
+    auto candidate = command;
+    switch (fault) {
+      case 0: candidate.intent = contract::ControlIntent::Cruise; break;
+      case 1: candidate.formulation = contract::Formulation::VelocitySteeringYawResponseProgress7State; break;
+      case 2: candidate.source = contract::CanonicalNormalAuthoritySource::EmergencyStop; break;
+      case 3: candidate.decision_id = 0U; break;
+      case 4: candidate.execution_certificate_decision_id = 41U; break;
+      case 5: candidate.execution_plan_id = 0U; break;
+      case 6: candidate.problem_fingerprint = 0U; break;
+      case 7: candidate.solution_id = 0U; break;
+      case 8: candidate.predicted_speed_mps = std::nextafter(0.25, 1.0); break;
+      case 9: candidate.predicted_speed_mps = -0.01; break;
+      case 10: candidate.predicted_speed_mps = std::numeric_limits<double>::quiet_NaN(); break;
+      case 11: candidate.acceleration_mps2 = std::numeric_limits<double>::infinity(); break;
+      case 12: candidate.curvature_radpm = std::numeric_limits<double>::quiet_NaN(); break;
+      case 13: candidate.steering_tire_angle_rad = std::numeric_limits<double>::quiet_NaN(); break;
+      case 14: candidate.virtual_progress_speed_mps = -0.01; break;
+    }
+    SCOPED_TRACE(fault);
+    reject(candidate);
+  }
+  EXPECT_FALSE(contract::canonical_rejoin_command_within_limit(
+    command, contract::ControlIntent::Stop, 0.25));
+  for (const double cap : {0.0, -1.0, std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::infinity()})
+  {
+    EXPECT_FALSE(contract::canonical_rejoin_command_within_limit(
+      command, contract::ControlIntent::Rejoin, cap));
+  }
+}

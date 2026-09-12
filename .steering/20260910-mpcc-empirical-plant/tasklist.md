@@ -614,3 +614,5 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R650near-stationary witnesses distinguished from useful progress; R651four preparation/launch candidates rejected. No promotion/infeasibility claim.
 - [ ] Exact occupied-cell/body geometry and target-free nonlinear source comparison, then supported constraint/geometry repair and full validation.
 - [ ] Independent measurement/contact/Recovery eligibility and all remainingM4–M6; no additional confirmation needed.
+
+2026-09-13R653–R656:source805front-left cell476325; native3seed comparison no useful restart (one4.496cm certificate, others rejected), Unknown. Separate prepared simulation Ready Recovery session and canonical Rejoin handoff implemented; no direct normal rejoin feedback. Native228/source115/build127/package114pass. Fixed-source single-r12and allM4–M6pending; source wall/model error not repaired. See recovery-session-rejoin-design.md/evidence.json.

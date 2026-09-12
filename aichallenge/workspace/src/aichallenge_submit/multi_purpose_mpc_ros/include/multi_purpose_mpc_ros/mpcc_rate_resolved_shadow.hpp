@@ -810,14 +810,18 @@ private:
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
   mpcc_rate_resolved_wall_refinement::Cache wall_refinement_cache_;
-  // Wall-bucket and coupled wall/opponent QPs are a distinct KKT class.  The
-  // owner is chosen before solve; the normal solver is never tried first and
-  // therefore this is not a retry or fallback path.
+  // Native body/tire nine-state QPs use one preselected numerical policy.
+  // Keep separate sparse workspaces for initial/dynamic and wall/coupled
+  // structure; neither workspace is a retry after the other rejects.
+  // The generic row-only policy still owns its older formulation callers.
+  static_assert(mpcc_rate_resolved::kStateDimension == 9,
+    "Revalidate the numerical owner when the native state formulation changes");
   persistent_osqp::PersistentOsqpSolver wall_refinement_solver_{
     persistent_osqp::ConstraintPreconditioningPolicy::
     RowToleranceNormalizedWithInternalEquilibration};
   persistent_osqp::PersistentOsqpSolver solver_{
-    persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};
+    persistent_osqp::ConstraintPreconditioningPolicy::
+    RowToleranceNormalizedWithInternalEquilibration};
 };
 
 /// Observation-only latest-state feedback owner.  It has deliberately no

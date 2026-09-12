@@ -113,11 +113,14 @@ def test_wall_bucket_relaxation_is_architecture_audit_only() -> None:
     assert MPCC_ARCHITECTURE_COMPARISON_SOURCE.count(audit_entry) == 1
 
 
-def test_internal_equilibration_has_one_wall_owner_and_one_audit_arm() -> None:
+def test_native_nine_state_equilibration_has_preselected_workspaces() -> None:
     policy = "RowToleranceNormalizedWithInternalEquilibration"
     assert policy not in SOURCE
     assert MPCC_ARCHITECTURE_COMPARISON_SOURCE.count(policy) == 1
-    assert MPCC_RATE_RESOLVED_SHADOW_HEADER.count(policy) == 1
+    assert MPCC_RATE_RESOLVED_SHADOW_HEADER.count(policy) == 2
+    assert "static_assert(mpcc_rate_resolved::kStateDimension == 9" in (
+        MPCC_RATE_RESOLVED_SHADOW_HEADER
+    )
 
     # Every wall-class solve has one preselected owner.  There is no
     # solve-reject-then-retry path through the normal solver.

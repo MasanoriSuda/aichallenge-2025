@@ -452,3 +452,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R481 strict affine feasibility comparison; R482 eight-factor combinations each; R483 exact prototype boundary.
 - [x] R484 complete future component query proceeds but all8 full candidates reject; unpromoted.
 - [ ] R485 native braking/steering tangent and repair demonstrated candidate producer, compare stationary bounded source generation; all full M4–M6 remain.
+
+## Native nine-state numerical owner
+
+- [x] R485–R493 separate native physical existence, derived topology and exact QP conditioning; failed and unexecuted diagnostics retained.
+- [x] Preselect existing internal equilibration for native nine-state workspaces; generic legacy policy unchanged, no retry.
+- [x] R494 exact numerical fixture and generic29 native tests; source106 pass.
+- [x] Full build117 all26/package104 all2599 pass; R495 current rejection preserved, R497 both original source proofs pass.
+- [ ] Seal verification, local commit and original standard dev2-r77 acceptance.
+- [ ] Remaining candidate generation and all M4–M6 completion work.

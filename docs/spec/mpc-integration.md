@@ -91,6 +91,15 @@ r75 D1の通常artifact生成拒否はR472で同じQP解から再現済み。
 安全余白込みの車体が同じ壁セルへ達する。安全判定を維持し、新規軌道の生成を修復する。
 [現在壁と新規sourceの比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r76-current-wall-audit.md)。
 
+現行9状態SolverContextの初期/dynamicとwall/coupledの両workspaceは、
+`RowToleranceNormalizedWithInternalEquilibration`をsolve前に選択する。
+物理row許容差への正規化、global relative tolerance二重適用の禁止、元の物理行の
+検査は維持する。旧7状態向け`RowToleranceNormalized`の汎用動作は変更しない。
+R492の同一QP比較とR493の同一Follow/Cruise完全証明が根拠。失敗後の再試行や
+solver制限変更は追加しない。build117全26、tests104全2599が合格し、R495/R497は
+実ライブラリでも元の現在壁拒否とFollow/Cruiseのsource合格を維持。新しい実走受入れは未完。
+[9状態の数値前処理](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-owner.md)。
+
 受信入力を表す共有数値API `mpcc_applied_input_prediction` を追加した。
 同一時刻の公開履歴を全件保持し、全予測区間の因果的な入力coverageを要求する。
 元観測から共通float32指令列へ進め、全応答のモデル内静止までを囲む。

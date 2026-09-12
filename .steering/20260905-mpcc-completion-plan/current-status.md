@@ -1,23 +1,26 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。初期通路幅は56692749で修正済み。標準r76はD1decision3999の現在壁証明で未達。**
+**全体未完。r76現在壁拒否を維持し、9状態QPの数値前処理を修正・検証中。**
 
-Build116全26、tests103全2598/source106は合格済み。r76は両車が再発進した後、
-D1の指令喪失で自動終了し未完走。元DLL・ユーザーJSON復元済み。
-R475は同じ送信履歴・source/domain識別値で現在壁拒否を再現。
-R477元の数値計算、R478既存分岐の個別検証でも拒否。R479の入力端点再生は
-安全余白込みの車体が同じ壁セルへ達するため、判定緩和では解決しない。
-R480は停止中の別世界でC/Dの2候補が完全なsource証明に合格するが、走行中の
-新規source3488は全9方式が拒否。R481は同sourceの厳密な線形制約の不成立を確認。
-R482の8条件比較は両世界で未達。未来の壁近似の候補は通路生成で止まるため、
-R483は仮の未来軌道のstage5が壁に入ると探索前に拒否する点を特定。診断は例外で
-中断したため全条件完了とは扱わない。R484は安全区間の探索を通るが全8条件で後段が未達。R485で移動中の初期軌道に
-元の制動限界を組み込む候補を比較中。QPの操作変数はすべて自由のまま。
-[現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r76-current-wall-audit.md)。
+基準bc4dded9（制御56692749）、既存build116全26、tests103全2598が合格済み。
+新しいR492では、同じ行列・制約・初期値の4場面を内部平衡化あり/なしで比較。
+現行9状態では内部平衡化により全8 cold/warm条件が元の制限内で解ける。
+R493は既存のFollow/Cruiseの同一sourceで両policyの完全な証明に合格。
+現行9状態SolverContextだけの前処理を変更し、旧7状態向け汎用policyは維持する。
+新規fixtureを含むR494全29nativeとsource106が合格。build117全26、tests104全2599が合格（error/failure/skipは0）。
 
-r75 D2Start/update_v_maxの文脈失効は別件で未修正。過去の期限超過とも分離する。
-全M4–M6、同一最終sourceでの反復走行・gate・提出/evalは未完。追加確認なしで続行。
+R486は走行中3488の物理的な成立例を確認。保存3488の強制Pass18/Ahead20という
+派生候補の厳密な線形制約不成立と、世界全体の走行不能を区別する。
+R490は元の壁表現のまま新しい候補と数値前処理でsource証明に合格したが、
+制動初期軌道・候補topologyは未採用。r76現在3999の壁拒否は正しく、保持する。
+[修正設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-owner.md)、
+[比較根拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-evidence.json)。
+
+R495は同じsource/history/domainで現在3999の壁拒否を正確に再現。R497は実ライブラリで
+元Follow/Cruiseの完全なsource証明に合格。次はローカルcommit、標準dev2-r77。
+r75 D2Start/update_v_max文脈失効、全M4–M6、同一最終source反復走行・gate・提出/evalは未完。
+追加確認なしで続行。pushなし。
 
 以下はr75開始前までの根拠。
 

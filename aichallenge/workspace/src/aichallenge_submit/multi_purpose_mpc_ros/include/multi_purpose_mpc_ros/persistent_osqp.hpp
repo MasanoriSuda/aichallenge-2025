@@ -183,9 +183,10 @@ enum class ConstraintPreconditioningPolicy
   None,
   RowToleranceNormalized,
   /// Preserve the identical explicit physical row contract, then let OSQP
-  /// apply its standard modified-Ruiz equilibration. Production use is limited
-  /// to the wall-refinement QP class whose frozen failures established this as
-  /// its canonical numerical owner; it is not a solve-time retry policy.
+  /// apply its standard modified-Ruiz equilibration. The native body/tire
+  /// nine-state owner and wall-refinement owner select this before solving.
+  /// Older row-only formulation callers retain their explicit policy; this
+  /// is not a global settings change or a solve-time retry policy.
   RowToleranceNormalizedWithInternalEquilibration,
 };
 

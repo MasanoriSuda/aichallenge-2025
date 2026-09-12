@@ -694,14 +694,10 @@ struct PersistentOsqpSolver::Impl
     if (row_tolerance_normalized(preconditioning_policy))
     {
       settings.eps_rel = 0.0;
-      // This policy already owns both transformations presented to OSQP:
-      // physical-units-per-solver-unit variable coordinates and per-row
-      // physical tolerance normalization. Applying OSQP's opaque Ruiz
-      // scaling a second time breaks that single numerical provenance and can
-      // make an otherwise feasible rate-resolved QP stall at the iteration
-      // limit. The canonical policy therefore disables it. The explicitly
-      // named architecture-audit policy is the only isolated comparison arm
-      // which retains OSQP's internal equilibration after this transform.
+      // Preserve the row-only policy used by older formulation callers:
+      // their frozen Follow KKT can stall with additional equilibration.
+      // Native nine-state and wall-class owners explicitly select the other
+      // policy before solving; both retain identical physical row checks.
       if (
         preconditioning_policy ==
         ConstraintPreconditioningPolicy::RowToleranceNormalized)

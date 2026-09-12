@@ -17,35 +17,79 @@ namespace multi_purpose_mpc_ros::persistent_osqp
 namespace
 {
 
+Eigen::VectorXd dense_fixture_vector(const YAML::Node & node)
+{
+  Eigen::VectorXd value(node.size());
+  for (std::size_t i = 0U; i < node.size(); ++i) {
+    value[static_cast<Eigen::Index>(i)] = node[i].as<double>();
+  }
+  return value;
+}
+
+Eigen::SparseMatrix<double> sparse_fixture_matrix(const YAML::Node & node)
+{
+  Eigen::SparseMatrix<double> value(node["rows"].as<int>(), node["columns"].as<int>());
+  std::vector<Eigen::Triplet<double>> entries;
+  for (const auto & entry : node["triplets"]) {
+    entries.emplace_back(entry[0].as<int>(), entry[1].as<int>(), entry[2].as<double>());
+  }
+  value.setFromTriplets(entries.begin(), entries.end());
+  return value;
+}
+
+TEST(PersistentOsqpSolver, SolvesSavedNativeNineStateQpWithinOriginalPhysicalRowTolerance)
+{
+  const auto path = std::filesystem::path(__FILE__).parent_path() /
+    "fixtures/mpcc_r76_native_nine_state_qp.yaml";
+  const auto data = YAML::LoadFile(path.string());
+  const auto qp = data["exact_qp"];
+  const auto p = sparse_fixture_matrix(qp["quadratic_cost"]);
+  const auto a = sparse_fixture_matrix(qp["constraints"]);
+  const auto q = dense_fixture_vector(qp["linear_cost"]);
+  const auto lower = dense_fixture_vector(qp["lower_bound"]);
+  const auto upper = dense_fixture_vector(qp["upper_bound"]);
+  const VariableCoordinateScaling scaling{dense_fixture_vector(qp["variable_scaling"])};
+  const WarmStart warm{
+    dense_fixture_vector(data["warm_start"]["primal"]),
+    dense_fixture_vector(data["warm_start"]["dual"])};
+  ASSERT_EQ(qp["horizon_steps"].as<int>(), 20);
+  ASSERT_EQ(p.rows(), 9 * 21 + 3 * 20);
+  ASSERT_EQ(a.rows(), 578);
+  ASSERT_TRUE(data["warm_start"]["available"].as<bool>());
+  for (const bool use_warm : {false, true}) {
+    SCOPED_TRACE(use_warm);
+    PersistentOsqpSolver solver(
+      ConstraintPreconditioningPolicy::RowToleranceNormalizedWithInternalEquilibration);
+    const auto solved = solver.solve(p, a, q, lower, upper,
+      use_warm ? std::optional<WarmStart>(warm) : std::nullopt, scaling);
+    ASSERT_TRUE(solved.result.has_value()) << solved.failure_detail;
+    EXPECT_FALSE(solved.telemetry.maximum_iterations_reached);
+    EXPECT_LE(solved.telemetry.iterations, 4000);
+    EXPECT_EQ(solved.telemetry.warm_start_applied, use_warm);
+    EXPECT_LE(solved.result->maximum_normalized_constraint_violation, 1.0);
+    const auto tolerance = solver.physical_constraint_tolerance();
+    const auto residual = evaluate_constraint_residuals(
+      a, solved.result->primal, lower, upper, tolerance.absolute, tolerance.relative);
+    ASSERT_TRUE(residual.has_value());
+    EXPECT_LE(residual->maximum_normalized_violation, 1.0);
+  }
+}
+
 TEST(PersistentOsqpSolver, SolvesSavedZeroObjectiveStopWithItsOwnEqualityBootstrap)
 {
   const auto path = std::filesystem::path(__FILE__).parent_path() /
     "fixtures/mpcc_zero_stop_qp.yaml";
   const auto data = YAML::LoadFile(path.string());
-  const auto dense = [](const YAML::Node & node) {
-      Eigen::VectorXd value(node.size());
-      for (std::size_t i = 0U; i < node.size(); ++i) {
-        value[static_cast<Eigen::Index>(i)] = node[i].as<double>();
-      }
-      return value;
-    };
-  const auto sparse = [](const YAML::Node & node) {
-      Eigen::SparseMatrix<double> value(node["rows"].as<int>(), node["columns"].as<int>());
-      std::vector<Eigen::Triplet<double>> entries;
-      for (const auto & entry : node["triplets"]) {
-        entries.emplace_back(entry[0].as<int>(), entry[1].as<int>(), entry[2].as<double>());
-      }
-      value.setFromTriplets(entries.begin(), entries.end());
-      return value;
-    };
   const auto qp = data["exact_qp"];
-  const auto p = sparse(qp["quadratic_cost"]);
-  const auto a = sparse(qp["constraints"]);
-  const auto q = dense(qp["linear_cost"]);
-  const auto lower = dense(qp["lower_bound"]);
-  const auto upper = dense(qp["upper_bound"]);
-  const VariableCoordinateScaling scaling{dense(qp["variable_scaling"])};
-  const WarmStart warm{dense(data["warm_start"]["primal"]), dense(data["warm_start"]["dual"])};
+  const auto p = sparse_fixture_matrix(qp["quadratic_cost"]);
+  const auto a = sparse_fixture_matrix(qp["constraints"]);
+  const auto q = dense_fixture_vector(qp["linear_cost"]);
+  const auto lower = dense_fixture_vector(qp["lower_bound"]);
+  const auto upper = dense_fixture_vector(qp["upper_bound"]);
+  const VariableCoordinateScaling scaling{dense_fixture_vector(qp["variable_scaling"])};
+  const WarmStart warm{
+    dense_fixture_vector(data["warm_start"]["primal"]),
+    dense_fixture_vector(data["warm_start"]["dual"])};
   ASSERT_EQ(p.nonZeros(), 0);
   ASSERT_DOUBLE_EQ(q.norm(), 0.0);
   for (const auto policy : {ConstraintPreconditioningPolicy::RowToleranceNormalized,

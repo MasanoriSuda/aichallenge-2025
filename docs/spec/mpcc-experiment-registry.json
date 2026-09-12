@@ -1297,6 +1297,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r76-evidence.json",
       "replay_ready": true,
       "reason": "Exact current3999 and separate original source3488/2025 worlds; no substituted failure."
+    },
+    {
+      "snapshot_id": "20260912-native-nine-state-numerical-owner",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-evidence.json",
+      "replay_ready": true,
+      "reason": "R76 frozen worlds, newly sealed candidate topologies and exact QPs; unchanged current certified Follow/Cruise sources."
     }
   ],
   "experiments": [
@@ -16195,6 +16201,194 @@
       "production_impact": "No production change or live authority; diagnostic/audit only.",
       "deleted_code": [],
       "revisit_condition": "A demonstrated producer change or a newly sealed different physical/context source; do not retry unchanged rejected candidates."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r485",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Native braking-and-steering tangent; original controls remain free",
+      "result": "rejected",
+      "reason": "All8 source arms reject downstream numerical, wall or dynamic rows; no seed promoted.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r486",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Native physical existence only, six brake-preparation lengths and both steer sides",
+      "result": "accepted",
+      "reason": "Original moving3488 physical world has6 of12 fully certified nonlinear rollouts: negative K2/4/6/8 and pure-stop K20 both signs. Does not enforce saved affine QP or derived forced-pass schedule, and has no command authority.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r487",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Full-pose static corner planes, diagnostic coupled-row transport",
+      "result": "rejected",
+      "reason": "All8 source arms reject. Temporary static-plane transport through dynamic rows is diagnostic only, not a production schema.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r488",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Clear derived pass/ahead stages, reseal each side, full-pose planes",
+      "result": "accepted",
+      "reason": "Stationary2025 positive-side masks3/7 fully certify; other14 reject, including all8 moving arms. Newly sealed candidates, not original-candidate reproduction.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r489",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Positive conditioning comparison setup",
+      "result": "inconclusive",
+      "reason": "Compile fails because side loop was not generated; no numerical result. Corrected in distinct R490.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r490",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Original production wall; reset derived schedule and compare seed/equilibration per side",
+      "result": "accepted",
+      "reason": "Moving3488 positive mask6 fully certifies in116.730ms; stationary2025 positive masks2/6 certify in42.406/32.164ms. Remaining13 reject. Seed/topology prototypes unpromoted; full-pose wall planes unnecessary for these witnesses.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r492",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Exact QP cold/original-warm comparison; only numerical preconditioning differs",
+      "result": "accepted",
+      "reason": "Existing internal equilibration solves all8 cases in200–725iterations. Row-only stalls at4000 in7cases; startup cold alone solves-inaccurate at4000. Physical source certificates are not inferred from QP success.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r493",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Identical current certified Follow673 and Cruise3454 source inputs; two policies",
+      "result": "accepted",
+      "reason": "Both policies certify both complete source chains with unchanged source identities. Internal31.100/28.171ms versus row-only40.328/102.146ms, unloaded standalone replay only.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r494",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Native nine-state KKT requires its own numerical owner; distinguish source existence, candidate generation and current safety proof.",
+      "changed_dimension": "Native frozen numerical fixture and generic solver regressions",
+      "result": "accepted",
+      "reason": "29 native tests pass, including exact original-coordinate residual checks for cold and warm current249-variable QP; source106 passes. Full build and live run pending.",
+      "production_impact": "Only native nine-state numerical policy promoted after validation; no seed/topology/wall prototype authority.",
+      "deleted_code": [],
+      "revisit_condition": "New causal input, formulation or demonstrated implementation change; never rerun an unchanged failed arm for acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-build117-tests104",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Production implementation preserves physical contracts and correct refusal while repairing native numerical conditioning.",
+      "changed_dimension": "Full production build and package regression",
+      "result": "accepted",
+      "reason": "26 packages;2599 tests,0 errors/failures/skips;106 source and29 native regressions pass.",
+      "production_impact": "Only native nine-state preselected numerical policy; no legacy global policy, wall/topology/seed/budget changes.",
+      "deleted_code": [
+        "Native nine-state initial/dynamic row-only policy ownership"
+      ],
+      "revisit_condition": "New source change or failed live/replay result; passing verification alone does not establish race acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r495",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Production implementation preserves physical contracts and correct refusal while repairing native numerical conditioning.",
+      "changed_dimension": "Built-library original current3999 replay",
+      "result": "accepted",
+      "reason": "Same original source/history/domain; all3 current-wall rejection reasons/times match R475 exactly.",
+      "production_impact": "Only native nine-state preselected numerical policy; no legacy global policy, wall/topology/seed/budget changes.",
+      "deleted_code": [
+        "Native nine-state initial/dynamic row-only policy ownership"
+      ],
+      "revisit_condition": "New source change or failed live/replay result; passing verification alone does not establish race acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r497",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Production implementation preserves physical contracts and correct refusal while repairing native numerical conditioning.",
+      "changed_dimension": "Built production solver/proof original certified source replay",
+      "result": "accepted",
+      "reason": "Original current nine-state Follow673 and Cruise3454 both fully accept with unchanged fingerprints; no diagnostic shadow solver implementation linked.",
+      "production_impact": "Only native nine-state preselected numerical policy; no legacy global policy, wall/topology/seed/budget changes.",
+      "deleted_code": [
+        "Native nine-state initial/dynamic row-only policy ownership"
+      ],
+      "revisit_condition": "New source change or failed live/replay result; passing verification alone does not establish race acceptance."
+    },
+    {
+      "experiment_id": "20260912-native-nine-state-numerical-owner-r496",
+      "baseline_commit": "bc4dded94b58145446e9b234eea5a8860616b180",
+      "snapshot_ids": [
+        "20260912-native-nine-state-numerical-owner"
+      ],
+      "hypothesis": "Built certified-source replay setup",
+      "changed_dimension": "Diagnostic A-only wrapper generation",
+      "result": "inconclusive",
+      "reason": "Source snippet appears in several functions; generation assertion fails before compile. Corrected by scoping replacement to compare() in R497.",
+      "production_impact": "None; no numerical result or production change.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected explicit function scope, satisfied by R497."
     }
   ]
 }

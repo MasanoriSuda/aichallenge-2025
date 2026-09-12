@@ -85,13 +85,20 @@ API at the actual future lag/heading, original scalar bounds, hard footprint and
 boundary guard. Corridor generation proceeds, but all8arms still reject downstream
 wall/dynamic/numerical problems. This provisional correction is not promoted.
 
-Next: compare a connected braking-and-steering tangent (R485) for moving initial
-states; all optimized inputs remain free and the original physical proof is required;
-retain original current-wall rejection and all timing guards. Independently explain
-the stationary C/D versus bounded-production difference before adopting a source
-strategy. New production work requires its own causal regression, full build/tests,
-current proof replay and standard run. All intents/Mission/sibling/Store, actual
-Stop/rest/restart, Recovery/Rejoin/Boost/async, repeated single/dev2, dev3/dev4sixlaps,
-gate1–3 and same-artifact submission/image/eval remain open.
+The follow-up R485–R493 audit separates candidate topology from world feasibility.
+Saved moving3488 is one derived candidate with forced pass stage18 and ahead20;
+its strict affine infeasibility is not a physical impossibility certificate. R486
+finds6 complete native physical witnesses without requiring that derived schedule.
+R488/R490 explicitly reset and reseal the candidate schedule. With the original
+production wall, R490 certifies a moving free-input candidate and two stationary
+variants. Seeds and topology changes remain diagnostic. R487 full-pose wall rows
+are unpromoted; R489 compile failure is retained; prepared R491 was not executed.
+
+R492 exact QPs isolate native nine-state conditioning, and R493 preserves already
+certified current Follow/Cruise sources under both policies. The bounded production
+slice is the [native numerical owner](native-nine-state-numerical-owner.md), with
+[follow-up evidence](native-nine-state-numerical-evidence.json). Original current3999
+must remain rejected. Build, current replay and standard live acceptance follow.
+All M4–M6, repeated runs/gates and same-artifact submission/eval remain open.
 
 [Sealed payloads](r76-evidence.json). All diagnostic candidates have no live authority.

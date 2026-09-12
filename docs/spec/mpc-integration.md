@@ -4829,3 +4829,12 @@ D1初回は事前集合の現在壁判定が不合格となり全再計算で期
 位置/向きと車体の状態集合を分ける独立証明をr62/r60で比較し現在世界判定が通過したが、
 本番未採用。共有モデルの回転・移動と区間四隅の包含証明が次の昇格条件。
 [比較と証明義務](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/relative-domain-design.md)。
+
+2026-09-12 独立した相対座標証明を接続。nonFollowでは車体状態と元の指令履歴・時刻の
+集合全体をゼロ姿勢から伝播し、現在の位置・向きの集合全体を外向き丸めで合成する。
+共有の平面・接地モデルの座標変換則に基づき、四隅と全停止までを現在の壁・車両条件で
+検証する。旧点軌跡の移動による再利用ではない。元の指令ID、前段履歴、世代、車体形状、
+元と現在の停止時刻、個別25ms送信前後判定を維持。Followは既存の独立証明を継続する。
+Snapshotの任意項目 relative_pose_composition が新しい集合の意味を示す。
+Native包含試験、全26 build、2,582 test記録、旧9場面の再生を確認。統合走行は未検証。
+[数式・設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/relative-domain-design.md)。

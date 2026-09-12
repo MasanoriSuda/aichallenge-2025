@@ -4780,8 +4780,11 @@ TEST(MpccScheduledDomainDispatch, RejectedSetNeverReplacesTheCompletePointProof)
   EXPECT_EQ(result.domain_use, scheduled::DomainUseReason::SourceMismatch);
   EXPECT_FALSE(result.candidate->current_domain_proof());
   EXPECT_TRUE(result.candidate->current_physical_proof());
-  f.fresh.publication_prefix->observation.initial.state.x_m = domain->tube().request.coordinate_origin.x_m +
-    domain->tube().request.body[0].lower - .2;
+  ASSERT_TRUE(domain->relative());
+  // Pose is composed independently now. Exercise a body-state exclusion,
+  // while the complete current proof can still certify the nearby population.
+  f.fresh.publication_prefix->observation.initial.state.yaw_rate_radps =
+    domain->tube().request.body[5].upper + .01;
   f.bind_next(0);
   result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
     f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
@@ -5245,6 +5248,9 @@ TEST(MpccSourceReservation, SnapshotPreservesDeclaredPriorIdsSeparatelyFromActua
   auto evidence = std::make_shared<capture::ScheduledFailureCapture>();
   evidence->original = f.request;
   evidence->certificate = f.certificate;
+  evidence->starting_domain = scheduled::StartingDomainEvidence::build(f.certificate);
+  ASSERT_TRUE(evidence->starting_domain);
+  ASSERT_TRUE(evidence->starting_domain->relative());
   const std::vector<std::uint64_t> expected{19, 23, 18446744073709551612ULL, 9223372036854775811ULL, 7};
   evidence->prior_sources = {vehicle::PublishedProgramSource{
     expected[0], expected[1], expected[2], expected[3], expected[4]}, std::nullopt};
@@ -5260,6 +5266,7 @@ TEST(MpccSourceReservation, SnapshotPreservesDeclaredPriorIdsSeparatelyFromActua
   ASSERT_EQ(recorded.status, capture::RecordStatus::Written) << recorded.detail;
   auto document = YAML::LoadFile(recorded.snapshot_file.string());
   EXPECT_FALSE(document["authority"].as<bool>());
+  EXPECT_TRUE(document["scheduled"]["starting_domain"]["relative_pose_composition"].as<bool>());
   const auto declared = document["scheduled"]["expected_prior_sources"];
   ASSERT_EQ(declared.size(), 2U);
   EXPECT_EQ(declared[0].as<std::vector<std::uint64_t>>(), expected);

@@ -103,6 +103,34 @@ ProgrammeStartingDomainPrediction predict_programme_starting_domain_to_rest(
     const ProgrammeStartingDomainRequest &request,
     const Parameters &parameters) noexcept;
 
+/// A distinct complete numerical theorem: body/time population is independently
+/// propagated from zero XY/yaw. Its future is composed with a whole current pose,
+/// never with an old point trajectory. Original programme/time/input memory stays.
+struct RelativeProgrammeStartingDomainTube {
+  ProgrammeStartingDomainTube normalized;
+};
+struct RelativeProgrammeStartingDomainPrediction {
+  AppliedInputRejectReason reason{AppliedInputRejectReason::InvalidObservation};
+  std::optional<RelativeProgrammeStartingDomainTube> tube;
+};
+RelativeProgrammeStartingDomainPrediction predict_relative_programme_domain_to_rest(
+    const ProgrammeStartingDomainRequest &request,
+    const Parameters &parameters) noexcept;
+
+/// Numerical composition only. Construction requires full body/time membership
+/// and exact footprint offsets. Source/history/world/authority checks remain in
+/// the dispatcher. Ranges and swept corners are composed with outward arithmetic.
+class RelativeDomainTransform {
+public:
+  static std::optional<RelativeDomainTransform> build(
+    const RelativeProgrammeStartingDomainTube &domain, const CurrentInputPrefix &prefix) noexcept;
+  BodyRanges body(const BodyRanges &relative) const;
+  FootprintRanges footprint(const FootprintRanges &relative) const;
+private:
+  RelativeDomainTransform() = default;
+  std::array<ScalarRange, 9> coefficients_{};
+};
+
 /// Strict geometric/state/time membership only, including every prefix range.
 /// This neither authenticates original history nor grants command authority.
 /// Exact original footprint offsets must agree; frame rotations are outward.

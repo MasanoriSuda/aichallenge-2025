@@ -349,3 +349,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R373 global versus relative complete body/time proof: two sealed cases pass relative current world, global variants fail different original invariants. No production promotion.
 - [ ] Validate native relative-pose theorem and corner containment; integrate only after proof, then build103/test90/replays/committed standardr63. Remaining timing and positive-programme availability remain causal work.
 - [ ] All remaining M4–M6 and same-artifact submission/eval remain open.
+
+2026-09-12 independent relative whole-body/time proof (after 84155a70):
+- [x] Native kernel and production transform containment: 2,764,800 corner coordinates, strict identity/body/time/footprint/finite negatives; numeric 10 and C5 158 tests pass.
+- [x] Replace nonFollow global-pose proof; preserve Follow, independent current prefix/world, original source/current rest and before/after authority gates.
+- [x] Build104 all 26; package91 all 2,582/66, source 105. Historical actual-library replay380/381 all nine source/prefix/late outcomes; intermediate failures preserved.
+- [x] Independent bounded-worker initialization repair 84155a70; real test90 timeout, widened diagnostic interleaving and 500 reconstruction iterations preserved.
+- [ ] Standard dev2-r63; resolve remaining scheduling and sustained positive programme availability, then all M4-M6 and same-artifact submission/eval.

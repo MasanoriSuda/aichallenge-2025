@@ -1033,10 +1033,10 @@ std::shared_ptr<const StartingDomainEvidence> StartingDomainEvidence::build(
         request.body[i].upper = std::max(request.body[i].upper, sample.swept_body[i].upper);
       }
     request.starting_sec.upper = source.rest_sec;
-    auto prediction = vehicle::predict_programme_starting_domain_to_rest(
+    auto prediction = vehicle::predict_relative_programme_domain_to_rest(
       {request, source.rest_sec}, original.plan->execution_artifact->vehicle_model);
     if (!prediction.tube) return {};
-    result->tube_ = std::move(prediction.tube->numerical);
+    result->relative_ = std::move(*prediction.tube);
     result->first_window_only_ = false;
   }
   result->certificate_ = std::move(certificate);
@@ -1103,15 +1103,21 @@ std::optional<vehicle::CurrentInputPrefix> check_current_domain(
     fresh.plan->execution_artifact->vehicle_model, offsets);
   if (!prediction.prefix) return std::nullopt;
   use = DomainUseReason::OutsideDomain;
-  if (!vehicle::starting_domain_contains_prefix(domain.request, *prediction.prefix)) return std::nullopt;
+  std::optional<vehicle::RelativeDomainTransform> relative;
+  if (evidence->relative()) {
+    relative = vehicle::RelativeDomainTransform::build(*evidence->relative(), *prediction.prefix);
+    if (!relative) return std::nullopt;
+  } else if (!vehicle::starting_domain_contains_prefix(domain.request, *prediction.prefix)) return std::nullopt;
   const auto &ceiling = certificate.nominal()->proof().terminal_stop_forward_velocity_ceiling_mps;
   applied::Result diagnostic;
   applied::WorldCheckStatistics statistics;
-  applied::AppliedWorldCheck checker{fresh, domain.request.source_observation, *footprint,
+  applied::AppliedWorldCheck checker{fresh, relative ? prediction.prefix->observation : domain.request.source_observation, *footprint,
     ceiling, follow_reference, statistics, diagnostic};
   const auto check = [&](const vehicle::BodyRanges &body, const vehicle::FootprintRanges &corners,
       double begin, double end) {
-    try { diagnostic.reason = checker.check(body, corners, begin, end); }
+    try { diagnostic.reason = relative ?
+      checker.check(relative->body(body), relative->footprint(corners), begin, end) :
+      checker.check(body, corners, begin, end); }
     catch (const std::exception &) { diagnostic.reason = applied::Reason::InvalidWorld; }
     if (diagnostic.reason == applied::Reason::Accepted) return true;
     result.reason = CurrentWorldReason::PhysicalRejected;

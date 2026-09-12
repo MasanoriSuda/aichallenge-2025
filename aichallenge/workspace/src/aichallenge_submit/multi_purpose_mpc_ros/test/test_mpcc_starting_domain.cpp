@@ -1,5 +1,6 @@
 #include "mpcc_vehicle_model_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_starting_domain.hpp"
+#include "multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp"
 #include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
@@ -362,4 +363,118 @@ TEST(MpccProgrammeStartingDomain, OriginalHorizonAndWholeIdentityAreBoundWithout
     EXPECT_EQ(v::programme_starting_domain_context_fingerprint(bad,p),0U);
     EXPECT_FALSE(v::predict_programme_starting_domain_to_rest(bad,p).tube);
   }
+}
+
+TEST(MpccRelativeStartingDomain, WholeBodyBoxComposesNativeEndpointsAndSweptCorners)
+{
+  namespace vehicle = v;
+  namespace n = vehicle::numerical;
+  const auto p = vehicle_model();
+  const auto vertex_ranges = ::offsets();
+  n::Box offsets;
+  for(size_t k=0;k<8;++k)offsets[k]=n::I(vertex_ranges[k].lower,vertex_ranges[k].upper);
+  size_t checked = 0;
+  bool rest_seen=false, launch_seen=false, reverse_seen=false;
+  for (double frame : {-2.9, -.3, 0., 1.7, 3.1}) for (double initial_u : {-.02, 0., .05, 2.}) {
+    vehicle::State relative{0,0,0,initial_u,.002,-.003,0,.04};
+    auto body=n::point(relative);
+    body[3]=n::I(initial_u,initial_u+.003);body[4]=n::I(-.001,.004);
+    body[5]=n::I(-.004,.002);body[6]=n::I(-.03,.03);body[7]=n::I(.035,.045);
+    std::vector<n::Box> population{body};
+    n::CornerPopulation corners{{offsets,0},{offsets},offsets};
+    const n::I px(-.004,.03),py(-.012,.007),heading(-.02,.03);
+    auto proposed = request();
+    for(size_t k=0;k<8;++k) {
+      proposed.body[k]={body[k].lo,body[k].hi};
+      proposed.footprint_offsets[k]={offsets[k].lo,offsets[k].hi};
+    }
+    const auto certified=v::predict_relative_programme_domain_to_rest({proposed,1.8},p);
+    ASSERT_TRUE(certified.tube);
+    v::CurrentInputPrefix prefix;
+    prefix.observation.now_sec=proposed.starting_sec.lower;
+    prefix.coordinate_origin.yaw_rad=frame;
+    prefix.footprint_offsets=proposed.footprint_offsets;
+    prefix.body=proposed.body;
+    prefix.body[0]={px.lo,px.hi};prefix.body[1]={py.lo,py.hi};prefix.body[2]={heading.lo,heading.hi};
+    const auto transform=v::RelativeDomainTransform::build(*certified.tube,prefix);
+    ASSERT_TRUE(transform);
+    const auto ranges=[](const n::Box &b){v::BodyRanges r;for(size_t k=0;k<8;++k)r[k]={b[k].lo,b[k].hi};return r;};
+    const auto box=[](const v::BodyRanges &r){n::Box b;for(size_t k=0;k<8;++k)b[k]=n::I(r[k].lower,r[k].upper);return b;};
+    std::vector<vehicle::State> scalar;
+    for(size_t mask=0;mask<64;++mask){
+      auto choose=[&](const n::I &r,size_t bit){return mask&(1U<<bit)?r.hi:r.lo;};
+      scalar.push_back({choose(px,0),choose(py,1),choose(heading,2),choose(body[3],0),choose(body[4],1),choose(body[5],2),choose(body[6],3),choose(body[7],4)});
+    }
+    for(size_t step=0;step<30;++step){
+      const std::vector<n::I> arms=step<12?std::vector<n::I>{{-3,-.0001},{0},{.0001,1.37}}:std::vector<n::I>{{-3}};
+      const n::I desired(-.07,.08);
+      for(auto &b:population)b[6]=desired;
+      n::Box swept;population=n::advance_partitioned_inputs(std::move(population),arms,p,.005,&swept,&corners);
+      const auto endpoint=n::joined(population);
+      const auto corner_endpoint=n::joined(corners.states);
+      auto compose_body=[&](const n::Box &b){return box(transform->body(ranges(b)));};
+      auto compose_corner=[&](const n::Box &b){return box(transform->footprint(ranges(b)));};
+      const auto body_end=compose_body(endpoint),corners_end=compose_corner(corner_endpoint),corners_sweep=compose_corner(corners.swept);
+      for(size_t mask=0;mask<scalar.size();++mask){
+        auto &state=scalar[mask];const auto before=state;const auto &a=arms[mask%arms.size()];
+        state.desired_steering_rad=mask&8?desired.hi:desired.lo;
+        const auto next=vehicle::advance(state,{mask&16?a.hi:a.lo,0},p,.005);ASSERT_TRUE(next);state=next->state;
+        rest_seen|=state.forward_velocity_mps==0;launch_seen|=before.forward_velocity_mps==0&&state.forward_velocity_mps>0;reverse_seen|=state.forward_velocity_mps<0;
+        const auto q=n::point(state);
+        for(size_t k=0;k<8;++k){ASSERT_GE(q[k].lo,body_end[k].lo)<<"component="<<k;ASSERT_LE(q[k].hi,body_end[k].hi)<<"component="<<k;}
+        for(size_t part=0;part<=8;++part){const double f=part/8.;
+          const double x=before.x_m+f*(state.x_m-before.x_m),y=before.y_m+f*(state.y_m-before.y_m);
+          const double yaw=frame+before.yaw_rad+f*(state.yaw_rad-before.yaw_rad);
+          for(size_t k=0;k<8;k+=2){
+            const double a=(offsets[k].lo+offsets[k].hi)/2,b=(offsets[k+1].lo+offsets[k+1].hi)/2;
+            const double X=std::cos(frame)*x-std::sin(frame)*y+std::cos(yaw)*a-std::sin(yaw)*b;
+            const double Y=std::sin(frame)*x+std::cos(frame)*y+std::sin(yaw)*a+std::cos(yaw)*b;
+            ASSERT_GE(X,corners_sweep[k].lo);ASSERT_LE(X,corners_sweep[k].hi);
+            ASSERT_GE(Y,corners_sweep[k+1].lo);ASSERT_LE(Y,corners_sweep[k+1].hi);
+            if(part==8){ASSERT_GE(X,corners_end[k].lo);ASSERT_LE(X,corners_end[k].hi);ASSERT_GE(Y,corners_end[k+1].lo);ASSERT_LE(Y,corners_end[k+1].hi);}
+            // World-coordinate addition is outward and does not alter the body kernel.
+            for(double origin:{-1e9,89631.,1e9}){
+              const auto bx=n::I(origin)+corners_sweep[k],by=n::I(-origin)+corners_sweep[k+1];
+              ASSERT_GE(origin+X,bx.lo);ASSERT_LE(origin+X,bx.hi);ASSERT_GE(-origin+Y,by.lo);ASSERT_LE(-origin+Y,by.hi);
+            }
+            checked+=2;
+          }
+        }
+      }
+    }
+  }
+  EXPECT_EQ(checked,2764800U);EXPECT_TRUE(rest_seen);EXPECT_TRUE(launch_seen);EXPECT_TRUE(reverse_seen);
+}
+
+TEST(MpccRelativeStartingDomain, DistinctIdentityAndStrictBodyTimeFootprintJoin) {
+  const auto p=vehicle_model();auto r=request();
+  const auto relative=v::predict_relative_programme_domain_to_rest({r,1.8},p);
+  ASSERT_TRUE(relative.tube);
+  const auto &d=relative.tube->normalized.numerical;
+  const auto normalized=v::predict_programme_starting_domain_to_rest({d.request,1.8},p);
+  ASSERT_TRUE(normalized.tube);
+  EXPECT_NE(d.context_fingerprint,normalized.tube->numerical.context_fingerprint);
+  EXPECT_EQ(d.request.program.commands.size(),r.program.commands.size());
+  EXPECT_EQ(d.request.source_observation.commands.size(),r.source_observation.commands.size());
+  EXPECT_EQ(d.request.profile.acceleration_age_sec,r.profile.acceleration_age_sec);
+  EXPECT_EQ(d.request.starting_sec.lower,r.starting_sec.lower);
+  EXPECT_EQ(d.request.starting_sec.upper,r.starting_sec.upper);
+  v::CurrentInputPrefix prefix;prefix.observation.now_sec=r.starting_sec.lower;
+  prefix.body=r.body;prefix.footprint_offsets=r.footprint_offsets;
+  prefix.coordinate_origin={89631,43128,2.1,0,0,0,0,0};
+  ASSERT_TRUE(v::RelativeDomainTransform::build(*relative.tube,prefix));
+  EXPECT_FALSE(v::starting_domain_contains_prefix(d.request,prefix));
+  for(int variant=0;variant<9;++variant) {
+    auto bad=prefix;
+    if(variant<5)bad.body[variant+3].upper=std::nextafter(r.body[variant+3].upper,INFINITY);
+    if(variant==5)bad.observation.now_sec=std::nextafter(r.starting_sec.lower,-INFINITY);
+    if(variant==6)bad.observation.now_sec=std::nextafter(r.starting_sec.upper,INFINITY);
+    if(variant==7)bad.footprint_offsets[0].upper=std::nextafter(r.footprint_offsets[0].upper,INFINITY);
+    if(variant==8)bad.coordinate_origin.yaw_rad=NAN;
+    EXPECT_FALSE(v::RelativeDomainTransform::build(*relative.tube,bad));
+  }
+  auto malformed=*relative.tube;malformed.normalized.numerical.request.body[0]={0,.1};
+  EXPECT_FALSE(v::RelativeDomainTransform::build(malformed,prefix));
+  r.coordinate_origin.x_m=NAN;
+  EXPECT_FALSE(v::predict_relative_programme_domain_to_rest({r,1.8},p).tube);
 }

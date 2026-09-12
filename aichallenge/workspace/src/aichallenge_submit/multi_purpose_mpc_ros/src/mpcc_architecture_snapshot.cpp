@@ -2889,6 +2889,7 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         data["scope"]=domain_evidence->first_window_only() ? "first-publication-window" : "original-programme-through-original-rest";
         data["original_rest_sec"]=domain_evidence->original_rest_sec();
         data["includes_pending_prior"]=domain_evidence->includes_pending_prior();
+        data["relative_pose_composition"]=domain_evidence->relative().has_value();
         data["sample_count"]=domain.source_to_rest.size();
         data["source_observation"]=mpcc_vehicle_model::encode_observation_provenance(domain.request.source_observation);
         data["program"]=mpcc_vehicle_model::encode_input_program(domain.request.program);

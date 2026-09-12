@@ -1219,6 +1219,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r62-relative-comparison-evidence.json",
       "replay_ready": true,
       "reason": "Frozen committed standardr62 and originalr60 inputs; exact runtime-reservation replay and independent domain architecture comparison."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-relative-domain",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/relative-domain-evidence.json",
+      "replay_ready": true,
+      "reason": "Independent whole body/time theorem and current whole-pose composition; native/build/package and historical guards verified."
     }
   ],
   "experiments": [
@@ -14665,6 +14671,70 @@
       "production_impact": "None. Relative evidence unpromoted; original delays, windows, bounds, authority unchanged.",
       "deleted_code": [],
       "revisit_condition": "Kernel-level independent body/pose/corner containment and source/current/clock negatives; new timing evidence required for scheduling family."
+    },
+    {
+      "experiment_id": "20260912-nine-state-relative-domain-r374-r379",
+      "baseline_commit": "84155a70ff0047989a88737f7e0a1920eab89da4",
+      "snapshot_ids": [
+        "20260912-nine-state-relative-domain"
+      ],
+      "hypothesis": "Independent body/time population composed with the current whole pose avoids obsolete global-pose correlations while preserving full current-world proof.",
+      "changed_dimension": "NonFollow independent proof representation; no timing, physical bounds or authority changes.",
+      "result": "accepted",
+      "reason": "Production transform containment, identity and membership negatives; numeric10 and C5 158 pass. Test include/link failures and invalid old fixture retained.",
+      "production_impact": "Locally validated relative proof integrated; standard dev2 and overall acceptance pending.",
+      "deleted_code": [
+        "NonFollow global-pose full-programme proof superseded by independent relative body/time proof"
+      ],
+      "revisit_condition": "New model/corner/time/source/current-world counterexample or standard runtime evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-relative-domain-build104-tests91",
+      "baseline_commit": "84155a70ff0047989a88737f7e0a1920eab89da4",
+      "snapshot_ids": [
+        "20260912-nine-state-relative-domain"
+      ],
+      "hypothesis": "Independent body/time population composed with the current whole pose avoids obsolete global-pose correlations while preserving full current-world proof.",
+      "changed_dimension": "NonFollow independent proof representation; no timing, physical bounds or authority changes.",
+      "result": "accepted",
+      "reason": "All26 packages and2,582 records/66 groups pass, including source105 and snapshot marker. Existing worker timeout fixed independently in84155a70.",
+      "production_impact": "Locally validated relative proof integrated; standard dev2 and overall acceptance pending.",
+      "deleted_code": [
+        "NonFollow global-pose full-programme proof superseded by independent relative body/time proof"
+      ],
+      "revisit_condition": "New model/corner/time/source/current-world counterexample or standard runtime evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-relative-domain-r380-r381",
+      "baseline_commit": "84155a70ff0047989a88737f7e0a1920eab89da4",
+      "snapshot_ids": [
+        "20260912-nine-state-relative-domain"
+      ],
+      "hypothesis": "Independent body/time population composed with the current whole pose avoids obsolete global-pose correlations while preserving full current-world proof.",
+      "changed_dimension": "NonFollow independent proof representation; no timing, physical bounds or authority changes.",
+      "result": "accepted",
+      "reason": "Nine original source identities, exact current prefixes and late before/after rejections preserved with intentionally new independent current proof IDs.",
+      "production_impact": "Locally validated relative proof integrated; standard dev2 and overall acceptance pending.",
+      "deleted_code": [
+        "NonFollow global-pose full-programme proof superseded by independent relative body/time proof"
+      ],
+      "revisit_condition": "New model/corner/time/source/current-world counterexample or standard runtime evidence."
+    },
+    {
+      "experiment_id": "20260912-nine-state-relative-domain-r382-source-order",
+      "baseline_commit": "84155a70ff0047989a88737f7e0a1920eab89da4",
+      "snapshot_ids": [
+        "20260912-nine-state-relative-domain"
+      ],
+      "hypothesis": "Independent body/time population composed with the current whole pose avoids obsolete global-pose correlations while preserving full current-world proof.",
+      "changed_dimension": "NonFollow independent proof representation; no timing, physical bounds or authority changes.",
+      "result": "inconclusive",
+      "reason": "Frozen three-scene production versus long-only source comparison; separate source availability diagnosis, no policy promoted.",
+      "production_impact": "Locally validated relative proof integrated; standard dev2 and overall acceptance pending.",
+      "deleted_code": [
+        "NonFollow global-pose full-programme proof superseded by independent relative body/time proof"
+      ],
+      "revisit_condition": "New model/corner/time/source/current-world counterexample or standard runtime evidence."
     }
   ]
 }

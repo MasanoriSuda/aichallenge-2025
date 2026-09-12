@@ -310,6 +310,87 @@ ProgrammeStartingDomainPrediction predict_programme_starting_domain_to_rest(
       std::move(*prediction.tube), request.original_rest_sec}};
 }
 
+RelativeProgrammeStartingDomainPrediction predict_relative_programme_domain_to_rest(
+    const ProgrammeStartingDomainRequest &request, const Parameters &parameters) noexcept {
+  // Keep original input history, time intervals, footprint and body population.
+  // Pose normalization is a separate theorem, not a relaxed global membership.
+  if (!finite(request.domain.coordinate_origin) || !valid_ranges(request.domain.body))
+    return {Reason::InvalidObservation, {}};
+  try {
+    auto normalized = request;
+    for (std::size_t i = 0; i < 3; ++i) normalized.domain.body[i] = {0, 0};
+    normalized.domain.coordinate_origin.x_m = 0;
+    normalized.domain.coordinate_origin.y_m = 0;
+    normalized.domain.coordinate_origin.yaw_rad = 0;
+    auto prediction = predict_programme_starting_domain_to_rest(normalized, parameters);
+    if (!prediction.tube) return {prediction.reason, {}};
+    Hash hash;
+    hash.string("independent-relative-programme-body-time-domain-v1");
+    hash.integer(prediction.tube->numerical.context_fingerprint);
+    prediction.tube->numerical.context_fingerprint = hash.value ? hash.value : 1;
+    return {Reason::None, RelativeProgrammeStartingDomainTube{std::move(*prediction.tube)}};
+  } catch (const std::exception &) { return {Reason::NumericalFailure, {}}; }
+}
+
+std::optional<RelativeDomainTransform> RelativeDomainTransform::build(
+    const RelativeProgrammeStartingDomainTube &domain, const CurrentInputPrefix &prefix) noexcept {
+  const auto &tube = domain.normalized.numerical;
+  const auto &request = tube.request;
+  const auto &t = request.starting_sec;
+  const auto now = prefix.observation.now_sec;
+  if (!tube.context_fingerprint || tube.source_to_rest.empty() ||
+      !finite(request.coordinate_origin) || !finite(prefix.coordinate_origin) ||
+      !valid_ranges(request.body) || !valid_ranges(prefix.body) ||
+      !valid_ranges(request.footprint_offsets) || !valid_ranges(prefix.footprint_offsets) ||
+      !std::isfinite(t.lower) || !std::isfinite(t.upper) || t.lower > t.upper ||
+      !std::isfinite(now) || now < t.lower || now > t.upper ||
+      request.coordinate_origin.x_m != 0 || request.coordinate_origin.y_m != 0 ||
+      request.coordinate_origin.yaw_rad != 0) return std::nullopt;
+  for (std::size_t i = 0; i < 8; ++i) {
+    if (request.footprint_offsets[i].lower != prefix.footprint_offsets[i].lower ||
+        request.footprint_offsets[i].upper != prefix.footprint_offsets[i].upper) return std::nullopt;
+    if (i < 3) {
+      if (request.body[i].lower != 0 || request.body[i].upper != 0) return std::nullopt;
+    } else if (prefix.body[i].lower < request.body[i].lower ||
+               prefix.body[i].upper > request.body[i].upper) return std::nullopt;
+  }
+  try {
+    const auto p = box(prefix.body);
+    const auto co = n::cosine(p[2]), si = n::sine(p[2]);
+    const auto yaw = n::I(prefix.coordinate_origin.yaw_rad);
+    const auto oc = n::cosine(yaw), os = n::sine(yaw);
+    const std::array<n::I, 9> values{p[0], p[1], p[2], co, si,
+      oc * p[0] - os * p[1], os * p[0] + oc * p[1],
+      n::cosine(yaw + p[2]), n::sine(yaw + p[2])};
+    RelativeDomainTransform result;
+    for (std::size_t i = 0; i < values.size(); ++i) {
+      if (!std::isfinite(values[i].lo) || !std::isfinite(values[i].hi)) return std::nullopt;
+      result.coefficients_[i] = {values[i].lo, values[i].hi};
+    }
+    return result;
+  } catch (const std::exception &) { return std::nullopt; }
+}
+
+BodyRanges RelativeDomainTransform::body(const BodyRanges &relative) const {
+  auto b = box(relative);
+  const auto q = [&](std::size_t i) { return n::I(coefficients_[i].lower, coefficients_[i].upper); };
+  const auto x = b[0], y = b[1];
+  b[0] = q(0) + q(3) * x - q(4) * y;
+  b[1] = q(1) + q(4) * x + q(3) * y;
+  b[2] = q(2) + b[2];
+  return ranges(b);
+}
+FootprintRanges RelativeDomainTransform::footprint(const FootprintRanges &relative) const {
+  auto b = box(relative);
+  const auto q = [&](std::size_t i) { return n::I(coefficients_[i].lower, coefficients_[i].upper); };
+  for (std::size_t i = 0; i < 8; i += 2) {
+    const auto x = b[i], y = b[i + 1];
+    b[i] = q(5) + q(7) * x - q(8) * y;
+    b[i + 1] = q(6) + q(8) * x + q(7) * y;
+  }
+  return ranges(b);
+}
+
 bool starting_domain_contains_prefix(
     const StartingDomainRequest &domain,
     const CurrentInputPrefix &prefix) noexcept {

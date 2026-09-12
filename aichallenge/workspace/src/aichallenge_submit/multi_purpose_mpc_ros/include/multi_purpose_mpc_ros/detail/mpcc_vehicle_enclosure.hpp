@@ -215,6 +215,29 @@ inline void intersect(I &a, I b) {
 inline void intersect(J &a, I b) { intersect(a.v, b); }
 using JS = std::array<J, 8>;
 using Box = std::array<I, 8>;
+
+// Fixed invertible numerical axes; the native state remains (u, vy, r).
+// Aligning with the common actuation force preserves velocity dependence
+// through successive interval maps without excluding any input or branch.
+struct VelocityFrame {
+  double lateral_per_forward{};
+  double yaw_rate_per_forward{};
+  bool operator==(const VelocityFrame &other) const noexcept {
+    return lateral_per_forward == other.lateral_per_forward &&
+      yaw_rate_per_forward == other.yaw_rate_per_forward;
+  }
+  bool operator!=(const VelocityFrame &other) const noexcept { return !(*this == other); }
+  template <class T> std::array<T, 8> encode(std::array<T, 8> state) const {
+    if (lateral_per_forward != 0) state[4] = state[4] - T(lateral_per_forward) * state[3];
+    if (yaw_rate_per_forward != 0) state[5] = state[5] - T(yaw_rate_per_forward) * state[3];
+    return state;
+  }
+  template <class T> std::array<T, 8> decode(std::array<T, 8> state) const {
+    if (lateral_per_forward != 0) state[4] = state[4] + T(lateral_per_forward) * state[3];
+    if (yaw_rate_per_forward != 0) state[5] = state[5] + T(yaw_rate_per_forward) * state[3];
+    return state;
+  }
+};
 // Four rigid footprint vertices, XY pairs in world axes relative to the
 // observation XY origin. Body boxes retain their original heading frame.
 struct CornerProbe { Box offsets; double origin_yaw{}; };
@@ -290,6 +313,18 @@ inline ForceCoefficients force_coefficients(I tire,
   }
   return out;
 }
+inline VelocityFrame actuation_velocity_frame(double tire, const model::Parameters &p) {
+  const auto force = force_coefficients(I(tire), p);
+  const auto midpoint = [](I value) { return value.lo + (value.hi - value.lo) / 2; };
+  const double forward = midpoint(force.x[3]);
+  const VelocityFrame frame{midpoint(force.y[3]) / forward,
+    midpoint(force.moment[3]) * p.mass_kg / p.yaw_inertia_kgm2 / forward};
+  if (!std::isfinite(frame.lateral_per_forward) ||
+      !std::isfinite(frame.yaw_rate_per_forward))
+    throw std::runtime_error("invalid actuation velocity frame");
+  return frame;
+}
+
 template <class T>
 inline model::kernel::BodyRates<T>
 derivative_map(const model::kernel::StateValues<T> &s, const T &wire,
@@ -382,7 +417,9 @@ inline I tire_bounds(I desired, I tire, const model::Parameters &p, double dt) {
 template <class T>
 inline std::array<T, 8> map(std::array<T, 8> s, T a, const model::Parameters &p,
                             double dt, bool rest,
-                            bool *discontinuous = nullptr, T *yaw_increment = nullptr) {
+                            bool *discontinuous = nullptr, T *yaw_increment = nullptr,
+                            const VelocityFrame &frame = {}) {
+  s = frame.decode(std::move(s));
   const Arithmetic<T> arithmetic{discontinuous};
   const auto tire = tire_bounds(bounds(s[6]), bounds(s[7]), p, dt);
   model::kernel::update_tire(s, p, dt, arithmetic);
@@ -407,7 +444,7 @@ inline std::array<T, 8> map(std::array<T, 8> s, T a, const model::Parameters &p,
                                     coefficients ? &*coefficients : nullptr);
   if (yaw_increment)
     *yaw_increment = rates[model::kernel::Yaw] * T(dt);
-  return model::kernel::body_increment(s, rates, dt);
+  return frame.encode(model::kernel::body_increment(s, rates, dt));
 }
 
 inline CornerImage
@@ -478,6 +515,7 @@ struct CompiledStepMap {
   I point_yaw_delta;
   bool discontinuous{};
   bool corner_delta_available{};
+  VelocityFrame velocity_frame{};
 };
 struct CompiledInputMapData {
   std::uint64_t model_fingerprint{}, source_domain_fingerprint{};
@@ -549,7 +587,8 @@ inline Box centered_step(const Box &b, I acceleration,
                          const Box *previous_corners = nullptr,
                          CornerImage *corner_image = nullptr,
                          const CompiledStepMapView *maps = nullptr,
-                         CompiledStepMapRecorder *recorder = nullptr) {
+                         CompiledStepMapRecorder *recorder = nullptr,
+                         const VelocityFrame &frame = {}) {
   if ((probe != nullptr) != (previous_corners != nullptr) ||
       (probe != nullptr) != (corner_image != nullptr))
     throw std::runtime_error("incomplete corner context");
@@ -580,7 +619,7 @@ inline Box centered_step(const Box &b, I acceleration,
   if (maps && maps->parameters == &p) {
     for (std::size_t candidate = 0; candidate < maps->count; ++candidate) {
       const auto &entry = maps->maps[candidate];
-      if (entry.duration != dt ||
+      if (entry.duration != dt || entry.velocity_frame != frame ||
           (corner_image && !entry.corner_delta_available) ||
           !std::isfinite(acceleration.lo) || !std::isfinite(acceleration.hi) ||
           acceleration.lo > acceleration.hi ||
@@ -621,13 +660,13 @@ inline Box centered_step(const Box &b, I acceleration,
   I point_yaw_delta = compiled ? compiled->point_yaw_delta : I{};
   const auto range = compiled ? compiled->range
                               : map(inputs, a, p, dt, rest, &discontinuous,
-                                    corner_image ? &yaw_delta : nullptr);
+                                    corner_image ? &yaw_delta : nullptr, frame);
   const auto point = compiled ? compiled->point
                               : map(center, I(ac), p, dt, rest, nullptr,
-                                    corner_image ? &point_yaw_delta : nullptr);
+                                    corner_image ? &point_yaw_delta : nullptr, frame);
   if (recorder && recorder->parameters == &p)
     recorder->record({b, center, point, acceleration, dt, range, yaw_delta,
-                      point_yaw_delta, discontinuous, corner_image != nullptr});
+                      point_yaw_delta, discontinuous, corner_image != nullptr, frame});
   Box result;
   for (size_t i = 0; i < 8; ++i) {
     I delta;
@@ -656,7 +695,8 @@ step_parts(const Box &b, I a, const model::Parameters &p, double dt,
            const Box *previous_corners = nullptr,
            std::vector<CornerImage> *corner_images = nullptr,
            const CompiledStepMapView *maps = nullptr,
-           CompiledStepMapRecorder *recorder = nullptr) {
+           CompiledStepMapRecorder *recorder = nullptr,
+           const VelocityFrame &frame = {}) {
   if ((probe != nullptr) != (previous_corners != nullptr) ||
       (probe != nullptr) != (corner_images != nullptr))
     throw std::runtime_error("incomplete corner branches");
@@ -672,7 +712,7 @@ step_parts(const Box &b, I a, const model::Parameters &p, double dt,
     CornerImage image;
     parts.push_back(centered_step(q, wire, p, dt, rest, probe, previous_corners,
                                   corner_images ? &image : nullptr, maps,
-                                  recorder));
+                                  recorder, frame));
     if (corner_images) corner_images->push_back(image);
   };
   if (a.lo <= 0) {
@@ -712,7 +752,8 @@ advance_partitioned_inputs(std::vector<Box> states,
                            const model::Parameters &p, double duration,
                            Box *swept, CornerPopulation *corners = nullptr,
                            const CompiledStepMapView *maps = nullptr,
-                           CompiledStepMapRecorder *recorder = nullptr) {
+                           CompiledStepMapRecorder *recorder = nullptr,
+                           const VelocityFrame &frame = {}) {
   if (corners && corners->states.size() != states.size())
     throw std::runtime_error("corner population mismatch");
   const auto count = model::integration_steps(duration, p.maximum_step_sec);
@@ -738,7 +779,7 @@ advance_partitioned_inputs(std::vector<Box> states,
             step_parts(states[j], a, p, duration / count,
                        corners ? &corners->probe : nullptr,
                        corners ? &corners->states[j] : nullptr,
-                       corners ? &branch_images : nullptr, maps, recorder);
+                       corners ? &branch_images : nullptr, maps, recorder, frame);
         for (size_t i = 0; i < next.size(); ++i) {
           parts.push_back(next[i]);
           if (corners) images.push_back(branch_images[i]);
@@ -843,4 +884,53 @@ inline Box point(const model::State &s) {
     b[i] = I(v[i]);
   return b;
 }
+// Shared source-to-publication and source-to-rest numerical population.
+// Both frames describe all responses to the same inputs; only their common
+// physical body/corner bounds leave this object. Parameters outlive the local
+// prediction and remain immutable, including during compiled-map lookup.
+class AppliedInputPopulation {
+public:
+  struct Step {
+    Box swept_body;
+    std::optional<Box> swept_footprint;
+  };
+  AppliedInputPopulation(const model::State &initial, const model::Parameters &parameters,
+                         std::optional<CornerPopulation> corners = {})
+      : parameters_(parameters), frame_(actuation_velocity_frame(initial.tire_steering_rad, parameters)),
+        physical_{point(initial)}, actuation_{frame_.encode(physical_.front())},
+        physical_corners_(corners), actuation_corners_(std::move(corners)) {
+    if (physical_corners_ && physical_corners_->states.size() != 1)
+      throw std::runtime_error("invalid initial corner population");
+  }
+  void desired_steering(I desired) {
+    for (auto *population : {&physical_, &actuation_})
+      for (auto &state : *population) state[model::kernel::Desired] = desired;
+  }
+  Box body() const { return common(frame_.decode(joined(actuation_)), joined(physical_)); }
+  std::optional<Box> footprint() const {
+    if (!physical_corners_) return std::nullopt;
+    return common(joined(actuation_corners_->states), joined(physical_corners_->states));
+  }
+  std::size_t partitions_per_frame() const { return std::max(physical_.size(), actuation_.size()); }
+  Step advance(const std::vector<I> &inputs, double duration,
+               const CompiledStepMapView *maps = nullptr) {
+    Box physical_swept, actuation_swept;
+    physical_ = advance_partitioned_inputs(std::move(physical_), inputs, parameters_, duration,
+      &physical_swept, physical_corners_ ? &*physical_corners_ : nullptr, maps);
+    actuation_ = advance_partitioned_inputs(std::move(actuation_), inputs, parameters_, duration,
+      &actuation_swept, actuation_corners_ ? &*actuation_corners_ : nullptr, maps, nullptr, frame_);
+    Step step{common(frame_.decode(actuation_swept), physical_swept), {}};
+    if (physical_corners_) step.swept_footprint = common(actuation_corners_->swept, physical_corners_->swept);
+    return step;
+  }
+private:
+  static Box common(Box left, const Box &right) {
+    for (std::size_t i = 0; i < left.size(); ++i) intersect(left[i], right[i]);
+    return left;
+  }
+  const model::Parameters &parameters_;
+  VelocityFrame frame_;
+  std::vector<Box> physical_, actuation_;
+  std::optional<CornerPopulation> physical_corners_, actuation_corners_;
+};
 } // namespace multi_purpose_mpc_ros::mpcc_vehicle_model::numerical

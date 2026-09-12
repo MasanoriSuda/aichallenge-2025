@@ -5092,3 +5092,14 @@ reader既定値・記録・予測・安全境界は変えない。実適用入�
 証明を分ける。R604で新しい認証済み1986からも同じ適用入力の壁拒否を再構成した。
 モデル・安全条件・通常権限は未変更。再発進・統合受入れ・M4–M6未完。
 [新しいsourceと送信証明の切り分け](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-loss-source-audit.md)。
+
+
+2026-09-13: 適用入力の範囲計算では、従来の物理座標と、共通の加速度入力が作る
+速度・旋回の対応を保持する固定した可逆座標を独立に伝播する。両方が元の全入力集合を
+含むことを前提に、同じ時刻の物理body/corner範囲の共通部分を、一つの従来検証へ渡す。
+送信前の短い予測と完全停止までの予測は共通のAppliedInputPopulationを使う。
+キャッシュしたJacobianは数値座標の一致も確認する。入力集合、受信age、送信窓、
+元の9状態モデル・安全条件・唯一の認証済み権限を維持し、受信順序を仮定しない。
+R626既存215件、build125全26/package112全2621/source112、R627保存世界の本番数値
+計算と768000個のnative照合、R628/R629過去5件の拒否が合格。新規実走・M4–M6は未完。
+[数値座標の根拠・式・検証条件](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/velocity-correlation-design.md)。

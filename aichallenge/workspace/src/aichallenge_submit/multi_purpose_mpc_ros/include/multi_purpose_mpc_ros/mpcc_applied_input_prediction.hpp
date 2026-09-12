@@ -167,6 +167,7 @@ struct AppliedInputTube {
   std::optional<FootprintRanges> publication_footprint{};
   std::vector<AppliedInputSample> source_to_rest;
   double rest_sec{};
+  /// Maximum disjoint body partitions in any one numerical coordinate frame.
   std::size_t maximum_body_partitions{};
 };
 
@@ -201,6 +202,7 @@ struct ScheduledInputTube {
   std::optional<FootprintRanges> observation_footprint;
   std::vector<AppliedInputSample> source_to_rest;
   double rest_sec{};
+  /// Maximum disjoint body partitions in any one numerical coordinate frame.
   std::size_t maximum_body_partitions{};
 };
 

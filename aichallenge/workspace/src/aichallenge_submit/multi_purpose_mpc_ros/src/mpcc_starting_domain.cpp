@@ -115,9 +115,8 @@ CurrentInputPrefixPrediction predict_pending_input_prefix(
   try {
     auto initial = observation.initial.state;
     initial.x_m = initial.y_m = initial.yaw_rad = 0;
-    std::vector<n::Box> population{n::point(initial)};
-    auto corners =
-        point_corners(observation.initial.state, box(footprint_offsets));
+    n::AppliedInputPopulation population(initial, parameters,
+      point_corners(observation.initial.state, box(footprint_offsets)));
     const double duration =
         observation.now_sec - observation.initial.source_sec;
     const auto count = integration_steps(duration, parameters.maximum_step_sec);
@@ -135,11 +134,9 @@ CurrentInputPrefixPrediction predict_pending_input_prefix(
                                                profile, stamp, end);
       if (!inputs)
         return {Reason::HistoryUnavailable, {}};
-      assign_steering(population, *inputs, parameters);
-      n::Box swept;
-      population = n::advance_partitioned_inputs(
-          std::move(population), acceleration_groups(*inputs), parameters, dt,
-          &swept, &corners);
+      population.desired_steering(n::I(inputs->wire_steering_rad.lower,
+        inputs->wire_steering_rad.upper) / parameters.steering_wire_gain);
+      population.advance(acceleration_groups(*inputs), dt);
       stamp = end;
     }
     const auto inputs = applied_input_bounds(
@@ -147,7 +144,8 @@ CurrentInputPrefixPrediction predict_pending_input_prefix(
         observation.now_sec + parameters.maximum_step_sec);
     if (!inputs)
       return {Reason::HistoryUnavailable, {}};
-    assign_steering(population, *inputs, parameters);
+    population.desired_steering(n::I(inputs->wire_steering_rad.lower,
+      inputs->wire_steering_rad.upper) / parameters.steering_wire_gain);
     Hash hash;
     hash.string("pending-current-short-prefix-v1");
     hash.integer(context);
@@ -158,8 +156,8 @@ CurrentInputPrefixPrediction predict_pending_input_prefix(
                               profile,
                               observation.initial.state,
                               footprint_offsets,
-                              ranges(n::joined(population)),
-                              ranges(n::joined(corners.states))};
+                              ranges(population.body()),
+                              ranges(*population.footprint())};
     return {Reason::None, std::move(prefix)};
   } catch (const std::exception &) {
     return {Reason::NumericalFailure, {}};

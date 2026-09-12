@@ -1423,6 +1423,18 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-loss-source-evidence.json",
       "replay_ready": true,
       "reason": "Fresh failures for both initializers, full nominal versus scheduled wall boundary, original inputs retained; exact live1343 unavailable."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-velocity-correlation-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/velocity-correlation-evidence.json",
+      "replay_ready": true,
+      "reason": "Same frozen post-loss source/current world, full population velocity-frame comparison, original cell fixture and immutable historical negative replay provenance."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-paired-enclosure-audit-r630",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/velocity-correlation-evidence.json",
+      "replay_ready": true,
+      "reason": "Shared paired physical/actuation enclosure, retained old test failures, final native/package/source and full-world positive/five negative validation."
     }
   ],
   "experiments": [
@@ -18199,6 +18211,338 @@
       "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
       "deleted_code": [],
       "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r607",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-partition",
+      "result": "rejected",
+      "reason": "Paired per-branch swept body/corners still fail original30.209999331wall.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r608",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "receiver-order",
+      "result": "inconclusive",
+      "reason": "Read-only CIL setup ran as non-root; compiler archive extraction failed, no implementation findings.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r609",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "receiver-order",
+      "result": "accepted",
+      "reason": "Read-only CIL and official Cyclone0.9.1mode selection. Actual live loaded middleware remains unknown.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r610",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-ordered",
+      "result": "rejected",
+      "reason": "Ordered three-mode acceleration still fails30.254999331; steering population unchanged.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r611",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "receiver-factory",
+      "result": "accepted",
+      "reason": "Actual DomainAware factory uses MultiDomain manager; general ROS2cs path is separate.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r612",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-history",
+      "result": "accepted",
+      "reason": "Conditional ordered-history exhaustive native enclosure certifies:1641cohorts/59442updates; no production promotion.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r613",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "receiver-domain",
+      "result": "accepted",
+      "reason": "DomainUpdate sequential64take/callback loop and native md_take→rcl_take confirmed read-only.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r614",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-force-coordinates",
+      "result": "inconclusive",
+      "reason": "Coordinate prototype build failed: wrong tire field; no physical outcome.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r615",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-force-coordinates",
+      "result": "inconclusive",
+      "reason": "Coordinate prototype build failed: unsupported interval/interval division; no physical outcome.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r616",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-force-coordinates",
+      "result": "accepted",
+      "reason": "Equation-derived fixed velocity frame certifies original full input population without FIFO assumption.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r617",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-coordinate-validation",
+      "result": "accepted",
+      "reason": "256native traces:153600body+614400corner endpoint checks,zero violations.75steps/4partitions,rest30.274999331,isolated prediction7.175861ms.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r618",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-coordinate-negatives",
+      "result": "inconclusive",
+      "reason": "Historical source numerical domain regenerated with new enclosure; identity check correctly rejects before current proof.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r619",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-coordinate-negatives",
+      "result": "accepted",
+      "reason": "Historical source/domain/history preserved; four current wall/deadline/rest negatives preserved. Oldr76reader setup fails absent metadata separately.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r620",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-coordinate-r76",
+      "result": "inconclusive",
+      "reason": "Oldr76still lacks newer last_actual_publication metadata; no physical result.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r621",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-wall-fixture",
+      "result": "accepted",
+      "reason": "Exact original first wall cell474070identified, complete footprint unchanged; supports isolated unit fixture.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r622",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "post-loss-coordinate-r76",
+      "result": "accepted",
+      "reason": "Originalr76schema reader preserves source/domain/history and current3999WallRejected98.614997805.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r623",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "coordinate-regression",
+      "result": "accepted",
+      "reason": "New isolated-cell regression fails original production with ValidationRejected8; expected baseline failure.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-velocity-correlation-audit-r624",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-velocity-correlation-audit"
+      ],
+      "hypothesis": "Distinguish receiver ordering and component-box wrapping; preserve native actuation correlation without excluding original possible inputs.",
+      "changed_dimension": "coordinate-regression",
+      "result": "accepted",
+      "reason": "Typed per-call production numerical frame: full vehicle/input/enclosure native suite53tests passes; original cell regression fixed, reverse/rest/launch and coordinate-cache mismatch covered.",
+      "production_impact": "R624tests typed numerical frame only; no native physics, input population, hard proof, timing or authority change. Earlier arms diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "Correct a demonstrated setup mismatch, supply a changed immutable world or validate this supported frame implementation. Do not repeat failed branch/mode subdivision or coefficient/bin/threshold tuning without new structural evidence."
+    },
+    {
+      "experiment_id": "20260913-nine-state-paired-enclosure-audit-r630-r625",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-paired-enclosure-audit-r630"
+      ],
+      "hypothesis": "Intersect two complete numerical enclosures and unify prefix/full population without changing native equations, inputs, physical/timing predicates or single normal authority.",
+      "changed_dimension": "Shared paired numerical population and complete integration validation",
+      "result": "rejected",
+      "reason": "Paired physical/actuation propagation restores four moving-Stop positives; native53pass. Two retained prefix-parity tests expose separate physical-only short-prefix consumer. No expectation relaxed.",
+      "production_impact": "Only numeric enclosure representation and prefix consumer change. Single-frame-only R624not promoted; no tuning, retry, successful-validator selection or fallback.",
+      "deleted_code": [
+        "Duplicate physical-only pending short-prefix propagation"
+      ],
+      "revisit_condition": "New immutable counterexample, proved model/measurement discrepancy or measured runtime timing failure; preserve original test/physical conditions."
+    },
+    {
+      "experiment_id": "20260913-nine-state-paired-enclosure-audit-r630-r626",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-paired-enclosure-audit-r630"
+      ],
+      "hypothesis": "Intersect two complete numerical enclosures and unify prefix/full population without changing native equations, inputs, physical/timing predicates or single normal authority.",
+      "changed_dimension": "Shared paired numerical population and complete integration validation",
+      "result": "accepted",
+      "reason": "One shared AppliedInputPopulation for source-to-publication and source-to-rest: native53 plus retained162 pass, including exact body/corner prefix equality and original positives/negatives.",
+      "production_impact": "Only numeric enclosure representation and prefix consumer change. Single-frame-only R624not promoted; no tuning, retry, successful-validator selection or fallback.",
+      "deleted_code": [
+        "Duplicate physical-only pending short-prefix propagation"
+      ],
+      "revisit_condition": "New immutable counterexample, proved model/measurement discrepancy or measured runtime timing failure; preserve original test/physical conditions."
+    },
+    {
+      "experiment_id": "20260913-nine-state-paired-enclosure-audit-r630-r627",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-paired-enclosure-audit-r630"
+      ],
+      "hypothesis": "Intersect two complete numerical enclosures and unify prefix/full population without changing native equations, inputs, physical/timing predicates or single normal authority.",
+      "changed_dimension": "Shared paired numerical population and complete integration validation",
+      "result": "accepted",
+      "reason": "Current production paired predictor certifies original full source1986world through rest;256native traces/768000body+corner endpoint comparisons have zero violations, isolated prediction14.047511ms. Counterfactual source, not exact live1343adoption.",
+      "production_impact": "Only numeric enclosure representation and prefix consumer change. Single-frame-only R624not promoted; no tuning, retry, successful-validator selection or fallback.",
+      "deleted_code": [
+        "Duplicate physical-only pending short-prefix propagation"
+      ],
+      "revisit_condition": "New immutable counterexample, proved model/measurement discrepancy or measured runtime timing failure; preserve original test/physical conditions."
+    },
+    {
+      "experiment_id": "20260913-nine-state-paired-enclosure-audit-r630-r628",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-paired-enclosure-audit-r630"
+      ],
+      "hypothesis": "Intersect two complete numerical enclosures and unify prefix/full population without changing native equations, inputs, physical/timing predicates or single normal authority.",
+      "changed_dimension": "Shared paired numerical population and complete integration validation",
+      "result": "accepted",
+      "reason": "Four prior current wall/deadline/rest negatives preserved with exact historical source/domain/history/last-source identities; saved original producer reconstructs old immutable source, only actual dispatch uses current production paired predictor.",
+      "production_impact": "Only numeric enclosure representation and prefix consumer change. Single-frame-only R624not promoted; no tuning, retry, successful-validator selection or fallback.",
+      "deleted_code": [
+        "Duplicate physical-only pending short-prefix propagation"
+      ],
+      "revisit_condition": "New immutable counterexample, proved model/measurement discrepancy or measured runtime timing failure; preserve original test/physical conditions."
+    },
+    {
+      "experiment_id": "20260913-nine-state-paired-enclosure-audit-r630-r629",
+      "baseline_commit": "f96325e6",
+      "snapshot_ids": [
+        "20260913-nine-state-paired-enclosure-audit-r630"
+      ],
+      "hypothesis": "Intersect two complete numerical enclosures and unify prefix/full population without changing native equations, inputs, physical/timing predicates or single normal authority.",
+      "changed_dimension": "Shared paired numerical population and complete integration validation",
+      "result": "accepted",
+      "reason": "Old-schema r76D1current3999 keeps physical wall rejection and exact source/domain/current-history identities with current production paired prediction.",
+      "production_impact": "Only numeric enclosure representation and prefix consumer change. Single-frame-only R624not promoted; no tuning, retry, successful-validator selection or fallback.",
+      "deleted_code": [
+        "Duplicate physical-only pending short-prefix propagation"
+      ],
+      "revisit_condition": "New immutable counterexample, proved model/measurement discrepancy or measured runtime timing failure; preserve original test/physical conditions."
     }
   ]
 }

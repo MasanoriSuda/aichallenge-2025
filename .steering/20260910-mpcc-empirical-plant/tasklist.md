@@ -592,3 +592,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Localb368ecab/single-r9, R595–R606: exact fresh failures obtained; same-source solve/physical and applied wall boundary reproduced, independent nonlinear witnesses identified.
 - [ ] Repair frozen applied/current wall boundary with unchanged hard proofs; source supply continues after1342, so do not treat solver failure alone as the sustained-stop cause.
 - [ ] Actual restart and all remaining M4–M6, final-source races/gates and same submitted artifact/image/eval.
+
+## Velocity correlation slice (2026-09-13)
+
+- [x] R607–R622 separate branch union, ordered histories and fixed velocity frame; full original input population certifies with the frame, five historical negatives remain.
+- [x] R623old exact-cell regression fails; R624typed production frame passes all53native vehicle/input tests.
+- [x] Build124/package111single-frame regression retained. R625paired missing-prefix consumer fixed; R626215pass, build12526packages, package1122621records, source112pass. R627full positive/768000native comparisons and R628/R629five historical negatives pass.
+- [ ] Review, seal and local commit; bounded single-r10, then remaining restart/intent/async/multicar/gates/submission M4–M6.

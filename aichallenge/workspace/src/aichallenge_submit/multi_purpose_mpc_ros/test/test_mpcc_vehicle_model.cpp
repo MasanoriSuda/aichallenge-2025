@@ -2,6 +2,7 @@
 #include "multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
 #include "mpcc_resting_packet_fixture.hpp"
+#include "mpcc_post_loss_coordinate_fixture.hpp"
 #include "multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp"
 #include "multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp"
 
@@ -760,10 +761,13 @@ TEST(MpccAppliedInput, CornersEncloseNativeEndpointsAndContinuousPoseSweeps)
   std::uniform_real_distribution<double> unit(0, 1);
   size_t checked = 0;
   bool rest_seen = false, launch_seen = false, reverse_seen = false;
+  for (const bool transformed : {false, true}) {
+  random.seed(20260912);
   for (double yaw : {-2.9, -.3, 0., 1.7, 3.1}) {
     for (double u : {-.05, -.01, 0., .01, .05, 2.}) {
       vehicle::State initial{0, 0, 0, u, .01, -.05, 0, .04};
-      std::vector<num::Box> population{num::point(initial)};
+      const auto frame = transformed ? num::actuation_velocity_frame(initial.tire_steering_rad, p) : num::VelocityFrame{};
+      std::vector<num::Box> population{frame.encode(num::point(initial))};
       num::Box seed;
       const auto co = num::cosine(num::I(yaw)), so = num::sine(num::I(yaw));
       for (size_t k = 0; k < 8; k += 2) {
@@ -781,7 +785,8 @@ TEST(MpccAppliedInput, CornersEncloseNativeEndpointsAndContinuousPoseSweeps)
         for (auto & body : population) body[6] = steer;
         num::Box swept;
         population = num::advance_partitioned_inputs(
-          std::move(population), arms, p, .005, &swept, &corners);
+          std::move(population), arms, p, .005, &swept, &corners, nullptr, nullptr, frame);
+        const auto physical = frame.decode(num::joined(population));
         const auto endpoint = num::joined(corners.states);
         for (size_t arm = 0; arm < oracles.size(); ++arm) {
           auto & state = oracles[arm]; const auto before = state;
@@ -792,6 +797,12 @@ TEST(MpccAppliedInput, CornersEncloseNativeEndpointsAndContinuousPoseSweeps)
           const auto next = vehicle::advance(state,
             {acceleration.lo + af * (acceleration.hi - acceleration.lo), 0}, p, .005);
           ASSERT_TRUE(next); state = next->state;
+          const std::array<double, 8> values{state.x_m, state.y_m, state.yaw_rad,
+            state.forward_velocity_mps, state.lateral_velocity_mps, state.yaw_rate_radps,
+            state.desired_steering_rad, state.tire_steering_rad};
+          for (std::size_t k=0;k<8;++k) {
+            ASSERT_GE(values[k], physical[k].lo); ASSERT_LE(values[k], physical[k].hi);
+          }
           rest_seen |= state.forward_velocity_mps == 0;
           launch_seen |= before.forward_velocity_mps == 0 && state.forward_velocity_mps > 0;
           reverse_seen |= state.forward_velocity_mps < 0;
@@ -820,7 +831,8 @@ TEST(MpccAppliedInput, CornersEncloseNativeEndpointsAndContinuousPoseSweeps)
       }
     }
   }
-  EXPECT_EQ(checked, 2073600U);
+  }
+  EXPECT_EQ(checked, 4147200U);
   EXPECT_TRUE(rest_seen); EXPECT_TRUE(launch_seen); EXPECT_TRUE(reverse_seen);
 }
 
@@ -1691,4 +1703,90 @@ TEST(MpccPendingInput, LateOrInterveningActualCommandsRejectAndIdentityIsSeparat
     EXPECT_EQ(current.tube->numerical.source_to_rest[i].swept_body[j].lower,original.tube->source_to_rest[i].swept_body[j].lower);
     EXPECT_EQ(current.tube->numerical.source_to_rest[i].swept_body[j].upper,original.tube->source_to_rest[i].swept_body[j].upper);
   }
+}
+
+TEST(MpccAppliedInput, PostLossSourceRetainsActuationCorrelationThroughCompleteStop)
+{
+  namespace num = vehicle::numerical;
+  namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
+  const auto observation = multi_purpose_mpc_ros::test::post_loss_observation();
+  const auto program = multi_purpose_mpc_ros::test::post_loss_program();
+  recovery::OccupancyGrid grid{751, 759, .1, 89608.69387016428, 43117.15165326744,
+    recovery::YAxisConvention::RowZeroAtMaximumY, std::vector<recovery::CellState>(751*759, recovery::CellState::Free)};
+  constexpr std::size_t cell = 474070;
+  grid.cells[cell] = recovery::CellState::Occupied;
+  const recovery::FootprintExtents footprint{1.615, .51, .968, .968, .05};
+  const auto offsets = num::footprint_vertex_offsets(footprint);
+  const auto & initial = observation.initial.state;
+  const recovery::Pose2D origin{initial.x_m, initial.y_m, initial.yaw_rad};
+  vehicle::AppliedFootprintValidation context;
+  for (std::size_t k=0;k<8;++k) context.local_offsets[k]={offsets[k].lo,offsets[k].hi};
+  std::size_t checked=0;
+  context.validate = [&](const vehicle::BodyRanges &body, const vehicle::FootprintRanges &corners,
+      double, double) {
+    num::Box states, vertices;
+    for (std::size_t k=0;k<8;++k) {
+      states[k]={body[k].lower,body[k].upper};vertices[k]={corners[k].lower,corners[k].upper};
+    }
+    ++checked;
+    return bool(num::separating_oriented_cell_clearance(states,footprint,vertices,grid,cell,origin));
+  };
+  const auto prediction=vehicle::predict_scheduled_inputs_to_rest(
+    observation,program,applied_profile(),vehicle_model(),{},&context);
+  ASSERT_TRUE(prediction.tube) << static_cast<int>(prediction.reason);
+  EXPECT_GT(checked, 1U);
+  const auto &terminal=prediction.tube->source_to_rest.back().endpoint_body;
+  for (std::size_t k=3;k<=5;++k) {
+    EXPECT_EQ(terminal[k].lower,0);EXPECT_EQ(terminal[k].upper,0);
+  }
+  EXPECT_GT(prediction.tube->rest_sec,program.commands.front().published_sec+.25);
+}
+
+TEST(MpccVehicleModel, VelocityFrameDoesNotReusePhysicalCoordinateMaps)
+{
+  namespace num = vehicle::numerical;
+  const auto p=vehicle_model();
+  const vehicle::State initial{0,0,0,1,0,0,-.35,-.35};
+  const auto frame=num::actuation_velocity_frame(initial.tire_steering_rad,p);
+  const auto encoded=frame.encode(num::point(initial));
+  auto parent=num::point(initial);
+  parent[2]={-.1,.1};parent[3]={.5,1.5};parent[4]=parent[5]={-1,1};
+  parent[6]=parent[7]={-.36,-.34};
+  num::CompiledStepMapRecorder recorder(p);
+  num::centered_step(parent,num::I(1),p,.005,false,nullptr,nullptr,nullptr,nullptr,&recorder);
+  ASSERT_EQ(recorder.data.maps.size(),1U);
+  const num::CompiledStepMapView view{recorder.data.maps.data(),recorder.data.maps.size(),&p};
+  const auto expected=num::centered_step(encoded,num::I(1),p,.005,false,
+    nullptr,nullptr,nullptr,nullptr,nullptr,frame);
+  const auto with_maps=num::centered_step(encoded,num::I(1),p,.005,false,
+    nullptr,nullptr,nullptr,&view,nullptr,frame);
+  for (std::size_t k=0;k<8;++k) {
+    EXPECT_EQ(with_maps[k].lo,expected[k].lo);EXPECT_EQ(with_maps[k].hi,expected[k].hi);
+  }
+}
+
+TEST(MpccAppliedInput, CorrelatedVelocityPredictionRejectsAnOccupiedBodyInterior)
+{
+  namespace num = vehicle::numerical;
+  namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
+  const auto observation = multi_purpose_mpc_ros::test::post_loss_observation();
+  const auto &initial=observation.initial.state;
+  recovery::OccupancyGrid grid{1,1,.1,initial.x_m,initial.y_m,
+    recovery::YAxisConvention::RowZeroAtMaximumY,{recovery::CellState::Occupied}};
+  const recovery::FootprintExtents footprint{1.615,.51,.968,.968,.05};
+  const auto offsets=num::footprint_vertex_offsets(footprint);
+  vehicle::AppliedFootprintValidation context;
+  for (std::size_t k=0;k<8;++k) context.local_offsets[k]={offsets[k].lo,offsets[k].hi};
+  context.validate=[&](const vehicle::BodyRanges &body,const vehicle::FootprintRanges &corners,double,double) {
+    num::Box states,vertices;
+    for (std::size_t k=0;k<8;++k) {
+      states[k]={body[k].lower,body[k].upper};vertices[k]={corners[k].lower,corners[k].upper};
+    }
+    return bool(num::separating_oriented_cell_clearance(states,footprint,vertices,grid,0,
+      {initial.x_m,initial.y_m,initial.yaw_rad}));
+  };
+  const auto prediction=vehicle::predict_scheduled_inputs_to_rest(observation,
+    multi_purpose_mpc_ros::test::post_loss_program(),applied_profile(),vehicle_model(),{},&context);
+  EXPECT_FALSE(prediction.tube);
+  EXPECT_EQ(prediction.reason,vehicle::AppliedInputRejectReason::ValidationRejected);
 }

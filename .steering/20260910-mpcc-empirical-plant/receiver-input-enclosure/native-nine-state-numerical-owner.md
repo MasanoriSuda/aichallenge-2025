@@ -53,7 +53,7 @@ Validation and completion criteria:
 - [x] R494 frozen numerical fixture/generic solver29 pass; source ownership106 pass.
 - [x] Build117 all26 packages; package104 all2599 records, zero errors/failures/skips.
 - [x] R495 same history/source/domain and exact current3999 rejection retained; R497 built production Follow/Cruise source proofs pass.
-- [ ] Standard dev2-r77 on committed source, original timing and six-lap criteria.
+- [x] Standard dev2-r77 executed on1241e0cf; rejected at Ready D1final deadline934, no laps. [Current audit](r77-publication-audit.md).
 - [ ] Remaining candidate generation, M4–M6 and same-artifact submission/eval.
 
 [Sealed numerical and verification evidence](native-nine-state-numerical-evidence.json).

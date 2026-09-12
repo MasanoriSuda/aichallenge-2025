@@ -1,25 +1,20 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。r76現在壁拒否を維持し、9状態QPの数値前処理を修正・検証中。**
+**全体未完。9状態の数値前処理は1241e0cfで修正。標準r77はReadyの公開期限で未達。**
 
-基準bc4dded9（制御56692749）、既存build116全26、tests103全2598が合格済み。
-新しいR492では、同じ行列・制約・初期値の4場面を内部平衡化あり/なしで比較。
-現行9状態では内部平衡化により全8 cold/warm条件が元の制限内で解ける。
-R493は既存のFollow/Cruiseの同一sourceで両policyの完全な証明に合格。
-現行9状態SolverContextだけの前処理を変更し、旧7状態向け汎用policyは維持する。
-新規fixtureを含むR494全29nativeとsource106が合格。build117全26、tests104全2599が合格（error/failure/skipは0）。
+Build117全26、tests104全2599（error/failure/skipは0）、source106、native29が合格。
+R495は元r76の壁拒否を維持、R497は元Follow/Cruiseの完全なsource証明に合格。
+標準dev2-r77はD1 Ready decision934で現在の物理証明に合格した後、元の公開期限を
+約5ms超過して自動停止。Start・完走なし。元DLLとユーザーJSONを復元済み。
+R498は同じsource/history/domainと時刻で物理合格・最終公開拒否を正確に再現。
+R499で計算内訳を測り、R500/R501は既存数値式の検索範囲による再計算減少を確認。
+短縮は約0.5msで、実走期限を満たしたとは扱わず未採用。次は向きの違いによる数値式の
+再利用不可を、物理座標系を保った局所方程式として改善できるか比較する。
+[現在の監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r77-publication-audit.md)、
+[前処理の修正](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-owner.md)。
 
-R486は走行中3488の物理的な成立例を確認。保存3488の強制Pass18/Ahead20という
-派生候補の厳密な線形制約不成立と、世界全体の走行不能を区別する。
-R490は元の壁表現のまま新しい候補と数値前処理でsource証明に合格したが、
-制動初期軌道・候補topologyは未採用。r76現在3999の壁拒否は正しく、保持する。
-[修正設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-owner.md)、
-[比較根拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-evidence.json)。
-
-R495は同じsource/history/domainで現在3999の壁拒否を正確に再現。R497は実ライブラリで
-元Follow/Cruiseの完全なsource証明に合格。次はローカルcommit、標準dev2-r77。
-r75 D2Start/update_v_max文脈失効、全M4–M6、同一最終source反復走行・gate・提出/evalは未完。
+r75 Start/update_v_max失効、候補生成、全M4–M6、同一最終source反復走行・gate・提出/evalは未完。
 追加確認なしで続行。pushなし。
 
 以下はr75開始前までの根拠。

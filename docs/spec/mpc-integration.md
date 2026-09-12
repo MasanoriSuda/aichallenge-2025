@@ -99,6 +99,10 @@ R492の同一QP比較とR493の同一Follow/Cruise完全証明が根拠。失敗
 solver制限変更は追加しない。build117全26、tests104全2599が合格し、R495/R497は
 実ライブラリでも元の現在壁拒否とFollow/Cruiseのsource合格を維持。新しい実走受入れは未完。
 [9状態の数値前処理](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-owner.md)。
+標準r77はD1 Ready decision934の公開期限で未達。現在の物理証明は合格するが、
+送信直前に元の期限を約5ms超過した。R498でも同一履歴・source・domainで再現。
+原判定を維持し、現在再証明の計算を監査中。
+[公開境界の根拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r77-publication-audit.md)。
 
 受信入力を表す共有数値API `mpcc_applied_input_prediction` を追加した。
 同一時刻の公開履歴を全件保持し、全予測区間の因果的な入力coverageを要求する。

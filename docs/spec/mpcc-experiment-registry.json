@@ -1303,6 +1303,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/native-nine-state-numerical-evidence.json",
       "replay_ready": true,
       "reason": "R76 frozen worlds, newly sealed candidate topologies and exact QPs; unchanged current certified Follow/Cruise sources."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-r77-publication",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r77-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact first Ready934 final-guard source/current/history/domain and original packet clocks."
     }
   ],
   "experiments": [
@@ -16389,6 +16395,76 @@
       "production_impact": "None; no numerical result or production change.",
       "deleted_code": [],
       "revisit_condition": "Corrected explicit function scope, satisfied by R497."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r77-publication-run",
+      "baseline_commit": "1241e0cfb5df473b712c683eb04374fff7909ae3",
+      "snapshot_ids": [
+        "20260912-nine-state-r77-publication"
+      ],
+      "hypothesis": "Explain original publication deadline and numeric current reproof cost while preserving physical rejection.",
+      "changed_dimension": "Standard dev2 unchanged six-lap criteria",
+      "result": "rejected",
+      "reason": "D1Ready934 physical proof passes; original before-publication deadline fails by4.999931ms. No Start/laps; restored.",
+      "production_impact": "None in this audit; all-row lookup and counters diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "New measured representation or causal input; no unchanged retry, tolerance/window relaxation or failed-run acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r77-publication-r498",
+      "baseline_commit": "1241e0cfb5df473b712c683eb04374fff7909ae3",
+      "snapshot_ids": [
+        "20260912-nine-state-r77-publication"
+      ],
+      "hypothesis": "Explain original publication deadline and numeric current reproof cost while preserving physical rejection.",
+      "changed_dimension": "Exact built-library current and final-clock replay",
+      "result": "accepted",
+      "reason": "3repeats same source/history/domain: physical151samples accept, entrytrue/beforefalse.5.279–5.314ms isolated.",
+      "production_impact": "None in this audit; all-row lookup and counters diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "New measured representation or causal input; no unchanged retry, tolerance/window relaxation or failed-run acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r77-publication-r499",
+      "baseline_commit": "1241e0cfb5df473b712c683eb04374fff7909ae3",
+      "snapshot_ids": [
+        "20260912-nine-state-r77-publication"
+      ],
+      "hypothesis": "Explain original publication deadline and numeric current reproof cost while preserving physical rejection.",
+      "changed_dimension": "Current numerical/wall profile only",
+      "result": "accepted",
+      "reason": "Reproof4.960ms anddomain0.657ms; nestedpropagation4.031/world1.362ms.268compiledhits/204misses; no implementation change.",
+      "production_impact": "None in this audit; all-row lookup and counters diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "New measured representation or causal input; no unchanged retry, tolerance/window relaxation or failed-run acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r77-publication-r500",
+      "baseline_commit": "1241e0cfb5df473b712c683eb04374fff7909ae3",
+      "snapshot_ids": [
+        "20260912-nine-state-r77-publication"
+      ],
+      "hypothesis": "Explain original publication deadline and numeric current reproof cost while preserving physical rejection.",
+      "changed_dimension": "All existing source equations with strict containment versus per-row lookup",
+      "result": "accepted",
+      "reason": "Both physical/clock cases keep appropriate acceptance/rejection.934 saves~0.5ms;3999 rejects one5msstep earlier. Diagnostic only, insufficient live evidence.",
+      "production_impact": "None in this audit; all-row lookup and counters diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "New measured representation or causal input; no unchanged retry, tolerance/window relaxation or failed-run acceptance."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r77-publication-r501",
+      "baseline_commit": "1241e0cfb5df473b712c683eb04374fff7909ae3",
+      "snapshot_ids": [
+        "20260912-nine-state-r77-publication"
+      ],
+      "hypothesis": "Explain original publication deadline and numeric current reproof cost while preserving physical rejection.",
+      "changed_dimension": "Observe miss predicates without weakening them",
+      "result": "accepted",
+      "reason": "All-row hit/miss376/96 versus268/204; remaining54closestyaw,24speed,18unmappedprefix. Counter timing unpromoted.",
+      "production_impact": "None in this audit; all-row lookup and counters diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "New measured representation or causal input; no unchanged retry, tolerance/window relaxation or failed-run acceptance."
     }
   ]
 }

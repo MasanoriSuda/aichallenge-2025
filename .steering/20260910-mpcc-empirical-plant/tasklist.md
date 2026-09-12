@@ -459,5 +459,13 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Preselect existing internal equilibration for native nine-state workspaces; generic legacy policy unchanged, no retry.
 - [x] R494 exact numerical fixture and generic29 native tests; source106 pass.
 - [x] Full build117 all26/package104 all2599 pass; R495 current rejection preserved, R497 both original source proofs pass.
-- [ ] Seal verification, local commit and original standard dev2-r77 acceptance.
+- [x] Seal verification and local commit1241e0cf; original dev2-r77 executed, rejected at Ready D1final deadline934.
 - [ ] Remaining candidate generation and all M4–M6 completion work.
+
+## r77 current proof / publication boundary
+
+- [x] Standard r77 original criteria, earliest934 capture, automatic stop/restoration.
+- [x] R498 same history/source/domain; physics passes, original final-clock guard fails.
+- [x] R499 current-cost profile; R500 all-row lookup and R501 component miss attribution, diagnostic only.
+- [ ] Compare a causally distinct local numerical map representation; preserve original frame/model/world/current/clock checks and independent oracle.
+- [ ] Material validated production improvement, fresh live acceptance and remaining M4–M6.

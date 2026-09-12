@@ -616,23 +616,51 @@ inline Box centered_step(const Box &b, I acceleration,
     return result;
   }
   const CompiledStepMap *compiled = nullptr;
+  std::optional<CompiledStepMap> transported;
   if (maps && maps->parameters == &p) {
     for (std::size_t candidate = 0; candidate < maps->count; ++candidate) {
       const auto &entry = maps->maps[candidate];
-      if (entry.duration != dt || entry.velocity_frame != frame ||
+      const bool change_frame = entry.velocity_frame != frame;
+      if (entry.duration != dt || (change_frame &&
+          (entry.velocity_frame != VelocityFrame{})) ||
           (corner_image && !entry.corner_delta_available) ||
           !std::isfinite(acceleration.lo) || !std::isfinite(acceleration.hi) ||
           acceleration.lo > acceleration.hi ||
           acceleration.lo < entry.acceleration.lo ||
           acceleration.hi > entry.acceleration.hi)
         continue;
+      // Membership is in the original parent, before enclosing its image in
+      // another coordinate box. That image box alone loses velocity dependence.
+      const auto physical_query = change_frame ? frame.decode(b) : b;
       bool contained = true;
       for (std::size_t i = 2; i < 8; ++i)
-        contained = contained && std::isfinite(b[i].lo) &&
-                    std::isfinite(b[i].hi) && b[i].lo <= b[i].hi &&
-                    b[i].lo >= entry.body[i].lo && b[i].hi <= entry.body[i].hi;
+        contained = contained && std::isfinite(physical_query[i].lo) &&
+          std::isfinite(physical_query[i].hi) && physical_query[i].lo <= physical_query[i].hi &&
+          physical_query[i].lo >= entry.body[i].lo && physical_query[i].hi <= entry.body[i].hi;
       if (contained) {
         compiled = &entry;
+        if (change_frame) {
+          auto transformed = entry;
+          transformed.velocity_frame = frame;
+          transformed.body = frame.encode(entry.body);
+          // T*c need not be representable. Retain its outward interval and
+          // use the entire interval when forming query offsets below.
+          transformed.center = frame.encode(entry.center);
+          transformed.point = frame.encode(entry.point);
+          // Compose T * J(Phi) * T^-1. The input column for u includes
+          // kv*d/dvy + kr*d/dr; output velocities then use T. Yaw increment
+          // is a physical scalar, so only its input derivatives transform.
+          const auto columns = [&](J value) {
+            value.d[1] = value.d[1] + I(frame.lateral_per_forward) * value.d[2] +
+              I(frame.yaw_rate_per_forward) * value.d[3];
+            return value;
+          };
+          for (auto &value : transformed.range) value = columns(value);
+          transformed.range = frame.encode(transformed.range);
+          transformed.yaw_delta = columns(transformed.yaw_delta);
+          transported = std::move(transformed);
+          compiled = &*transported;
+        }
         break;
       }
     }
@@ -641,12 +669,11 @@ inline Box centered_step(const Box &b, I acceleration,
   Box center;
   std::array<I, N> offsets{};
   for (size_t i = 2; i < 8; ++i) {
-    const double c =
-        compiled ? compiled->center[i].lo : b[i].lo + (b[i].hi - b[i].lo) / 2;
+    const I c = compiled ? compiled->center[i] : I(b[i].lo + (b[i].hi - b[i].lo) / 2);
     inputs[i] = J(compiled ? compiled->body[i] : b[i]);
     inputs[i].d[i - 2] = I(1);
-    center[i] = I(c);
-    offsets[i - 2] = b[i] - I(c);
+    center[i] = c;
+    offsets[i - 2] = b[i] - c;
   }
   const auto parent_acceleration =
       compiled ? compiled->acceleration : acceleration;

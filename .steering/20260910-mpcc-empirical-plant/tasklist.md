@@ -598,4 +598,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R607–R622 separate branch union, ordered histories and fixed velocity frame; full original input population certifies with the frame, five historical negatives remain.
 - [x] R623old exact-cell regression fails; R624typed production frame passes all53native vehicle/input tests.
 - [x] Build124/package111single-frame regression retained. R625paired missing-prefix consumer fixed; R626215pass, build12526packages, package1122621records, source112pass. R627full positive/768000native comparisons and R628/R629five historical negatives pass.
-- [ ] Review, seal and local commit; bounded single-r10, then remaining restart/intent/async/multicar/gates/submission M4–M6.
+- [x] Reviewed/sealed/local commit f2a89c14; single-r10/R631–R636 separates late publication and source wall failures. No race acceptance.
+
+## Compiled coordinate transport (2026-09-13)
+
+- [x] R633/R634exact current999replay/cost, R635bounded coordinate-conjugation comparison; R636separate source1020wall rejection.
+- [x] R637old reuse regression fails; R638216native tests, build12626packages/package1132622records/source112pass.
+- [x] R639full1986positive/768000native comparisons, R640current clock result and R641–R643historical/same-run negatives preserved.
+- [ ] Seal/review/local commit, fresh bounded single-r11 current timing/restart/authority; no margin/clock changes.
+- [ ] Source1020wall/model/measurement and all remainingM4–M6 acceptance, same final artifact/image/eval.

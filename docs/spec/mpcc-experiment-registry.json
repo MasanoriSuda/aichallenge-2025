@@ -1435,6 +1435,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/velocity-correlation-evidence.json",
       "replay_ready": true,
       "reason": "Shared paired physical/actuation enclosure, retained old test failures, final native/package/source and full-world positive/five negative validation."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-map-transport-audit-r644",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compiled-coordinate-transport-evidence.json",
+      "replay_ready": true,
+      "reason": "single-r10exact current/source failures, measured numerical cost, original-map coordinate conjugation and native/full verification."
     }
   ],
   "experiments": [
@@ -18543,6 +18549,214 @@
         "Duplicate physical-only pending short-prefix propagation"
       ],
       "revisit_condition": "New immutable counterexample, proved model/measurement discrepancy or measured runtime timing failure; preserve original test/physical conditions."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r631",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "paired-live-audit",
+      "result": "accepted",
+      "reason": "single-r10/f2a89c14first known timing and programme-availability boundaries;551normal sends,1142callbacks max20.404766ms,zero actual window violations,Readyonly. First999late before guard; moving1016no due/active,1020sourcewall,1021resumes.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r632",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "paired-public",
+      "result": "accepted",
+      "reason": "Same-run MCAP publicmax0.9889339209mps; after1000max0.1938343942. Velocity/tire28.571Hz,IMU20Hz,clock200Hz over recorded source-time span. No private body/contact truth.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r633",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "paired-deadline",
+      "result": "accepted",
+      "reason": "Exact999source/domain/history/lastactual replay3times; independent physical proof accepted, original actual before guard rejected;14.215–14.295ms offline.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r634",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "paired-profile",
+      "result": "accepted",
+      "reason": "No-production-change scoped current999: physical population4.02ms,actuation9.84ms; physical104vsactuation661Jacobian recomputations. Inclusive overlapping scopes, not callback bound.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r635",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "map-transport",
+      "result": "accepted",
+      "reason": "A baseline14.36–14.42ms vs B transported physical parent11.68–11.84ms;267maps,1422candidate membership misses; same whole physical proof and actual late guard. No source/clock changes.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r636",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "paired-source",
+      "result": "accepted",
+      "reason": "Separate1020original scheduled source wall rejection reproduced at13.389999709; not solved by timing optimization.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r637",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "transport-regression",
+      "result": "accepted",
+      "reason": "Old production fails new cache-reuse behavior test:3456reference-center assertions only. Native containment succeeds; old code recomputes instead of transporting. Unsupported-frame negative retained.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r638",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "transport-regression",
+      "result": "accepted",
+      "reason": "Production transport passes54native vehicle and162retained tests. Whole decoded query membership, outward reference center, native body/corners/sweeps and unsupported-frame guard covered.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r639",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "transport-positive",
+      "result": "accepted",
+      "reason": "Production preserves full1986positive certificate and768000native containment checks; no added tolerance.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r640",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "transport-deadline",
+      "result": "accepted",
+      "reason": "Production exact999full current proof and actual late guard preserve original results; measured current timing recorded in evidence.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r641",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "transport-negatives",
+      "result": "accepted",
+      "reason": "Four historical current wall/deadline/rest negatives and exact original identities preserved; historical-source-only baseline reconstruction explicitly isolated.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r642",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "transport-r76",
+      "result": "accepted",
+      "reason": "Old-schema r76current3999physical wall rejection and original source/domain/history identities preserved.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
+    },
+    {
+      "experiment_id": "20260913-nine-state-map-transport-audit-r644-r643",
+      "baseline_commit": "f2a89c14",
+      "snapshot_ids": [
+        "20260913-nine-state-map-transport-audit-r644"
+      ],
+      "hypothesis": "Separate current clock cost and source wall rejection; reuse immutable physical parent maps through a verified coordinate transform.",
+      "changed_dimension": "transport-source",
+      "result": "accepted",
+      "reason": "Production preserves same-run1020source wall rejection; remains separate open physical boundary.",
+      "production_impact": "R638numerical cache selection/reference intervals only. Source/model/inputs/wall/clock/normal authority unchanged; single-r11required.",
+      "deleted_code": [
+        "Unconditional cache miss for a supported physical-to-query-frame transformation"
+      ],
+      "revisit_condition": "New exact source/current world, failed containment/native test or prospective timing evidence; no larger window/threshold/hold/retry substitute."
     }
   ]
 }

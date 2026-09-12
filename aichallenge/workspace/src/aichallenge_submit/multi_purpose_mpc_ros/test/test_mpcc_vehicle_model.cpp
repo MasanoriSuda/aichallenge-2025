@@ -1742,7 +1742,7 @@ TEST(MpccAppliedInput, PostLossSourceRetainsActuationCorrelationThroughCompleteS
   EXPECT_GT(prediction.tube->rest_sec,program.commands.front().published_sec+.25);
 }
 
-TEST(MpccVehicleModel, VelocityFrameDoesNotReusePhysicalCoordinateMaps)
+TEST(MpccVehicleModel, UnsupportedVelocityFramesDoNotReuseCoordinateMaps)
 {
   namespace num = vehicle::numerical;
   const auto p=vehicle_model();
@@ -1753,7 +1753,8 @@ TEST(MpccVehicleModel, VelocityFrameDoesNotReusePhysicalCoordinateMaps)
   parent[2]={-.1,.1};parent[3]={.5,1.5};parent[4]=parent[5]={-1,1};
   parent[6]=parent[7]={-.36,-.34};
   num::CompiledStepMapRecorder recorder(p);
-  num::centered_step(parent,num::I(1),p,.005,false,nullptr,nullptr,nullptr,nullptr,&recorder);
+  num::centered_step(parent,num::I(1),p,.005,false,nullptr,nullptr,nullptr,nullptr,&recorder,
+    num::VelocityFrame{.2,.3});
   ASSERT_EQ(recorder.data.maps.size(),1U);
   const num::CompiledStepMapView view{recorder.data.maps.data(),recorder.data.maps.size(),&p};
   const auto expected=num::centered_step(encoded,num::I(1),p,.005,false,
@@ -1789,4 +1790,96 @@ TEST(MpccAppliedInput, CorrelatedVelocityPredictionRejectsAnOccupiedBodyInterior
     multi_purpose_mpc_ros::test::post_loss_program(),applied_profile(),vehicle_model(),{},&context);
   EXPECT_FALSE(prediction.tube);
   EXPECT_EQ(prediction.reason,vehicle::AppliedInputRejectReason::ValidationRejected);
+}
+
+
+TEST(MpccVehicleModel, PhysicalWorkerMapsTransportOnlyWholeContainedQueries)
+{
+  namespace num = vehicle::numerical;
+  const auto p = vehicle_model();
+  const num::VelocityFrame frame{.5,.3};
+  num::Box parent{};
+  parent[2]={-.1,.1}; parent[3]={.5,1.5}; parent[4]=parent[5]={-1,1};
+  parent[6]=parent[7]={-.36,-.34};
+  const auto offsets = num::footprint_vertex_offsets({1.615,.51,.768,.768,.2});
+  std::mt19937_64 random(20260913);
+  std::uniform_real_distribution<double> unit(0,1);
+  for (const double origin_yaw : {-2.9,0.,3.1}) {
+    num::CornerProbe probe{offsets,origin_yaw};
+    num::Box parent_corners;
+    for (auto &coordinate : parent_corners) coordinate={-4,4};
+    num::CornerImage parent_image;
+    num::CompiledStepMapRecorder maps(p);
+    num::centered_step(parent,num::I(.5,1.5),p,.005,false,
+      &probe,&parent_corners,&parent_image,nullptr,&maps);
+    ASSERT_EQ(maps.data.maps.size(),1U);
+    const num::CompiledStepMapView view{maps.data.maps.data(),maps.data.maps.size(),&p};
+    for (std::size_t trace=0;trace<96;++trace) {
+      vehicle::State initial{0,0,-.05+.1*unit(random),.7+.6*unit(random),
+        -.15+.3*unit(random),-.2+.4*unit(random),-.358+.016*unit(random),
+        -.358+.016*unit(random)};
+      const double acceleration=.6+.8*unit(random);
+      const auto query=frame.encode(num::point(initial));
+      const auto co=num::cosine(num::I(origin_yaw+initial.yaw_rad));
+      const auto sn=num::sine(num::I(origin_yaw+initial.yaw_rad));
+      num::Box corners;
+      for (std::size_t k=0;k<8;k+=2) {
+        corners[k]=co*offsets[k]-sn*offsets[k+1];
+        corners[k+1]=sn*offsets[k]+co*offsets[k+1];
+      }
+      num::CornerImage image;
+      num::CompiledStepMapRecorder used(p);
+      const auto encoded=num::centered_step(query,num::I(acceleration),p,.005,false,
+        &probe,&corners,&image,&view,&used,frame);
+      ASSERT_EQ(used.data.maps.size(),1U);
+      // The transformed original reference point must actually be used.
+      // Fresh evaluation instead centers on this distinct query point.
+      const auto center=frame.encode(maps.data.maps.front().center);
+      for (std::size_t k=2;k<8;++k) {
+        EXPECT_EQ(used.data.maps.front().center[k].lo,center[k].lo);
+        EXPECT_EQ(used.data.maps.front().center[k].hi,center[k].hi);
+      }
+      const auto physical=frame.decode(encoded);
+      const auto native=vehicle::advance(initial,{acceleration,0},p,.005);
+      ASSERT_TRUE(native);
+      const auto values=num::values(native->state);
+      for (std::size_t k=0;k<8;++k) {
+        EXPECT_GE(values[k],physical[k].lo); EXPECT_LE(values[k],physical[k].hi);
+      }
+      for (int part=0;part<=8;++part) {
+        const double f=part/8.,x=f*native->state.x_m,y=f*native->state.y_m;
+        const double yaw=origin_yaw+initial.yaw_rad+f*(native->state.yaw_rad-initial.yaw_rad);
+        for (std::size_t k=0;k<8;k+=2) {
+          const double lx=(offsets[k].lo+offsets[k].hi)/2;
+          const double ly=(offsets[k+1].lo+offsets[k+1].hi)/2;
+          const double wx=std::cos(origin_yaw)*x-std::sin(origin_yaw)*y+std::cos(yaw)*lx-std::sin(yaw)*ly;
+          const double wy=std::sin(origin_yaw)*x+std::cos(origin_yaw)*y+std::sin(yaw)*lx+std::cos(yaw)*ly;
+          EXPECT_GE(wx,image.swept[k].lo); EXPECT_LE(wx,image.swept[k].hi);
+          EXPECT_GE(wy,image.swept[k+1].lo); EXPECT_LE(wy,image.swept[k+1].hi);
+          if (part==8) {
+            EXPECT_GE(wx,image.endpoint[k].lo); EXPECT_LE(wx,image.endpoint[k].hi);
+            EXPECT_GE(wy,image.endpoint[k+1].lo); EXPECT_LE(wy,image.endpoint[k+1].hi);
+          }
+        }
+      }
+    }
+  }
+  // A box enclosing the transformed parent admits corners whose decoded
+  // physical velocity escapes the parent. Such a query must recompute.
+  parent[4]={-.02,.02}; parent[5]={-.02,.02};
+  num::CompiledStepMapRecorder maps(p);
+  num::centered_step(parent,num::I(1),p,.005,false,nullptr,nullptr,nullptr,nullptr,&maps);
+  const num::CompiledStepMapView view{maps.data.maps.data(),maps.data.maps.size(),&p};
+  const auto transformed=frame.encode(parent);
+  auto escaped=frame.encode(maps.data.maps.front().center);
+  escaped[3]=num::I(1.49); escaped[4]=num::I(transformed[4].hi-.001);
+  EXPECT_GE(escaped[4].lo,transformed[4].lo); EXPECT_LE(escaped[4].hi,transformed[4].hi);
+  EXPECT_GT(frame.decode(escaped)[4].lo,parent[4].hi);
+  const auto fresh=num::centered_step(escaped,num::I(1),p,.005,false,
+    nullptr,nullptr,nullptr,nullptr,nullptr,frame);
+  const auto cached=num::centered_step(escaped,num::I(1),p,.005,false,
+    nullptr,nullptr,nullptr,&view,nullptr,frame);
+  for (std::size_t k=0;k<8;++k) {
+    EXPECT_EQ(cached[k].lo,fresh[k].lo); EXPECT_EQ(cached[k].hi,fresh[k].hi);
+  }
 }

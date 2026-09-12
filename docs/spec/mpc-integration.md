@@ -5103,3 +5103,11 @@ reader既定値・記録・予測・安全境界は変えない。実適用入�
 R626既存215件、build125全26/package112全2621/source112、R627保存世界の本番数値
 計算と768000個のnative照合、R628/R629過去5件の拒否が合格。新規実走・M4–M6は未完。
 [数値座標の根拠・式・検証条件](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/velocity-correlation-design.md)。
+
+物理座標で保存したworker Jacobianは、問い合わせ全体を元の親領域へ逆変換して
+包含が確認できる場合、T J T^-1として入力連成座標へ移す。親領域を変換した外接箱だけの
+包含では代用しない。変換中心Tcは丸めた一点にせず外向き区間で保持する。時刻・加速度・
+モデル・corner情報・座標の検査を維持し、不一致なら元の数値計算を使う。
+R638216件/build126全26/package113全2622/source112と本番の保存場面再生が合格。
+実走single-r10の物理証明後の期限拒否と、1020の新計画の壁拒否は別に記録した。
+[再利用の数学的条件・回帰・残る実走](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/compiled-coordinate-transport-design.md)。

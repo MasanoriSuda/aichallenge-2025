@@ -1,0 +1,630 @@
+{
+  "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+  "control_model_baseline": "8d9810e0",
+  "production_change": false,
+  "run_id": "20260913-nine-state-single-r9",
+  "build": 123,
+  "package_test": 110,
+  "runtime_stopped": true,
+  "protected_restored": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "source_failures": [
+    {
+      "path": "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "source_sequence": 1081,
+      "source_snapshot_sec": 17.524999608,
+      "source_control_decision_id": 1177,
+      "policy": 0,
+      "interaction_fingerprint": 13777856761332470395,
+      "pipeline_stage": "wall-refinement",
+      "failure_outcome": "solve-rejected",
+      "failure_detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0237837, dua_res=5.36275, failed_iterate_row=497, value=0.957414, bounds=[-inf,0.911941], violation=0.045473, tolerance=0.00195741, normalized=23.2311",
+      "exact_qp_available": true,
+      "cold_source_A": {
+        "arm": "persistent-a",
+        "stage": "solver-rejected",
+        "candidate_fingerprint": 13777856761332470395,
+        "source_fingerprint": 13777856761332470395,
+        "bundle": false,
+        "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0237837, dua_res=5.36275, failed_iterate_row=497, value=0.957414, bounds=[-inf,0.911941], violation=0.045473, tolerance=0.00195741, normalized=23.2311, architecture_snapshot=mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "ms": 238.912309
+      },
+      "exact_qp_replays": [
+        {
+          "warm": true,
+          "loaded": true,
+          "warm_available": true,
+          "solved": false,
+          "detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0265013, dua_res=10.9198, failed_iterate_row=497, value=0.96261, bounds=[-inf,0.911941], violation=0.050669, tolerance=0.00196261, normalized=25.8171",
+          "iterations": 4000,
+          "primal_residual": 0.026501328510139865,
+          "dual_residual": 10.919847292122853
+        },
+        {
+          "warm": false,
+          "loaded": true,
+          "warm_available": true,
+          "solved": false,
+          "detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.026507, dua_res=10.4544, failed_iterate_row=497, value=0.962621, bounds=[-inf,0.911941], violation=0.0506798, tolerance=0.00196262, normalized=25.8225",
+          "iterations": 4000,
+          "primal_residual": 0.026506986980476044,
+          "dual_residual": 10.454408540748616
+        }
+      ]
+    },
+    {
+      "path": "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sequence": 2703,
+      "source_snapshot_sec": 40.094999103,
+      "source_control_decision_id": 1988,
+      "policy": 0,
+      "interaction_fingerprint": 5479321594315588463,
+      "pipeline_stage": "physical-proof",
+      "failure_outcome": "outer-exact-physical-wall-rejected",
+      "failure_detail": "outer exact physical wall proof rejected/outcome=stage-wall-rejected/reason=hard-wall-contact/stage=61/detail=rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=61, wp=31, distance=2.844m, lateral=0.930m, lag=0.054m, bounds=[-3.711,1.000]m, reserve=0.070m, heading_offset=0.069rad, progress=30.841/33.633m, progress_delta=-2.792m, pose=(89629.559,43129.530,2.401), out_of_map=0, contacts=1",
+      "exact_qp_available": false,
+      "cold_source_A": {
+        "arm": "persistent-a",
+        "stage": "wall-proof-rejected",
+        "candidate_fingerprint": 5479321594315588463,
+        "source_fingerprint": 5479321594315588463,
+        "bundle": false,
+        "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=61, wp=31, distance=2.844m, lateral=0.930m, lag=0.054m, bounds=[-3.711,1.000]m, reserve=0.070m, heading_offset=0.069rad, progress=30.841/33.633m, progress_delta=-2.792m, pose=(89629.559,43129.530,2.401), out_of_map=0, contacts=1",
+        "ms": 24.463536
+      },
+      "exact_qp_replays": []
+    },
+    {
+      "path": "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001080-e4dbdc204e9ed7cc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sequence": 1080,
+      "source_snapshot_sec": 17.524999608,
+      "source_control_decision_id": 1177,
+      "policy": 1,
+      "interaction_fingerprint": 16491016491863300044,
+      "pipeline_stage": "physical-proof",
+      "failure_outcome": "outer-exact-physical-wall-rejected",
+      "failure_detail": "outer exact physical wall proof rejected/outcome=stage-wall-rejected/reason=hard-wall-contact/stage=347/detail=rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=347, wp=32, distance=15.829m, lateral=0.889m, lag=-0.012m, bounds=[-3.711,1.000]m, reserve=0.111m, heading_offset=0.004rad, progress=31.858/46.618m, progress_delta=-14.761m, pose=(89628.906,43130.277,2.289), out_of_map=0, contacts=1",
+      "exact_qp_available": false,
+      "cold_source_A": {
+        "arm": "persistent-a",
+        "stage": "wall-proof-rejected",
+        "candidate_fingerprint": 16491016491863300044,
+        "source_fingerprint": 16491016491863300044,
+        "bundle": false,
+        "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=347, wp=32, distance=15.829m, lateral=0.889m, lag=-0.012m, bounds=[-3.711,1.000]m, reserve=0.111m, heading_offset=0.004rad, progress=31.858/46.618m, progress_delta=-14.761m, pose=(89628.906,43130.277,2.289), out_of_map=0, contacts=1",
+        "ms": 20.791387
+      },
+      "exact_qp_replays": []
+    },
+    {
+      "path": "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "source_sequence": 1986,
+      "source_snapshot_sec": 29.914999331,
+      "source_control_decision_id": 1630,
+      "policy": 1,
+      "interaction_fingerprint": 13167192940650313015,
+      "pipeline_stage": "wall-refinement",
+      "failure_outcome": "solve-rejected",
+      "failure_detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=5.9233e-05, dua_res=0.0218149, failed_iterate_row=495, value=0.912055, bounds=[-inf,0.911941], violation=0.00011325, tolerance=0.00191205, normalized=0.0592295",
+      "exact_qp_available": true,
+      "cold_source_A": {
+        "arm": "persistent-a",
+        "stage": "accepted",
+        "candidate_fingerprint": 13167192940650313015,
+        "source_fingerprint": 13167192940650313015,
+        "bundle": true,
+        "detail": "accepted",
+        "ms": 60.13112
+      },
+      "exact_qp_replays": [
+        {
+          "warm": true,
+          "loaded": true,
+          "warm_available": true,
+          "solved": false,
+          "detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000208406, dua_res=0.049079, failed_iterate_row=495, value=0.91234, bounds=[-inf,0.911941], violation=0.000398459, tolerance=0.00191234, normalized=0.208362",
+          "iterations": 4000,
+          "primal_residual": 0.0002084055093743986,
+          "dual_residual": 0.0490789682740953
+        },
+        {
+          "warm": false,
+          "loaded": true,
+          "warm_available": true,
+          "solved": false,
+          "detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000229747, dua_res=0.0445556, failed_iterate_row=495, value=0.912381, bounds=[-inf,0.911941], violation=0.000439262, tolerance=0.00191238, normalized=0.229694",
+          "iterations": 4000,
+          "primal_residual": 0.00022974677559489676,
+          "dual_residual": 0.044555602738121536
+        }
+      ]
+    }
+  ],
+  "log": {
+    "callback_samples": 4275,
+    "callback_max_ms": 21.185262,
+    "callback_over25": [],
+    "scheduled_publications": 804,
+    "last_publication": {
+      "dispatch": 1342,
+      "job": 1328,
+      "source": 1374,
+      "index": 13,
+      "nominal": 21.664999569,
+      "before": 21.674999515,
+      "after": 21.674999515,
+      "deadline": 21.689999569,
+      "programme_input": 5700419192899386811,
+      "physical_input": 10625593963336918308,
+      "independent": 1
+    },
+    "window_violations": [],
+    "states": [
+      "spawned",
+      "grounded",
+      "ready"
+    ],
+    "post_motion_pairs": 1,
+    "post_motion_decisions": [
+      1160
+    ],
+    "last_source_supply": "[mpc_controller_cpp-10] [INFO] [1789241892.856951958] [mpc_controller]: MPCC source supply: decision=4243, now=104.024997674, draft=available, scheduled=observed-request-rejected, successor=normal-submitted, plans=1/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=3752/rejected:2, worker=3752/2646/2646/running:0/pending:1/exceptions:0, mailbox=7211/7208/invalid:0, store=2700/accepted:902/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:terminal Stop course geometry unavailable/nominal=21/inputs=20/horizon=20/wall_progress=0/wall_lower=0/wall_upper=0/wall_refinement=0/wall_diagnostic=current-physical-envelope-rejected/valid=1/feasible=1/bounds=[-4.52548,2.40832]/lateral=0.955787/heading=0.0732671, source_missing=3/0/0, generation_rejected=0/invalid:0, invalidation=851/decision:783/site:reset_overtake_line_state, mailbox_result=build-rejected/geometry:7297210173200458920/detail:native initializer population identity/physical source/owners unavailable, authority=observation-only"
+  },
+  "timeline_summary": {
+    "authority": false,
+    "run": "20260913-nine-state-single-r9",
+    "first_captured_post_motion_failure": 1160,
+    "last_normal": 1342,
+    "first_final_after_last_normal": [
+      {
+        "decision": 1343,
+        "detail": "MPCC scheduled admission: dispatch=1343, job=1342, source=1402, index=0, reason=3/current:5/context:0/measurement:5/prefix:0/world:4/physical:6, source_geometry=7297210173200458920, current_geometry=7297210173200458920, source_intent=cruise, proposed=cruise, worker_ms=18.729, request_ms=0.036829, current_ms=2.840729, current_cpu_ms=2.838756, domain_use=7, domain_worker_ms=8.620449"
+      },
+      {
+        "decision": 1343,
+        "detail": "MPCC scheduled admission: dispatch=1343, job=1328, source=1374, index=14, reason=5/current:1/context:3/measurement:1/prefix:3/world:1/physical:4, source_geometry=7297210173200458920, current_geometry=7297210173200458920, source_intent=cruise, proposed=cruise, worker_ms=18.749, request_ms=0.031970, current_ms=0.002384, current_cpu_ms=0.001873, domain_use=0, domain_worker_ms=8.272027"
+      }
+    ],
+    "later_proof_count": 370,
+    "later_physical_reason_counts": {
+      "6": 369,
+      "1": 1
+    },
+    "maximum_public_velocity_after_first_loss": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789241807686047935,
+      "stamp_ns": 18969999575,
+      "v": 0.06849725544452667,
+      "vy": -0.0023788437247276306,
+      "heading_rate": -0.005166532471776009
+    },
+    "causal_limits": [
+      "1160 was followed by177 normal sends. It is not terminal final loss.",
+      "1343 due source1402/current WorldRejected physical WallRejected; previous1374 RestExpired. No exact1343 input snapshot; log-level evidence only.",
+      "Store continues accepting fresh sources until2700 (~40s); source solver failures alone do not explain persistent loss after1342.",
+      "Later input8 is not a separate input failure when physical6 denotes WallRejected; preserve enum and control-flow meaning.",
+      "Post~42s expired old source binding and later current-envelope build rejection are downstream distinct boundaries."
+    ]
+  },
+  "public": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r9",
+    "domain": 1,
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r9/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "1f96d79130269d85be81c6d9033ccc900051a61b4acbc4dedb27f36350e545f7"
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 395,
+        "scope_source_sec": [
+          7.9,
+          21.7
+        ],
+        "source_hz": 28.571429211644062,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 395,
+        "scope_source_sec": [
+          7.9,
+          21.7
+        ],
+        "source_hz": 28.571429211644062,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 276,
+        "scope_source_sec": [
+          7.9,
+          21.7
+        ],
+        "source_hz": 20.00000044800001,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 690,
+        "scope_source_sec": [
+          7.9,
+          21.7
+        ],
+        "source_hz": 50.00000111756171,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.030000000000000002,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 14,
+        "scope_source_sec": [
+          7.9,
+          21.7
+        ],
+        "source_hz": 1.000000022384616,
+        "median_source_period_sec": 0.9999999780000001,
+        "max_source_gap_sec": 1.004999978,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 551,
+        "scope_source_sec": [
+          7.9,
+          21.7
+        ],
+        "source_hz": 39.883974796504724,
+        "median_source_period_sec": 0.025,
+        "max_source_gap_sec": 0.034999791,
+        "nonpositive_source_steps": 0
+      },
+      "/clock": {
+        "rows": 2760,
+        "scope_source_sec": [
+          7.9,
+          21.7
+        ],
+        "source_hz": 200.00000447988413,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "rows": 37134,
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789241798767034015,
+      "stamp_ns": 10044999775,
+      "v": 1.0596704483032227,
+      "vy": 0.031269609928131104,
+      "heading_rate": 0.18764632940292358
+    },
+    "limits": [
+      "Source and recorder receipt separate; controller receipt comes only from R596 immutable captures.",
+      "Heading rate is not IMU body yaw rate. Only angular.z supplies body r.",
+      "ROS topics describe public state; no direct force/contact/receiver application instrumentation in this run.",
+      "Frequency window is the observed Ready motion/stop interval, not a completed race."
+    ]
+  },
+  "scheduled_counterfactual": {
+    "command": [
+      "/output/20260913-nine-state-post-loss-scheduled-r604/replay",
+      "/output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "/output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001160-pre-stationary/snapshot.yaml",
+      "/output/20260913-nine-state-post-loss-scheduled-r604/report.yaml"
+    ],
+    "source_sha256": "d0095ea6386f383a1b73998ea80f29a8cadb5f1be15c133d04af68a23172ae30",
+    "policy_sha256": "0c087ca5d506b884d560df5b52ac75597ffb141ee4312f25bd7b2682e7ee89ca",
+    "prediction_delay_config": "/output/20260913-nine-state-single-r9/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+    "prediction_delay_config_sha256": "e39f1acbc70bd6553749f542fe65f4b450377cf5485256a0c1961096a29b7d30",
+    "return_code": 0,
+    "result": {
+      "authority": false,
+      "source_sequence": 1986,
+      "source_fingerprint_exact": true,
+      "bound": true,
+      "scope": "Counterfactual fresh cold-built1986 source at its captured observation, actual last input as bootstrap; static same-run policy/frame donor only. Not replay of live1343/source1402 or actual solver completion/adoption.",
+      "prediction_delay_sec": 0.13,
+      "observation_now": 29.914999331,
+      "actual_prior_sec": 29.889999331,
+      "actual_prior_acceleration": -3,
+      "planned_control_origin": 30.044999331,
+      "nominal": "applied-program-unavailable",
+      "physical": 6,
+      "input": 8,
+      "program": 0,
+      "rejected_sec": 30.209999331000002,
+      "certificate": false
+    }
+  },
+  "native_endpoint_summary": [
+    {
+      "acceleration_upper": 0,
+      "steering_upper": 0,
+      "contact": false,
+      "contact_cell_samples": 0
+    },
+    {
+      "acceleration_upper": 0,
+      "steering_upper": 1,
+      "contact": false,
+      "contact_cell_samples": 0
+    },
+    {
+      "acceleration_upper": 1,
+      "steering_upper": 0,
+      "contact": false,
+      "contact_cell_samples": 0
+    },
+    {
+      "acceleration_upper": 1,
+      "steering_upper": 1,
+      "contact": false,
+      "contact_cell_samples": 0
+    }
+  ],
+  "experiments": [
+    {
+      "id": 595,
+      "result": "accepted",
+      "dimension": "Post-loss recorder live provenance",
+      "reason": "Actual moving1007 witness and paired1160;177later normal sends.804normal/4275callbacks max21.185262ms,0>25ms/0send-window violations."
+    },
+    {
+      "id": 596,
+      "result": "accepted",
+      "dimension": "Fresh post-loss source capture inventory",
+      "reason": "Four complete original failure inputs after1160, both initialization policies and exact control/source namespaces.1080/1081same control1177."
+    },
+    {
+      "id": 597,
+      "result": "accepted",
+      "dimension": "Same-run public bag",
+      "reason": "Max1.059670448m/s; after1160 maximum0.068497255m/s. No Start/laps/restart acceptance; public source frequencies preserve their epochs."
+    },
+    {
+      "id": 598,
+      "result": "accepted",
+      "dimension": "Frozen native A/B/C/D/G and exact QP replay",
+      "reason": "Full-source1081 solve reject and1080/2703exact wall contacts reproduced.1986cold source A fully certifies although captured QP/warm and cold exact-QP fail; distinguish persistent workspace/reassembly. Target-dependent B/C/D/G unsupported, no all-method impossibility."
+    },
+    {
+      "id": 599,
+      "result": "accepted",
+      "dimension": "Original affine feasibility classification",
+      "reason": "HiGHS reports1081affine infeasible;1986affine feasible with maximum original row violation2.5964e-10. No physical infeasibility certificate."
+    },
+    {
+      "id": 600,
+      "result": "inconclusive",
+      "dimension": "Bounded physical oracle setup",
+      "reason": "All18setup calls rejected because exact-QP record was discarded/absent. No physical feasibility result; preserved."
+    },
+    {
+      "id": 601,
+      "result": "accepted",
+      "dimension": "Same declared nonlinear physical oracle library",
+      "reason": "Fixed6perworld,3unique worlds; negative steering at original inset maximum acceleration passes full wall/dynamic/terminal proof with final speeds1.3583/1.2801/1.2801m/s. No optimized live normal or applied scheduling authority."
+    },
+    {
+      "id": 602,
+      "result": "inconclusive",
+      "dimension": "Fresh source-to-scheduled counterfactual setup",
+      "reason": "Native1986source certified and current binding valid; floating subtraction of epochs failed unique-nanosecond future clock. No applied verdict; preserved."
+    },
+    {
+      "id": 603,
+      "result": "accepted",
+      "dimension": "Actual supply/admission/proof timeline",
+      "reason": "1343new1402current wall rejection plus old1374RestExpired after last1342; fresh Store advances until2700 around40s.370later proof rejects,369wall/1invalid nominal. Source shortage alone falsified as22..40s cause."
+    },
+    {
+      "id": 604,
+      "result": "accepted",
+      "dimension": "Counterfactual source1986 through scheduled proof",
+      "reason": "Same captured observation at29.914999331 andactual previous-3packet; saved config0.13s delay. Cold-certified source binds but original scheduled wall proof rejects30.209999331. Not exact live1343replay."
+    },
+    {
+      "id": 605,
+      "result": "inconclusive",
+      "dimension": "Scheduled point observer build",
+      "reason": "Diagnostic compile failed on nonexistent input-program encoder. No trajectories evaluated; preserved."
+    },
+    {
+      "id": 606,
+      "result": "accepted",
+      "dimension": "Original applied-input population native endpoints",
+      "reason": "Original R604verdict retained; four400step native endpoint trajectories and first rejected enclosure captured. [{\"acceleration_upper\":0,\"steering_upper\":0,\"contact\":false,\"contact_cell_samples\":0},{\"acceleration_upper\":0,\"steering_upper\":1,\"contact\":false,\"contact_cell_samples\":0},{\"acceleration_upper\":1,\"steering_upper\":0,\"contact\":false,\"contact_cell_samples\":0},{\"acceleration_upper\":1,\"steering_upper\":1,\"contact\":false,\"contact_cell_samples\":0}]"
+    }
+  ],
+  "sha256": {
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-post-loss-source-single-r9-runner.log": "de8e8ef224048cb017931de1dfc285a1a693b372cbfec0fb9331db3b3824f87c",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r595-audit.log": "722a5cc357ef549b6ab4157b77ba5edacaf600d30a287fd2f73cf1d87e83ec5e",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r596-inputs.log": "a8d55d3262fa330acdfacaf7cf1940b1bd0ee1a1126e4f9caeb67d26d04127da",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r597-public.log": "61855c1d9bb7ea45689cd2dba584de33018adbfb55812d92ae8642cecfeb9296",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r598-replay.log": "5c4a375c3c866d569d98cb262715d284f45e1d365e8d9846a922a529c00081cf",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r600-oracles.log": "0e94497a918241eef1e00e0ddea14200f8d1e6f26db06ed59e38ab0c47aa4ffa",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r601-oracles.log": "619591b396a07f4c5f8b0125a963feec585295dcfa10c67b1c338a1646ee7211",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r602-scheduled.log": "a6707505f78593ae5af85a5f2b334657338d08c1b7ea4cbe8f02e925390c6067",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r604-scheduled.log": "12e89fc9619297b517113b7f0f565b491da5a07d067091c4b62ee7ee2a5dc57e",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r605-points.log": "fdfdd0bcd18529f3c48e1e1cc0a6bae3b2238381f682c765995799f2f5fbb36d",
+    "output/20260913-nine-state-post-loss-run-audit/mpcc-r606-points.log": "8073a74ce8d5b1bdcd109e8b6d9fa5038d7b084d0e4dfdb6c42ab7641322b445",
+    "output/20260913-nine-state-post-loss-run-audit/seal.py": "556d0b1734d3902339fc618a32fdac28f9144e737ae3d8c9865d00b435bec648",
+    "output/20260913-nine-state-post-loss-source-audit-r595/generator.py": "93c2b04a3139ab30979d305c3c8318ec8b0562f3f971b88b323d249b0e5c5d03",
+    "output/20260913-nine-state-post-loss-source-audit-r595/report.json": "bd8d5ba500fe319dcd5e92d71051be64b4cd031dba251094fea245f8a72b45e2",
+    "output/20260913-nine-state-post-loss-source-inputs-r596/generator.py": "8b1b0258addb6aa8f1ffa3b0c9cc60d1af1c61b65142efadb41a8ab3218b033f",
+    "output/20260913-nine-state-post-loss-source-inputs-r596/report.json": "a5944a2520b9c33bb746d62b8642f92d54b48c1e198916d2be5751455d20e130",
+    "output/20260913-nine-state-post-loss-source-public-r597/d1.json": "0e64ab1087ba78546bca805395ba316634413c02e41bfdff4983ba8843daeaba",
+    "output/20260913-nine-state-post-loss-source-public-r597/generator.py": "1cc370e1d2e6caac710ae137482bd06b2ffa275b742c2c05de958fa837eb423e",
+    "output/20260913-nine-state-post-loss-source-public-r597/report.json": "9b465cb387f5ed99fa6ccb1416c45c80697906dab509f1c9fa5af390943d314f",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001080-e4dbdc204e9ed7cc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001080-e4dbdc204e9ed7cc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "7d89dcb666519cf11bec7abfad52c61a93fe1b85004117764c6d88e78ba87b5d",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "5128395eae32337bd989aebeda180478052d67b0df4e497075673c129cc78f6c",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "5128395eae32337bd989aebeda180478052d67b0df4e497075673c129cc78f6c",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "c175d8fa8027a3cb00df821cae1c640efcb602e1c09db39c7015700fff02b60b",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "7e6bc533412f5f93432853588d2be7ca7779962d33a97d5bb3648eb4ffb1e9e6",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-source-replay-r598/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "d8a86501276f988fd70b65c3c2d857824c93ab123b82aa68dd56528114748f00",
+    "output/20260913-nine-state-post-loss-source-replay-r598/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-post-loss-source-replay-r598/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-source-replay-r598/compile-command.json": "56b1e27281e3bce18d7450a29c78e0dee07891166d0863a153e9e1cc40f5d804",
+    "output/20260913-nine-state-post-loss-source-replay-r598/driver.cpp": "94555b7a49311ebfe617a95c264eda6e511fc968f36c5eb786256d49aab08b5d",
+    "output/20260913-nine-state-post-loss-source-replay-r598/generator.py": "21e4fc466c34a9788500d1b53f6a9a80ef999b8480a11da7ae763a9a317aa2ce",
+    "output/20260913-nine-state-post-loss-source-replay-r598/replay": "99d84fc3a168f3d5858bedccb4fccfcef5f0178328d8787cdcaf4769df88d696",
+    "output/20260913-nine-state-post-loss-source-replay-r598/results.json": "4d7e07faddfd8117421d471c9514a5998b54df3265d61374a911e03237e80a9a",
+    "output/20260913-nine-state-post-loss-qp-feasibility-r599/generator.py": "4991f11a8a7e7765d61a676d55df2767086e330c3e7b8d6f2d8be1fe2887b076",
+    "output/20260913-nine-state-post-loss-qp-feasibility-r599/report.json": "3242ee6621a6956b7be8b56c26ea199c134de10d53bb7c8b03c0382abc5b2cfc",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "2aff4a87e0d6fdcd93be58d8a3c77dd80370439350323af1fd330edb31dcbcd6",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "1e35ca57bed5e6bda7237eb13071c5a96de8262ff86318face20795e023ef0d6",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "57b604d605dbc8fce1d6feac1d3f58d160a915034fb3920837cf21371c261a35",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/compile-command.json": "35da12d5562bd67f10fa79f4702d64bf519d1786703ae79de54d28b052e68a08",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/declared-plan.json": "57cc91e52f9c7ec44ee653571561e38ca43ba9a45f3e4891ed79d42e08515de8",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/driver.cpp": "255764c1a76da772db16fb5432ea719b2e7dccc9ace97ad3219c9f3c7303d7e1",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/generator.py": "a49479e4811b2cc583d8a0a2b82a337d8f453e92e3efe67065fcadafb2c35a35",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/replay": "7213b7a63da1ffc8aa47f9c22ce5998ddcc8adc5e2ec29e94f57a4d6823aa057",
+    "output/20260913-nine-state-post-loss-native-oracles-r600/results.json": "8749f5dfd05d05f79ec1de47218d7b129ea47664b760e549793e799c2a4567e5",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "69e5d7e66e65ff85dcc36a97c654efc0e04ecf967e7d184b19f638289c1f070e",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "86da0759169c4690ef3bfa4f87e3f5670d1bc8d042e380f227eb5f25dd458438",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "f048f38161e55d592c18ed8249e5ea2d3a4e05eb4a6c39f5c6e359140534f33c",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/compile-command.json": "50a4bce513c5d35092bce7c851c3030af834f1c27574ad10f2ed231c3b1fc08b",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/declared-plan.json": "57cc91e52f9c7ec44ee653571561e38ca43ba9a45f3e4891ed79d42e08515de8",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/driver.cpp": "6e0bd888a40dfd1003542e2e1446b1113cb4f25573d90e6a4f0a366cf4cdaeaa",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/generator.py": "ce2169a7ea4746b18a923a3d880b15f36991596662ab1ca703f2c81b0569e9a6",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/replay": "183f64eedabda037d4990f77bd035188f80e09a666ce182886a96d2ac55fc6dc",
+    "output/20260913-nine-state-post-loss-native-oracles-r601/results.json": "cee24718edb03c3fe04ff1b401d1db0c1395c5ebb93986ee6c42f36acf15d77f",
+    "output/20260913-nine-state-post-loss-scheduled-r602/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-post-loss-scheduled-r602/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-scheduled-r602/comparison.cpp": "b94b68b397bab3474680602ed1ed93573c97365f4a071b16f76c7b0af15f2f36",
+    "output/20260913-nine-state-post-loss-scheduled-r602/compile-command.json": "f1fab432023a3720035a59bc2274b00dc303ddbe117dcc6c15078e35e6af7223",
+    "output/20260913-nine-state-post-loss-scheduled-r602/driver.cpp": "c9867efff4a3a9a15184e5e378943a2bb8a5007f82bfbb02b19a2fb58d3b0942",
+    "output/20260913-nine-state-post-loss-scheduled-r602/generator.py": "654bb0f5965ad719eab34d503b3ef7f53f806cd0d7547b8644724d595dbe43e0",
+    "output/20260913-nine-state-post-loss-scheduled-r602/replay": "2cbc7131ed52dce470d0bf709d6617c8b48447b0ff7f04306230814470717553",
+    "output/20260913-nine-state-post-loss-scheduled-r602/replay.log": "1ea4b2712d9c5c781452c916f5f1ce7d5d6def9b8e45ea80226c240207a84f6d",
+    "output/20260913-nine-state-post-loss-scheduled-r602/result.json": "b69c9090ed32f82a27c0d50b8a877dbb44f3c056bd293b4471e008fb471e84fe",
+    "output/20260913-nine-state-post-loss-timeline-r603/generator.py": "bf82a83a1255715924d5b7f41e1feadf51aa9e2bcfa6bcb4c5aaa58c1c68ab51",
+    "output/20260913-nine-state-post-loss-timeline-r603/report.json": "958d435e209e0bb2170c54255bc8430d9b31bce38ecbc095e4e152be45dce381",
+    "output/20260913-nine-state-post-loss-scheduled-r604/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-post-loss-scheduled-r604/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-scheduled-r604/comparison.cpp": "b94b68b397bab3474680602ed1ed93573c97365f4a071b16f76c7b0af15f2f36",
+    "output/20260913-nine-state-post-loss-scheduled-r604/compile-command.json": "d657d2c22a5b775fe001078e81160073aae76f0121e507d68c8c9a1c9442d1de",
+    "output/20260913-nine-state-post-loss-scheduled-r604/driver.cpp": "76086b6d4f286e4444a54d554411e3702863fa59dda85adb6986c7b747de752f",
+    "output/20260913-nine-state-post-loss-scheduled-r604/generator.py": "abbe76c855716b40590ff66b56147f8b7500079e951bd1ad037c17e1beb12b8f",
+    "output/20260913-nine-state-post-loss-scheduled-r604/replay": "5edb6f054a127095493348a193452c3dda84e42b44132ff1f9ca7765801a91f4",
+    "output/20260913-nine-state-post-loss-scheduled-r604/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-scheduled-r604/report.yaml": "182c088bc3f29128ad4ff425f5ca59c60f0c8e7a4ede3dd65222156a1f9a63e0",
+    "output/20260913-nine-state-post-loss-scheduled-r604/result.json": "f441a1eae6a2fc909dabdbcd5fb6e2e99922725665e09f7d8972679152e1de23",
+    "output/20260913-nine-state-post-loss-scheduled-points-r605/applied.cpp": "dc8a41a18248f45cf751e24a799b62b3f0634c151a9399c83040a1db67f7800e",
+    "output/20260913-nine-state-post-loss-scheduled-points-r605/build-status.json": "4df7e306bff9cf8b6546ba28ccb1707b05fcfbd81e618b394b02855490cbb4b1",
+    "output/20260913-nine-state-post-loss-scheduled-points-r605/build.log": "c0d8b7f3ccaf5263229a279f67a598183bb6ab9d53a8a88e980a86b61b638aaa",
+    "output/20260913-nine-state-post-loss-scheduled-points-r605/comparison.cpp": "b94b68b397bab3474680602ed1ed93573c97365f4a071b16f76c7b0af15f2f36",
+    "output/20260913-nine-state-post-loss-scheduled-points-r605/compile-command.json": "d24ed0737fe98bff87d71a0829715e1f60e29b9b542c09e27742c458c21a2f49",
+    "output/20260913-nine-state-post-loss-scheduled-points-r605/driver.cpp": "76086b6d4f286e4444a54d554411e3702863fa59dda85adb6986c7b747de752f",
+    "output/20260913-nine-state-post-loss-scheduled-points-r605/generator.py": "6ce0d327264fb91f5b59f1e7cc1f2723e58de2b54bc9f038ce76a1b339df383d",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/applied-diagnostic.yaml": "b33c10b54a8d4aba05077345a7b8a8e3a7163ed07ce920720a91cce8fc597e0c",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/applied.cpp": "d9576ce235ecf16e0701f0d9ba73c710c3a11d394d6a04b858e6d3bec232b741",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/comparison.cpp": "b94b68b397bab3474680602ed1ed93573c97365f4a071b16f76c7b0af15f2f36",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/compile-command.json": "e2a12feb3fc7c5dd9af1b55f8a5aa6bbf32a1723a9b7ab4fa362f8ee2a94d9d6",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/driver.cpp": "76086b6d4f286e4444a54d554411e3702863fa59dda85adb6986c7b747de752f",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/generator.py": "c13dbba9958ac036935f7246f50fa5d6492e7e54cefc13c118def754865d71c6",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/replay": "9b8d434ad05a4c340bdae5651e13fb81bcc837a7caf56431f087a41364ea613f",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/report.yaml": "182c088bc3f29128ad4ff425f5ca59c60f0c8e7a4ede3dd65222156a1f9a63e0",
+    "output/20260913-nine-state-post-loss-scheduled-points-r606/result.json": "e25eb80e71c2b6b3e9b4834eb3a015c2f059c5321ae8964f8f1f41ca7bc3432d",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/000000000458-b8b3b9bbeade91b6-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "08309c7112edf377f43815d1a9aef26dad5b1d2deec660e170224cbf7483dac5",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/000000000458-b8b3b9bbeade91b6-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/000000000534-bdb2858b6ffe1f46-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "e8ac39b59e685c485934e7cbc852c62759e86ef3f2b46834086ac859eed0a698",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/000000000534-bdb2858b6ffe1f46-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/000000000807-5de0c0dc4ceb1db7-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml": "df56e4da7b4f232cbcce55a158bb47c15578b90b318ee1d785b68e1dd82bf5a7",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/000000000807-5de0c0dc4ceb1db7-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "81e4652b79b4b2277efbf73fc35f1390f9ad8a7ca95e93566f310a1036f37794",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000001081-bf34c7b9e96f927b-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "4342fc82efd0bf69416d0c1cdee85c4665df00ebfe2d800b7e65c0472fbf332b",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002703-4c0a75f5974ec36f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001080-e4dbdc204e9ed7cc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "b2dec750d279ac64b31bcf23c44a00e3755ee3269c830e353c7fcf468d77c3ca",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001080-e4dbdc204e9ed7cc-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "d0095ea6386f383a1b73998ea80f29a8cadb5f1be15c133d04af68a23172ae30",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001986-b6bb44377c7e3537-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000784-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000784-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000784-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000784-pre-stationary/snapshot.yaml": "26832c70a9dfa217988226ad709edb8f11198f38049396d9d7f39a126bdf955f",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000503-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000503-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000503-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000503-pre-stationary/snapshot.yaml": "0c99c4ae65ed4ba2544d582c6c73a46c47a8ca3886548f7d432d5f8e5a69018c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000831-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000831-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000831-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000831-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000831-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000831-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000831-pre-moving/snapshot.yaml": "2cc149a690cfc4fcfb49c11ffba0949e1a9d44f2240f182d8e7dfba7a109a0a8",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001160-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001160-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001160-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001160-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001160-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001160-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001160-pre-stationary/snapshot.yaml": "0c087ca5d506b884d560df5b52ac75597ffb141ee4312f25bd7b2682e7ee89ca",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000784-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000784-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000784-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000784-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000784-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000784-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000784-pre-stationary/snapshot.yaml": "b9aa82c3a82dfa0ec4421a517944b27ff9413e62257c5f1267a26ce31ad96796",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/due/after-normal-motion/publication-000000001160-pre-stationary/snapshot.yaml": "5327df3c40fc8557f999c69c2863c310eca06ff660bb961b17a569f6018fdbc5",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000784-pre-stationary/snapshot.yaml": "cf26c4c9a352476378c0f3762c8cb3b1c687c383282c028c40c964267dec2901",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-startup/active/publication-000000000490-pre-stationary/snapshot.yaml": "ecb16a4526e305b05af06ad2f7b8c52ed270d55464b7548f8274397734dfb4b0",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-final-startup/due/publication-000000000490-pre-stationary/snapshot.yaml": "ecb16a4526e305b05af06ad2f7b8c52ed270d55464b7548f8274397734dfb4b0",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000879-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000879-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000879-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000879-pre-moving/snapshot.yaml": "de2d9666403d10829a795ec4f591cfbc5de03802e409fec8cc4619c6d361738d",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001005-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001005-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001005-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001005-pre-stationary/snapshot.yaml": "3290d87640f47dc2640bcf4446dd039df68da6b9d0a13d578da1ad65d0e256da",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000493-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000493-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000493-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r9/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000493-pre-stationary/snapshot.yaml": "087f326ab40a557bbae4cbc3c80cf75c3ccabf0d7d2c7821c7cd49f58eb02c25",
+    "output/20260913-nine-state-single-r9/d1/rosbag2_autoware/metadata.yaml": "c913492422be346a7011595bb21d4c84e526707c2d27ac35c8d73f5f2f849613",
+    "output/20260913-nine-state-single-r9/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "1f96d79130269d85be81c6d9033ccc900051a61b4acbc4dedb27f36350e545f7",
+    "output/20260913-nine-state-single-r9/manifest.json": "28c35bfc9fa2f3ff6221784bbe1a085f81fb86e0e56d1b87ff69a85ea4ec84b4",
+    "output/20260913-nine-state-single-r9/monitor-summary.json": "9da09f966d562c54d6f6639c45c9ef4ee9252ac6112686705cd8f6ba87d765ee",
+    "output/20260913-nine-state-single-r9/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-single-r9/launch.log": "817a2757f40399e96fb91e1e5dcc72f2b00b0cf2e3cc853d651c19aed203ab10",
+    "output/20260913-nine-state-single-r9/down.log": "698cb5a19ddf4a9697d6c7da4d852fad70ebe1a743be7789b3641040cb34ff18",
+    "output/20260913-nine-state-single-r9/d1/autoware.log": "d50cc83081315f8101660ded77c70d831a2185fab1d179b4e09d343c045f0994",
+    "output/20260913-nine-state-single-r9/run_campaign.py": "bb2fb5f31d90347ea76854b0848892ab316c706d64bfec40af359614cba78abf"
+  },
+  "limits": [
+    "M4–M6, physical restart, same-final-source multi-vehicle races/gates/submission/eval remain open.",
+    "1160first post-motion capture is not terminal;1343exact input absent and timeline is log-level.",
+    "Native scalar oracles and cold source proof do not grant scheduled/fresh/current/actual publication authority.",
+    "Nominal path_distance is the prescribed reference coordinate, not physical travel or virtual-progress divergence.",
+    "R595named check fields None are absent report keys; actual vector fields and native replays own check semantics."
+  ]
+}

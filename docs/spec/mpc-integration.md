@@ -5084,3 +5084,11 @@ reader既定値・記録・予測・安全境界は変えない。実適用入�
 元QP・warm start・物理source、通常権限、fingerprint、判定条件は維持。時計逆行でlive
 証拠を破棄し、不正な診断情報で元の再生を捨てない。build123全26/package110全2618合格。
 [設計と実走前の検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-loss-source-observation-design.md)。
+
+
+2026-09-13single-r9/b368ecab: 停止後のsolver入力を両初期化で取得。1160後も通常送信が
+続くため最終停止と解釈しない。最後1342後は新しい認証済み計画が約40秒まで供給されるが、
+現在状態・適用入力の壁証明に失敗する。sourceの数値解・物理証明と、送信プログラムの
+証明を分ける。R604で新しい認証済み1986からも同じ適用入力の壁拒否を再構成した。
+モデル・安全条件・通常権限は未変更。再発進・統合受入れ・M4–M6未完。
+[新しいsourceと送信証明の切り分け](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-loss-source-audit.md)。

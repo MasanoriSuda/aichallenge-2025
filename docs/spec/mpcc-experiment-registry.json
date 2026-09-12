@@ -1417,6 +1417,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-loss-source-observation-evidence.json",
       "replay_ready": true,
       "reason": "Post-loss source capture regression and exact four old dispatch replays; live fresh-source capture pending."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-post-loss-run-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-loss-source-evidence.json",
+      "replay_ready": true,
+      "reason": "Fresh failures for both initializers, full nominal versus scheduled wall boundary, original inputs retained; exact live1343 unavailable."
     }
   ],
   "experiments": [
@@ -18025,6 +18031,174 @@
       "production_impact": "Optional diagnostic anchor through owned source clones and fixed source recording buckets only; no normal, solver, model, physical or timing authority change.",
       "deleted_code": [],
       "revisit_condition": "New exact source/capture regression or live provenance; no repeated unchanged fixture failure, expired stop extension or race acceptance from observation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r595",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Post-loss recorder live provenance",
+      "result": "accepted",
+      "reason": "Actual moving1007 witness and paired1160;177later normal sends.804normal/4275callbacks max21.185262ms,0>25ms/0send-window violations.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r596",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Fresh post-loss source capture inventory",
+      "result": "accepted",
+      "reason": "Four complete original failure inputs after1160, both initialization policies and exact control/source namespaces.1080/1081same control1177.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r597",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Same-run public bag",
+      "result": "accepted",
+      "reason": "Max1.059670448m/s; after1160 maximum0.068497255m/s. No Start/laps/restart acceptance; public source frequencies preserve their epochs.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r598",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Frozen native A/B/C/D/G and exact QP replay",
+      "result": "accepted",
+      "reason": "Full-source1081 solve reject and1080/2703exact wall contacts reproduced.1986cold source A fully certifies although captured QP/warm and cold exact-QP fail; distinguish persistent workspace/reassembly. Target-dependent B/C/D/G unsupported, no all-method impossibility.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r599",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Original affine feasibility classification",
+      "result": "accepted",
+      "reason": "HiGHS reports1081affine infeasible;1986affine feasible with maximum original row violation2.5964e-10. No physical infeasibility certificate.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r600",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Bounded physical oracle setup",
+      "result": "inconclusive",
+      "reason": "All18setup calls rejected because exact-QP record was discarded/absent. No physical feasibility result; preserved.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r601",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Same declared nonlinear physical oracle library",
+      "result": "accepted",
+      "reason": "Fixed6perworld,3unique worlds; negative steering at original inset maximum acceleration passes full wall/dynamic/terminal proof with final speeds1.3583/1.2801/1.2801m/s. No optimized live normal or applied scheduling authority.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r602",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Fresh source-to-scheduled counterfactual setup",
+      "result": "inconclusive",
+      "reason": "Native1986source certified and current binding valid; floating subtraction of epochs failed unique-nanosecond future clock. No applied verdict; preserved.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r603",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Actual supply/admission/proof timeline",
+      "result": "accepted",
+      "reason": "1343new1402current wall rejection plus old1374RestExpired after last1342; fresh Store advances until2700 around40s.370later proof rejects,369wall/1invalid nominal. Source shortage alone falsified as22..40s cause.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r604",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Counterfactual source1986 through scheduled proof",
+      "result": "accepted",
+      "reason": "Same captured observation at29.914999331 andactual previous-3packet; saved config0.13s delay. Cold-certified source binds but original scheduled wall proof rejects30.209999331. Not exact live1343replay.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r605",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Scheduled point observer build",
+      "result": "inconclusive",
+      "reason": "Diagnostic compile failed on nonexistent input-program encoder. No trajectories evaluated; preserved.",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-run-audit-r606",
+      "baseline_commit": "b368ecabf564fed0d6ac644c145177eb7b7fb17b",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-run-audit"
+      ],
+      "hypothesis": "Separate post-loss source feasibility from applied/current wall rejection before a producer fix.",
+      "changed_dimension": "Original applied-input population native endpoints",
+      "result": "accepted",
+      "reason": "Original R604verdict retained; four400step native endpoint trajectories and first rejected enclosure captured. [{\"acceleration_upper\":0,\"steering_upper\":0,\"contact\":false,\"contact_cell_samples\":0},{\"acceleration_upper\":0,\"steering_upper\":1,\"contact\":false,\"contact_cell_samples\":0},{\"acceleration_upper\":1,\"steering_upper\":0,\"contact\":false,\"contact_cell_samples\":0},{\"acceleration_upper\":1,\"steering_upper\":1,\"contact\":false,\"contact_cell_samples\":0}]",
+      "production_impact": "None; diagnostic only, no model/solver/safety/timing relaxation or live authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use a demonstrated producer change or corrected diagnostic setup at the frozen boundary; no blind source/retry/margin scan or unchanged live run."
     }
   ]
 }

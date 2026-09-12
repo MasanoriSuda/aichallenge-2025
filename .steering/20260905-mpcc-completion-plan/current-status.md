@@ -1,22 +1,24 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。r69の新経路D1source350の初期線形化を修正。次は固定した標準r70。**
+**全体未完。D2完全停止からの初期軌道を修正。次は固定した標準r71。**
 
-標準r69は両車が短く移動して停止し未完走。draft/worker/mailboxは進み、Storeへの
-認証済みsourceの追加が止まった。経路の不一致は正当な拒否。D1新経路source350の
-初回QPは元の線形制約で不成立。R416–R419の方式比較・warm/cold・線形診断と
-R422/R423の同一場面比較で、切り離された目標状態を初期線形化に使うproducerを特定。
+標準r70ではD1の新経路へのsource供給が進み、最大1.177m/s・連続61正加速指令を
+確認したが、decision1529の公開直前に元の期限を超過。callback21.360712msでも
+当該packetの残り窓には収まらなかった。後続の静止1858/27.074336msとは区別する。
+D2は認証済みsourceを生成できず、正加速指令0。両車未完走、保護成果物復元と停止を確認。
 
-初期物理状態からネイティブ車体モデルでつないだ状態列へ変更。目標速度・軌道の
-コスト、全制約・予算・証明・単一制御権限は維持。NativeRED2/adapter22、
-Build111全26、tests97全2,587/66（source105、C5 161）、R429本番libraryの
-元source350に対する候補/完全停止証明が合格。Tests96の旧診断期待とsetup失敗は保存。
-他の旧経路sourceの直接候補失敗、D2後続新経路の未採取境界は未解決。
+D2の線形QPには解があるがsolverが収束せず、惰性で停止へ戻る初期軌道が寄与。
+一律の加速用初期軌道はD1の通常候補を失敗させるため不採用。全body速度3成分が
+厳密にゼロで前進目標がある場合だけ、元の入力制約内で目標へ向かう初期軌道を生成。
+全コスト・制約・予算・単一権限・物理/適用入力/公開時刻の証明は維持。
+NativeRED1/adapter24、Build112全26、tests98全2,589/66（source105、C5 161）、
+R436本番libraryでD2source260と既存D1source350の候補/完全停止証明が合格。
 
-全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
-同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/initial-tangent-design.md)、
+D1deadline1529の原因修復、全intent/Mission/sibling/Store、実Stop/rest/restart、
+Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、dev3/dev4六周、
+gate1–3、同一tar/image/evalは未完。
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/rest-launch-tangent-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

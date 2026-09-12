@@ -4880,3 +4880,12 @@ tests95全2,585記録/66group。r69で供給境界と実周期を確認する。
 SQP、壁・相手車・車体・停止・適用入力・公開時刻の確認は維持。Build111全26、
 tests97全2,587/66。別の保存場面のsolver失敗と全体受入れは未解決。標準r70で確認する。
 [初期線形化の根拠と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/initial-tangent-design.md)。
+
+2026-09-12 標準r70のD2完全停止状態では、惰性入力で作った初期軌道のsolver収束が
+失敗した。一律の加速用初期軌道は走行中D1の通常候補を失敗させるため採用せず、
+初期u/vy/yaw-rateが厳密にゼロで、制約内の前進目標がある場合だけ、元の加速度制約内で
+目標へ向かう初期軌道を使う。走行中と前進目標のないHold/Stopは従来の入力参照を維持。
+初期値に制御権限はなく、全コスト・制約・予算・物理/適用入力/時刻証明は同じ。
+Build112全26、tests98全2,589/66、R436でD2source260とD1source350の完全証明を確認。
+D1の公開期限超過1529と全体受入れは別の未解決事項。
+[完全停止時の初期軌道](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rest-launch-tangent-design.md)。

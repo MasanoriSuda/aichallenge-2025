@@ -1255,6 +1255,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/initial-tangent-evidence.json",
       "replay_ready": true,
       "reason": "r69 exact initial QP causal comparison and connected-native producer repair; other sources remain separate."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-rest-launch-tangent",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rest-launch-tangent-evidence.json",
+      "replay_ready": true,
+      "reason": "r70 rest-source failure and separate first moving deadline; immutable initial-tangent comparisons and full proof."
     }
   ],
   "experiments": [
@@ -15095,6 +15101,70 @@
         "Disconnected per-stage soft-state initial dynamics"
       ],
       "revisit_condition": "Changed source/initialization or new physical evidence. Other recorded dynamic/solver/authority failures are not relabeled, no context/clock bypass or point-proof reuse."
+    },
+    {
+      "experiment_id": "20260912-nine-state-rest-launch-tangent-r70",
+      "baseline_commit": "45a1b18fd08501f780eb1331368a9dc5d5778beb",
+      "snapshot_ids": [
+        "20260912-nine-state-rest-launch-tangent"
+      ],
+      "hypothesis": "Steady-speed coasting references are an unsuitable initial trajectory for a forward goal at complete body rest.",
+      "changed_dimension": "Initial nominal acceleration at exact full body rest with a bounded forward target only; one existing solve/proof pipeline.",
+      "result": "rejected",
+      "reason": "D1 sources progress/new geometry but deadline1529 fails; D2 no accepted source/positive command, no laps.",
+      "production_impact": "Complete-rest nominal trajectory locally validated; standardr71 and separate timing repair remain.",
+      "deleted_code": [
+        "Unconditional coasting-reference seed at complete body rest with a forward objective"
+      ],
+      "revisit_condition": "New body-state/goal/formulation evidence or integrated failure; do not promote the rejected universal seed, tune budgets or retime original proofs."
+    },
+    {
+      "experiment_id": "20260912-nine-state-rest-launch-tangent-r430",
+      "baseline_commit": "45a1b18fd08501f780eb1331368a9dc5d5778beb",
+      "snapshot_ids": [
+        "20260912-nine-state-rest-launch-tangent"
+      ],
+      "hypothesis": "Steady-speed coasting references are an unsuitable initial trajectory for a forward goal at complete body rest.",
+      "changed_dimension": "Initial nominal acceleration at exact full body rest with a bounded forward target only; one existing solve/proof pipeline.",
+      "result": "inconclusive",
+      "reason": "Original QPs linearly feasible; large derivative near coasting/rest transition supports a numerical contributor, not a physical infeasibility or model-error proof.",
+      "production_impact": "Complete-rest nominal trajectory locally validated; standardr71 and separate timing repair remain.",
+      "deleted_code": [
+        "Unconditional coasting-reference seed at complete body rest with a forward objective"
+      ],
+      "revisit_condition": "New body-state/goal/formulation evidence or integrated failure; do not promote the rejected universal seed, tune budgets or retime original proofs."
+    },
+    {
+      "experiment_id": "20260912-nine-state-rest-launch-tangent-r431-r432-universal",
+      "baseline_commit": "45a1b18fd08501f780eb1331368a9dc5d5778beb",
+      "snapshot_ids": [
+        "20260912-nine-state-rest-launch-tangent"
+      ],
+      "hypothesis": "Steady-speed coasting references are an unsuitable initial trajectory for a forward goal at complete body rest.",
+      "changed_dimension": "Initial nominal acceleration at exact full body rest with a bounded forward target only; one existing solve/proof pipeline.",
+      "result": "rejected",
+      "reason": "Speed-directed/power initial acceleration restores D2 but regresses moving D1 A/B/G; universal replacement rejected, fixed solver and physical budgets.",
+      "production_impact": "Complete-rest nominal trajectory locally validated; standardr71 and separate timing repair remain.",
+      "deleted_code": [
+        "Unconditional coasting-reference seed at complete body rest with a forward objective"
+      ],
+      "revisit_condition": "New body-state/goal/formulation evidence or integrated failure; do not promote the rejected universal seed, tune budgets or retime original proofs."
+    },
+    {
+      "experiment_id": "20260912-nine-state-rest-launch-tangent-r433-r436-build112-tests98",
+      "baseline_commit": "45a1b18fd08501f780eb1331368a9dc5d5778beb",
+      "snapshot_ids": [
+        "20260912-nine-state-rest-launch-tangent"
+      ],
+      "hypothesis": "Steady-speed coasting references are an unsuitable initial trajectory for a forward goal at complete body rest.",
+      "changed_dimension": "Initial nominal acceleration at exact full body rest with a bounded forward target only; one existing solve/proof pipeline.",
+      "result": "accepted",
+      "reason": "Exact complete-rest forward-goal seed: RED1/adapter24,26build/2589records/66groups; built production D2source260 and D1source350 A/B/C/D/G complete proof. Old D2source320 A still rejects,C/D accept.",
+      "production_impact": "Complete-rest nominal trajectory locally validated; standardr71 and separate timing repair remain.",
+      "deleted_code": [
+        "Unconditional coasting-reference seed at complete body rest with a forward objective"
+      ],
+      "revisit_condition": "New body-state/goal/formulation evidence or integrated failure; do not promote the rejected universal seed, tune budgets or retime original proofs."
     }
   ]
 }

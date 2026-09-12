@@ -839,3 +839,65 @@ TEST(MpccRateResolvedAdapter, InitialTangentsShareOneNativeBodyTrajectory)
     body = exact->next_state;
   }
 }
+
+TEST(MpccRateResolvedAdapter, FullRestSeedMovesTowardTheSoftSpeedWithinOriginalInputBounds)
+{
+  auto request = curved_request(8);
+  request.initial_state.setZero();
+  const auto built = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(built);
+  model::StateVector body = built->problem.initial_state;
+  for (int stage = 0; stage < request.horizon_steps; ++stage) {
+    SCOPED_TRACE(stage);
+    const auto & input = request.inputs[stage];
+    const int offset = model::kInputDimension * stage;
+    const double acceleration = built->problem.input_upper[offset + model::kAccelerationIndex];
+    const double progress_speed = std::max(0.0,
+      body[3] * std::cos(body[2]) - body[7] * std::sin(body[2]));
+    const auto exact = model::evaluate_temporal_frenet_transition(
+      model::LinearizationRequest{body[0], body[1], body[2], body[3], body[4],
+        body[5], body[6], acceleration, 0.0, progress_speed, input.path_curvature_radpm,
+        request.wheelbase_m, input.stage_dt_sec, request.minimum_frenet_denominator,
+        request.minimum_stage_dt_sec, request.maximum_stage_dt_sec, request.course_frame,
+        body[7], body[8], request.vehicle_model});
+    ASSERT_TRUE(exact);
+    // This short horizon cannot reach the 3m/s target with the original <=1m/s2
+    // input envelope. The seed therefore uses that bounded acceleration and
+    // still cannot jump to the soft target speed.
+    ASSERT_LT(body[3] + acceleration * input.stage_dt_sec, 3.0);
+    model::InputVector control;
+    control << acceleration, 0.0, progress_speed;
+    const auto & tangent = built->problem.linearizations[stage];
+    const model::StateVector affine = tangent.state_matrix * body +
+      tangent.input_matrix * control - tangent.equality_offset;
+    EXPECT_TRUE(affine.isApprox(exact->next_state, 1e-8)) <<
+      "affine/native error=" << (affine - exact->next_state).transpose();
+    EXPECT_DOUBLE_EQ(built->problem.input_reference[offset + model::kAccelerationIndex], 0.0);
+    EXPECT_DOUBLE_EQ(built->problem.state_reference[
+      (stage + 1) * model::kStateDimension + model::kVelocityIndex], 3.0);
+    body = exact->next_state;
+  }
+}
+
+TEST(MpccRateResolvedAdapter, FullRestWithoutAForwardGoalKeepsTheDeclaredBrakingSeed)
+{
+  auto request = curved_request();
+  request.initial_state.setZero();
+  for (auto & state : request.states) {
+    state.reference[model::kVelocityIndex] = 3.0;
+    state.upper[model::kVelocityIndex] = 0.0;
+  }
+  for (auto & input : request.inputs) {
+    input.reference[model::kAccelerationIndex] = -0.5;
+  }
+  const auto built = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(built);
+  const model::StateVector rest = model::StateVector::Zero();
+  model::InputVector braking;
+  braking << -0.5, 0.0, 0.0;
+  for (const auto & tangent : built->problem.linearizations) {
+    const model::StateVector next = tangent.state_matrix * rest +
+      tangent.input_matrix * braking - tangent.equality_offset;
+    EXPECT_TRUE(next.isZero(1e-12));
+  }
+}

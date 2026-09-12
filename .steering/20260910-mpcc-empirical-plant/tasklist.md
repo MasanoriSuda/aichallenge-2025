@@ -388,3 +388,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Replace disconnected soft-state initial tangents. Build111all26, tests97all2587/66/source105/C5 161; tests96 changed-optimum fixture failure and r427/r428 boundaries retained.
 - [x] R429 built production library/original source complete comparison; source350 A accepts. Other source A failures remain.
 - [ ] Committed standard r70 source availability, all timing/physical/authority checks and integrated progress. All remaining M4-M6 unchanged.
+
+2026-09-12 complete-rest initial trajectory (baseline45a1b18f):
+- [x] Standard r70 starts, D1 fresh sources cross geometry/move/max1.177mps then pre-publication1529 fails its original deadline. D2 never admits a source. No laps; protected artifacts restored, containers stopped.
+- [x] R430 original-QP linear feasibility; R431/R432 reject universal acceleration-seed replacement (D2 improves, moving D1 normal candidate regresses).
+- [x] R433 exact full-body-rest initial seed restores D2 and preserves moving D1. R434 RED1, r435 adapter24; pureHold/Stop reference input remains.
+- [x] Build112all26, tests98all2589/66/source105/C5 161. R436 original-source built-library A/B/C/D/G complete proofs for D2source260 and D1source350.
+- [ ] Committed standard r71; separate D1deadline1529 original-window/cost repair with exact evidence. All M4-M6 remain open.

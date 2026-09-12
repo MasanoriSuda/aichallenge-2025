@@ -633,13 +633,30 @@ std::optional<Result> build(
   // trajectory and can make the first affine QP infeasible before refinement.
   // Keep every objective and bound above, but build all initial tangents along
   // one native trajectory. This seed has no execution or certificate authority.
+  // At complete body rest, the steady-speed reference inputs (usually one
+  // launch pulse followed by coasting) drain the nominal trajectory back into
+  // the model's rest transition. Seed a forward objective with reachable
+  // acceleration instead. Moving bodies and pure Hold/Stop objectives keep
+  // their existing reference-input seed; this selects no executable control.
+  const bool launch_from_rest =
+    problem.initial_state[model::kVelocityIndex] == 0.0 &&
+    problem.initial_state[model::kLateralVelocityIndex] == 0.0 &&
+    problem.initial_state[model::kYawRateIndex] == 0.0 &&
+    std::any_of(request.states.begin() + 1, request.states.end(), [](const StateStage & stage) {
+      return std::clamp(stage.reference[model::kVelocityIndex],
+        stage.lower[model::kVelocityIndex], stage.upper[model::kVelocityIndex]) > 0.0;
+    });
   auto tangent_state = problem.initial_state;
   problem.linearizations.reserve(static_cast<std::size_t>(horizon));
   for (int stage = 0; stage < horizon; ++stage) {
     const auto & semantic_input = request.inputs[static_cast<std::size_t>(stage)];
     const int input = stage * model::kInputDimension;
     const double dt = semantic_input.stage_dt_sec;
+    const auto & next_state = request.states[static_cast<std::size_t>(stage + 1)];
+    const double speed_target = std::clamp(next_state.reference[model::kVelocityIndex],
+      next_state.lower[model::kVelocityIndex], next_state.upper[model::kVelocityIndex]);
     const double acceleration = std::clamp(
+      launch_from_rest ? (speed_target - tangent_state[model::kVelocityIndex]) / dt :
       problem.input_reference[input + model::kAccelerationIndex],
       problem.input_lower[input + model::kAccelerationIndex],
       problem.input_upper[input + model::kAccelerationIndex]);

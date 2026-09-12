@@ -1411,6 +1411,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-source-evidence.json",
       "replay_ready": true,
       "reason": "Actual paired stationary1052, exact RestExpired and earlier source430/622 comparison; later fresh-source failure not captured."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-post-loss-source-observation-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-loss-source-observation-evidence.json",
+      "replay_ready": true,
+      "reason": "Post-loss source capture regression and exact four old dispatch replays; live fresh-source capture pending."
     }
   ],
   "experiments": [
@@ -17963,6 +17969,62 @@
       "production_impact": "No additional production change after diagnostic commit ec8e822b; no model/authority/clock/safety relaxation.",
       "deleted_code": [],
       "revisit_condition": "New exact source failure after actual post-motion final loss, not an unchanged run or acceptance by extending expired stop proof."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-source-observation-audit-r591",
+      "baseline_commit": "7b44f455b348757d80501af4ac139aeb04b136b3",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-source-observation-audit"
+      ],
+      "hypothesis": "Earlier source failure buckets must not hide fresh source failure after an actual final normal loss",
+      "changed_dimension": "Initial source capture regression setup",
+      "result": "inconclusive",
+      "reason": "Fixture reused a Pass execution side for Cruise and changed source/control-prefix times inconsistently; source validation rejects before recording. Original failed run preserved, not a production rejection.",
+      "production_impact": "Optional diagnostic anchor through owned source clones and fixed source recording buckets only; no normal, solver, model, physical or timing authority change.",
+      "deleted_code": [],
+      "revisit_condition": "New exact source/capture regression or live provenance; no repeated unchanged fixture failure, expired stop extension or race acceptance from observation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-source-observation-audit-r592",
+      "baseline_commit": "7b44f455b348757d80501af4ac139aeb04b136b3",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-source-observation-audit"
+      ],
+      "hypothesis": "Earlier source failure buckets must not hide fresh source failure after an actual final normal loss",
+      "changed_dimension": "Aligned time fixture and write failure reporting",
+      "result": "inconclusive",
+      "reason": "Control-prefix times aligned and post-capture I/O failure propagation added, but the Cruise fixture still has execution side1 and fails existing source validation before recording. No pass claimed.",
+      "production_impact": "Optional diagnostic anchor through owned source clones and fixed source recording buckets only; no normal, solver, model, physical or timing authority change.",
+      "deleted_code": [],
+      "revisit_condition": "New exact source/capture regression or live provenance; no repeated unchanged fixture failure, expired stop extension or race acceptance from observation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-source-observation-audit-r593",
+      "baseline_commit": "7b44f455b348757d80501af4ac139aeb04b136b3",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-source-observation-audit"
+      ],
+      "hypothesis": "Earlier source failure buckets must not hide fresh source failure after an actual final normal loss",
+      "changed_dimension": "Exact old/new source objects with valid Cruise fixture",
+      "result": "accepted",
+      "reason": "Set Cruise execution side0 and reseal test context; same R592 old/new source objects. Old3fail/new3pass: independent original and post-loss buckets for both initializers, exact QP/primal/dual/rejected iterate, optional metadata roundtrip outside fingerprint, invalid metadata isolation, I/O error visible and slot reusable after write failure.",
+      "production_impact": "Optional diagnostic anchor through owned source clones and fixed source recording buckets only; no normal, solver, model, physical or timing authority change.",
+      "deleted_code": [],
+      "revisit_condition": "New exact source/capture regression or live provenance; no repeated unchanged fixture failure, expired stop extension or race acceptance from observation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-loss-source-observation-audit-r594",
+      "baseline_commit": "7b44f455b348757d80501af4ac139aeb04b136b3",
+      "snapshot_ids": [
+        "20260913-nine-state-post-loss-source-observation-audit"
+      ],
+      "hypothesis": "Earlier source failure buckets must not hide fresh source failure after an actual final normal loss",
+      "changed_dimension": "Fresh build123 four original dispatch replays",
+      "result": "accepted",
+      "reason": "Exact source/domain/history/prior actual/check/time identities in all4. Force-r2 and single-r6 wall rejections, single-r5 actual before-send deadline rejection and single-r8 final1052 RestExpired preserved. CurrentCheck at1052 remains unexecuted/default.",
+      "production_impact": "Optional diagnostic anchor through owned source clones and fixed source recording buckets only; no normal, solver, model, physical or timing authority change.",
+      "deleted_code": [],
+      "revisit_condition": "New exact source/capture regression or live provenance; no repeated unchanged fixture failure, expired stop extension or race acceptance from observation."
     }
   ]
 }

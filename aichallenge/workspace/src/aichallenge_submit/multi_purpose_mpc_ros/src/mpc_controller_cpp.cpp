@@ -8564,6 +8564,7 @@ struct MPC
     snapshot->physical_control_origin_lateral_velocity_mps_ = physical_control_origin_lateral_velocity_mps_;
     snapshot->vehicle_observation_provenance_ = vehicle_observation_provenance_;
     snapshot->received_body_observation_ = received_body_observation_;
+    snapshot->post_motion_final_loss_ = post_motion_final_loss_;
     snapshot->physical_control_origin_yaw_rate_radps_ = physical_control_origin_yaw_rate_radps_;
     snapshot->physical_control_origin_response_steering_rad_ =
       physical_control_origin_response_steering_rad_;
@@ -25505,6 +25506,13 @@ struct MPC
       bound_submission.control_prediction_origin_sec;
     snapshot.request = bound_submission.request;
     snapshot.received_body_observation = received_body_observation_;
+    if (received_body_observation_ && post_motion_final_loss_ &&
+        received_body_observation_->control_decision_id>=post_motion_final_loss_->decision_id &&
+        received_body_observation_->now_sec>=post_motion_final_loss_->clock_sec) {
+      auto received=std::make_shared<mpcc_architecture_snapshot::ReceivedBodyObservation>(*received_body_observation_);
+      received->post_motion_final_loss=post_motion_final_loss_;
+      snapshot.received_body_observation=std::move(received);
+    }
     snapshot.execution_prefix_steps =
       bound_submission.execution_prefix_steps;
     snapshot.course_progress_origin_m =
@@ -31367,7 +31375,12 @@ struct MPC
             observation.prior_normal_motion=last_moving_normal_observation_;
             observation.output_root/="after-normal-motion";
           }
-          static_cast<void>(final_recorder->submit_selection_failure(std::move(observations)));
+          const auto admission=final_recorder->submit_selection_failure(std::move(observations));
+          if (admission==mpcc_architecture_snapshot::ObservationAdmission::Queued && !post_motion_final_loss_) {
+            post_motion_final_loss_=std::make_shared<const mpcc_architecture_snapshot::PostMotionFinalLossObservation>(
+              mpcc_architecture_snapshot::PostMotionFinalLossObservation{active_control_decision_id_,
+                vehicle_observation_provenance_->now_sec,*last_moving_normal_observation_});
+          }
         }
       }
       scheduled_active_.reset();
@@ -31483,7 +31496,10 @@ struct MPC
     active_control_decision_id_ = decision_id;
     // Diagnostic epoch only; never carry a movement witness across clock reset.
     if (!std::isfinite(now_sec) || (std::isfinite(normal_motion_observation_clock_sec_) &&
-        now_sec<normal_motion_observation_clock_sec_)) last_moving_normal_observation_.reset();
+        now_sec<normal_motion_observation_clock_sec_)) {
+      last_moving_normal_observation_.reset();
+      post_motion_final_loss_.reset();
+    }
     normal_motion_observation_clock_sec_=now_sec;
     source_supply_draft_ = "not-reached";
     source_supply_scheduled_ = "post-send-not-reached";
@@ -31780,6 +31796,7 @@ struct MPC
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_final_recorder_;
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_active_final_recorder_;
   std::optional<mpcc_architecture_snapshot::PublishedNormalMotionObservation> last_moving_normal_observation_;
+  std::shared_ptr<const mpcc_architecture_snapshot::PostMotionFinalLossObservation> post_motion_final_loss_;
   double normal_motion_observation_clock_sec_{std::numeric_limits<double>::quiet_NaN()};
   mutable scheduled_control::ContextOwner normal_context_owner_;
   // Control-thread observation only; these values never participate in

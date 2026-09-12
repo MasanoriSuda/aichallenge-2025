@@ -5076,3 +5076,11 @@ reader既定値・記録・予測・安全境界は変えない。実適用入�
 初期値を物理・context検証の実行結果と解釈しない。最後の正常1051後の再発進は未達。
 古い証明の延長ではなく、新しい認証済み計画が供給されない前段を調べる。全M4–M6未完。
 [実走・再生・残る観測不足](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-motion-source-audit.md)。
+
+
+2026-09-13停止後のsource診断: 実際に保存されたpost-motion final lossの判断・時計・
+以前の正常送信証拠を不変なcloneへ渡し、その後のsolver sourceへ付加する。元の記録に
+加えて、既存のintent/side/stage/outcomeごとに、両native初期化の失敗を固定枠へ保存する。
+元QP・warm start・物理source、通常権限、fingerprint、判定条件は維持。時計逆行でlive
+証拠を破棄し、不正な診断情報で元の再生を捨てない。build123全26/package110全2618合格。
+[設計と実走前の検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-loss-source-observation-design.md)。

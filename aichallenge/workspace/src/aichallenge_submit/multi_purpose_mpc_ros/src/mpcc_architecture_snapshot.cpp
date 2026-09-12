@@ -309,6 +309,85 @@ bool received_body_matches(
       s.yaw_rate_radps, s.desired_steering_rad, s.tire_steering_rad};
 }
 
+bool post_motion_loss_valid(const PostMotionFinalLossObservation &loss, const ReceivedBodyObservation &body)
+{
+  const auto &motion=loss.prior_normal_motion;
+  const auto &p=motion.publication;
+  return loss.decision_id && motion.decision_id && motion.decision_id<loss.decision_id &&
+    loss.decision_id<=body.control_decision_id && std::isfinite(loss.clock_sec) &&
+    loss.clock_sec<=body.now_sec && std::isfinite(motion.pose_sec) && motion.pose_sec>=0 &&
+    std::isfinite(motion.forward_velocity_mps) && std::abs(motion.forward_velocity_mps)>0.1 &&
+    p.sequence && p.source && p.source->decision_id && p.source->solution_id &&
+    p.source->problem_fingerprint && p.source->input_context_fingerprint &&
+    std::isfinite(p.nominal.published_sec) && std::isfinite(p.published.published_sec) &&
+    std::isfinite(p.nominal.wire_acceleration_mps2) && std::isfinite(p.nominal.wire_steering_rad) &&
+    p.nominal.wire_acceleration_mps2==p.published.wire_acceleration_mps2 &&
+    p.nominal.wire_steering_rad==p.published.wire_steering_rad &&
+    std::isfinite(p.before_clock_sec) && std::isfinite(p.after_clock_sec) &&
+    motion.pose_sec<=p.before_clock_sec && p.before_clock_sec<=p.after_clock_sec &&
+    p.after_clock_sec<=loss.clock_sec;
+}
+
+YAML::Node post_motion_loss_node(const ReceivedBodyObservation &body)
+{
+  YAML::Node node;
+  node["schema"]="mpcc-post-motion-final-loss/v1";
+  node["authority"]=false;
+  node["status"]=post_motion_loss_valid(*body.post_motion_final_loss,body) ? "valid" : "invalid";
+  if (node["status"].as<std::string>()!="valid") return node;
+  const auto &loss=*body.post_motion_final_loss;
+  const auto &motion=loss.prior_normal_motion;
+  const auto &p=motion.publication;
+  node["final_decision_id"]=loss.decision_id; node["final_clock_sec"]=loss.clock_sec;
+  node["moving_decision_id"]=motion.decision_id; node["moving_pose_sec"]=motion.pose_sec;
+  node["moving_forward_velocity_mps"]=motion.forward_velocity_mps;
+  auto pub=node["actual_moving_publication"];
+  pub["sequence"]=p.sequence;
+  pub["nominal_wire_acceleration_wire_steering_before_after"]=std::vector<double>{p.nominal.published_sec,
+    p.nominal.wire_acceleration_mps2,p.nominal.wire_steering_rad,p.before_clock_sec,p.after_clock_sec};
+  pub["recorded_publication_sec"]=p.published.published_sec;
+  pub["source_job_solution_problem_input_index"]=std::vector<std::uint64_t>{p.source->decision_id,
+    p.source->solution_id,p.source->problem_fingerprint,p.source->input_context_fingerprint,p.source->packet_index};
+  return node;
+}
+
+std::shared_ptr<const PostMotionFinalLossObservation> load_post_motion_loss(
+  const YAML::Node &node, const ReceivedBodyObservation &body)
+{
+  try {
+    if (!node || !node.IsMap() || node["schema"].as<std::string>()!="mpcc-post-motion-final-loss/v1" ||
+        node["status"].as<std::string>()!="valid" || node["authority"].as<bool>()) return nullptr;
+    auto loss=std::make_shared<PostMotionFinalLossObservation>();
+    loss->decision_id=node["final_decision_id"].as<std::uint64_t>(); loss->clock_sec=node["final_clock_sec"].as<double>();
+    auto &motion=loss->prior_normal_motion;
+    motion.decision_id=node["moving_decision_id"].as<std::uint64_t>(); motion.pose_sec=node["moving_pose_sec"].as<double>();
+    motion.forward_velocity_mps=node["moving_forward_velocity_mps"].as<double>();
+    const auto pub=node["actual_moving_publication"];
+    const auto v=pub["nominal_wire_acceleration_wire_steering_before_after"];
+    const auto ids=pub["source_job_solution_problem_input_index"];
+    if (!v.IsSequence() || v.size()!=5 || !ids.IsSequence() || ids.size()!=5) return nullptr;
+    auto &p=motion.publication;
+    p.sequence=pub["sequence"].as<std::uint64_t>();
+    p.nominal={v[0].as<double>(),v[1].as<double>(),v[2].as<double>()};
+    p.published={pub["recorded_publication_sec"].as<double>(),p.nominal.wire_acceleration_mps2,p.nominal.wire_steering_rad};
+    p.before_clock_sec=v[3].as<double>(); p.after_clock_sec=v[4].as<double>();
+    p.source=mpcc_vehicle_model::PublishedProgramSource{ids[0].as<std::uint64_t>(),ids[1].as<std::uint64_t>(),
+      ids[2].as<std::uint64_t>(),ids[3].as<std::uint64_t>(),ids[4].as<std::size_t>()};
+    return post_motion_loss_valid(*loss,body) ? loss : nullptr;
+  } catch (const YAML::Exception &) {return nullptr;}
+}
+
+bool source_after_post_motion_loss(const shadow::Snapshot &source)
+{
+  const auto &body=source.received_body_observation;
+  return body && received_body_valid(*body) && body->post_motion_final_loss &&
+    post_motion_loss_valid(*body->post_motion_final_loss,*body) &&
+    source.identity.snapshot_sec>=body->post_motion_final_loss->clock_sec &&
+    source.request.observation_provenance &&
+    source.request.observation_provenance->now_sec>=body->post_motion_final_loss->clock_sec &&
+    mpcc_rate_resolved_adapter::initial_tangent_policy_valid(source.request.initial_tangent_policy);
+}
+
 constexpr std::array<const char *, 3> kReceivedBodyChannels{
   "velocity_u_vy", "imu_body_yaw_rate", "physical_tire_steering"};
 
@@ -324,6 +403,7 @@ YAML::Node received_body_node(
   node["status"] = !capture ? "missing" : valid ? "valid" : "invalid";
   if (!valid) return node;
   const auto & value = *capture;
+  if (value.post_motion_final_loss) node["post_motion_final_loss"]=post_motion_loss_node(value);
   node["control_decision_id"] = value.control_decision_id;
   node["captured_steady_ns"] = value.captured_steady_ns;
   node["now_sec"] = value.now_sec;
@@ -379,6 +459,7 @@ std::shared_ptr<const ReceivedBodyObservation> load_received_body(const YAML::No
           row[2].as<double>(), row[3].as<double>()});
       }
     }
+    value->post_motion_final_loss=load_post_motion_loss(node["post_motion_final_loss"],*value);
     return received_body_valid(*value) ? value : nullptr;
   } catch (const YAML::Exception &) {
     return nullptr;
@@ -2670,6 +2751,7 @@ static YAML::Node revalidation_evidence_node(
 
 static RecordResult record_snapshot(
   const shadow::Snapshot & source,
+  const bool post_loss_capture,
   const problem::AssemblyRequest * const assembly_request,
   const problem::Problem * const exact_problem,
   const std::optional<persistent_osqp::WarmStart> * const warm_start,
@@ -2718,8 +2800,11 @@ static RecordResult record_snapshot(
       return result;
     }
 
-    const std::string key = failure_key(
-      source, pipeline_stage, failure_outcome);
+    if (post_loss_capture && !source_after_post_motion_loss(source)) return result;
+    const auto policy=std::to_string(static_cast<int>(source.request.initial_tangent_policy));
+    const auto recording_root=post_loss_capture ? output_root/"after-post-motion-final-loss"/("initializer-"+policy) : output_root;
+    const std::string key = failure_key(source, pipeline_stage, failure_outcome) +
+      (post_loss_capture ? "|after-post-motion-final-loss|initializer="+policy : "");
     std::lock_guard<std::mutex> lock(record_mutex);
     if (recorded_failure_keys.count(key) != 0U) {
       result.status = RecordStatus::Duplicate;
@@ -2742,10 +2827,10 @@ static RecordResult record_snapshot(
       physical_homotopy_component(physical_homotopy_side(source)) + '-' +
       safe_component(to_string(pipeline_stage)) + '-' +
       safe_component(failure_outcome);
-    const auto final_directory = output_root / directory_name;
-    const auto temporary_directory = output_root / (directory_name + ".tmp");
+    const auto final_directory = recording_root / directory_name;
+    const auto temporary_directory = recording_root / (directory_name + ".tmp");
     std::error_code error;
-    std::filesystem::create_directories(output_root, error);
+    std::filesystem::create_directories(recording_root, error);
     if (error) {
       result.status = RecordStatus::IoFailure;
       result.detail = "cannot create snapshot root: " + error.message();
@@ -2885,9 +2970,13 @@ RecordResult record_failure(
   const std::string & failure_detail,
   const std::filesystem::path & output_root) noexcept
 {
-  return record_snapshot(
-    source, &assembly_request, &exact_problem, &warm_start, &outcome,
+  const auto original=record_snapshot(
+    source, false, &assembly_request, &exact_problem, &warm_start, &outcome,
     pipeline_stage, failure_outcome, failure_detail, output_root);
+  if (!source_after_post_motion_loss(source)) return original;
+  const auto post=record_snapshot(source, true, &assembly_request, &exact_problem, &warm_start, &outcome,
+    pipeline_stage, failure_outcome, failure_detail, output_root);
+  return post.status==RecordStatus::Duplicate ? original : post;
 }
 
 RecordResult record_proof_failure(
@@ -2903,9 +2992,13 @@ RecordResult record_proof_failure(
     result.detail = "incomplete source-only interaction snapshot";
     return result;
   }
-  return record_snapshot(
-    source, nullptr, nullptr, nullptr, nullptr, pipeline_stage,
+  const auto original=record_snapshot(
+    source, false, nullptr, nullptr, nullptr, nullptr, pipeline_stage,
     failure_outcome, failure_detail, output_root);
+  if (!source_after_post_motion_loss(source)) return original;
+  const auto post=record_snapshot(source, true, nullptr, nullptr, nullptr, nullptr,
+    pipeline_stage, failure_outcome, failure_detail, output_root);
+  return post.status==RecordStatus::Duplicate ? original : post;
 }
 
 RecordResult record_published_execution(
@@ -2922,7 +3015,7 @@ RecordResult record_published_execution(
         "invalid published execution identity, artifact or clock"};
     }
     return record_snapshot(
-      source, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
+      source, false, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
       "published-source-at-authority-loss", failure_detail, output_root,
       execution_evidence_node(artifact, publication));
   } catch (const std::exception & exception) {
@@ -3522,7 +3615,7 @@ RecordResult record_authority_failure(
     previous_revalidation["observation_role"] = "previous-ordinary-terminal-accepted";
     previous_revalidation["failure_decision_id"] = current_world.identity.source_context.decision_id;
     return record_snapshot(
-      current_world, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
+      current_world, false, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
       failure_outcome, failure_detail, output_root, YAML::Node(), bundle, grid,
       revalidation, inspected_grid, observed_grid, previous_revalidation,
       previous_inspected_grid, previous_observed_grid,

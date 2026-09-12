@@ -71,7 +71,9 @@ struct RecordResult
 /// warm start or solver setting. At most one artifact per (intent, physical
 /// homotopy, pipeline stage, failure outcome) is written by one process.  The
 /// homotopy is part of the evidence boundary: collapsing opposite Follow
-/// sides can hide the exact candidate that failed in production.
+/// sides can hide the exact candidate that failed in production. Each original
+/// bucket also has a fixed post-motion-final-loss bucket per native initializer;
+/// optional diagnostic provenance never changes the original recording.
 RecordResult record_failure(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,
@@ -176,6 +178,13 @@ struct PublishedNormalMotionObservation
   double pose_sec{};
   double forward_velocity_mps{};
   mpcc_vehicle_model::PublicationTransaction publication;
+};
+
+struct PostMotionFinalLossObservation
+{
+  std::uint64_t decision_id{};
+  double clock_sec{};
+  PublishedNormalMotionObservation prior_normal_motion;
 };
 
 struct PublicationFailureObservation

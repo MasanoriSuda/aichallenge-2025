@@ -3711,6 +3711,13 @@ def test_final_normal_authority_loss_is_frozen_without_control_authority() -> No
     assert "!std::isfinite(now_sec)" in cycle
     assert "now_sec<normal_motion_observation_clock_sec_" in cycle
     assert "last_moving_normal_observation_.reset()" in cycle
+    assert "ObservationAdmission::Queued && !post_motion_final_loss_" in dispatch[post_motion:reset]
+    assert "post_motion_final_loss_.reset()" in cycle
+    assert "snapshot->post_motion_final_loss_ = post_motion_final_loss_" in SOURCE
+    source = _cpp_function("std::optional<rate_resolved_shadow::Snapshot>\n  build_rate_resolved_submission_snapshot(")
+    assert "received_body_observation_->control_decision_id>=post_motion_final_loss_->decision_id" in source
+    assert "received_body_observation_->now_sec>=post_motion_final_loss_->clock_sec" in source
+    assert "received->post_motion_final_loss=post_motion_final_loss_" in source
     capture = _cpp_function("std::shared_ptr<mpcc_architecture_snapshot::ScheduledFailureCapture> scheduled_failure_capture(")
     assert "ledger.latest_transaction()" in capture
     assert "capture->last_publication=*last" in capture

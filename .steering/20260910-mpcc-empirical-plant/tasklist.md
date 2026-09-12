@@ -583,3 +583,10 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R583 fixture collision preserved; R584 old2fail/new2pass; source106; build122 all26/package109 all2615; R586 unchanged old wall/deadline replays.
 - [x] Localec8e822b and bounded single-r8: paired final1052 captured, actual witness1001 verified, no restart; R589 exact original RestExpired, R590 earlier430/622 A rejection and target-free alternative unavailability.
 - [ ] Capture exact fresh source failure after the actual post-motion final loss for both native initializers; repair its producer and complete remaining M4–M6.
+
+## Source failure after actual post-motion final loss
+
+- [x] Freeze the queued final-loss anchor, copy through owned MPC clones into optional source metadata; preserve original buckets plus fixed per-initializer source captures.
+- [x] R591/R592 invalid fixtures preserved, R593old3fail/new3pass, source106, build123all26/package110all2618, R594four original wall/deadline/rest-expiry replays exact.
+- [ ] Local commit and bounded single-r9: obtain actual post-loss fresh source failure for both initializers; inspect exact QP/warm-start or full physical source before causal repair.
+- [ ] Actual restart and all remaining M4–M6, final-source races/gates and same submitted artifact/image/eval.

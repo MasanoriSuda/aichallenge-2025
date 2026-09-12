@@ -407,6 +407,154 @@ TEST(MpccArchitectureSnapshot, PostMotionPairRejectsInvalidWitnessWithoutConsumi
   std::filesystem::remove_all(root);
 }
 
+PostMotionFinalLossObservation source_loss_fixture()
+{
+  const mpcc_vehicle_model::PublishedCommand nominal{19.5,-3,.01};
+  auto published=nominal; published.published_sec=19.51;
+  return {100,19.6,{90,19.4,-.2,{91,nominal,published,19.5,19.51,
+    mpcc_vehicle_model::PublishedProgramSource{29,31,37,41,11}}}};
+}
+
+TEST(MpccArchitectureSnapshot, SourceAfterFinalLossPreservesBothInitializersAndExactQp)
+{
+  const auto root=output_root("post-loss-source-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  auto source=make_interaction_snapshot(mpcc_execution_contract::ControlIntent::Cruise);
+  source.identity.source_context.execution_side_sign=0;
+  source.identity.source_context=mpcc_execution_contract::seal_problem_context(source.identity.source_context);
+  source.identity.snapshot_sec=20; source.control_prediction_origin_sec=20.1;
+  source.replay_world->observed_sec=20;
+  source.request.observation_provenance=received_body_selected();
+  auto body=received_body_fixture(103);
+  const auto problem=make_valid_problem(); const auto request=make_assembly_request();
+  const std::optional<persistent_osqp::WarmStart> warm{persistent_osqp::WarmStart{
+    Eigen::VectorXd::Constant(1,.17),Eigen::VectorXd::Constant(1,.23)}};
+  persistent_osqp::SolveOutcome failed;
+  failed.failure_detail="exact original failure";
+  failed.rejected_primal=Eigen::VectorXd::Constant(1,.25);
+  for (bool qp:{false,true}) {
+    const std::string outcome=qp ? "unit-source-after-loss-qp" : "unit-source-after-loss-physical";
+    const auto record=[&](const auto &input) {
+      return qp ? record_failure(input,request,problem,warm,failed,PipelineStage::Initial,outcome,"test",root) :
+        record_proof_failure(input,PipelineStage::PhysicalProof,outcome,"test",root);
+    };
+    source.received_body_observation.reset();
+    const auto original=record(source);
+    ASSERT_EQ(original.status,RecordStatus::Written) << original.detail;
+    source.received_body_observation=std::make_shared<const ReceivedBodyObservation>(body);
+    EXPECT_EQ(record(source).status,RecordStatus::Duplicate);
+    for (int policy:{0,1}) {
+      source.request.initial_tangent_policy=static_cast<mpcc_rate_resolved_adapter::InitialTangentPolicy>(policy);
+      const auto fingerprint=fingerprint_interaction_snapshot(source);
+      ASSERT_NE(fingerprint,0U);
+      auto tagged=body; tagged.post_motion_final_loss=std::make_shared<const PostMotionFinalLossObservation>(source_loss_fixture());
+      source.received_body_observation=std::make_shared<const ReceivedBodyObservation>(tagged);
+      EXPECT_EQ(fingerprint_interaction_snapshot(source),fingerprint);
+      const auto written=record(source);
+      ASSERT_EQ(written.status,RecordStatus::Written) << written.detail;
+      EXPECT_NE(written.snapshot_file.string().find("after-post-motion-final-loss/initializer-"+std::to_string(policy)),std::string::npos);
+      std::string detail;
+      const auto loaded=load_recorded_interaction_snapshot(written.snapshot_file,&detail);
+      ASSERT_TRUE(loaded) << detail;
+      EXPECT_EQ(loaded->interaction_fingerprint,fingerprint);
+      ASSERT_TRUE(loaded->source.received_body_observation);
+      const auto &loss=loaded->source.received_body_observation->post_motion_final_loss;
+      ASSERT_TRUE(loss);
+      EXPECT_EQ(loss->decision_id,100U);
+      EXPECT_EQ(loss->prior_normal_motion.decision_id,90U);
+      EXPECT_EQ(loss->prior_normal_motion.publication.source->input_context_fingerprint,41U);
+      EXPECT_DOUBLE_EQ(loss->prior_normal_motion.publication.after_clock_sec,19.51);
+      if (qp) {
+        const auto exact=load_recorded_qp(written.snapshot_file,&detail);
+        ASSERT_TRUE(exact) << detail;
+        ASSERT_TRUE(exact->warm_start); ASSERT_TRUE(exact->rejected_primal);
+        EXPECT_DOUBLE_EQ((*exact->rejected_primal)[0],.25);
+        EXPECT_DOUBLE_EQ(exact->warm_start->primal[0],.17);
+        EXPECT_DOUBLE_EQ(exact->warm_start->dual[0],.23);
+      }
+      ++source.identity.sequence;
+      EXPECT_EQ(record(source).status,RecordStatus::Duplicate);
+    }
+  }
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, SourceAfterFinalLossInvalidMetadataKeepsOriginalReplay)
+{
+  const auto root=output_root("post-loss-invalid-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  auto source=make_interaction_snapshot(mpcc_execution_contract::ControlIntent::Cruise);
+  source.identity.source_context.execution_side_sign=0;
+  source.identity.source_context=mpcc_execution_contract::seal_problem_context(source.identity.source_context);
+  source.identity.snapshot_sec=20; source.control_prediction_origin_sec=20.1;
+  source.replay_world->observed_sec=20; source.request.observation_provenance=received_body_selected();
+  auto body=received_body_fixture(103);
+  const auto fingerprint=fingerprint_interaction_snapshot(source);
+  auto loss=source_loss_fixture(); loss.clock_sec=21;  // future relative to source
+  body.post_motion_final_loss=std::make_shared<const PostMotionFinalLossObservation>(loss);
+  source.received_body_observation=std::make_shared<const ReceivedBodyObservation>(body);
+  const auto record=[&] {return record_proof_failure(source,PipelineStage::PhysicalProof,
+    "unit-post-loss-invalid","test",root);};
+  const auto original=record();
+  ASSERT_EQ(original.status,RecordStatus::Written) << original.detail;
+  EXPECT_EQ(original.snapshot_file.string().find("after-post-motion-final-loss"),std::string::npos);
+  std::string detail;
+  auto loaded=load_recorded_interaction_snapshot(original.snapshot_file,&detail);
+  ASSERT_TRUE(loaded) << detail;
+  EXPECT_EQ(loaded->interaction_fingerprint,fingerprint);
+  ASSERT_TRUE(loaded->source.received_body_observation);
+  EXPECT_FALSE(loaded->source.received_body_observation->post_motion_final_loss);
+  for (int fault=0;fault<5;++fault) {
+    auto invalid=source_loss_fixture();
+    switch(fault) {
+      case 0: invalid.decision_id=104; break;
+      case 1: invalid.prior_normal_motion.decision_id=100; break;
+      case 2: invalid.prior_normal_motion.forward_velocity_mps=0; break;
+      case 3: invalid.prior_normal_motion.publication.source.reset(); break;
+      case 4: invalid.prior_normal_motion.publication.after_clock_sec=20.1; break;
+    }
+    body.post_motion_final_loss=std::make_shared<const PostMotionFinalLossObservation>(invalid);
+    source.received_body_observation=std::make_shared<const ReceivedBodyObservation>(body);
+    EXPECT_EQ(record().status,RecordStatus::Duplicate) << fault;
+  }
+  body.post_motion_final_loss=std::make_shared<const PostMotionFinalLossObservation>(source_loss_fixture());
+  source.received_body_observation=std::make_shared<const ReceivedBodyObservation>(body);
+  ASSERT_EQ(record().status,RecordStatus::Written);
+  // A malformed optional tag on disk cannot discard an otherwise usable source.
+  auto doc=YAML::LoadFile(original.snapshot_file.string());
+  doc["source"]["received_body_observation"]["post_motion_final_loss"]="malformed";
+  // Keep relative world-grid paths anchored to their original capture directory.
+  const auto malformed_local=original.snapshot_file.parent_path()/"malformed.yaml";
+  {std::ofstream stream(malformed_local); stream<<doc;}
+  loaded=load_recorded_interaction_snapshot(malformed_local,&detail);
+  ASSERT_TRUE(loaded) << detail;
+  EXPECT_EQ(loaded->interaction_fingerprint,fingerprint);
+  EXPECT_FALSE(loaded->source.received_body_observation->post_motion_final_loss);
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, SourceAfterFinalLossReportsIoFailureAndKeepsSlotAvailable)
+{
+  const auto root=output_root("post-loss-io-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  auto source=make_interaction_snapshot(mpcc_execution_contract::ControlIntent::Cruise);
+  source.identity.source_context.execution_side_sign=0;
+  source.identity.source_context=mpcc_execution_contract::seal_problem_context(source.identity.source_context);
+  source.identity.snapshot_sec=20; source.control_prediction_origin_sec=20.1;
+  source.replay_world->observed_sec=20; source.request.observation_provenance=received_body_selected();
+  const auto record=[&] {return record_proof_failure(source,PipelineStage::PhysicalProof,
+    "unit-post-loss-io","test",root);};
+  auto original=record();
+  ASSERT_EQ(original.status,RecordStatus::Written) << original.detail;
+  auto body=received_body_fixture(103);
+  body.post_motion_final_loss=std::make_shared<const PostMotionFinalLossObservation>(source_loss_fixture());
+  source.received_body_observation=std::make_shared<const ReceivedBodyObservation>(body);
+  const auto blocked=root/"after-post-motion-final-loss";
+  {std::ofstream stream(blocked); stream<<"owned test obstruction";}
+  EXPECT_EQ(record().status,RecordStatus::IoFailure);
+  std::filesystem::remove(blocked);
+  EXPECT_EQ(record().status,RecordStatus::Written);
+  EXPECT_EQ(record().status,RecordStatus::Duplicate);
+  std::filesystem::remove_all(root);
+}
+
 TEST(MpccArchitectureSnapshot, ReceivedBodiesKeepProgrammeAndCurrentOwnersSeparate)
 {
   const auto root = output_root("received-body-owners");

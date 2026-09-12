@@ -2,10 +2,13 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot
 {
+
+struct PostMotionFinalLossObservation;
 
 /// Diagnostic copy of already received values. Steady timestamps belong to
 /// this process; source timestamps belong to ROS. Neither is a bag receipt.
@@ -28,6 +31,9 @@ struct ReceivedBodyObservation
   std::array<double, 3> selected_component_source_sec{};  // velocity, IMU, tire
   std::array<double, 8> selected_x_y_yaw_u_vy_r_desired_tire{};
   std::array<std::vector<ReceivedBodySample>, 3> histories;
+  /// Optional source-worker provenance, outside all authority fingerprints.
+  std::shared_ptr<const PostMotionFinalLossObservation> post_motion_final_loss;
+
 };
 
 }  // namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot

@@ -1327,6 +1327,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/required-origin-corridor-evidence.json",
       "replay_ready": true,
       "reason": "Exact final1022 and separate stopped source592, original QP/primal and native/full-production comparisons."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-single-r5-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r5-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact final1122 plus distinct earlier source302/373/573 and existing certified source regressions."
     }
   ],
   "experiments": [
@@ -16729,6 +16735,90 @@
       "production_impact": "Only required-origin sampling/containment has a production candidate; other numerical/proof prototypes unpromoted. All M4–M6 remain open.",
       "deleted_code": [],
       "revisit_condition": "Fresh committed single-r5 for initial metadata repair; other rejected variants require new distinct world/causal evidence, not unchanged retries."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r5-audit-r513",
+      "baseline_commit": "f9aa990a9cc6b36900ded754e62cba4c61f3bf89",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r5-audit"
+      ],
+      "hypothesis": "Separate real-clock current deadline from source initialization availability; preserve full physical/candidate identity requirements",
+      "changed_dimension": "Exact current source/history/domain/last actual source and actual clock guard",
+      "result": "accepted",
+      "reason": "Three replays reproduce accepted full current proof and rejected actual before guard. Domain use7 is WorldRejected; the separate independent full proof accepts. Offline0.861–0.883ms is not a live bound.",
+      "production_impact": "None; all initial-tangent prototypes unpromoted and simple replacement rejected. Existing source and safety parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only a materially distinct bounded candidate architecture with explicit source identity, warm-state ownership, cost and physical proof can revisit seed replacement. Clock scheduling retries require new causal evidence; do not repeat rejected partitions unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r5-audit-r514",
+      "baseline_commit": "f9aa990a9cc6b36900ded754e62cba4c61f3bf89",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r5-audit"
+      ],
+      "hypothesis": "Separate real-clock current deadline from source initialization availability; preserve full physical/candidate identity requirements",
+      "changed_dimension": "Whole source A/B/C/D/G on three distinct pre-1122 snapshots",
+      "result": "inconclusive",
+      "reason": "Cold A accepts302, rejects373 at original wall-refinement class, rejects573 at a different boundary than captured. Target-free B/C/D/G unavailable. Not an exact failed QP/warm-state reproduction or world infeasibility proof.",
+      "production_impact": "None; all initial-tangent prototypes unpromoted and simple replacement rejected. Existing source and safety parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only a materially distinct bounded candidate architecture with explicit source identity, warm-state ownership, cost and physical proof can revisit seed replacement. Clock scheduling retries require new causal evidence; do not repeat rejected partitions unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r5-audit-r515",
+      "baseline_commit": "f9aa990a9cc6b36900ded754e62cba4c61f3bf89",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r5-audit"
+      ],
+      "hypothesis": "Separate real-clock current deadline from source initialization availability; preserve full physical/candidate identity requirements",
+      "changed_dimension": "Four native connected tangent seeds with zero virtual progress",
+      "result": "accepted",
+      "reason": "Complete original solver/artifact/physical/Stop chain finds source candidates for failed373 and573. All QP inputs free, original hard constraints. Current adapter already uses a connected native seed; connectivity itself is not the new dimension. No production promotion.",
+      "production_impact": "None; all initial-tangent prototypes unpromoted and simple replacement rejected. Existing source and safety parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only a materially distinct bounded candidate architecture with explicit source identity, warm-state ownership, cost and physical proof can revisit seed replacement. Clock scheduling retries require new causal evidence; do not repeat rejected partitions unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r5-audit-r516",
+      "baseline_commit": "f9aa990a9cc6b36900ded754e62cba4c61f3bf89",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r5-audit"
+      ],
+      "hypothesis": "Separate real-clock current deadline from source initialization availability; preserve full physical/candidate identity requirements",
+      "changed_dimension": "Separate native progress, reference steering and braking preparation",
+      "result": "inconclusive",
+      "reason": "No universal improvement inferred from these three frozen sources. Native progress changes some classifications; soft steering plus preparation accepts373/573 but loses302. No altered hard bounds or live authority.",
+      "production_impact": "None; all initial-tangent prototypes unpromoted and simple replacement rejected. Existing source and safety parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only a materially distinct bounded candidate architecture with explicit source identity, warm-state ownership, cost and physical proof can revisit seed replacement. Clock scheduling retries require new causal evidence; do not repeat rejected partitions unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r5-audit-r517",
+      "baseline_commit": "f9aa990a9cc6b36900ded754e62cba4c61f3bf89",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r5-audit"
+      ],
+      "hypothesis": "Separate real-clock current deadline from source initialization availability; preserve full physical/candidate identity requirements",
+      "changed_dimension": "Adapter steering-reference and per-stage rest-launch ablation",
+      "result": "accepted",
+      "reason": "Combined soft steering reference and per-stage native rest launch accepts302/373/573. Separate dimensions do not repair573; preparation variant still rejects573. All constraints and free controls retained. No production promotion.",
+      "production_impact": "None; all initial-tangent prototypes unpromoted and simple replacement rejected. Existing source and safety parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only a materially distinct bounded candidate architecture with explicit source identity, warm-state ownership, cost and physical proof can revisit seed replacement. Clock scheduling retries require new causal evidence; do not repeat rejected partitions unchanged."
+    },
+    {
+      "experiment_id": "20260912-nine-state-single-r5-audit-r518",
+      "baseline_commit": "f9aa990a9cc6b36900ded754e62cba4c61f3bf89",
+      "snapshot_ids": [
+        "20260912-nine-state-single-r5-audit"
+      ],
+      "hypothesis": "Separate real-clock current deadline from source initialization availability; preserve full physical/candidate identity requirements",
+      "changed_dimension": "Cross-source regression of candidate initial-tangent replacement",
+      "result": "rejected",
+      "reason": "Preserving initial-rest launch plus per-stage rest (mode11) accepts302/373/573 and original Follow673/Cruise3454, but loses original single-r5 Cruise586 at unchanged full wall proof. Global replacement rejected. Mode3 also loses3454; latched mode19 loses573/586. A single initializer is insufficient on these cases; new bounded candidate architecture requires separate validation.",
+      "production_impact": "None; all initial-tangent prototypes unpromoted and simple replacement rejected. Existing source and safety parameters unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "Only a materially distinct bounded candidate architecture with explicit source identity, warm-state ownership, cost and physical proof can revisit seed replacement. Clock scheduling retries require new causal evidence; do not repeat rejected partitions unchanged."
     }
   ]
 }

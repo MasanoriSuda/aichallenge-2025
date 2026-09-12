@@ -312,3 +312,5 @@ CA1peers/Follow/fullrest/identity. Buildr54=26/23.8s,testsr44=2451/62groups/zero
 errors-fails-skips/29.74s;native146-148earlierpositive/realhistorygapregressions
 pass. See receiver-input-enclosure/oriented-wall-evidence.json. Commit then
 freshdev2-r27; actualpublicationclock/live25ms/allM4–M6remainopen.
+
+2026-09-12 resumed f9aa990a: single-r5 D1Ready1122 exact current source/history/domain/lastactual reproduces physical acceptance and actual before-window rejection in R513. Bag317.259755ms receipt gap then40ms ROS within4.997012ms wall is not controller delivery attribution; old R39/R53 and rejected partitions are separate evidence. Run externally interrupted for analysis, no Start/laps/deadline result, protected artifacts restored. R514 cold source302accepts/373rejects/573different-boundary; target-free alternatives unavailable. R515–R517 native-seed comparisons find fully certified sources without changing hard constraints, but R518 global replacement loses existing586 and is unpromoted. Next bounded candidate architecture and independent clock repair; full M4–M6 remains incomplete. See receiver-input-enclosure/single-r5-current-audit.md.

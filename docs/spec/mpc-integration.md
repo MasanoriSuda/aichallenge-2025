@@ -4963,3 +4963,10 @@ Build118全26、tests105全2600、source106を確認。実走の記録確認は�
 他の呼出し側のサンプル格子と全source/current/公開時刻条件は維持する。
 Build119全26、tests106全2602、source106、native65、保存source/current再生を確認。
 標準single-r5と全M4–M6は未完。[初期支持点の根拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/required-origin-corridor-design.md)。
+
+
+2026-09-12 標準single-r5は現在物理証明の後、D1Ready1122の元の公開期限で未達。
+R513は同じsource/domain/実履歴/直前送信で判定を再現。初期軌道候補を変える
+R515–R517は別の保存source373/573を改善したが、R518で既存source586の壁証明を
+失うため、単純な生成方式の置換は棄却した。本番制御・各制限はf9aa990aを維持。
+[現在境界と候補比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r5-current-audit.md)。

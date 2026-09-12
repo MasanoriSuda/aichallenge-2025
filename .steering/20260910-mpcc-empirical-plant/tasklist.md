@@ -496,4 +496,14 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R507/R509 same QP/primal isolate incompatible initial corridor metadata; original hard footprint/guard support clear.
 - [x] Initial sampling includes origin/guard and requires containment; R510 old2 failures/new65 native pass, source106 pass.
 - [x] Build119 all26/package106 all2602, R511 full source pipeline and R512 exact original rejection, evidence sealed.
-- [ ] Fresh single-r5; all original M4–M6 repeated runs/gates/submission/eval.
+- [x] Standard single-r5 executed; D1Ready1122 original before-publication deadline rejected, no Start/laps. External analysis interruption/restoration, not acceptance.
+
+## single-r5 current publication and source availability
+
+- [x] R513 identical source/domain/history/preceding actual send and captured current proof; entry guard accepts, actual before guard rejects.
+- [x] Whole-run MCAP and clock extraction; bag receipt clustering is distinct from controller delivery.
+- [x] Existing absolute ROS appointment and rejected R37/R61/R79 partitions audited; no unchanged scheduling rerun.
+- [x] R514 current whole-source A/B/C/D/G comparison on three PRE-1122 sources; cold replay is distinct from exact failed QP/warm start.
+- [x] R515–R518 native tangent/steering/progress/rest ablations and six-source regression; simple global replacement rejected because original586 loses wall proof.
+- [ ] Original publication timing, later stationary source failure and full M4–M6; no local slice substitutes for acceptance.
+- [ ] Compare a bounded predeclared native seed set with exact candidate/warm-start identity, one final normal authority, same objective/hard constraints and measured source cost; no retry or raw seed execution.

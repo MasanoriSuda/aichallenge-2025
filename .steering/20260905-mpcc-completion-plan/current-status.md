@@ -1,23 +1,19 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。最終失敗の記録は70475357で実走確認。初期区間の生成を修正・検証済み。**
+**全体未完。最新標準single-r5と保存入力の比較を完了し、単純な初期軌道の置換を棄却。**
 
-single-r4はD1Ready1022/source539/job1018/index1で現在壁証明を拒否。最終due/activeを
-途中の883と独立して保存でき、R503で元source/domain/履歴/直前1021と拒否時刻を再現。
-その後停止し、新source592が軌道データの初期区間不整合で拒否。解析用に中断し未完走。
-raw velocity0.1208、最終odomログ0.07は別時刻の観測で、元の自動停止条件>0.1は未成立。
-元DLLとユーザーJSONは復元済み。Start/周回/840s期限の完了結果はない。
+本番候補f9aa990a/build119全26/tests106全2602は維持。single-r5はD1Ready1122の
+実公開期限を超過。独立した現在物理証明は通るが、25msのROS期限には間に合わない。
+R513でsource/domain/実履歴/直前送信と判定を再現。壁時計callback5.784msの間に
+ROSは30ms進む。bag受信時刻とcontroller配信時刻を区別し、過去のCPU割当て失敗も保存。
+解析用に明示中断し、元DLL/ユーザーJSONを復元。Start/周回/完走の受入れはない。
 
-R506/R508は1022のnative/数値式再利用/既存分岐個別検査でも元の壁拒否を維持。
-R504の4端点はclearだが網羅的な安全証明ではない。現在壁拒否の解消は未完。
-別の592は、50mmサンプルの位相が初期状態を横区間から約1.07mm除外していた。
-初期姿勢と元の1mm guardを全車体で確認し、同じQP/primalの軌道構築が通るR507/R509を保存。
-初期区間の生成でこの支持点を追加し、単なる近傍区間の採用を廃止。全物理/時計条件は維持。
-R510旧2失敗→新65native合格。Build119全26、tests106全2602、source106が合格。
-R511は実ビルドの全source証明に合格、R512は元の1022拒否をそのまま再現。
-次は修正をローカルcommitし、標準single-r5で検証する。pushなし、追加確認なし。
-[最新の設計・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/required-origin-corridor-design.md)。
+別の、1122より前のsource373/573では、初期軌道の操舵と予測中の停止・発進が候補生成に
+影響する。R515–R517では同じ状態・壁・制約で全証明が通る候補を得たが、R518で
+既存の成功source586を失うことが判明。単純な全体置換は棄却し、本番へ入れていない。
+次は有界な初期軌道候補集合の方式比較・生成責務・計算量を調べる。追加確認/pushなし。
+[最新の時系列・比較・証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/single-r5-current-audit.md)。
 
 r75 Start/update_v_max失効、実公開期限、全intent/Mission/sibling/Store、Stop/rest/restart、
 Recovery/Rejoin/Boost/async、同一最終HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、

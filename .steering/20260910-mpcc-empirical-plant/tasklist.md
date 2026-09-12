@@ -380,3 +380,11 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] R414 exact source/current/history: geometry mismatch correctly rejects old new-source; D1job936/source423 applied wall failure at12.339999736. R415 all candidate wall failures cell476325; no infeasibility claim.
 - [x] Observe draft, scheduled submission exits, predecessor binding and normal worker/mailbox/Store without authority changes. Build109 all26, tests95 all2,585/66/source105/C5 161.
 - [ ] Committed standard r69: identify first missing fresh compatible source boundary, observe logger timing; causal fix and all M4-M6 remain.
+
+2026-09-12 initial tangent (baseline d6c5de15):
+- [x] Standard r69 lifecycle: drafts/normal worker/mailbox progress; accepted Store stalls. Both stop with no laps. One isolated startup overrun each; initialization dominates, post-publication observation scope<=0.252/0.154ms at those callbacks. No final-window violation recorded; cleanup/restoration verified.
+- [x] Exact r416 A/B/C/D, r417 cold/warm, r418 linear feasibility and r419 constraint attribution; source350 initial affine infeasibility is distinct from old-geometry dynamic/solver failures.
+- [x] R422/R423 isolated connected-native tangent comparison; r425 RED2, r426 adapter22. Setup failures420/421/424 preserved.
+- [x] Replace disconnected soft-state initial tangents. Build111all26, tests97all2587/66/source105/C5 161; tests96 changed-optimum fixture failure and r427/r428 boundaries retained.
+- [x] R429 built production library/original source complete comparison; source350 A accepts. Other source A failures remain.
+- [ ] Committed standard r70 source availability, all timing/physical/authority checks and integrated progress. All remaining M4-M6 unchanged.

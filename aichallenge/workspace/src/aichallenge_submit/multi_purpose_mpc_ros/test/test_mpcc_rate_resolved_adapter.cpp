@@ -766,3 +766,76 @@ TEST(
     maximum_cumulative_delta_rad,
     0.80 - prefix_margin, 1e-12);
 }
+
+TEST(MpccRateResolvedAdapter, SoftRacingSpeedCannotReplaceTheInitialPhysicalTrajectory)
+{
+  auto request = curved_request(20);
+  request.initial_state << 0.9194310400827391, -0.48353979878083253,
+    -0.1091854402811685, 0.2702067330722648, 0.0;
+  request.current_steering_rad = 0.32403313324426525;
+  request.current_response_steering_rad = 0.32549134574657773;
+  request.current_lateral_velocity_mps = 0.012246213131490612;
+  request.current_yaw_rate_radps = 0.07926222390056174;
+  for (auto & state : request.states) {
+    state.reference[model::kVelocityIndex] = request.initial_state[model::kVelocityIndex];
+    state.upper[model::kVelocityIndex] = 10.0;
+  }
+  const auto slow_reference = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(slow_reference);
+  for (auto & state : request.states) {
+    state.reference[model::kVelocityIndex] = 9.853461939927946;
+  }
+  const auto racing_reference = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(racing_reference);
+  EXPECT_DOUBLE_EQ(racing_reference->problem.initial_state[model::kVelocityIndex],
+    request.initial_state[model::kVelocityIndex]);
+  EXPECT_DOUBLE_EQ(racing_reference->problem.state_reference[
+    model::kStateDimension + model::kVelocityIndex], 9.853461939927946);
+  for (int stage = 0; stage < request.horizon_steps; ++stage) {
+    SCOPED_TRACE(stage);
+    const auto & slow = slow_reference->problem.linearizations[stage];
+    const auto & racing = racing_reference->problem.linearizations[stage];
+    EXPECT_TRUE(slow.state_matrix.isApprox(racing.state_matrix, 1e-12));
+    EXPECT_TRUE(slow.input_matrix.isApprox(racing.input_matrix, 1e-12));
+    EXPECT_TRUE(slow.equality_offset.isApprox(racing.equality_offset, 1e-12));
+  }
+}
+
+TEST(MpccRateResolvedAdapter, InitialTangentsShareOneNativeBodyTrajectory)
+{
+  auto request = curved_request(8);
+  request.initial_state << 0.9, -0.4, -0.1, 0.27, 0.0;
+  request.current_steering_rad = 0.3;
+  request.current_response_steering_rad = 0.31;
+  request.current_lateral_velocity_mps = 0.012;
+  request.current_yaw_rate_radps = 0.08;
+  for (auto & input : request.inputs) {
+    input.reference[adapter::kLegacyCurvatureIndex] =
+      request.curvature_reference_gain * std::tan(request.current_steering_rad) /
+      request.wheelbase_m;
+  }
+  const auto built = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(built);
+  model::StateVector body = built->problem.initial_state;
+  for (int stage = 0; stage < request.horizon_steps; ++stage) {
+    SCOPED_TRACE(stage);
+    const auto & input = request.inputs[stage];
+    const double progress_speed = std::max(0.0,
+      body[3] * std::cos(body[2]) - body[7] * std::sin(body[2]));
+    const auto exact = model::evaluate_temporal_frenet_transition(
+      model::LinearizationRequest{body[0], body[1], body[2], body[3], body[4],
+        body[5], body[6], 0.0, 0.0, progress_speed, input.path_curvature_radpm,
+        request.wheelbase_m, input.stage_dt_sec, request.minimum_frenet_denominator,
+        request.minimum_stage_dt_sec, request.maximum_stage_dt_sec, request.course_frame,
+        body[7], body[8], request.vehicle_model});
+    ASSERT_TRUE(exact);
+    model::InputVector control;
+    control << 0.0, 0.0, progress_speed;
+    const auto & tangent = built->problem.linearizations[stage];
+    const model::StateVector affine = tangent.state_matrix * body +
+      tangent.input_matrix * control - tangent.equality_offset;
+    EXPECT_TRUE(affine.isApprox(exact->next_state, 1e-8)) <<
+      "affine/native error=" << (affine - exact->next_state).transpose();
+    body = exact->next_state;
+  }
+}

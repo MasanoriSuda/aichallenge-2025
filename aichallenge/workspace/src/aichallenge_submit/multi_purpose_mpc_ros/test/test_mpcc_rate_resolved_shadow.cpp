@@ -1508,25 +1508,37 @@ TEST(
     << direct.detail;
   EXPECT_TRUE(bridge.reachable_bridge_applied) << bridge.detail;
   EXPECT_TRUE(bridge.solved) << bridge.detail;
-  EXPECT_EQ(
-    bridge.reason,
-    shadow::LatestStateFeedbackReason::PhysicalAdapterRejected)
-    << bridge.detail;
-  EXPECT_EQ(
-    bridge.physical_adapter_reason,
-    physical::RejectReason::ExactTrajectoryRejected);
-  EXPECT_NE(
-    bridge.physical_exact_reason,
-    multi_purpose_mpc_ros::race_mpcc_foundation::
-    ExactPhysicalExecutionTrajectoryReason::Accepted);
-  EXPECT_GE(bridge.physical_rejected_stage, 0);
+  // Connected initial tangents change the prepared optimum: this original
+  // fixture now passes the independent nonlinear check. Preserve the direct
+  // suffix failure and require full physical acceptance, not just a solved QP.
+  EXPECT_EQ(bridge.reason, shadow::LatestStateFeedbackReason::Accepted) << bridge.detail;
+  EXPECT_TRUE(bridge.finite);
+  EXPECT_TRUE(bridge.constraints_satisfied);
+  EXPECT_EQ(bridge.physical_adapter_reason, physical::RejectReason::None);
+  EXPECT_EQ(bridge.physical_exact_reason,
+    multi_purpose_mpc_ros::race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted);
+  ASSERT_NE(bridge.execution_artifact, nullptr);
+  EXPECT_EQ(bridge.physical_rejected_stage, -1);
   EXPECT_TRUE(multi_sqp.latest_state_multi_sqp_audit_requested);
-  EXPECT_EQ(multi_sqp.latest_state_multi_sqp_attempt_count, 2U);
+  EXPECT_EQ(multi_sqp.latest_state_multi_sqp_attempt_count, 1U);
   EXPECT_EQ(multi_sqp.latest_state_multi_sqp_solve_count, 1U);
-  EXPECT_EQ(multi_sqp.reason, shadow::LatestStateFeedbackReason::SolveRejected)
-    << multi_sqp.detail;
-  EXPECT_NE(multi_sqp.detail.find("maximum iterations reached"), std::string::npos);
-  EXPECT_EQ(multi_sqp.execution_artifact, nullptr);
+  EXPECT_EQ(multi_sqp.reason, shadow::LatestStateFeedbackReason::Accepted) << multi_sqp.detail;
+  ASSERT_NE(multi_sqp.execution_artifact, nullptr);
+
+  // The nearby state still violates the original QP constraints. A connected
+  // seed is neither a guarantee of feasibility nor permission to accept a
+  // failed solve. Nonlinear wall-departure rejection is independently covered
+  // by MpccRateResolvedPhysicalAdapter.RejectsLinearizedStatesThatHideNonlinearWallDeparture.
+  auto outside = request;
+  outside.initial_state = execution::PredictedState{
+    0.0, 0.0, -0.6, 2.0, 0.04, -0.3, -0.2, 1.0, 0.0};
+  shadow::LatestStateFeedbackSolverContext rejected_context;
+  const auto rejected = rejected_context.evaluate_reachable_bridge_time_aligned(outside);
+  EXPECT_TRUE(rejected.reachable_bridge_applied);
+  EXPECT_EQ(rejected.reason, shadow::LatestStateFeedbackReason::SolveRejected) << rejected.detail;
+  EXPECT_FALSE(rejected.solved);
+  EXPECT_EQ(rejected.execution_artifact, nullptr);
+
 }
 
 TEST(

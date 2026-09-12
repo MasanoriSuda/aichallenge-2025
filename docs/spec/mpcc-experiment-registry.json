@@ -1249,6 +1249,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r68-source-supply-evidence.json",
       "replay_ready": true,
       "reason": "r68 exact source/current-history context and wall rejection; source lifecycle observation pending live diagnosis."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-initial-tangent",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/initial-tangent-evidence.json",
+      "replay_ready": true,
+      "reason": "r69 exact initial QP causal comparison and connected-native producer repair; other sources remain separate."
     }
   ],
   "experiments": [
@@ -15009,6 +15015,86 @@
       "production_impact": "Observation only; source repair is not yet proposed.",
       "deleted_code": [],
       "revisit_condition": "New source/worker/Store/draft observation supports one producer cause; rejected context/clock bypasses remain forbidden."
+    },
+    {
+      "experiment_id": "20260912-nine-state-initial-tangent-r69-source-supply",
+      "baseline_commit": "d6c5de15d66d3d19f9a45b2684e940747851183a",
+      "snapshot_ids": [
+        "20260912-nine-state-initial-tangent"
+      ],
+      "hypothesis": "Disconnected soft-state initial tangents create an infeasible initial QP after geometry changes.",
+      "changed_dimension": "Initial tangent producer only; fixed world/cost/constraints/solver/physical and publication contracts.",
+      "result": "rejected",
+      "reason": "Standard motion then both stop without laps. Worker/mailbox progress, accepted Store stalls. One isolated startup overrun each; dominant problem initialization. Not a worker hang.",
+      "production_impact": "Connected native initial tangents locally validated; standardr70 and integrated M4-M6 pending.",
+      "deleted_code": [
+        "Disconnected per-stage soft-state initial dynamics"
+      ],
+      "revisit_condition": "Changed source/initialization or new physical evidence. Other recorded dynamic/solver/authority failures are not relabeled, no context/clock bypass or point-proof reuse."
+    },
+    {
+      "experiment_id": "20260912-nine-state-initial-tangent-r416-r419",
+      "baseline_commit": "d6c5de15d66d3d19f9a45b2684e940747851183a",
+      "snapshot_ids": [
+        "20260912-nine-state-initial-tangent"
+      ],
+      "hypothesis": "Disconnected soft-state initial tangents create an infeasible initial QP after geometry changes.",
+      "changed_dimension": "Initial tangent producer only; fixed world/cost/constraints/solver/physical and publication contracts.",
+      "result": "inconclusive",
+      "reason": "Two sources have feasible C/D; all methods fail new-geometry350. Exact warm/cold rejects, numerical linear feasibility exposes initial affine infeasibility, not physical infeasibility.",
+      "production_impact": "Connected native initial tangents locally validated; standardr70 and integrated M4-M6 pending.",
+      "deleted_code": [
+        "Disconnected per-stage soft-state initial dynamics"
+      ],
+      "revisit_condition": "Changed source/initialization or new physical evidence. Other recorded dynamic/solver/authority failures are not relabeled, no context/clock bypass or point-proof reuse."
+    },
+    {
+      "experiment_id": "20260912-nine-state-initial-tangent-r420-r421-r424-setup",
+      "baseline_commit": "d6c5de15d66d3d19f9a45b2684e940747851183a",
+      "snapshot_ids": [
+        "20260912-nine-state-initial-tangent"
+      ],
+      "hypothesis": "Disconnected soft-state initial tangents create an infeasible initial QP after geometry changes.",
+      "changed_dimension": "Initial tangent producer only; fixed world/cost/constraints/solver/physical and publication contracts.",
+      "result": "inconclusive",
+      "reason": "Diagnostic compile member names, missing context reseal and gtest include mismatch; corrected in422/423/425, never counted as solver outcomes.",
+      "production_impact": "Connected native initial tangents locally validated; standardr70 and integrated M4-M6 pending.",
+      "deleted_code": [
+        "Disconnected per-stage soft-state initial dynamics"
+      ],
+      "revisit_condition": "Changed source/initialization or new physical evidence. Other recorded dynamic/solver/authority failures are not relabeled, no context/clock bypass or point-proof reuse."
+    },
+    {
+      "experiment_id": "20260912-nine-state-initial-tangent-r422-r423",
+      "baseline_commit": "d6c5de15d66d3d19f9a45b2684e940747851183a",
+      "snapshot_ids": [
+        "20260912-nine-state-initial-tangent"
+      ],
+      "hypothesis": "Disconnected soft-state initial tangents create an infeasible initial QP after geometry changes.",
+      "changed_dimension": "Initial tangent producer only; fixed world/cost/constraints/solver/physical and publication contracts.",
+      "result": "accepted",
+      "reason": "Same hard scene/cost/budget with connected tangents:350 complete A/B/C/D/G accepts. Other original A failures remain. New causal formulation evidence satisfies old coherent-tangent revisit condition.",
+      "production_impact": "Connected native initial tangents locally validated; standardr70 and integrated M4-M6 pending.",
+      "deleted_code": [
+        "Disconnected per-stage soft-state initial dynamics"
+      ],
+      "revisit_condition": "Changed source/initialization or new physical evidence. Other recorded dynamic/solver/authority failures are not relabeled, no context/clock bypass or point-proof reuse."
+    },
+    {
+      "experiment_id": "20260912-nine-state-initial-tangent-r425-r429-build111-tests97",
+      "baseline_commit": "d6c5de15d66d3d19f9a45b2684e940747851183a",
+      "snapshot_ids": [
+        "20260912-nine-state-initial-tangent"
+      ],
+      "hypothesis": "Disconnected soft-state initial tangents create an infeasible initial QP after geometry changes.",
+      "changed_dimension": "Initial tangent producer only; fixed world/cost/constraints/solver/physical and publication contracts.",
+      "result": "accepted",
+      "reason": "RED2 then22adapter; build11126packages/tests972587records/66/source105. Built production-library source350 complete A accepts. Tests96 changed-optimum fixture failure preserved with explicit positive and nearby reject.",
+      "production_impact": "Connected native initial tangents locally validated; standardr70 and integrated M4-M6 pending.",
+      "deleted_code": [
+        "Disconnected per-stage soft-state initial dynamics"
+      ],
+      "revisit_condition": "Changed source/initialization or new physical evidence. Other recorded dynamic/solver/authority failures are not relabeled, no context/clock bypass or point-proof reuse."
     }
   ]
 }

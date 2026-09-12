@@ -1,23 +1,22 @@
 # Current status and remaining completion work
 
 2026-09-12 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。標準r68で実移動、停止後の候補供給は未解明。次は観測付き標準r69。**
+**全体未完。r69の新経路D1source350の初期線形化を修正。次は固定した標準r70。**
 
-165de6edの中間長候補でD1は61回・1.5秒の連続加速、最大1.17m/s。D2は移動中30回、
-最大0.56m/s。両車とも停止し未完走。標準描画は今回起動できたが、直前のmonitor復帰と
-前回の停止原因の因果は未確定。全callback4123/4096のoverrunは0、元の最終公開窓違反も
-記録上0。既存成果物とDLLの復元、コンテナ終了を確認した。
+標準r69は両車が短く移動して停止し未完走。draft/worker/mailboxは進み、Storeへの
+認証済みsourceの追加が止まった。経路の不一致は正当な拒否。D1新経路source350の
+初回QPは元の線形制約で不成立。R416–R419の方式比較・warm/cold・線形診断と
+R422/R423の同一場面比較で、切り離された目標状態を初期線形化に使うproducerを特定。
 
-R414は新規候補の旧経路文脈の正当な拒否と、D1job936/source423の元入力による
-壁拒否を再現。R415は4候補の拒否セル476325を記録し、物理的不成立とは断定しない。
-停止後の新規source欠落を区別する観測を追加。draft・選別・予定・worker投入・
-前段束縛・worker/mailbox/Store統計を既存ログ間隔で記録し、制御権限や合格条件は維持。
-Build109全26、tests95全2,585/66（C5 161、source105）。標準r69で観測到達と周期を検証する。
+初期物理状態からネイティブ車体モデルでつないだ状態列へ変更。目標速度・軌道の
+コスト、全制約・予算・証明・単一制御権限は維持。NativeRED2/adapter22、
+Build111全26、tests97全2,587/66（source105、C5 161）、R429本番libraryの
+元source350に対する候補/完全停止証明が合格。Tests96の旧診断期待とsetup失敗は保存。
+他の旧経路sourceの直接候補失敗、D2後続新経路の未採取境界は未解決。
 
-供給producerの原因確定・回帰と修正、全intent/Mission/sibling/Store、実Stop/rest/restart、
-Recovery/Rejoin/Boost/async、同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、
-同一tar/image/evalは未完。
-[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r68-source-supply-design.md)、
+全intent/Mission/sibling/Store、実Stop/rest/restart、Recovery/Rejoin/Boost/async、
+同一finalHEADの単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/evalは未完。
+[現在の設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/initial-tangent-design.md)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)。
 
 ## Superseded checkpoint and historical evidence

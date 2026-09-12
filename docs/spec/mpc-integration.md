@@ -4872,3 +4872,11 @@ r63D2の集合外拒否は維持。全26build、2,584test記録、12再生場面
 単一の非同期取引ではない。制御候補や権限・時計・壁条件は変えない。Build109全26、
 tests95全2,585記録/66group。r69で供給境界と実周期を確認する。
 [供給境界の観測](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r68-source-supply-design.md)。
+
+2026-09-12 標準r69でworkerの停止は観測されず、新しい経路のD1source350では初回QPの
+線形制約が不成立だった。同じコスト・制約・予算で、初期物理状態から車両モデルで
+つないだ初期線形化は候補と完全停止の証明を通る。初期線形化をこの一貫した状態列へ
+置き換え、目標速度・軌道は元のコストに維持する。初期値自体に制御権限はなく、後段の
+SQP、壁・相手車・車体・停止・適用入力・公開時刻の確認は維持。Build111全26、
+tests97全2,587/66。別の保存場面のsolver失敗と全体受入れは未解決。標準r70で確認する。
+[初期線形化の根拠と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/initial-tangent-design.md)。

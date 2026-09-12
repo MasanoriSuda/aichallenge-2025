@@ -534,41 +534,14 @@ std::optional<Result> build(
     }
   }
 
-  problem.linearizations.reserve(static_cast<std::size_t>(horizon));
   const bool braking_feasibility_valid = !request.maximum_braking_feasibility ||
     is_braking_feasibility_request(request);
   for (int stage = 0; stage < horizon; ++stage) {
     const auto index = static_cast<std::size_t>(stage);
-    const auto & legacy_state = request.states[index];
     const auto & legacy_input = request.inputs[index];
-    const auto state_reference = stage == 0 ?
-      request.initial_state : legacy_state.reference;
     const int input_offset = model::kInputDimension * stage;
     const double steering_reference =
       result.steering_reference_rad[index];
-    const auto virtual_speed_tangent = select_virtual_speed_tangent(
-      request.course_frame, state_reference[model::kProgressIndex],
-      legacy_input.stage_dt_sec, legacy_input.reference[2],
-      legacy_input.lower[2], legacy_input.upper[2]);
-    if (!virtual_speed_tangent) {
-      return reject(RejectReason::LinearizationUnavailable, stage);
-    }
-    const auto linearization = model::linearize_temporal_frenet(
-      model::LinearizationRequest{
-        state_reference[0], state_reference[1], state_reference[2],
-        state_reference[3], state_reference[4], steering_reference,
-        response_steering_reference_rad[index],
-        legacy_input.reference[0], 0.0, *virtual_speed_tangent,
-        legacy_input.path_curvature_radpm, request.wheelbase_m,
-        legacy_input.stage_dt_sec, request.minimum_frenet_denominator,
-        request.minimum_stage_dt_sec, request.maximum_stage_dt_sec,
-        request.course_frame, lateral_velocity_reference_mps[index],
-        yaw_rate_reference_radps[index], request.vehicle_model});
-    if (!linearization.has_value()) {
-      return reject(RejectReason::LinearizationUnavailable, stage);
-    }
-    problem.linearizations.push_back(linearization.value());
-
     problem.input_reference[input_offset + model::kAccelerationIndex] =
       legacy_input.reference[0];
     problem.input_reference[input_offset + model::kSteeringRateIndex] = 0.0;
@@ -654,6 +627,60 @@ std::optional<Result> build(
     problem.input_weight[input_offset + model::kSteeringRateIndex] =
       curvature_change_weight * jacobian * jacobian *
       legacy_input.stage_dt_sec * legacy_input.stage_dt_sec;
+  }
+  // A soft racing reference can jump from an initial low speed to the target
+  // speed in one stage. Such disconnected states are not a physical initial
+  // trajectory and can make the first affine QP infeasible before refinement.
+  // Keep every objective and bound above, but build all initial tangents along
+  // one native trajectory. This seed has no execution or certificate authority.
+  auto tangent_state = problem.initial_state;
+  problem.linearizations.reserve(static_cast<std::size_t>(horizon));
+  for (int stage = 0; stage < horizon; ++stage) {
+    const auto & semantic_input = request.inputs[static_cast<std::size_t>(stage)];
+    const int input = stage * model::kInputDimension;
+    const double dt = semantic_input.stage_dt_sec;
+    const double acceleration = std::clamp(
+      problem.input_reference[input + model::kAccelerationIndex],
+      problem.input_lower[input + model::kAccelerationIndex],
+      problem.input_upper[input + model::kAccelerationIndex]);
+    const auto & prefix = *problem.steering_rate_prefix_bounds;
+    const double rate_lower = std::max(
+      problem.input_lower[input + model::kSteeringRateIndex],
+      (prefix.minimum_cumulative_delta_rad + request.current_steering_rad -
+      tangent_state[model::kSteeringIndex]) / dt);
+    const double rate_upper = std::min(
+      problem.input_upper[input + model::kSteeringRateIndex],
+      (prefix.maximum_cumulative_delta_rad + request.current_steering_rad -
+      tangent_state[model::kSteeringIndex]) / dt);
+    if (rate_lower > rate_upper) {
+      return reject(RejectReason::LinearizationUnavailable, stage);
+    }
+    const double steering_rate = std::clamp(0.0, rate_lower, rate_upper);
+    const double projected_speed =
+      tangent_state[model::kVelocityIndex] * std::cos(tangent_state[model::kHeadingIndex]) -
+      tangent_state[model::kLateralVelocityIndex] * std::sin(tangent_state[model::kHeadingIndex]);
+    const double progress_lower = problem.input_lower[input + model::kVirtualProgressSpeedIndex];
+    const double progress_upper = problem.input_upper[input + model::kVirtualProgressSpeedIndex];
+    const auto virtual_speed = select_virtual_speed_tangent(
+      request.course_frame, tangent_state[model::kProgressIndex], dt,
+      std::clamp(projected_speed, progress_lower, progress_upper), progress_lower, progress_upper);
+    if (!virtual_speed) {
+      return reject(RejectReason::LinearizationUnavailable, stage);
+    }
+    const model::LinearizationRequest tangent_request{
+      tangent_state[0], tangent_state[1], tangent_state[2], tangent_state[3],
+      tangent_state[4], tangent_state[5], tangent_state[6], acceleration,
+      steering_rate, *virtual_speed, semantic_input.path_curvature_radpm,
+      request.wheelbase_m, dt, request.minimum_frenet_denominator,
+      request.minimum_stage_dt_sec, request.maximum_stage_dt_sec, request.course_frame,
+      tangent_state[7], tangent_state[8], request.vehicle_model};
+    const auto next = model::evaluate_temporal_frenet_transition(tangent_request);
+    const auto linearization = model::linearize_temporal_frenet(tangent_request);
+    if (!next || !linearization) {
+      return reject(RejectReason::LinearizationUnavailable, stage);
+    }
+    problem.linearizations.push_back(*linearization);
+    tangent_state = next->next_state;
   }
   return result;
 }

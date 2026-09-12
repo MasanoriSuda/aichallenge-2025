@@ -1,4 +1,5 @@
 #include "multi_purpose_mpc_ros/recovery_footprint.hpp"
+#include "fixtures/mpcc_r75_initial_corridor.hpp"
 
 #include <gtest/gtest.h>
 
@@ -12,6 +13,48 @@ namespace
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 
 constexpr double kPi = 3.14159265358979323846;
+
+TEST(RecoveryFootprintInitialCorridor, ActualSourcePosePreservesClearInitialState)
+{
+  const auto grid = mpcc_r75_corridor_fixture::grid();
+  const recovery::FootprintExtents footprint{1.615, 0.51, 0.768, 0.768, 0.05};
+  const recovery::Pose2D waypoint{89630.30642205999, 43130.09448658, 2.3341359219410047};
+  constexpr double lateral = 0.8717846581278238;
+  constexpr double lag = -0.4015398691692103;
+  constexpr double heading = 0.11711843027052682;
+  constexpr double clearance = 0.2;
+  constexpr double guard = 0.001;
+  const auto interval = [&](const recovery::Pose2D & base, const double offset,
+      const recovery::FootprintExtents & body) {
+      const auto runs = recovery::find_clear_lateral_runs_with_heading(
+        grid, body, base, -4.0, 2.0, offset, clearance, 0.05);
+      return recovery::select_lateral_clear_interval(runs, -4.0, 2.0, lateral, guard);
+    };
+  auto bucket_body = footprint;
+  const double radius = std::hypot(1.615 + 0.05, 0.768 + 0.05 + clearance);
+  bucket_body.margin_m += 2.0 * radius * std::sin(0.25 * 0.025);
+  const auto nominal = interval(waypoint, std::round(heading / 0.025) * 0.025, bucket_body);
+  ASSERT_TRUE(nominal.valid && nominal.feasible);
+  EXPECT_FALSE(nominal.preferred_lateral_contained);
+
+  const recovery::Pose2D actual_base{
+    waypoint.x_m + lag * std::cos(waypoint.yaw_rad),
+    waypoint.y_m + lag * std::sin(waypoint.yaw_rad), waypoint.yaw_rad};
+  const auto actual = interval(actual_base, heading, footprint);
+  ASSERT_TRUE(actual.valid && actual.feasible);
+  EXPECT_TRUE(actual.preferred_lateral_contained);
+  EXPECT_GT(actual.upper_lateral_offset_m, lateral);
+  auto hard_body = footprint;
+  hard_body.left_extent_m += clearance;
+  hard_body.right_extent_m += clearance;
+  const auto exact = recovery::sample_footprint(grid, hard_body,
+    recovery::Pose2D{
+      actual_base.x_m - lateral * std::sin(waypoint.yaw_rad),
+      actual_base.y_m + lateral * std::cos(waypoint.yaw_rad), waypoint.yaw_rad + heading});
+  ASSERT_TRUE(exact.valid);
+  EXPECT_FALSE(exact.out_of_map);
+  EXPECT_TRUE(exact.contact_cells.empty());
+}
 
 recovery::OccupancyGrid make_grid(
   const std::size_t width = 20U, const std::size_t height = 20U,

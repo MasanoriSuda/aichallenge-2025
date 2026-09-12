@@ -3786,3 +3786,20 @@ def test_wall_clock_watchdog_cannot_enter_normal_control():
     forced = control[control.index("if (forced_failsafe)"):control.index("const bool missing_odometry")]
     assert "publish_failsafe_command(control_time, forced_failsafe);" in forced
     assert "return;" in forced
+
+
+def test_initial_physical_corridor_uses_semantic_fixed_waypoint_pose() -> None:
+    start = SOURCE.index("std::optional<std::pair<double, double>> current_physical_wall_interval;")
+    end = SOURCE.index("const bool overtake_wall_profile_available", start)
+    initial = SOURCE[start:end]
+    assert "find_cached_physical_wall_envelope(" not in initial
+    assert "project_planar_pose_to_frenet(" in initial
+    assert "model->temporal_state.x" in initial
+    assert "model->temporal_state.y" in initial
+    assert "model->temporal_state.psi" in initial
+    assert "initial_frenet->lag_m" in initial
+    assert "initial_frenet->heading_offset_rad" in initial
+    assert "initial_frenet->lateral_m" in initial
+    assert "find_clear_lateral_runs_with_heading(" in initial
+    assert "progress_execution_physical_wall_clearance_m, sample_step_m" in initial
+    assert "kInitialWallBoundaryGuardM = 0.001" in initial

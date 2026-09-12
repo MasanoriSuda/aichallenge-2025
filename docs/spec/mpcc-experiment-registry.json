@@ -1285,6 +1285,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/course-support-evidence.json",
       "replay_ready": true,
       "reason": "Exact solved QP and immutable preceding static map support, native helper and worker scalar ownership."
+    },
+    {
+      "snapshot_id": "20260912-nine-state-r75-initial-corridor",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r75-initial-corridor-evidence.json",
+      "replay_ready": true,
+      "reason": "D1 original artifact construction and D2Start context break recorded separately."
     }
   ],
   "experiments": [
@@ -15941,6 +15947,94 @@
       "production_impact": "Static support helper/producer only; all prepared candidate variations remain diagnostic.",
       "deleted_code": [],
       "revisit_condition": "Compare further only with changed candidate/constraint representation and same immutable full proof."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r75-initial-corridor-r75",
+      "baseline_commit": "0bd0870601367a4956a4480493cd00e94cf5870d",
+      "snapshot_ids": [
+        "20260912-nine-state-r75-initial-corridor"
+      ],
+      "hypothesis": "The physical initial corridor must describe the semantic source pose; epoch changes need independent current-proof handoff.",
+      "changed_dimension": "Standard dev2 on0bd08706",
+      "result": "rejected",
+      "reason": "D1stops near launch; D2Start2274invalidates source1784 before physics. Later2285deadline rejected. No laps.",
+      "production_impact": "Diagnostic only at capture; initial width producer repair is tracked separately.",
+      "deleted_code": [],
+      "revisit_condition": "Causal initial-width and separate current speed/context handoff repair."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r75-initial-corridor-r470",
+      "baseline_commit": "0bd0870601367a4956a4480493cd00e94cf5870d",
+      "snapshot_ids": [
+        "20260912-nine-state-r75-initial-corridor"
+      ],
+      "hypothesis": "The physical initial corridor must describe the semantic source pose; epoch changes need independent current-proof handoff.",
+      "changed_dimension": "Generic external saved-primal proof",
+      "result": "inconclusive",
+      "reason": "Old and actual-pose initial map both fully physically certify; helper omits production initial map assignment. Does not reproduce artifact construction.",
+      "production_impact": "Diagnostic only at capture; initial width producer repair is tracked separately.",
+      "deleted_code": [],
+      "revisit_condition": "Invoke actual production build_execution_artifact."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r75-initial-corridor-r471",
+      "baseline_commit": "0bd0870601367a4956a4480493cd00e94cf5870d",
+      "snapshot_ids": [
+        "20260912-nine-state-r75-initial-corridor"
+      ],
+      "hypothesis": "The physical initial corridor must describe the semantic source pose; epoch changes need independent current-proof handoff.",
+      "changed_dimension": "Production artifact diagnostic wrapper setup",
+      "result": "inconclusive",
+      "reason": "Compile failed: source.snapshot_sec is stored in source.identity.snapshot_sec. No candidate.",
+      "production_impact": "Diagnostic only at capture; initial width producer repair is tracked separately.",
+      "deleted_code": [],
+      "revisit_condition": "Corrected in distinct R472."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r75-initial-corridor-r472",
+      "baseline_commit": "0bd0870601367a4956a4480493cd00e94cf5870d",
+      "snapshot_ids": [
+        "20260912-nine-state-r75-initial-corridor"
+      ],
+      "hypothesis": "The physical initial corridor must describe the semantic source pose; epoch changes need independent current-proof handoff.",
+      "changed_dimension": "Actual production artifact builder with original saved primal",
+      "result": "accepted",
+      "reason": "Original initial map rejects invalid-lateral-corridor; actual-pose map accepts. Identical2.5676097725746416e-7 row residual and unchanged physical controls certify in both.",
+      "production_impact": "Diagnostic only at capture; initial width producer repair is tracked separately.",
+      "deleted_code": [],
+      "revisit_condition": "Fix initial width producer using semantic source position/heading, then tests/current runtime."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r75-initial-corridor-r473",
+      "baseline_commit": "0bd0870601367a4956a4480493cd00e94cf5870d",
+      "snapshot_ids": [
+        "20260912-nine-state-r75-initial-corridor"
+      ],
+      "hypothesis": "The initial corridor must describe the semantic source pose under unchanged physical limits.",
+      "changed_dimension": "Same static-grid native producer regression",
+      "result": "accepted",
+      "reason": "Original bucket excludes x0; actual lag/heading interval includes it with unchanged hard footprint and guard. One native test and source106 pass.",
+      "production_impact": "Initial physical-width producer only; no numerical or command authority change.",
+      "deleted_code": [
+        "Initial find_cached_physical_wall_envelope call"
+      ],
+      "revisit_condition": "Changed physical pose/model/map or source producer; integrated live validation remains."
+    },
+    {
+      "experiment_id": "20260912-nine-state-r75-initial-corridor-r474",
+      "baseline_commit": "0bd0870601367a4956a4480493cd00e94cf5870d",
+      "snapshot_ids": [
+        "20260912-nine-state-r75-initial-corridor"
+      ],
+      "hypothesis": "The initial corridor must describe the semantic source pose under unchanged physical limits.",
+      "changed_dimension": "Current query API and saved production artifact",
+      "result": "accepted",
+      "reason": "Representative scalar bounds[-4,2]; old artifact rejects, actual pose interval accepts and identical external full proof passes. Timing is an unloaded diagnostic, not a runtime bound. {\"query_median_ms\": 0.607659, \"query_p95_ms\": 0.611306, \"query_max_ms\": 0.659247, \"query_checked_poses\": 121}",
+      "production_impact": "Initial physical-width producer only; no numerical or command authority change.",
+      "deleted_code": [
+        "Initial find_cached_physical_wall_envelope call"
+      ],
+      "revisit_condition": "Changed physical pose/model/map or source producer; integrated live validation remains."
     }
   ]
 }

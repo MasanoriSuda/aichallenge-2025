@@ -22380,15 +22380,35 @@ struct MPC
               model->reference_path->get_waypoint(current_waypoint);
             const double sample_step_m = std::clamp(
               0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10);
-            const auto interval = find_cached_physical_wall_envelope(
-              current_waypoint,
-              recovery_footprint::Pose2D{
+            const auto initial_frenet = mpcc_contract::project_planar_pose_to_frenet(
+              mpcc_contract::PlanarPose{
+                model->temporal_state.x, model->temporal_state.y,
+                model->temporal_state.psi},
+              mpcc_contract::PlanarPose{
                 current_waypoint_pose.x, current_waypoint_pose.y,
-                current_waypoint_pose.psi},
-              scalar_lower_m, scalar_upper_m,
-              scalar_lower_m, scalar_upper_m,
-              model->spatial_state.e_y, model->spatial_state.e_psi,
-              progress_execution_physical_wall_clearance_m, sample_step_m);
+                current_waypoint_pose.psi});
+            recovery_footprint::LateralClearIntervalResult interval;
+            if (initial_frenet) {
+              // Match the semantic source pose in build_extended_progress_problem.
+              // A nominal waypoint/heading bucket may exclude a clear actual x0.
+              const double initial_lag_m =
+                (track_cruise_shadow_requested || follow_shadow_requested ||
+                rejoin_shadow_requested || (progress_execution_context_active &&
+                mpcc_contract::canonical_normal_intent_requires_execution_side(
+                  problem_intent))) ? initial_frenet->lag_m : 0.0;
+              const auto runs = recovery_footprint::find_clear_lateral_runs_with_heading(
+                *overtake_static_wall_grid_, overtake_static_wall_footprint_,
+                recovery_footprint::Pose2D{
+                  current_waypoint_pose.x + initial_lag_m * std::cos(current_waypoint_pose.psi),
+                  current_waypoint_pose.y + initial_lag_m * std::sin(current_waypoint_pose.psi),
+                  current_waypoint_pose.psi},
+                scalar_lower_m, scalar_upper_m, initial_frenet->heading_offset_rad,
+                progress_execution_physical_wall_clearance_m, sample_step_m);
+              constexpr double kInitialWallBoundaryGuardM = 0.001;
+              interval = recovery_footprint::select_lateral_clear_interval(
+                runs, scalar_lower_m, scalar_upper_m, initial_frenet->lateral_m,
+                kInitialWallBoundaryGuardM);
+            }
             if (
               interval.valid && interval.feasible &&
               std::isfinite(interval.lower_lateral_offset_m) &&

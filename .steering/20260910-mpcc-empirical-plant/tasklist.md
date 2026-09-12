@@ -432,3 +432,12 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 - [x] Native465 four tests; source105; build115 all26; package102 all2596; R469 built-library exact proof A/B.
 - [x] Preserve R466 source-test selection and R467 diagnostic namespace setup failures.
 - [ ] Standard dev2-r75 dynamic validation, earliest remaining failure and full M4–M6 acceptance.
+
+2026-09-12 r75 initial corridor / Start handoff:
+- [x] Run standard dev2-r75 on0bd08706, build115/tests102. No laps; rejected.
+- [x] Record D2Start2274 source1784 context invalidation separately from later2285 deadline.
+- [x] R472 actual production artifact builder reproduces D1source747 false initial-width rejection.
+- [x] Replace initial width query with semantic actual pose; native473/source106 pass.
+- [x] Build116 all26/package103 all2598, R474 saved artifact/physical proof and native query timing.
+- [ ] Standard dev2-r76 on the committed source.
+- [ ] Separate speed/context handoff and remaining full M4–M6 completion.

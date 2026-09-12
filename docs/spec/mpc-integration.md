@@ -79,6 +79,14 @@ virtual speedを意味上の初期progressから積分する全区間を含め�
 元の完全な物理証明が成立した。build115全26package、tests102全2596件は合格。
 実走受入れは未完。[範囲計算と再生の根拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/course-support-design.md)。
 
+初期通路幅の修正候補は、9状態sourceと同じ固定waypointへの実姿勢投影を使う。
+初期lagとheadingを反映した車体で既存の地図範囲を調べ、元の0.001m境界guardを保つ。
+初期点のキャッシュ用姿勢近似を外し、未来の幅・壁・他車・Stop証明は維持する。
+r75 D1の通常artifact生成拒否はR472で同じQP解から再現済み。
+修正候補のbuild116全26、tests103全2598、source106、実APIによるR474再生が合格。
+単独測定の初期幅計算は中央値0.608ms。実走時の時間上限や完走の保証ではない。
+[初期通路幅の根拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/initial-corridor-design.md)。
+
 受信入力を表す共有数値API `mpcc_applied_input_prediction` を追加した。
 同一時刻の公開履歴を全件保持し、全予測区間の因果的な入力coverageを要求する。
 元観測から共通float32指令列へ進め、全応答のモデル内静止までを囲む。

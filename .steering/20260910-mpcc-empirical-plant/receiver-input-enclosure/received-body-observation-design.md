@@ -66,3 +66,9 @@ original captured decision while retaining its raw components; compare those
 explicitly instead of rewriting either epoch. Restore protected results and
 measure callback costs. Physical reconstruction/contact repair and allM4–M6
 remain open; this observation change does not claim race acceptance.
+
+R7 observation completed with20unique valid decision captures, all decision
+associations exact, no callback above25ms and no observed send-window violation.
+It stopped inReady without restart/laps. R563–R566 distinguish receiver availability
+from physical accuracy and rule out initial desired as a nominal prediction cause.
+[Run audit and next physical comparison](received-single-r7-audit.md).

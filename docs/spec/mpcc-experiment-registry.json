@@ -1375,6 +1375,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-body-observation-evidence.json",
       "replay_ready": true,
       "reason": "Bounded optional observation ownership tests and fresh unchanged historical current/guard replay; live observation pending."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-single-r7-audit",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-single-r7-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact received-queue/source association and same-bag timing; source snapshots present, final stationary1012snapshot unavailable. No integrated race acceptance."
     }
   ],
   "experiments": [
@@ -17507,6 +17513,76 @@
       "production_impact": "Optional diagnostic queue ownership and serialization only; no component selection/model/authority/physical or timing gate change.",
       "deleted_code": [],
       "revisit_condition": "Fresh received-history, association or diagnostic regression evidence; no repeat of unchanged setup failures or promotion as race acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-single-r7-audit-r563",
+      "baseline_commit": "fe976b39be5e79f75501cc4bae9a5d8bb349b63a",
+      "snapshot_ids": [
+        "20260913-nine-state-single-r7-audit"
+      ],
+      "hypothesis": "Separate causal received-state reconstruction from contact/prediction error",
+      "changed_dimension": "Actual per-decision body histories and association audit",
+      "result": "accepted",
+      "reason": "26valid serialized occurrences/20unique decisions,3missing programme records remain missing.17occurrences have newer received nonfuture velocity/tire,10IMU. All recorded decision associations match; raw pose/body sensor components match their source requests.7programme association differences are now/command-derived desired only.4239callbacks max19.778002ms,480publications with no before/after deadline violation. No moving final override; Ready-only stationary loss1012 after final actual1011, exact1012snapshot unavailable because earlier stationary779slot consumed.",
+      "production_impact": "Observation productionfe976b39 unchanged. Diagnostic reconstruction cannot control the car.",
+      "deleted_code": [],
+      "revisit_condition": "New same-epoch physical truth or demonstrated reconstruction/producer negative; no repeat of an unchanged initial desired-only hypothesis."
+    },
+    {
+      "experiment_id": "20260913-nine-state-single-r7-audit-r564",
+      "baseline_commit": "fe976b39be5e79f75501cc4bae9a5d8bb349b63a",
+      "snapshot_ids": [
+        "20260913-nine-state-single-r7-audit"
+      ],
+      "hypothesis": "Separate causal received-state reconstruction from contact/prediction error",
+      "changed_dimension": "Same-bag public source timing and physical velocity status",
+      "result": "accepted",
+      "reason": "Same D1 bag, Ready7.7–13.5s: velocity/tire28.5714Hz,IMU20Hz,pose50Hz,trajectory1Hz,command40Hz,clock200Hz. Maximum publicu1.039849758 at9.869999779. Later rest observed before stationary loss; no Start/laps or accepted restart. No private physical pose-epoch truth or application trace.",
+      "production_impact": "Observation productionfe976b39 unchanged. Diagnostic reconstruction cannot control the car.",
+      "deleted_code": [],
+      "revisit_condition": "New same-epoch physical truth or demonstrated reconstruction/producer negative; no repeat of an unchanged initial desired-only hypothesis."
+    },
+    {
+      "experiment_id": "20260913-nine-state-single-r7-audit-r565",
+      "baseline_commit": "fe976b39be5e79f75501cc4bae9a5d8bb349b63a",
+      "snapshot_ids": [
+        "20260913-nine-state-single-r7-audit"
+      ],
+      "hypothesis": "Separate causal received-state reconstruction from contact/prediction error",
+      "changed_dimension": "Freeze received-endpoint interpolation as offline diagnostic",
+      "result": "accepted",
+      "reason": "5invalid receipt/order/owner/size cases reject; supported bracket/no extrapolation preserve explicit raw endpoints.21serialized variants/20decisions fromR7 process; no physical scoring or production adoption. Original/derived states remain separate, clock-newer inputs excluded. Freeze helper/protocol beforeforce-r3.",
+      "production_impact": "Observation productionfe976b39 unchanged. Diagnostic reconstruction cannot control the car.",
+      "deleted_code": [],
+      "revisit_condition": "New same-epoch physical truth or demonstrated reconstruction/producer negative; no repeat of an unchanged initial desired-only hypothesis."
+    },
+    {
+      "experiment_id": "20260913-nine-state-single-r7-audit-r566",
+      "baseline_commit": "fe976b39be5e79f75501cc4bae9a5d8bb349b63a",
+      "snapshot_ids": [
+        "20260913-nine-state-single-r7-audit"
+      ],
+      "hypothesis": "Separate causal received-state reconstruction from contact/prediction error",
+      "changed_dimension": "Rule out changed initial command-derived desired steering as nominal prediction cause",
+      "result": "accepted",
+      "reason": "7saved programme occurrences re-evaluate original full published histories with original versus pre-send desired initial value. Every current/control/intermediate nominal state is exactly equal. Positive-interval predict_schedule sets desired from applied historical wire before integration; no producer repair on this field alone.",
+      "production_impact": "Observation productionfe976b39 unchanged. Diagnostic reconstruction cannot control the car.",
+      "deleted_code": [],
+      "revisit_condition": "New same-epoch physical truth or demonstrated reconstruction/producer negative; no repeat of an unchanged initial desired-only hypothesis."
+    },
+    {
+      "experiment_id": "20260913-nine-state-single-r7-audit-dynamic",
+      "baseline_commit": "fe976b39be5e79f75501cc4bae9a5d8bb349b63a",
+      "snapshot_ids": [
+        "20260913-nine-state-single-r7-audit"
+      ],
+      "hypothesis": "Observe receiver histories through standard Ready motion and rest",
+      "changed_dimension": "Bounded120s standard single with new received-history diagnostics",
+      "result": "inconclusive",
+      "reason": "Receiver evidence available; no moving final override, stationary source loss1012/no restart, no Start/laps. No whole race acceptance.",
+      "production_impact": "None beyond fe976b39 diagnostic metadata.",
+      "deleted_code": [],
+      "revisit_condition": "Validated material production change or distinct missing observation; next force-r3 adds physical truth, not a blind repeat."
     }
   ]
 }

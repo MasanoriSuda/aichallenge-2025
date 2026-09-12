@@ -562,5 +562,7 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 
 - [x] Separate immutable semantic/programme/current queue captures, exact source/steady receipt, optional writer/loader outside proof fingerprints; original selections unchanged.
 - [x] R559/R560 setup failures preserved; R561 old3fail/new3pass; build121 all26/package108 all2613; R562 original2wall+1actualdeadline rejection identities retained.
-- [ ] Committed bounded single-r7: actual received-but-unselected values, callback costs and reset/epoch associations; update evidence and local commit.
+- [x] Committed bounded single-r7/R563–R566:20unique received captures, source/receipt associations and original clock guard/callback costs; stationary loss1012/no restart/laps retained. Clock reset acceptance is still open.
 - [ ] Repair supported causal observation/model producer, preserve all physical/timing negatives, then complete remaining M4–M6 and same submission/eval.
+
+- [ ] Frozen force-r3: compare original held and received-bracket initial body/tire against same-epoch private truth; retain all rest/launch/regression cases. No interpolation/model promotion without coherent proof and dynamic acceptance.

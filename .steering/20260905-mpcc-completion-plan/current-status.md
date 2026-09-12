@@ -1,11 +1,15 @@
 # Current status and remaining completion work
 
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。現行の単車走行は壁証明で停止。接地の平均化による予測誤差を確認したが、採用できる修正は未確定。**
+**全体未完。単車はReady中に停止し、再発進・完走は未達。観測時刻と接地変動による予測誤差の修正を検証中。**
 
 制御モデル・通常権限は8d9810e0を維持。受信履歴の診断追加をbuild121全26、
-package108全2613、旧3失敗/新3合格、過去3ケースの判定保持で検証。次は120秒上限の
-標準single-r7で、受信済みでも位置時刻により除外した値と各記録元を確認する。
+package108全2613、旧3失敗/新3合格、過去3ケースの判定保持で検証。標準single-r7/R563–R566で
+20判断の受信済み履歴を取得し、位置時刻により新しい値を除外した事実を確認した。
+最大1.04m/sまで動き、正常送信1011の後に停止状態で通常権限を失った。全4239callbackは
+25ms以内、送信期限違反なしだが、再発進・Start・周回は未達。受信値の補間案を固定し、
+次はforce-r3で位置時刻の物理状態と比較する。
+[今回の結果と次の条件](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-single-r7-audit.md)。
 [診断実装と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/received-body-observation-design.md)。
 標準single-r6の決定968は
 元の予測範囲から後の速度・向きが外れ、現在の壁証明を拒否した。別世界のforce-single-r1も

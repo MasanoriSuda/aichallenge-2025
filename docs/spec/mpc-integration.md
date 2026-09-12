@@ -5030,3 +5030,11 @@ R534/R539の位置評価には診断側の車体原点/base_link混同があり�
 識別値へ含めず、欠落・不正でも元の再生記録を保持する。build121全26、package108
 全2613、R561旧3失敗/新3合格、R562過去3判定保持を確認。実走single-r7と全M4–M6は未完。
 [設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-body-observation-design.md)。
+
+
+2026-09-13標準single-r7/R563–R566:20判断の受信履歴から、位置時刻より新しい速度等が
+受信済みでも選ばれない例を確認。7記録の送信前後の目標操舵初期値の差は、指令履歴を
+使う数値予測には影響しなかった。最大実速度1.04m/s、最終正常送信1011の後に停止中の
+通常権限喪失。4239callback最大19.78ms、480送信の窓違反なしだが再発進・Start・周回は
+未達。補間は別の診断値として保存し、force-r3で物理時刻との精度を検証する。全M4–M6未完。
+[受信履歴の根拠と次の検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/received-single-r7-audit.md)。

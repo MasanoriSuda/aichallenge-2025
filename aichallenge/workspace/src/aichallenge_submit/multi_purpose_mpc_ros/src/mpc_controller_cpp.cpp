@@ -62,6 +62,7 @@
 #include <multi_purpose_mpc_ros/persistent_osqp.hpp>
 #include <multi_purpose_mpc_ros/prediction_markers.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
+#include <multi_purpose_mpc_ros/recovery_candidate_selection.hpp>
 #include <multi_purpose_mpc_ros/race_mpcc_foundation.hpp>
 #include <multi_purpose_mpc_ros/recovery_mpc.hpp>
 #include <multi_purpose_mpc_ros/runtime_speed_profile.hpp>
@@ -56958,54 +56959,20 @@ private:
           return true;
         };
       const auto select_heading_aligned_reverse_candidate = [&]() {
-          std::optional<recovery_footprint::FeasibilityResult> best_result;
-          double best_score = std::numeric_limits<double>::infinity();
-          const auto consider = [&](recovery_footprint::FeasibilityResult result) {
-              if (!first_result.has_value()) {
-                first_result = result;
-              }
-              if (!result.feasible || result.rollout.empty() ||
-                !course_candidate_allowed(result))
-              {
-                return;
-              }
-              const double yaw_delta = wrap_to_pi(
-                result.rollout.back().pose.yaw_rad - recovery_pose.yaw_rad);
-              const double candidate_heading_error = std::isfinite(recovery_heading_error_rad) ?
-                std::abs(wrap_to_pi(recovery_heading_error_rad + yaw_delta)) :
-                std::abs(yaw_delta);
-              const double score = desired_reverse_mpc_steering.has_value() ?
-                std::abs(
-                result.steering_angle_rad - desired_reverse_mpc_steering.value()) +
-                0.10 * candidate_heading_error : candidate_heading_error;
-              if (!best_result.has_value() || score + kEps < best_score) {
-                best_score = score;
-                best_result = std::move(result);
-              }
-            };
-          if (desired_reverse_mpc_steering.has_value() &&
-            !recovery_selected_reverse_primitive_.has_value())
-          {
-            consider(evaluate_candidate_with_steering(
-              recovery_footprint::ReversePrimitive::Straight, 0.0));
-            for (const auto primitive : {
-                recovery_footprint::ReversePrimitive::Left,
-                recovery_footprint::ReversePrimitive::Right})
-            {
-              for (const double steering_magnitude_rad : steering_samples) {
-                consider(evaluate_candidate_with_steering(primitive, steering_magnitude_rad));
-              }
-            }
-            return best_result;
+          auto selection = recovery_footprint::select_heading_aligned_reverse(
+            recovery_footprint::HeadingAlignedReverseRequest{
+              recovery_pose.yaw_rad, recovery_heading_error_rad,
+              cfg_.stuck_recovery.reverse_steering_angle_rad,
+              cfg_.stuck_recovery.side_escape_steering_samples,
+              snapshot.current_footprint_clear,
+              recovery_selected_reverse_primitive_.has_value(),
+              recovery_selected_reverse_steering_angle_rad_,
+              desired_reverse_mpc_steering},
+            evaluate_candidate_with_steering, course_candidate_allowed);
+          if (!first_result.has_value() && selection.first.has_value()) {
+            first_result = std::move(selection.first);
           }
-          constexpr std::array<recovery_footprint::ReversePrimitive, 3> kReversePreference{
-            recovery_footprint::ReversePrimitive::Straight,
-            recovery_footprint::ReversePrimitive::Left,
-            recovery_footprint::ReversePrimitive::Right};
-          for (const auto primitive : kReversePreference) {
-            consider(evaluate_candidate(primitive));
-          }
-          return best_result;
+          return std::move(selection.selected);
         };
       const auto select_forward_deadlock_fallback = [&]() {
           std::optional<recovery_footprint::FeasibilityResult> best_result;

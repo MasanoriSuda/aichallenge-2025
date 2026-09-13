@@ -1140,6 +1140,7 @@ if(BUILD_TESTING)
   if(TARGET test_recovery_footprint)
     target_link_libraries(test_recovery_footprint
       ${PROJECT_NAME}_recovery_footprint
+      ${PROJECT_NAME}_stuck_recovery_core
     )
   endif()
 

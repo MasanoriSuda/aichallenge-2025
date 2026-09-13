@@ -1555,6 +1555,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-direction-live-evidence.json",
       "replay_ready": true,
       "reason": "Actual first failed CheckClearance1921and all4original candidate native replays, fixed-source live timing/authority evidence."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-recovery-sampling-seal-r771",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-steering-population-validation.json",
+      "replay_ready": true,
+      "reason": "Exact1921original grid; bounded Recovery shape/magnitude comparison and old/corrected production selector with original8m requirements."
     }
   ],
   "experiments": [
@@ -20306,6 +20312,86 @@
       "production_impact": "Diagnostic evidence only; no new normal/Recovery actuation. Moving rear-hazard input and full race acceptance remain missing.",
       "deleted_code": [],
       "revisit_condition": "New sealed candidate shape or exact earlier moving-hazard input. Never infer global infeasibility or lower hard requirements."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-shape-compare-r766",
+      "baseline_commit": "3fa5ef2c",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-sampling-seal-r771"
+      ],
+      "hypothesis": "Optional guidance incorrectly limits clear-footprint Recovery candidate coverage.",
+      "changed_dimension": "Bounded offline Recovery shape comparison, then constant primitive population independent of optional guidance; hard requirements unchanged.",
+      "result": "accepted",
+      "reason": "Same8m piecewise and64beam kinematic candidates pass static/course; configured4mStraight positive is a changed request. No raw promotion.",
+      "production_impact": "Only corrected constant-steering producer is adopted after regression/build/package; no piecewise/beam/analytic actuation.",
+      "deleted_code": [
+        "Inline duplicate reverse selector and guidance-only restriction for fresh clear footprint."
+      ],
+      "revisit_condition": "New sealed world or candidate-generation implementation; moving rear-hazard input and live integration remain distinct."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-magnitude-compare-r767",
+      "baseline_commit": "3fa5ef2c",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-sampling-seal-r771"
+      ],
+      "hypothesis": "Optional guidance incorrectly limits clear-footprint Recovery candidate coverage.",
+      "changed_dimension": "Bounded offline Recovery shape comparison, then constant primitive population independent of optional guidance; hard requirements unchanged.",
+      "result": "accepted",
+      "reason": "Existing configured constant−0.05/−0.10rad pass full8m, −0.15course rejects, original full-steer wall rejects; indexed/scalar results exact.",
+      "production_impact": "Only corrected constant-steering producer is adopted after regression/build/package; no piecewise/beam/analytic actuation.",
+      "deleted_code": [
+        "Inline duplicate reverse selector and guidance-only restriction for fresh clear footprint."
+      ],
+      "revisit_condition": "New sealed world or candidate-generation implementation; moving rear-hazard input and live integration remain distinct."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-sampling-old-r768",
+      "baseline_commit": "3fa5ef2c",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-sampling-seal-r771"
+      ],
+      "hypothesis": "Optional guidance incorrectly limits clear-footprint Recovery candidate coverage.",
+      "changed_dimension": "Bounded offline Recovery shape comparison, then constant primitive population independent of optional guidance; hard requirements unchanged.",
+      "result": "rejected",
+      "reason": "Old extracted selector cannot find existing feasible small-steering candidate; one new regression fails, other68pass.",
+      "production_impact": "Only corrected constant-steering producer is adopted after regression/build/package; no piecewise/beam/analytic actuation.",
+      "deleted_code": [
+        "Inline duplicate reverse selector and guidance-only restriction for fresh clear footprint."
+      ],
+      "revisit_condition": "New sealed world or candidate-generation implementation; moving rear-hazard input and live integration remain distinct."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-sampling-native-r769",
+      "baseline_commit": "3fa5ef2c",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-sampling-seal-r771"
+      ],
+      "hypothesis": "Optional guidance incorrectly limits clear-footprint Recovery candidate coverage.",
+      "changed_dimension": "Bounded offline Recovery shape comparison, then constant primitive population independent of optional guidance; hard requirements unchanged.",
+      "result": "accepted",
+      "reason": "Fresh clear-footprint sampling independent of optional guidance; native249/source118pass, committed/contact/guidance/physical/course negatives retained.",
+      "production_impact": "Only corrected constant-steering producer is adopted after regression/build/package; no piecewise/beam/analytic actuation.",
+      "deleted_code": [
+        "Inline duplicate reverse selector and guidance-only restriction for fresh clear footprint."
+      ],
+      "revisit_condition": "New sealed world or candidate-generation implementation; moving rear-hazard input and live integration remain distinct."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-selection-replay-r770",
+      "baseline_commit": "3fa5ef2c",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-sampling-seal-r771"
+      ],
+      "hypothesis": "Optional guidance incorrectly limits clear-footprint Recovery candidate coverage.",
+      "changed_dimension": "Bounded offline Recovery shape comparison, then constant primitive population independent of optional guidance; hard requirements unchanged.",
+      "result": "accepted",
+      "reason": "Full1921old3reject/new11select−0.05rad, original three result dictionaries exact. Offline ten-repetition cost recorded; no live timing claim.",
+      "production_impact": "Only corrected constant-steering producer is adopted after regression/build/package; no piecewise/beam/analytic actuation.",
+      "deleted_code": [
+        "Inline duplicate reverse selector and guidance-only restriction for fresh clear footprint."
+      ],
+      "revisit_condition": "New sealed world or candidate-generation implementation; moving rear-hazard input and live integration remain distinct."
     }
   ]
 }

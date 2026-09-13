@@ -413,3 +413,11 @@ allmatch; three8mreverse wall rejects at6/3.55/7m. Earlier moving rear hazard re
 uncaptured; retry increased4to8. Compare base4and bounded piecewise8on same world,
 preserve original hard oracle and no raw normal promotion. AllM4–M6stillopen.
 See recovery-direction-live-audit/evidence.
+
+2026-09-13R766–R771: Recoveryの新規後退候補を補助MPCの有効・無効から分離し、既存設定の操舵角を探索する。
+保存1921では元の8m候補3件が壁拒否する一方、−0.05/−0.10radは元の壁・コース条件を通る。
+R768旧選択失敗→R769native249/source118合格、R770完全地図で元3件の拒否を保持し
+−0.05radを選択。距離・設定・壁・V2X・停止・通常権限・期限は維持。build138全26、
+package125合格。次は固定commitのsingle-r23で実選択・再検証・時刻と周回を確認する。
+全体は未完。先行する後退中の障害停止、車両Start・周回・M4–M6は引き続き未達。
+See receiver-input-enclosure/recovery-steering-population-design.md and validation.json.

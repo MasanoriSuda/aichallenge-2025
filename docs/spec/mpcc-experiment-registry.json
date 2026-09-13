@@ -1573,6 +1573,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-full-wall-feedback-evidence.json",
       "replay_ready": true,
       "reason": "Actual r23 Rejoin sources, complete native wall geometry and bounded correction feedback comparison with preserved failed/inapplicable diagnostics."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-full-wall-feedback-validation-r788",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-full-wall-feedback-validation.json",
+      "replay_ready": true,
+      "reason": "Original saved inputs and exact fixture map; old failing regression, trajectory-only negative holdouts, production archive, build/package evidence."
     }
   ],
   "experiments": [
@@ -20544,6 +20550,86 @@
       "production_impact": "None; trajectory-only trigger/holdouts/build/live still required.",
       "deleted_code": [],
       "revisit_condition": "New exact missing producer/warm input, corrected diagnostic applicability, or predeclared trajectory-only implementation with original hard guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-trajectory-wall-feedback-holdouts-r784",
+      "baseline_commit": "c4d7c4d8",
+      "snapshot_ids": [
+        "20260913-nine-state-full-wall-feedback-validation-r788"
+      ],
+      "hypothesis": "Missing complete wall feedback prematurely ends otherwise valid native numerical correction.",
+      "changed_dimension": "Trajectory StageWallRejected joins existing maximum-three correction predicate. Same world/model/costs/bounds/solver and independent outer authority.",
+      "result": "accepted",
+      "reason": "Original native population across five worlds:537/656 complete bundles pass;430solver/622wall99/527current-contact negatives remain under max3 trajectory-only feedback.",
+      "production_impact": "Bounded producer correction integrated; original contact/invalid-input and outer wall/dynamic/Stop guards retained. Live not yet accepted.",
+      "deleted_code": [
+        "Correction termination based only on adapter/state proof."
+      ],
+      "revisit_condition": "New immutable world or live failure with exact producer evidence; do not increase budgets or relax guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-wall-feedback-old-r785",
+      "baseline_commit": "c4d7c4d8",
+      "snapshot_ids": [
+        "20260913-nine-state-full-wall-feedback-validation-r788"
+      ],
+      "hypothesis": "Missing complete wall feedback prematurely ends otherwise valid native numerical correction.",
+      "changed_dimension": "Trajectory StageWallRejected joins existing maximum-three correction predicate. Same world/model/costs/bounds/solver and independent outer authority.",
+      "result": "rejected",
+      "reason": "Old implementation fails actual537 complete future wall test; expected causal regression retained.",
+      "production_impact": "Bounded producer correction integrated; original contact/invalid-input and outer wall/dynamic/Stop guards retained. Live not yet accepted.",
+      "deleted_code": [
+        "Correction termination based only on adapter/state proof."
+      ],
+      "revisit_condition": "New immutable world or live failure with exact producer evidence; do not increase budgets or relax guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-wall-feedback-native-r786",
+      "baseline_commit": "c4d7c4d8",
+      "snapshot_ids": [
+        "20260913-nine-state-full-wall-feedback-validation-r788"
+      ],
+      "hypothesis": "Missing complete wall feedback prematurely ends otherwise valid native numerical correction.",
+      "changed_dimension": "Trajectory StageWallRejected joins existing maximum-three correction predicate. Same world/model/costs/bounds/solver and independent outer authority.",
+      "result": "accepted",
+      "reason": "Corrected native162/source118; current/past wall cannot request added corrections; unresolved future wall remains rejected after original max3.",
+      "production_impact": "Bounded producer correction integrated; original contact/invalid-input and outer wall/dynamic/Stop guards retained. Live not yet accepted.",
+      "deleted_code": [
+        "Correction termination based only on adapter/state proof."
+      ],
+      "revisit_condition": "New immutable world or live failure with exact producer evidence; do not increase budgets or relax guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-wall-production-replay-r787",
+      "baseline_commit": "c4d7c4d8",
+      "snapshot_ids": [
+        "20260913-nine-state-full-wall-feedback-validation-r788"
+      ],
+      "hypothesis": "Missing complete wall feedback prematurely ends otherwise valid native numerical correction.",
+      "changed_dimension": "Trajectory StageWallRejected joins existing maximum-three correction predicate. Same world/model/costs/bounds/solver and independent outer authority.",
+      "result": "accepted",
+      "reason": "Actual repository archive matches R784 member outcomes and accepted exact trajectory arrays across all five original worlds.",
+      "production_impact": "Bounded producer correction integrated; original contact/invalid-input and outer wall/dynamic/Stop guards retained. Live not yet accepted.",
+      "deleted_code": [
+        "Correction termination based only on adapter/state proof."
+      ],
+      "revisit_condition": "New immutable world or live failure with exact producer evidence; do not increase budgets or relax guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-wall-feedback-validation-r788",
+      "baseline_commit": "c4d7c4d8",
+      "snapshot_ids": [
+        "20260913-nine-state-full-wall-feedback-validation-r788"
+      ],
+      "hypothesis": "Missing complete wall feedback prematurely ends otherwise valid native numerical correction.",
+      "changed_dimension": "Trajectory StageWallRejected joins existing maximum-three correction predicate. Same world/model/costs/bounds/solver and independent outer authority.",
+      "result": "accepted",
+      "reason": "Build139 all26/package126 all2655 pass; source/linked archive hashes checked; live eligibility still pending.",
+      "production_impact": "Bounded producer correction integrated; original contact/invalid-input and outer wall/dynamic/Stop guards retained. Live not yet accepted.",
+      "deleted_code": [
+        "Correction termination based only on adapter/state proof."
+      ],
+      "revisit_condition": "New immutable world or live failure with exact producer evidence; do not increase budgets or relax guards."
     }
   ]
 }

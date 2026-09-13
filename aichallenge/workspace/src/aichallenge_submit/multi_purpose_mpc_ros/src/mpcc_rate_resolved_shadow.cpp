@@ -4531,6 +4531,10 @@ Result SolverContext::evaluate_impl(
   ExecutionArtifactBuildResult post_refinement_artifact_build;
   const auto evaluate_post_refinement_proof = [&]() {
       native_state_bounds = {};
+      result.post_refinement_wall_proof_checked = false;
+      result.post_refinement_wall_outcome =
+        mpcc_rate_resolved_physical_wall::Outcome::InvalidInput;
+      result.post_refinement_wall_failure_stage = -1;
       post_refinement_artifact_build = build_execution_artifact(
         snapshot, adapted->problem, outcome,
         snapshot.identity.snapshot_sec +
@@ -4547,7 +4551,49 @@ Result SolverContext::evaluate_impl(
         adapted->problem, proof.native_stage_states,
         static_cast<std::size_t>(snapshot.execution_prefix_steps),
         solver_.physical_constraint_tolerance());
+      if (snapshot.physical_wall_refinement_active && proof.exact_trajectory &&
+        snapshot.replay_world && !snapshot.replay_world->control_prefix.empty())
+      {
+        // Use the complete immutable world and the same reconstruction as the
+        // outer certificate. Affine wall rows and a valid executable prefix
+        // alone do not prove that the later nonlinear trajectory is clear.
+        namespace wall = mpcc_rate_resolved_physical_wall;
+        const auto & replay = *snapshot.replay_world;
+        wall::Snapshot wall_source;
+        wall_source.identity.artifact = snapshot.identity;
+        wall_source.identity.captured_sec = snapshot.identity.snapshot_sec;
+        wall_source.identity.pose_snapshot_id = wall::fingerprint_control_pose_path(
+          replay.control_prefix, replay.control_prefix.back());
+        wall_source.identity.course_frame_window_id =
+          wall::fingerprint_course_frame_window(snapshot.wall_course_frame_knots);
+        wall_source.wall_grid = snapshot.wall_grid;
+        wall_source.wall_grid_fingerprint = replay.wall_grid_fingerprint;
+        wall_source.footprint = replay.physical_footprint;
+        wall_source.current_pose = replay.current_pose;
+        wall_source.control_prefix = replay.control_prefix;
+        wall_source.trajectory = *proof.exact_trajectory;
+        wall_source.course_frame_knots = snapshot.wall_course_frame_knots;
+        wall_source.hard_wall_clearance_m = replay.hard_wall_clearance_m;
+        wall_source.bound_tolerance_m = wall_source.trajectory.lateral_bound_tolerance_m;
+        wall_source.swept_step_m = replay.swept_step_m;
+        if (snapshot.terminal_stop_course_geometry) {
+          wall_source.terminal_stop_course_geometry = *snapshot.terminal_stop_course_geometry;
+        }
+        const auto wall_result = wall::evaluate(wall_source);
+        result.post_refinement_wall_proof_checked = true;
+        result.post_refinement_wall_outcome = wall_result.outcome;
+        result.post_refinement_wall_failure_stage =
+          wall_result.outcome == wall::Outcome::Accepted ? -1 :
+          wall_result.diagnostic.stage_index;
+      }
       return proof;
+    };
+  const auto trajectory_wall_requires_correction = [&]() {
+      // Future inputs cannot repair current contact, a measured prefix, or
+      // invalid proof inputs. Those still fail the independent outer proof.
+      return result.post_refinement_wall_proof_checked &&
+             result.post_refinement_wall_outcome ==
+             mpcc_rate_resolved_physical_wall::Outcome::StageWallRejected;
     };
   result.post_refinement_physical_proof_checked = true;
   post_refinement_proof = evaluate_post_refinement_proof();
@@ -4556,11 +4602,15 @@ Result SolverContext::evaluate_impl(
     mpcc_rate_resolved_physical_adapter::RejectReason::ExactTrajectoryRejected ||
     post_refinement_proof.reason ==
     mpcc_rate_resolved_physical_adapter::RejectReason::TerminalRestNotReached ||
-    (native_state_bounds.valid && !native_state_bounds.satisfied)) &&
+    (native_state_bounds.valid && !native_state_bounds.satisfied) ||
+    trajectory_wall_requires_correction()) &&
     result.post_refinement_linearization_count <
     kMaximumPhysicalProofSqpCorrections)
   {
     result.post_refinement_linearization_requested = true;
+    if (trajectory_wall_requires_correction()) {
+      ++result.post_refinement_wall_driven_correction_count;
+    }
     ++result.post_refinement_linearization_count;
     const auto post_refinement_linearization =
       mpcc_rate_resolved_adapter::relinearize_around_native_rollout(
@@ -4852,6 +4902,12 @@ Result SolverContext::evaluate_impl(
       (result.progress_wall_refinement_solved ? 1 : 0)
            << "/mismatch=" <<
       result.progress_wall_refinement_maximum_mismatch_m << "m";
+    if (result.post_refinement_wall_proof_checked) {
+      detail << ", complete_wall_feedback=" <<
+        mpcc_rate_resolved_physical_wall::to_string(result.post_refinement_wall_outcome)
+             << "/stage=" << result.post_refinement_wall_failure_stage
+             << "/corrections=" << result.post_refinement_wall_driven_correction_count;
+    }
     if (result.physical_wall_refinement_requested) {
       detail << ", physical_wall=" <<
         mpcc_rate_resolved_wall_refinement::to_string(

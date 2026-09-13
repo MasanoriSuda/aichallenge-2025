@@ -194,6 +194,7 @@ target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved_shadow PUBLIC
   ${EIGEN3_INCLUDE_DIRS}
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_shadow
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
   ${PROJECT_NAME}_mpcc_rate_resolved_adapter
   ${PROJECT_NAME}_mpcc_architecture_snapshot
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact

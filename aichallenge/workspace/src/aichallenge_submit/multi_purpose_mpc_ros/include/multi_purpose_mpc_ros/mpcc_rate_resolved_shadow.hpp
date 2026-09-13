@@ -9,6 +9,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp"
 #include "multi_purpose_mpc_ros/mpcc_progress.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
@@ -655,6 +656,13 @@ struct Result
   bool post_refinement_linearization_solved{false};
   bool post_refinement_physical_proof_checked{false};
   bool post_refinement_physical_proof_accepted{false};
+  // Numerical feedback only; the independent outer wall certificate remains
+  // mandatory before any normal command can acquire authority.
+  bool post_refinement_wall_proof_checked{false};
+  mpcc_rate_resolved_physical_wall::Outcome post_refinement_wall_outcome{
+    mpcc_rate_resolved_physical_wall::Outcome::InvalidInput};
+  int post_refinement_wall_failure_stage{-1};
+  std::size_t post_refinement_wall_driven_correction_count{};
   std::size_t post_refinement_linearization_count{};
   mpcc_rate_resolved_adapter::RelinearizationReason
     post_refinement_linearization_reason{

@@ -1,0 +1,361 @@
+{
+  "baseline": "c4d7c4d8",
+  "source_runtime": "single-r23/226e4f84",
+  "scope": "Full immutable wall proof feeds StageWallRejected into the original maximum three native numerical corrections; independent outer authority retained.",
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt": "ea50be5de319d421c246dd153394296f68dd3d9a78cac3b9f6952260452ab23c",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp": "183bf52e2ac88e2c6f3280f30459e63af3c9966567e3be88010cfc4306ec6b95",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp": "cc9f770b0d51ab24b5eba07d3d666685bbc30136d30babc5197cdaf598bffd5f",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp": "1ba6d2b4e5262d40e5ceead3692b86e1b95c9ff309a26f8145cb8e9010bfc4ef",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/rejoin_wall_feedback/rejoin537.yaml": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/rejoin_wall_feedback/current_contact527.yaml": "598e36eca0c718b824762e4ecd868292cbf001a2c85b70cbaa0daa8d64dde57a",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/rejoin_wall_feedback/wall-grid.rle": "074c6e5085d2fb033835dfee7a2a48dfc095f500788e4f6fbc4f10ac6683cb19",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/rejoin_wall_feedback/README.md": "2d7d869735f4224c8465503a100eb13125b4b77cce9bbdc16bb00aa487e8397b",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/rejoin_wall_feedback/wall_exhaustion622.yaml": "63ae5eacc84e3baba886da06760a11c228ac4809a1ddfeec61b43c6b254fa237"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/results.json": "1e38aa227394c052cd031d62464a6f05a0a320506ab4d3bdcf6239741b1c69d5",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/replay": "ff3f81186eac7bf9dd19f904bf9964618886497c018740e259bd2f8e7a93836a",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/mpcc_rate_resolved_shadow.cpp": "b74afe2c2ccf38e8082e309e5b287abc9a489bdcc117226f3959249eb8debb96",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/driver.cpp": "77224b5c39d6c56e72d110635cf89fa28dad105b952f471df9cdc493fc7e858c",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/compile-command.json": "4d132740f5ea3a7f52f4ffaf955acf3d4180ef95f6eec7de01cdf2110b6d74d6",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/mpcc_architecture_comparison.cpp": "38bbcd474fdd792c9eadfec976aefb1076623b038a8bae10fa1c06455f8e01cf",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/source-sha256.json": "d6f2bafd4dff61b6ac53ab1d1999763b8cad95a695b68e8c06185b36f219b892",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/runner.py": "7ef18b17f0c13f3bc5062b828adc5e5591270b3d23dc4b6e870acec503de1fa2",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/declared-plan.json": "79d7334863bec41e771bdbec0fca98905619eb6ee38e5628c42f7ff46baa7c41",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/3-000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/trace-member--1.yaml-lines": "6cbbf2b10fd462475d509f3039d842c8ac616f08132d6d08bcd1e129745c91e3",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/3-000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/3-000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "027f22c0e22cc754ed1e12b3cc341bc9d402eee96aa4778294a13a99f2d65457",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/0-000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/trace-member--1.yaml-lines": "150a03498d791e49b16fe63969a32c6b694197e764dfc3834e2d9deb98fccfaa",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/0-000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/0-000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "67c6bee659093cdd1bf7c08661a7de76d171605437ae1aa4418a5037995b653a",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/4-000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/trace-member-0.yaml-lines": "3cfbc46a29f10cc408729239cbcacabe6fdc266d659e900f07d6b8374be65a5c",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/4-000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/4-000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/report.yaml": "0ddde4ee2f335385acb19d44140ca313a445ee7740324d74d9b6c7cf6e68a29d",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/4-000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "f58ce8c4bf38853cfca177bb1dfc3ae8ffc53da57af9b4545eb9f5fe4fe498e3",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/4-000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/4-000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "f58ce8c4bf38853cfca177bb1dfc3ae8ffc53da57af9b4545eb9f5fe4fe498e3",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/4-000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/2-000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/2-000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "560bf2d49981a86b63df69ecbcadce616c9fce9911c037cec0ef728cd797cfc5",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/2-000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "96855fe2d7438370c81d2ee60f287ebba66bf85505070fb5087e11bc5f8b8ec9",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/2-000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/1-000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/trace-member-1.yaml-lines": "e9469b132018a0b349858dc5b966113db6215a1fdff19571415217356561a59d",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/1-000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/trace-member--1.yaml-lines": "e9469b132018a0b349858dc5b966113db6215a1fdff19571415217356561a59d",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/1-000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/trace-member-0.yaml-lines": "83fb2daa49217f56fb33b09e8fc514493a5681f520d0e6efb8ca31f4602f58bb",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/1-000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-trajectory-wall-feedback-holdouts-r784/1-000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "88087a9a556b36b3364657c4657f6d58f6e5193227979d171852e811b003f744",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/build-command.json": "4e3a1fc378f0fb0bf780a806024d03014fce4347af5a398c44bc4fa1eb5d4eda",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/test_mpcc_architecture_comparison.log": "2bd91db5dc4815f6d0680dc7251b881064533fce2480de44140cf0cea096bbab",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/build.log": "681b6eb8c48fb380224251912a2bfbde5ec80ee4722a9bf7b1e848dd21a804bd",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/test_mpcc_architecture_comparison.xml": "eb80e86904a157c53c2db1f15ebb8a9135cc4cd83220d97e4f27fe05fa58b2fd",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/CMakeLists.txt": "5d304004932fcbbf4eb836306f969b24b68548fd884dfbd997ec799028262f14",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/result.json": "9f40e9d217289da460951fa8ec7a29b7e6a0b0a9781eb5772a025aed9903605c",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/runner.py": "a541eca5b4a5128ec269a00d75d0417f4d8f32c12b144ae17433e1b3324f4429",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/test/test_mpcc_architecture_comparison.cpp": "b5e5038216e3405c92058c55c3571cf7eb1aa10ed02f44c9f5014ac3521dac30",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/test/fixtures/rejoin_wall_feedback/rejoin537.yaml": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/test/fixtures/rejoin_wall_feedback/wall-grid.rle": "074c6e5085d2fb033835dfee7a2a48dfc095f500788e4f6fbc4f10ac6683cb19",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/test/fixtures/rejoin_wall_feedback/README.md": "c9745de2da33ed8c555624dbc0bfb4194f73431ec1dd1cf4b5e2d673db129a05",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/test/fixtures/rejoin_wall_feedback/current_contact527.yaml": "598e36eca0c718b824762e4ecd868292cbf001a2c85b70cbaa0daa8d64dde57a",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp": "6273f5b94f0c481d7c465157e8a5f47ad4e550c57ea8e27d6172a20696ef10ac",
+    "output/20260913-nine-state-full-wall-feedback-old-r785/src/mpcc_rate_resolved_shadow.cpp": "80f3b7ee9305c498cad2c99a7d681e48b834f6627935d91139a7c55e38fff098",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test_mpcc_architecture_snapshot.log": "4cccb6f78ae1442b83c2898556cf4cf0d5207915b185dbde3fc9ac716205e1b8",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/build-command.json": "4d7135a428820db57ceee137cad147ac56fa230b8b380eb5e22c5cf968647a5f",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test_mpcc_rate_resolved_physical_wall.xml": "92211f5a055a77f64d8fd47f7a922107bc596c70f140d79ff2f3934beec11e27",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test_mpcc_architecture_snapshot.xml": "24a0f7551c774cf892296d83dc974c19ec0e4fb36f49152b01d284859739423b",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test_mpcc_rate_resolved_physical_wall.log": "384f9a6c38098b4c12f3c3587d35c1586135ab11805166e6c608a82ba844629e",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test_mpcc_architecture_comparison.log": "d74805102256d925f09418d7517dae5baad62180c4325a2b6a5896b38c78594b",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/build.log": "3ed0ffe85a02bf6b1153ff7138fe5782c961d3b9d33a5d20be8454726274e657",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test_mpcc_rate_resolved_shadow.xml": "28d544094b86cea5fd134c738165485fc318007bc67d4deb3a52edefb59113ca",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test_mpcc_architecture_comparison.xml": "db507521e95cd81ca4e2ffe4d166367013777d4fc23069dd337b87b0bf19ee07",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/CMakeLists.txt": "ea50be5de319d421c246dd153394296f68dd3d9a78cac3b9f6952260452ab23c",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/result.json": "b8f96a8a96fe0a568fb1ec8974bad70100df6ece6ccf9f8436fce7ab558683ef",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/runner.py": "97bdfee8d73e6584af22b971ee4e06c0f5b3187850e48204b727a762bfefb32d",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test_mpcc_rate_resolved_shadow.log": "863418f38c066b17a217d4c3f0d5959938764f024259d4c0c86a0d00a33d1996",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test/test_mpcc_architecture_comparison.cpp": "1ba6d2b4e5262d40e5ceead3692b86e1b95c9ff309a26f8145cb8e9010bfc4ef",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test/fixtures/rejoin_wall_feedback/rejoin537.yaml": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test/fixtures/rejoin_wall_feedback/wall-grid.rle": "074c6e5085d2fb033835dfee7a2a48dfc095f500788e4f6fbc4f10ac6683cb19",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test/fixtures/rejoin_wall_feedback/README.md": "2d7d869735f4224c8465503a100eb13125b4b77cce9bbdc16bb00aa487e8397b",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test/fixtures/rejoin_wall_feedback/current_contact527.yaml": "598e36eca0c718b824762e4ecd868292cbf001a2c85b70cbaa0daa8d64dde57a",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/test/fixtures/rejoin_wall_feedback/wall_exhaustion622.yaml": "63ae5eacc84e3baba886da06760a11c228ac4809a1ddfeec61b43c6b254fa237",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp": "183bf52e2ac88e2c6f3280f30459e63af3c9966567e3be88010cfc4306ec6b95",
+    "output/20260913-nine-state-full-wall-feedback-native-r786/src/mpcc_rate_resolved_shadow.cpp": "cc9f770b0d51ab24b5eba07d3d666685bbc30136d30babc5197cdaf598bffd5f",
+    "output/20260913-nine-state-full-wall-production-replay-r787/results.json": "d3dda8b2e2107c2aa3b4453cd5a2d09248dda7211b915d346e7344a3ddfb5d63",
+    "output/20260913-nine-state-full-wall-production-replay-r787/replay": "32d89ac832fab17541aba5492a356cd46a38a637b8b914bfa24b0d27adb5f874",
+    "output/20260913-nine-state-full-wall-production-replay-r787/input-sha256.json": "0c78aa8b8cd4e094539089e924295f5f47eadfe728cdffdca63f82fbc31e922a",
+    "output/20260913-nine-state-full-wall-production-replay-r787/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-full-wall-production-replay-r787/driver.cpp": "46ba681b889154314f4b75b387e77c70e078ffb433bf26d44c67731b8a7b4e81",
+    "output/20260913-nine-state-full-wall-production-replay-r787/compile-command.json": "387ab0dc57bca6673967ae5d54c7a0db448b6a151c38038e6f08b1b62295d573",
+    "output/20260913-nine-state-full-wall-production-replay-r787/mpcc_architecture_comparison.cpp": "9202f8b74fc96cb896c932f8b804301ed5f94fa965d9670f31c82cfce9516ad0",
+    "output/20260913-nine-state-full-wall-production-replay-r787/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-full-wall-production-replay-r787/runner.py": "008c141c056d474ae742bd73c560b03c50e4c5e223f2199dbaf2f54d13a97826",
+    "output/20260913-nine-state-full-wall-production-replay-r787/declared-plan.json": "abd2349f3a86d857bc9405dfde639d0977d9ea8ab290e0a9bdbd13beec63de20",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "74b2405892537ec416562196fdef219f2469b5b45d6a1d5753bcd30def03e547",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "620f06467ac2fdbaf53d0f4fab68e778b31fb9482e25b1ef4eaded89f4177019",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/report.yaml": "902c7965beea6f71cfa2b4216988d1bcc4bf015c46192dec765d02e150ad6bd0",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "fc5483cfa8c10ba0b370c290f98d40dee41a367e54e391e4a0745f643d3e8001",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "a29803a59ba457e7cc08e75d777414e7af2b0deeda220b808a69339d1ebe3943",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/report.yaml": "a9b873f495720d563feb5aa56e08c937b38b1766ceea041811c8644d8c00b754",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "b6aed628ba7a101cef57c6ce54a917312d9e6e43f8e0b45e1ef692f0f8e98c08",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "b6aed628ba7a101cef57c6ce54a917312d9e6e43f8e0b45e1ef692f0f8e98c08",
+    "output/20260913-nine-state-full-wall-production-replay-r787/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-build139/status.json": "efbd77a8641b38ac0e494df9099cb817f2dce73e8fd2150f58c99e0d8b27223d",
+    "output/20260913-nine-state-build139/build.log": "559b912cb187d44d0061ab87eb6134a2e4506b4e1568b38f5d4799bbf0f33ac7",
+    "output/20260913-nine-state-build139/runner.py": "a019d43709c534735cfaa18d70ab9f9abf1e7b48c6d2462986e113360c66571f",
+    "output/20260913-nine-state-build139/manifest.json": "8b2f6028dc21e248c7ff01c6dd5d8814fbfe0add87fcec6714023ad07185fc13",
+    "output/20260913-nine-state-package126/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package126/test.log": "4a6dd72502684afdee6aa3503c2c8f4fd7bb55fa99b132f4f3b0c404296f8b7e",
+    "output/20260913-nine-state-package126/status.json": "60e360ee81230fbe5053464dda7dd3cebfc9160dc2b1581b678bbbbda3b2dbcf",
+    "output/20260913-nine-state-package126/test-result.log": "244c11dbf73c2a5ba6f9bff155a69721dc5cbbda4ba0d96a1c505ff4675d2983",
+    "output/20260913-nine-state-package126/runner.py": "be28df573493b66b54fb537cd675614c13d95fa4f40e6d01c4af06d90c5f1913"
+  },
+  "old_failed_tests": [
+    "ActualRejoin537CorrectsFutureWallWithinExistingBudget"
+  ],
+  "native_tests": [
+    {
+      "file": "test_mpcc_rate_resolved_physical_wall.xml",
+      "tests": "14",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "0.006",
+      "timestamp": "2026-09-13T14:37:07",
+      "name": "AllTests"
+    },
+    {
+      "file": "test_mpcc_architecture_snapshot.xml",
+      "tests": "29",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "0.583",
+      "timestamp": "2026-09-13T14:37:07",
+      "name": "AllTests"
+    },
+    {
+      "file": "test_mpcc_rate_resolved_shadow.xml",
+      "tests": "65",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "0.305",
+      "timestamp": "2026-09-13T14:37:06",
+      "name": "AllTests"
+    },
+    {
+      "file": "test_mpcc_architecture_comparison.xml",
+      "tests": "54",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "3.989",
+      "timestamp": "2026-09-13T14:37:02",
+      "name": "AllTests"
+    }
+  ],
+  "source_tests": 118,
+  "build": {
+    "return_code": 0,
+    "elapsed_sec": 261.54506768198917,
+    "sources_unchanged": true
+  },
+  "package": {
+    "results": [
+      {
+        "command": [
+          "colcon",
+          "test",
+          "--packages-select",
+          "multi_purpose_mpc_ros",
+          "--return-code-on-test-failure",
+          "--event-handlers",
+          "console_direct+"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 44.96337896998739
+      },
+      {
+        "command": [
+          "colcon",
+          "test-result",
+          "--verbose",
+          "--test-result-base",
+          "build/multi_purpose_mpc_ros"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 1.9007871889625676
+      }
+    ],
+    "all_pass": true
+  },
+  "package_tests": 2655,
+  "production_replay": [
+    {
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+      "members": [
+        {
+          "index": -1,
+          "sequence": 537,
+          "policy": 2,
+          "fingerprint": 13552597408078219522,
+          "stage": "accepted",
+          "bundle": true,
+          "detail": "accepted",
+          "solver_compute_ms": 68.616019,
+          "terminal_velocity_mps": 1.8771739772103555,
+          "terminal_progress_m": 1.9937200103171866
+        }
+      ]
+    },
+    {
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "7826f6729ebc4afca92bafc761456232df0af4a6d08e6082d754bd992e4b006c",
+      "members": [
+        {
+          "index": -1,
+          "sequence": 656,
+          "policy": 0,
+          "fingerprint": 16519427920263069651,
+          "stage": "accepted",
+          "bundle": true,
+          "detail": "accepted",
+          "solver_compute_ms": 65.212026,
+          "terminal_velocity_mps": 1.3584435178155745,
+          "terminal_progress_m": 3.4854075369806172
+        },
+        {
+          "index": 0,
+          "sequence": 656,
+          "policy": 2,
+          "fingerprint": 2498265170874406104,
+          "stage": "accepted",
+          "bundle": true,
+          "detail": "accepted",
+          "solver_compute_ms": 79.440148,
+          "terminal_velocity_mps": 0.33039786268518945,
+          "terminal_progress_m": 1.9937033798574333
+        },
+        {
+          "index": 1,
+          "sequence": 657,
+          "policy": 0,
+          "fingerprint": 2320333244804707770,
+          "stage": "accepted",
+          "bundle": true,
+          "detail": "accepted",
+          "solver_compute_ms": 65.663202,
+          "terminal_velocity_mps": 1.3584435178155745,
+          "terminal_progress_m": 3.4854075369806172
+        }
+      ]
+    },
+    {
+      "source": "/output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "source_sha256": "b5d5a720b112671f12428d46bc4a818070c3440a39ab4899fde5bbae2390000f",
+      "members": [
+        {
+          "index": -1,
+          "sequence": 430,
+          "policy": 1,
+          "fingerprint": 13103031932593471888,
+          "stage": "solver-rejected",
+          "bundle": false,
+          "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000468347, dua_res=0.0365594, failed_iterate_row=379, value=-0.715018, bounds=[-0.714215,0.714215], violation=0.000802848, tolerance=0.00171502, normalized=0.468128, architecture_snapshot=mpcc_architecture_snapshots/000000000430-b5d7521eaed58190-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+          "solver_compute_ms": 152.896231,
+          "terminal_velocity_mps": 0,
+          "terminal_progress_m": 0
+        }
+      ]
+    },
+    {
+      "source": "/output/20260913-nine-state-single-r8/d1/mpcc_architecture_snapshots/000000000622-a8ec71234e928827-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "63ae5eacc84e3baba886da06760a11c228ac4809a1ddfeec61b43c6b254fa237",
+      "members": [
+        {
+          "index": -1,
+          "sequence": 622,
+          "policy": 1,
+          "fingerprint": 12172228289331628071,
+          "stage": "wall-proof-rejected",
+          "bundle": false,
+          "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=99, wp=31, distance=5.528m, lateral=0.908m, lag=-0.184m, bounds=[-3.711,1.000]m, reserve=0.092m, heading_offset=0.128rad, progress=30.789/36.317m, progress_delta=-5.528m, pose=(89629.777,43129.334,2.462), out_of_map=0, contacts=1",
+          "solver_compute_ms": 97.172361,
+          "terminal_velocity_mps": 1.3405795840147134,
+          "terminal_progress_m": 1.593723325691407
+        }
+      ]
+    },
+    {
+      "source": "/output/20260913-nine-state-single-r18/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "source_sha256": "598e36eca0c718b824762e4ecd868292cbf001a2c85b70cbaa0daa8d64dde57a",
+      "members": [
+        {
+          "index": -1,
+          "sequence": 527,
+          "policy": 0,
+          "fingerprint": 4961777347216614028,
+          "stage": "solver-rejected",
+          "bundle": false,
+          "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0285916, dua_res=4.14487, failed_iterate_row=497, value=0.966607, bounds=[-inf,0.911941], violation=0.0546654, tolerance=0.00196661, normalized=27.7968, architecture_snapshot=mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000527-44dbc6356b6d228c-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+          "solver_compute_ms": 249.633066,
+          "terminal_velocity_mps": 0,
+          "terminal_progress_m": 0
+        },
+        {
+          "index": 0,
+          "sequence": 527,
+          "policy": 2,
+          "fingerprint": 15192655044107288583,
+          "stage": "wall-proof-rejected",
+          "bundle": false,
+          "detail": "current pose hard wall contact, reason=current-pose-hard-wall-contact, stage=-1, wp=-1, pose=(89629.505,43129.575,2.399), out_of_map=0, contacts=1",
+          "solver_compute_ms": 46.77286,
+          "terminal_velocity_mps": 0.8246033830986775,
+          "terminal_progress_m": 1.993719045225441
+        },
+        {
+          "index": 1,
+          "sequence": 528,
+          "policy": 0,
+          "fingerprint": 11610595956804796447,
+          "stage": "solver-rejected",
+          "bundle": false,
+          "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0285916, dua_res=4.14487, failed_iterate_row=497, value=0.966607, bounds=[-inf,0.911941], violation=0.0546654, tolerance=0.00196661, normalized=27.7968",
+          "solver_compute_ms": 67.665401,
+          "terminal_velocity_mps": 0,
+          "terminal_progress_m": 0
+        }
+      ]
+    }
+  ],
+  "accepted_exact_trajectories_equal_to_R784": true,
+  "review": [
+    "Complete wall reconstruction matches outer proof inputs for captured sources. Terminal geometry remains mandatory; absent or invalid inputs cannot request a wall-driven correction.",
+    "Only future StageWallRejected adds a correction request. Current contact and measured-prefix sweep tests retain original correction count and outer rejection.",
+    "Existing max3, solver4000, state/input boxes, objective, nonlinear model, margins, timing, owners and population retained.",
+    "Native Solved and inner physical proof are numerical outcomes; independent outer wall/dynamic/Stop authority still mandatory even after exhausted wall feedback."
+  ],
+  "limits": [
+    "Offline correction adds worker compute; live eligibility and callback/publication timing require single-r24.",
+    "No current-contact clearance, physical infeasibility or integrated race acceptance inferred. Later Stop geometry, physical observation and r80 D2 timing remain open."
+  ],
+  "next": "Commit verified slice, then single-r24 with original DLL and build139/package126; inspect actual Rejoin completion, Start/laps and final authority timing."
+}

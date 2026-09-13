@@ -435,3 +435,11 @@ See receiver-input-enclosure/recovery-steering-live-audit.md and evidence.json.
 537で拒否、656で合格。本番は未変更。次は現在接触などの負例と追加入力を検証し、
 元の上限内の最小修正を実装・build・実走へ進める。全体・M4–M6は未完。
 See receiver-input-enclosure/rejoin-full-wall-feedback-audit.md and evidence.json.
+
+2026-09-13 R784–R788: 完全な壁検証で将来の軌道接触を検出し、元の最大3回内で数値補正を続ける修正を実装。
+現在接触・既通過区間の異常は追加補正の対象にせず、最終の壁・他車・停止認証を維持。
+R785旧版の実入力テスト失敗→R786native162/source118合格。R787本番ビルドで
+Rejoin537/656の認証が成立し、追加3場面の元の拒否を保持。build139全26package、
+package126は2655tests合格。次は固定commitのsingle-r24で計算・送信時刻とRejoinを確認。
+全体・車両Start・周回・M4–M6は未完。
+See receiver-input-enclosure/rejoin-full-wall-feedback-design.md and validation.json.

@@ -7,6 +7,9 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
+#include "multi_purpose_mpc_ros/mpcc_native_initialization.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
 
 #include <gtest/gtest.h>
 
@@ -14,6 +17,10 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_comparison
 {
@@ -25,6 +32,135 @@ namespace contract = mpcc_execution_contract;
 namespace model = mpcc_rate_resolved;
 namespace recovery = recovery_footprint;
 namespace shadow = mpcc_rate_resolved_shadow;
+class RejoinWallFixture
+{
+public:
+  RejoinWallFixture()
+  {
+    directory = std::filesystem::path(::testing::TempDir()) /
+      ("mpcc-rejoin-wall-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    if (!std::filesystem::create_directory(directory)) throw std::runtime_error("private fixture directory unavailable");
+    const auto input = std::filesystem::path(__FILE__).parent_path() / "fixtures/rejoin_wall_feedback";
+    std::ifstream rle(input / "wall-grid.rle");
+    int value{}; std::size_t total{}, count{}, written{};
+    if (!(rle >> value >> total) || (value != 0 && value != 1) || total != 570009U) {
+      throw std::runtime_error("invalid grid fixture header");
+    }
+    std::ofstream binary(directory / "wall-grid.bin", std::ios::binary);
+    while (rle >> count) {
+      if (count == 0U || count > total - written) throw std::runtime_error("invalid grid run");
+      const std::string bytes(count, static_cast<char>(value));
+      binary.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+      written += count; value = 1 - value;
+    }
+    if (!rle.eof() || written != total || !binary) throw std::runtime_error("incomplete grid fixture");
+    binary.close();
+    for (const auto name : {"rejoin537.yaml", "current_contact527.yaml", "wall_exhaustion622.yaml"}) {
+      std::filesystem::copy_file(input / name, directory / name);
+    }
+  }
+  ~RejoinWallFixture() {std::error_code error; std::filesystem::remove_all(directory, error);}
+  architecture::RecordedInteractionSnapshot load(const std::string & name) const
+  {
+    std::string detail;
+    const auto loaded = architecture::load_recorded_interaction_snapshot(directory / name, &detail);
+    if (!loaded) throw std::runtime_error(detail);
+    return *loaded;
+  }
+  std::filesystem::path directory;
+};
+
+mpcc_rate_resolved_physical_wall::Result check_complete_source_wall(
+  const shadow::Snapshot & source, const shadow::Result & solved)
+{
+  namespace physical = mpcc_rate_resolved_physical_adapter;
+  namespace wall = mpcc_rate_resolved_physical_wall;
+  if (!solved.execution_artifact || !source.replay_world) throw std::runtime_error(solved.detail);
+  const auto adapted = physical::build(*solved.execution_artifact,
+    source.identity.source_context.intent, source.identity.source_context.stage_geometry_id);
+  if (!adapted.exact_trajectory) throw std::runtime_error(physical::to_string(adapted.reason));
+  const auto & replay = *source.replay_world;
+  wall::Snapshot proof;
+  proof.identity.artifact = source.identity;
+  proof.identity.captured_sec = source.identity.snapshot_sec;
+  proof.identity.pose_snapshot_id = wall::fingerprint_control_pose_path(replay.control_prefix, replay.control_prefix.back());
+  proof.identity.course_frame_window_id = wall::fingerprint_course_frame_window(source.wall_course_frame_knots);
+  proof.wall_grid = source.wall_grid; proof.wall_grid_fingerprint = replay.wall_grid_fingerprint;
+  proof.footprint = replay.physical_footprint; proof.current_pose = replay.current_pose;
+  proof.control_prefix = replay.control_prefix; proof.trajectory = *adapted.exact_trajectory;
+  proof.course_frame_knots = source.wall_course_frame_knots;
+  proof.hard_wall_clearance_m = replay.hard_wall_clearance_m;
+  proof.bound_tolerance_m = proof.trajectory.lateral_bound_tolerance_m;
+  proof.swept_step_m = replay.swept_step_m;
+  if (source.terminal_stop_course_geometry) proof.terminal_stop_course_geometry = *source.terminal_stop_course_geometry;
+  return wall::evaluate(proof);
+}
+
+TEST(MpccArchitectureComparison, ActualRejoin537CorrectsFutureWallWithinExistingBudget)
+{
+  RejoinWallFixture fixture;
+  const auto recorded = fixture.load("rejoin537.yaml");
+  shadow::SolverContext solver;
+  const auto solved = solver.evaluate(recorded.source);
+  ASSERT_EQ(solved.outcome, shadow::Outcome::Solved) << solved.detail;
+  EXPECT_LE(solved.post_refinement_linearization_count, 3U);
+  EXPECT_GT(solved.post_refinement_wall_driven_correction_count, 0U);
+  EXPECT_TRUE(solved.post_refinement_wall_proof_checked);
+  EXPECT_EQ(solved.post_refinement_wall_outcome, mpcc_rate_resolved_physical_wall::Outcome::Accepted);
+  const auto wall = check_complete_source_wall(recorded.source, solved);
+  EXPECT_EQ(wall.outcome, mpcc_rate_resolved_physical_wall::Outcome::Accepted) << wall.detail;
+}
+
+TEST(MpccArchitectureComparison, FixedCurrentContactCannotRequestAnotherTrajectoryCorrection)
+{
+  RejoinWallFixture fixture;
+  const auto recorded = fixture.load("current_contact527.yaml");
+  const auto population = mpcc_native_initialization::build(recorded.source, recorded.source.identity.sequence + 1U);
+  ASSERT_TRUE(population);
+  const auto & candidate = population->candidates[0];
+  shadow::SolverContext solver;
+  const auto solved = solver.evaluate(candidate);
+  ASSERT_EQ(solved.outcome, shadow::Outcome::Solved) << solved.detail;
+  EXPECT_EQ(solved.post_refinement_linearization_count, 2U);
+  EXPECT_EQ(solved.post_refinement_wall_driven_correction_count, 0U);
+  const auto wall = check_complete_source_wall(candidate, solved);
+  EXPECT_EQ(wall.outcome, mpcc_rate_resolved_physical_wall::Outcome::CurrentPoseRejected) << wall.detail;
+}
+
+TEST(MpccArchitectureComparison, BlockedMeasuredPrefixCannotRequestFutureTrajectoryCorrection)
+{
+  RejoinWallFixture fixture;
+  auto source = fixture.load("rejoin537.yaml").source;
+  ASSERT_TRUE(source.replay_world);
+  auto & prefix = source.replay_world->control_prefix;
+  ASSERT_GE(prefix.size(), 2U);
+  // Deliberately invalid history: preserve current/control origins but insert
+  // the actual rejected body pose. Future controls cannot repair this prefix.
+  prefix.insert(prefix.end() - 1, {89629.35611953771, 43129.7490734034, 2.391963987158252});
+  shadow::SolverContext solver;
+  const auto solved = solver.evaluate(source);
+  ASSERT_EQ(solved.outcome, shadow::Outcome::Solved) << solved.detail;
+  EXPECT_EQ(solved.post_refinement_linearization_count, 1U);
+  EXPECT_EQ(solved.post_refinement_wall_driven_correction_count, 0U);
+  const auto wall = check_complete_source_wall(source, solved);
+  EXPECT_EQ(wall.outcome, mpcc_rate_resolved_physical_wall::Outcome::SweptWallRejected) << wall.detail;
+  EXPECT_EQ(wall.diagnostic.stage_index, -1);
+}
+
+TEST(MpccArchitectureComparison, UnresolvedFutureWallKeepsOriginalThreeCorrectionLimit)
+{
+  RejoinWallFixture fixture;
+  const auto source = fixture.load("wall_exhaustion622.yaml").source;
+  shadow::SolverContext solver;
+  const auto solved = solver.evaluate(source);
+  ASSERT_EQ(solved.outcome, shadow::Outcome::Solved) << solved.detail;
+  EXPECT_EQ(solved.post_refinement_linearization_count, 3U);
+  EXPECT_EQ(solved.post_refinement_wall_driven_correction_count, 3U);
+  const auto wall = check_complete_source_wall(source, solved);
+  EXPECT_EQ(wall.outcome, mpcc_rate_resolved_physical_wall::Outcome::StageWallRejected) << wall.detail;
+  EXPECT_EQ(wall.diagnostic.stage_index, 99);
+}
+
 namespace stop_lattice = mpcc_rate_resolved_stop_control_lattice;
 namespace stop_lattice_shadow = mpcc_rate_resolved_stop_lattice_shadow;
 

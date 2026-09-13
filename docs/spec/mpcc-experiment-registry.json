@@ -1483,6 +1483,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-rejoin-source-evidence.json",
       "replay_ready": false,
       "reason": "Live Rejoin handoff validated; first post-Rejoin reserved Cruise input absent. Logs/public commands constrain next observation boundary."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-post-rejoin-observation-seal-r705",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-rejoin-observation-validation.json",
+      "replay_ready": true,
+      "reason": "Bounded diagnostic producer/writer native validation; new live post-Rejoin worker request still pending."
     }
   ],
   "experiments": [
@@ -19510,6 +19516,34 @@
       "production_impact": "None in this evidence slice; b3613667handoff maintained.",
       "deleted_code": [],
       "revisit_condition": "New complete post-Rejoin worker snapshot and structural comparison; do not repeat unchanged live runs or tune safety/timeout limits."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-rejoin-observation-native-r703",
+      "baseline_commit": "39df1ffb",
+      "snapshot_ids": [
+        "20260913-nine-state-post-rejoin-observation-seal-r705"
+      ],
+      "hypothesis": "Earlier generic observation buckets hide the first post-Rejoin reserved Cruise result; total worker time must retain all attempted source inputs.",
+      "changed_dimension": "One bounded post-Rejoin diagnostic recorder, exact actual publication witness, optional timing and per-source leaf snapshots; no control/model/clock/limits change.",
+      "result": "accepted",
+      "reason": "Single-request prototype native193pass; review identifies missing earlier attempted source inputs in total elapsed time.",
+      "production_impact": "Observation only; first reserved Cruise past original deadline after actual Rejoin. Same writer thread, max4leaf inputs, one admitted event. Runtime data not yet accepted.",
+      "deleted_code": [],
+      "revisit_condition": "New missing input or changed causal boundary; native/live diagnosis before any budget or programme change."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-rejoin-attempts-native-r704",
+      "baseline_commit": "39df1ffb",
+      "snapshot_ids": [
+        "20260913-nine-state-post-rejoin-observation-seal-r705"
+      ],
+      "hypothesis": "Earlier generic observation buckets hide the first post-Rejoin reserved Cruise result; total worker time must retain all attempted source inputs.",
+      "changed_dimension": "One bounded post-Rejoin diagnostic recorder, exact actual publication witness, optional timing and per-source leaf snapshots; no control/model/clock/limits change.",
+      "result": "accepted",
+      "reason": "Extended native193/source118/build132/package119pass: record up to4actually attempted source requests and per-attempt timing, preserve rejected inputs and actual Rejoin witness. No normal authority/solver order/reservation limit change.",
+      "production_impact": "Observation only; first reserved Cruise past original deadline after actual Rejoin. Same writer thread, max4leaf inputs, one admitted event. Runtime data not yet accepted.",
+      "deleted_code": [],
+      "revisit_condition": "New missing input or changed causal boundary; native/live diagnosis before any budget or programme change."
     }
   ]
 }

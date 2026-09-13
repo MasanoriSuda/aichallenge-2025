@@ -1,0 +1,62 @@
+{
+  "baseline": "39df1ffb",
+  "control_baseline": "b3613667",
+  "authority": false,
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "5876b5758728e7436c43639a58a645d61d763f844500bb3d83176dffb70551a7",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp": "5ae92a2a42e661c1e5a9122538407697db682cbb20a4ebe46902c26aa9f9867c",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp": "4ead529d7adb38ecf7ae8190526c82068f49615fef18ef7136c36bd5b2a6f91e",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp": "d9e89a73cce31d45f9416239ee86f6ee31e77f88c183900dcfaa7139a7a21e55"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/test_mpcc_architecture_snapshot.log": "1a38be47bc229a1246df2edbeb9419d28bf847e26ada59d33196415afbd83fac",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/build-command.json": "2ca4631000df6227f25a340b545db2365716da545d0afcc354f143765ee5a4a0",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/test_mpcc_rate_resolved_retained_revalidation.log": "fbb0609a0021d64e2e62a9946c667fa087f4596debea323ffa497d07023e1995",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/test_mpcc_architecture_snapshot.xml": "be00e7023b01ec8223793654eec8cf6ddac506975935f0504ed6b9cf5e89f07a",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/build.log": "c084b6a472f681501eb0e5f31ce1b5c125fa674e8d42bc6b5699ddf4210d2d4d",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/test_mpcc_rate_resolved_retained_revalidation.xml": "c18bb6b57203e0152673866abad05e735e8dc50da8c37671e52037c4c8153332",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/result.json": "07b7677cdb5bd7c4430d0615f6e8f15c8aa2419a254d25062a6f0aec1a3e761e",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/runner.py": "c7be8722055400ff731146ef6c4feae2e1b83c86201b5e8c25973e9d353427fb",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/test/test_mpcc_rate_resolved_retained_revalidation.cpp": "673738be321f8a992ac300468dfbdff979ef6286172772505cee160421fdadf8",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/include/multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp": "b21056706d23f5c0bac4a2503ac4fa2b4b139f4fdaacec6516ed537ad53a68f0",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/src/mpc_controller_cpp.cpp": "6a328f31397658b3f7a0a69fa1c31278270f531209e9495994a5b421087f8fb0",
+    "output/20260913-nine-state-post-rejoin-observation-native-r703/src/mpcc_architecture_snapshot.cpp": "bb8b47d6c41177675204f68e16395463afc330f22ffcf09356edbce106356124",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/test_mpcc_architecture_snapshot.log": "fc0a1c00f49a2be5977b6c8024c47727820f8a88d405c760117e44454efcab6a",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/build-command.json": "2ca4631000df6227f25a340b545db2365716da545d0afcc354f143765ee5a4a0",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/test_mpcc_rate_resolved_retained_revalidation.log": "aa6c8d495d9e0c6f5451e568c250faf1f98b71b1b04d5ac3de857fae4e98c2e5",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/test_mpcc_architecture_snapshot.xml": "8f82497a432ad50ba169c6a3cf3ff29c3ae2a5d69e1cae17ec6ba756ea9df861",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/build.log": "1fde9fccdae0d66466d6645841bbdad2a8f2cc022228cd510600cfcb6816c193",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/test_mpcc_rate_resolved_retained_revalidation.xml": "cebe07df0d7033b933d09c515ee2973c22ea885637408855967234ed6843ca32",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/result.json": "9f53ea27a39272a2fca8bf555778b38fb3004340f2fed00ea56b331ef9d71044",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/runner.py": "39e4cc08ef74066e191c81c42945f80c606d431e0cac6e764970682ce660c744",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/test/test_mpcc_rate_resolved_retained_revalidation.cpp": "d9e89a73cce31d45f9416239ee86f6ee31e77f88c183900dcfaa7139a7a21e55",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/include/multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp": "4ead529d7adb38ecf7ae8190526c82068f49615fef18ef7136c36bd5b2a6f91e",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/src/mpc_controller_cpp.cpp": "5876b5758728e7436c43639a58a645d61d763f844500bb3d83176dffb70551a7",
+    "output/20260913-nine-state-post-rejoin-attempts-native-r704/src/mpcc_architecture_snapshot.cpp": "5ae92a2a42e661c1e5a9122538407697db682cbb20a4ebe46902c26aa9f9867c",
+    "output/20260913-nine-state-build132/status.json": "061052aac952c239b6d23db4714b6ec4e3bed1285f350027bdd3ce4bf40cdddd",
+    "output/20260913-nine-state-build132/build.log": "cdce1e179dbd192d2876342ac0cf60925c178616df0213b9be1fb7d088acf77e",
+    "output/20260913-nine-state-build132/runner.py": "1653d9f287d16078d4a47a5224512fd82367755ff0662657164e30fe5dcb51a6",
+    "output/20260913-nine-state-build132/manifest.json": "f75a7b37975a02cded2e6952a0919d992177b2e05e7191aded1bb7f61868f04c",
+    "output/20260913-nine-state-package119/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package119/test.log": "0c70697e6848157f34a3abe7ac99e5ba9c9bd2c827135da00e58ea1223519725",
+    "output/20260913-nine-state-package119/status.json": "f7525b7de81d0ec23d83ed445c83d7c067adfb7f328037f567566659d22141dc",
+    "output/20260913-nine-state-package119/test-result.log": "58a7644772894be77cf7e044739ee21d61deb90d43048267aa78a26efbc52851",
+    "output/20260913-nine-state-package119/runner.py": "05a0db76c4676386b7671dc0cc8c88cf927640f170474b43164850826ba8be47"
+  },
+  "native_tests": 193,
+  "source_tests": 118,
+  "package_summary": "Summary: 2640 tests, 0 errors, 0 failures, 0 skipped",
+  "review": {
+    "scope": "Read changed producer, worker ownership, recorder serialization and downstream before/after publication paths; no independent agent used.",
+    "result": "No further actionable defect found. Prior Rejoin witness derives only from actual scheduled receipt and normal prefix; current raw prefix/source retained. One first admission; max4leaf records on the same recorder worker. Failed source attempts preserved, original request copy retained before worker input move. Clock regression drops historical witness.",
+    "limitations": "Diagnostic overhead is real and included in total worker time; per-attempt wall timing surrounds evaluation only. No current publication capability is minted. Node/live capture not yet observed. Individual Stop-profile branch timing still requires native replay."
+  },
+  "next": "Local commit then single-r18diagnostic; validate all recorded attempts and actual Rejoin witness. Use immutable snapshot for structural programme/scheduling comparisons, no budget/tolerance change."
+}

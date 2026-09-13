@@ -3035,6 +3035,23 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
     }
     const auto & o = observation;
     YAML::Node root;
+    if (o.scheduled_capture && !o.scheduled_capture->attempted_sources.empty()) {
+      const auto &attempts=o.scheduled_capture->attempted_sources;
+      if (attempts.size()>4 || std::any_of(attempts.begin(),attempts.end(),[](const auto &attempt) {
+          return !attempt || !attempt->attempted_sources.empty();
+        })) return {RecordStatus::InvalidInput,{},"Invalid diagnostic attempt batch"};
+      // Same private recorder worker, before taking this writer's file mutex.
+      // Each input owns its own world/grid files; the parent records all paths.
+      for (std::size_t i=0;i<attempts.size();++i) {
+        auto item=o; item.scheduled_capture=attempts[i];
+        item.output_root/= "attempt-"+std::to_string(i);
+        const auto recorded=record_publication_failure(item);
+        if (recorded.status!=RecordStatus::Written && recorded.status!=RecordStatus::Duplicate)
+          return {recorded.status,recorded.snapshot_file,"Diagnostic source attempt: "+recorded.detail};
+        YAML::Node row; row["index"]=i; row["file"]=recorded.snapshot_file.string();
+        row["status"]=to_string(recorded.status); root["scheduled_attempts"].push_back(row);
+      }
+    }
     root["schema"] = "mpcc-final-publication-failure/v1";
     root["authority"] = false;
     root["meaning"] = "Exact final-guard observation; inspected solver source is historical, current request is separate. No publication authority.";
@@ -3099,6 +3116,8 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
       root["schema"]="mpcc-scheduled-dispatch-observation/v1";
       auto node=root["scheduled"];
       node["boundary"]=capture.boundary; node["detail"]=capture.detail;
+      if (capture.worker_elapsed_ms) node["worker_elapsed_ms"]=*capture.worker_elapsed_ms;
+      if (capture.starting_domain_ms) node["starting_domain_ms"]=*capture.starting_domain_ms;
       if (capture.raw_observation) node["raw_current_observation"]=mpcc_vehicle_model::encode_observation_provenance(*capture.raw_observation);
       node["source_received_body_observation"] = received_body_node(
         capture.source_received_body_observation,
@@ -3202,6 +3221,23 @@ RecordResult record_publication_failure(const PublicationFailureObservation & ob
         node["transactions"].push_back(transaction_node(event));
       if (capture.last_publication)
         node["last_actual_publication"]=transaction_node(*capture.last_publication);
+      if (capture.prior_rejoin_publication) {
+        const auto &prior=*capture.prior_rejoin_publication;
+        const auto &command=prior.command;
+        auto witness=node["prior_rejoin_publication"];
+        witness["authority"]=false;
+        witness["dispatch_plan_certificate_problem_solution"]=std::vector<std::uint64_t>{
+          command.decision_id,command.execution_plan_id,command.execution_certificate_decision_id,
+          command.problem_fingerprint,command.solution_id};
+        witness["intent"]=mpcc_execution_contract::to_string(command.intent);
+        witness["formulation"]=mpcc_execution_contract::to_string(command.formulation);
+        witness["source"]=mpcc_execution_contract::to_string(command.source);
+        witness["retained_solution"]=command.retained_solution;
+        witness["speed_acceleration_curvature_tire_virtual_speed"]=std::vector<double>{
+          command.predicted_speed_mps,command.acceleration_mps2,command.curvature_radpm,
+          command.steering_tire_angle_rad,command.virtual_progress_speed_mps};
+        witness["actual_publication"]=transaction_node(prior.actual);
+      }
       if (o.prior_normal_motion) {
         const auto &motion=*o.prior_normal_motion;
         auto witness=boundary["prior_normal_motion"];

@@ -15,6 +15,10 @@ b3613667のsingle-r17は認証済みRejoinを実送信し、通常Cruiseへの�
 その後のCruiseでは短い加速と制動を反復し、予約した後続証明が期限を超過。1773は
 通常認証後も停止確認でRecoveryが上書きし、最終SafeStopとなった。Start/周回は未達。
 この後続計算の完全入力が保存されていないため、限定した観測追加と構造比較を次に行う。
+診断は独立した最初の保存枠に、認証済みRejoinの実送信と後段の予約計算を記録する。
+同じ計算が試した最大4候補を、失敗も含めて個別の入力・世界ファイル・時間として残す。
+R704native193/source118/build132/package119合格、実取得は次のsingle-r18で検証する。
+[観測の設計](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-rejoin-observation-design.md)。
 [実走根拠と未解決境界](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-rejoin-source-audit.md)。
 
 ## Rejoin引き継ぎと非同期証明ID（2026-09-13）

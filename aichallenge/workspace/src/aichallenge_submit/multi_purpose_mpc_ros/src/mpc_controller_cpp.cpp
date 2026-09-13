@@ -8370,6 +8370,7 @@ struct ScheduledProductionOutcome
   std::optional<scheduled_control::FollowCourseAnchor> follow_anchor;
   std::size_t sent{};
   double elapsed_ms{};
+  std::vector<std::shared_ptr<const mpcc_architecture_snapshot::ScheduledFailureCapture>> diagnostic_attempts;
 };
 struct ScheduledProductionMailbox
 {
@@ -8414,6 +8415,7 @@ struct MPC
       scheduled_context_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       scheduled_final_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       scheduled_active_final_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
+      post_rejoin_reserved_recorder_=std::make_shared<mpcc_architecture_snapshot::FirstPublicationFailureRecorder>(report_scheduled);
       rate_resolved_track_cruise_shadow_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_native_reference_solver_context_ =
@@ -30912,6 +30914,8 @@ struct MPC
     if (const auto *last=ledger.latest_transaction()) capture->last_publication=*last;
     if (capture->certificate)
       capture->source_context_active_at_capture=capture->certificate->nominal()->source_context().valid();
+    capture->worker_elapsed_ms=entry->elapsed_ms;
+    capture->starting_domain_ms=entry->starting_domain_ms;
     capture->suffix_index=entry->sent; capture->boundary=boundary;
     return capture;
   }
@@ -31114,7 +31118,10 @@ struct MPC
     }
     const auto job_cursor = reservation ? reservation->cursor() : *cursor;
     const auto received_body = received_body_observation_;
-    const auto submitted = scheduled_worker_->submit_latest([requests=std::move(requests),cursor=job_cursor,context,anchor,mailbox,reservation,received_body]() mutable {
+    const bool observe_attempts=post_rejoin_reserved_recorder_ && !post_rejoin_reserved_recorded_ &&
+      last_rejoin_publication_observation_ && reservation && context.intent==mpcc_contract::ControlIntent::Cruise &&
+      last_rejoin_publication_observation_->actual.published.published_sec<=actual.provenance.now_sec;
+    const auto submitted = scheduled_worker_->submit_latest([requests=std::move(requests),cursor=job_cursor,context,anchor,mailbox,reservation,received_body,observe_attempts]() mutable {
       const ScheduledProductionCompletion completion{mailbox};
       const auto started = SteadyClock::now();
       auto outcome = std::make_shared<ScheduledProductionOutcome>();
@@ -31122,9 +31129,22 @@ struct MPC
       outcome->cursor = cursor; outcome->reservation = reservation;
       if (reservation) outcome->prior_sources = reservation->prior_sources();
       outcome->proposed_context = context; outcome->follow_anchor = anchor;
-      for (const auto &request : requests) {
+      for (auto &request : requests) {
         outcome->request = request;
+        const auto attempt_started=SteadyClock::now();
         outcome->result = scheduled_control::evaluate(request);
+        const double attempt_ms=std::chrono::duration<double,std::milli>(SteadyClock::now()-attempt_started).count();
+        if (observe_attempts) {
+          auto attempt=std::make_shared<mpcc_architecture_snapshot::ScheduledFailureCapture>();
+          attempt->original=std::move(request);
+          attempt->certificate=outcome->result.applied.certificate;
+          attempt->worker_elapsed_ms=attempt_ms;
+          attempt->detail=std::string{rate_resolved_retained::to_string(outcome->result.reason)}+
+            "/physical:"+std::to_string(static_cast<int>(outcome->result.applied.reason))+
+            "/program:"+std::to_string(static_cast<int>(outcome->result.applied.program_reason))+
+            "/input:"+std::to_string(static_cast<int>(outcome->result.applied.prediction_reason));
+          outcome->diagnostic_attempts.push_back(std::move(attempt));
+        }
         if (outcome->result.applied.certificate) break;
       }
       const auto domain_started = SteadyClock::now();
@@ -31350,6 +31370,44 @@ struct MPC
           observation.scheduled_capture = std::move(capture);
           static_cast<void>(admission_recorder->submit(std::move(observation)));
         }
+        // One diagnostic slot after an actual Rejoin. Earlier admission
+        // failures cannot consume it; this never changes the failed reservation.
+        if (post_rejoin_reserved_recorder_ && !post_rejoin_reserved_recorded_ &&
+            last_rejoin_publication_observation_ && waiting->reservation &&
+            !waiting->prior_sources.empty() && deadline && now > *deadline &&
+            waiting->request.observed.plan && waiting->request.observed.plan->execution_artifact &&
+            waiting->request.observed.plan->execution_artifact->identity.source_context.intent ==
+              mpcc_contract::ControlIntent::Cruise &&
+            last_rejoin_publication_observation_->actual.published.published_sec <=
+              waiting->request.observed.now_sec) {
+          auto capture=scheduled_failure_capture(waiting,ledger,nullptr,"post-rejoin-reservation-expired");
+          capture->raw_observation=*vehicle_observation_provenance_;
+          capture->current_check.prefix=prefix;
+          if (proposed_context) capture->current_context=*proposed_context;
+          capture->prior_rejoin_publication=last_rejoin_publication_observation_;
+          capture->detail="First reserved Cruise result past its original deadline after actual certified Rejoin; observation only";
+          for (const auto &attempt:waiting->diagnostic_attempts) {
+            auto item=std::make_shared<mpcc_architecture_snapshot::ScheduledFailureCapture>(*capture);
+            item->attempted_sources.clear();
+            item->original=attempt->original; item->certificate=attempt->certificate;
+            item->boundary="post-rejoin-source-attempt"; item->detail=attempt->detail;
+            item->worker_elapsed_ms=attempt->worker_elapsed_ms;
+            item->starting_domain_ms.reset();
+            if (item->certificate!=capture->certificate) item->starting_domain.reset();
+            item->source_context_active_at_capture=item->certificate ?
+              std::optional<bool>{item->certificate->nominal()->source_context().valid()} : std::nullopt;
+            capture->attempted_sources.push_back(std::move(item));
+          }
+          mpcc_architecture_snapshot::PublicationFailureObservation observation;
+          observation.decision_id=active_control_decision_id_;
+          observation.nominal_sec=first.value_or(now);
+          observation.decision_clock_sec=now;
+          observation.moving=std::abs(vehicle_observation_provenance_->initial.state.forward_velocity_mps)>0.1;
+          observation.output_root="mpcc_architecture_snapshots/post-rejoin-reservation";
+          observation.scheduled_capture=std::move(capture);
+          post_rejoin_reserved_recorded_=post_rejoin_reserved_recorder_->submit(std::move(observation)) ==
+            mpcc_architecture_snapshot::ObservationAdmission::Queued;
+        }
         RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
           "MPCC scheduled reservation invalid: dispatch=%lu, job=%lu, prior=%zu, now=%.9f, first=%.9f, deadline=%.9f, prefix=%d, worker_ms=%.3f",
           static_cast<unsigned long>(active_control_decision_id_),
@@ -31455,6 +31513,12 @@ struct MPC
     }
     const auto entry=pending_scheduled_entry_;
     const auto &certificate=*entry->result.applied.certificate;
+    if (scheduled_control::programme_publication_intent(certificate,entry->sent) ==
+        mpcc_contract::ControlIntent::Rejoin) {
+      if (const auto *actual=ledger.latest_transaction())
+        last_rejoin_publication_observation_=mpcc_architecture_snapshot::ScheduledRejoinPublicationObservation{
+          pending_scheduled_dispatch_->canonical_command(),*actual};
+    }
     if (entry->sent==0) {
       entry->committed_context=pending_scheduled_context_;
       // A resampled programme is a published source, never an unmodified
@@ -31517,6 +31581,7 @@ struct MPC
         now_sec<normal_motion_observation_clock_sec_)) {
       last_moving_normal_observation_.reset();
       post_motion_final_loss_.reset();
+      last_rejoin_publication_observation_.reset();
     }
     normal_motion_observation_clock_sec_=now_sec;
     source_supply_draft_ = "not-reached";
@@ -31813,6 +31878,9 @@ struct MPC
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_context_recorder_;
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_final_recorder_;
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> scheduled_active_final_recorder_;
+  std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> post_rejoin_reserved_recorder_;
+  std::optional<mpcc_architecture_snapshot::ScheduledRejoinPublicationObservation> last_rejoin_publication_observation_;
+  bool post_rejoin_reserved_recorded_{false};
   std::optional<mpcc_architecture_snapshot::PublishedNormalMotionObservation> last_moving_normal_observation_;
   std::shared_ptr<const mpcc_architecture_snapshot::PostMotionFinalLossObservation> post_motion_final_loss_;
   double normal_motion_observation_clock_sec_{std::numeric_limits<double>::quiet_NaN()};

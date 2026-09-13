@@ -3,6 +3,12 @@
 #include "multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp"
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot {
+/// Historical diagnostic evidence; never a current publication capability.
+struct ScheduledRejoinPublicationObservation {
+  mpcc_execution_contract::CanonicalNormalCommand command;
+  mpcc_vehicle_model::PublicationTransaction actual;
+};
+
 struct ScheduledFailureCapture {
   mpcc_rate_resolved_scheduled::Request original;
   std::shared_ptr<const mpcc_rate_resolved_applied_program::ScheduledCertificate> certificate;
@@ -27,5 +33,10 @@ struct ScheduledFailureCapture {
   mpcc_rate_resolved_scheduled::DomainUseReason domain_use{mpcc_rate_resolved_scheduled::DomainUseReason::NotNeeded};
   std::string boundary;
   std::string detail;
+  std::optional<double> worker_elapsed_ms;
+  std::optional<double> starting_domain_ms;
+  std::optional<ScheduledRejoinPublicationObservation> prior_rejoin_publication;
+  /// At most four original source attempts, one level only; same private writer.
+  std::vector<std::shared_ptr<const ScheduledFailureCapture>> attempted_sources;
 };
 } // namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot

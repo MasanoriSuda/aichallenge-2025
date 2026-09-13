@@ -1,15 +1,17 @@
 # Current status and remaining completion work
 
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。単車はReady中に停止し、再発進・完走は未達。観測時刻と接地変動による予測誤差の修正を検証中。**
+**全体未完。単車はRejoin復帰まで確認したが、その後再停止。Start・周回・統合受入れは未達。**
 
 最新: b3613667のsingle-r17で認証済みRejoin実送信とRejoin完了→Cruiseを2回確認。
 全4296callback最大26.41ms、通常856件、最終1772。863は送信前期限拒否、実期限外送信ゼロ。
 ただしCruiseは短い加速と制動を反復し、予約済み後続計算が元期限を超過（job1207約148ms）。
 1773の通常候補は現在認証済みでも再停止確認でRecoveryが上書きし、最後は進行方向不明の
 SafeStop。Start/周回なし。R699–R701で保存、元DLL・ユーザーJSON復元済み。
-次は最初のRejoin後の予約計算の完全な入力・各証明結果・時間を限定保存し、native再生と
-構造比較で修正箇所を確定する。既存保存枠は先行失敗で使用済み。速度/期限/安全条件は緩めない。
+限定保存の実装はR704native193/source118、build132全26/package119合格。
+実際のRejoin記録と、予約計算が試した最大4候補の完全入力・結果・時間を独立保存する。
+次はローカルcommit固定single-r18で取得し、native再生と
+構造比較で修正箇所を確定する。先行失敗と別の保存枠を使う。速度/期限/安全条件は緩めない。
 [現在の監査・次の観測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/post-rejoin-source-audit.md)。
 
 以下は引き継ぎ修正前までの履歴。

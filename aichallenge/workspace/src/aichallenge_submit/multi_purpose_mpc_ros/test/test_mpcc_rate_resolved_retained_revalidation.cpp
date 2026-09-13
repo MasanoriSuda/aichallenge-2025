@@ -5617,3 +5617,74 @@ TEST(
   }
 }
 }  // namespace
+
+TEST(MpccSourceReservation, PostRejoinObservationKeepsActualReceiptAndLateSourceSeparate)
+{
+  namespace capture = multi_purpose_mpc_ros::mpcc_architecture_snapshot;
+  ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Rejoin, true);
+  const auto result=f.prepare(); ASSERT_TRUE(result.candidate);
+  const auto &dispatch=*result.candidate;
+  const auto command=dispatch.canonical_command();
+  ASSERT_TRUE(f.ledger.record(dispatch.packet(),f.fresh.now_sec,f.fresh.now_sec,2,dispatch.source()));
+  const auto receipt=dispatch.publication_identity(f.ledger,f.owner.capture());
+  ASSERT_TRUE(receipt); ASSERT_TRUE(receipt->matches(command));
+  ASSERT_NE(command.decision_id,command.execution_certificate_decision_id);
+  const auto root=std::filesystem::temp_directory_path() / ("mpcc-post-rejoin-"+
+    std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  auto evidence=std::make_shared<capture::ScheduledFailureCapture>();
+  ScheduledDispatchFixture inspected(1.075, false, contract::ControlIntent::Cruise, true);
+  evidence->original=inspected.request; evidence->certificate=inspected.certificate;
+  ASSERT_NE(command.problem_fingerprint, inspected.certificate->suffix().source.source_context.fingerprint);
+  evidence->boundary="post-rejoin-reservation-expired";
+  evidence->worker_elapsed_ms=147.670; evidence->starting_domain_ms=10.603326;
+  evidence->prior_rejoin_publication=capture::ScheduledRejoinPublicationObservation{
+    command,*f.ledger.latest_transaction()};
+  capture::PublicationFailureObservation observation;
+  observation.decision_id=command.decision_id+10;
+  observation.nominal_sec=1.15; observation.decision_clock_sec=1.3;
+  observation.output_root=root / "earlier"; observation.scheduled_capture=evidence;
+  capture::FirstPublicationFailureRecorder earlier;
+  ASSERT_EQ(earlier.submit(observation),capture::ObservationAdmission::Queued);
+  ASSERT_EQ(earlier.submit(observation),capture::ObservationAdmission::Duplicate);
+  earlier.stop();
+  std::vector<capture::RecordResult> records;
+  capture::FirstPublicationFailureRecorder dedicated([&](const auto &,const auto &record){records.push_back(record);});
+  observation.output_root=root / "post-rejoin";
+  auto failed=std::make_shared<capture::ScheduledFailureCapture>(*evidence);
+  failed->certificate.reset(); failed->worker_elapsed_ms=120.0; failed->detail="rejected-attempt";
+  auto accepted=std::make_shared<capture::ScheduledFailureCapture>(*evidence);
+  accepted->worker_elapsed_ms=20.0; accepted->detail="accepted-attempt";
+  evidence->attempted_sources={failed,accepted};
+  ASSERT_EQ(dedicated.submit(observation),capture::ObservationAdmission::Queued);
+  EXPECT_EQ(dedicated.submit(observation),capture::ObservationAdmission::Duplicate);
+  dedicated.stop(); ASSERT_EQ(records.size(),1U);
+  ASSERT_EQ(records.front().status,capture::RecordStatus::Written) << records.front().detail;
+  const auto document=YAML::LoadFile(records.front().snapshot_file.string());
+  const auto node=document["scheduled"], witness=node["prior_rejoin_publication"];
+  ASSERT_EQ(document["scheduled_attempts"].size(),2U);
+  for (std::size_t i=0;i<2;++i) {
+    const auto child=YAML::LoadFile(document["scheduled_attempts"][i]["file"].as<std::string>());
+    EXPECT_EQ(child["scheduled"]["detail"].as<std::string>(),i==0 ? "rejected-attempt" : "accepted-attempt");
+    EXPECT_EQ(bool(child["scheduled"]["program"]),i==1);
+    EXPECT_DOUBLE_EQ(child["scheduled"]["worker_elapsed_ms"].as<double>(),i==0 ? 120.0 : 20.0);
+    EXPECT_TRUE(child["scheduled"]["source_request"]);
+  }
+  ASSERT_TRUE(witness); EXPECT_FALSE(witness["authority"].as<bool>());
+  EXPECT_EQ(witness["dispatch_plan_certificate_problem_solution"].as<std::vector<std::uint64_t>>(),
+    (std::vector<std::uint64_t>{command.decision_id,command.execution_plan_id,
+      command.execution_certificate_decision_id,command.problem_fingerprint,command.solution_id}));
+  EXPECT_EQ(witness["speed_acceleration_curvature_tire_virtual_speed"].as<std::vector<double>>(),
+    (std::vector<double>{command.predicted_speed_mps,command.acceleration_mps2,
+      command.curvature_radpm,command.steering_tire_angle_rad,command.virtual_progress_speed_mps}));
+  EXPECT_EQ(witness["intent"].as<std::string>(),"rejoin");
+  EXPECT_DOUBLE_EQ(node["worker_elapsed_ms"].as<double>(),147.670);
+  EXPECT_DOUBLE_EQ(node["starting_domain_ms"].as<double>(),10.603326);
+  const auto &actual=evidence->prior_rejoin_publication->actual;
+  EXPECT_EQ(witness["actual_publication"]["nominal_wire_acceleration_wire_steering_before_after"].as<std::vector<double>>(),
+    (std::vector<double>{actual.nominal.published_sec,actual.nominal.wire_acceleration_mps2,
+      actual.nominal.wire_steering_rad,actual.before_clock_sec,actual.after_clock_sec}));
+  EXPECT_EQ(document["boundary"]["decision_id"].as<std::uint64_t>(),observation.decision_id);
+  EXPECT_DOUBLE_EQ(document["boundary"]["decision_clock_sec"].as<double>(),1.3);
+  EXPECT_NE(command.decision_id,observation.decision_id);
+  std::filesystem::remove_all(root);
+}

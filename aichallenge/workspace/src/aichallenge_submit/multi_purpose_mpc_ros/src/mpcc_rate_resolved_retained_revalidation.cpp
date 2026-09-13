@@ -822,6 +822,22 @@ std::optional<double> source_horizon_velocity_ceiling(const Request & request) n
   return std::isfinite(ceiling) ? std::optional<double>{ceiling} : std::nullopt;
 }
 
+static std::optional<std::size_t> source_horizon_interval_count(
+  const artifact::ExecutionArtifact & execution, const artifact::Cursor & cursor)
+{
+  if (!cursor.available || cursor.control_stage_index >= execution.control_stages.size() ||
+    !std::isfinite(execution.publication_interval_sec) || execution.publication_interval_sec <= 0.0)
+    return std::nullopt;
+  double remaining_sec = -cursor.stage_elapsed_sec;
+  for (std::size_t i = cursor.control_stage_index; i < execution.control_stages.size(); ++i)
+    remaining_sec += execution.control_stages[i].duration_sec;
+  const double intervals = std::floor(remaining_sec / execution.publication_interval_sec);
+  const mpcc_vehicle_model::PublishedInputProgram program;
+  if (!std::isfinite(intervals) || intervals <= 1 ||
+    intervals >= static_cast<double>(program.commands.max_size() - 1U)) return std::nullopt;
+  return static_cast<std::size_t>(intervals);
+}
+
 // Proposal ordering only: a peer approaching the stationary current footprint
 // can make immediate braking a poor first hypothesis. One native braking step
 // estimates the stop duration; every actual programme still needs full proof.
@@ -1588,17 +1604,13 @@ static Result evaluate_with_stop_profile(
           // interval. Its proof scope does not shorten the original schedule
           // used to propose this different constant-input programme. The full
           // new programme and its terminal stop are independently proved below.
-          double source_remaining_sec = -command_cursor.stage_elapsed_sec;
-          for (std::size_t i = command_cursor.control_stage_index; i < execution.control_stages.size(); ++i)
-            source_remaining_sec += execution.control_stages[i].duration_sec;
-          const double intervals = std::floor(source_remaining_sec / execution.publication_interval_sec);
-          if (!result.terminal_stop_forward_velocity_ceiling_mps || !std::isfinite(intervals) ||
-            intervals <= 1 || intervals >= static_cast<double>(program.commands.max_size() - 1U))
+          const auto intervals = source_horizon_interval_count(execution, command_cursor);
+          if (!result.terminal_stop_forward_velocity_ceiling_mps || !intervals)
             return mpcc_rate_resolved_physical_adapter::StopContingencyResult{};
-          prefix_intervals = static_cast<std::size_t>(intervals);
+          prefix_intervals = *intervals;
           if (intermediate_prefix_intervals) {
-            // The full duration was already attempted. Only propose a distinct
-            // shorter programme, never extend the immutable source schedule.
+            // This candidate owns a distinct shorter reservation span and
+            // never extends the immutable source schedule.
             if (*intermediate_prefix_intervals <= 1U || *intermediate_prefix_intervals >= prefix_intervals)
               return mpcc_rate_resolved_physical_adapter::StopContingencyResult{};
             prefix_intervals = *intermediate_prefix_intervals;
@@ -1929,26 +1941,34 @@ static Result evaluate_stop_candidates(
     request.input_application_profile)
   {
     const bool horizon_available = source_horizon_velocity_ceiling(request).has_value();
-    // Reserved prior packets provide time to calculate a longer programme.
-    // Zero-prior bootstrap jobs must retain their original candidate order:
-    // any intervening actual send invalidates those jobs, so extra long-proof
-    // work would make it harder to obtain the first published normal source.
+    // Reserved priors define the next replenishment span. Prove that member
+    // first, before spending its arrival budget on a longer proposal. Every
+    // member still needs the complete nominal/applied Stop and world proofs.
     const bool reserved_source = scheduled && scheduled->forecast.nominal_prefix.commands.size() > 1;
     const bool horizon_first = horizon_available &&
       (reserved_source || rear_peer_prefers_source_horizon(request, scheduled));
-    common = evaluate_with_stop_profile(request, nullptr, true, horizon_first, materialized_from, scheduled);
+    std::optional<std::size_t> reservation_span;
+    if (reserved_source && horizon_available) {
+      const auto &execution = *request.plan->execution_artifact;
+      const auto cursor = resolve_execution_cursor(execution, request.control_origin_sec, request.execution_clock);
+      Result selection;
+      const auto publication = cursor.available ?
+        select_publication_actuation(request, cursor, selection, scheduled->previous_wire_steering) : std::nullopt;
+      const auto full = publication ? source_horizon_interval_count(execution, publication->first) : std::nullopt;
+      const auto span = scheduled->forecast.nominal_prefix.commands.size();
+      if (full && span < *full) reservation_span = span;
+    }
+    common = evaluate_with_stop_profile(request, nullptr, true, horizon_first,
+      materialized_from, scheduled, reservation_span);
     if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
     if (horizon_available) {
-      if (reserved_source) {
-        // Failure of the entire original horizon does not imply that only one
-        // positive packet can stop safely. Cover the next planning span already
-        // defined by the reserved priors plus this source's first appointment.
-        // This is a newly fingerprinted programme with complete independent
-        // pending-input, current-world and terminal-rest proofs.
-        auto intermediate = evaluate_with_stop_profile(request, nullptr, true, true,
-          materialized_from, scheduled, scheduled->forecast.nominal_prefix.commands.size());
-        accumulate(intermediate, *common);
-        common = std::move(intermediate);
+      if (reservation_span) {
+        // The shorter member failed. Preserve the original full-horizon
+        // alternative, without repeating either candidate.
+        auto full = evaluate_with_stop_profile(request, nullptr, true, true,
+          materialized_from, scheduled);
+        accumulate(full, *common);
+        common = std::move(full);
         if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
       }
       auto alternative = evaluate_with_stop_profile(request, nullptr, true, !horizon_first, materialized_from, scheduled);

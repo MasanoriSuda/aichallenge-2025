@@ -1513,6 +1513,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-program-order-evidence.json",
       "replay_ready": true,
       "reason": "Frozen source-state live validation and first complete post-Rejoin reserved-source timing input."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-reserved-order-seal-r743",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-program-order-validation.json",
+      "replay_ready": true,
+      "reason": "Old deterministic producer-order failure, five holdouts, full native/package tests and actual archive six-source equivalence."
     }
   ],
   "experiments": [
@@ -19965,6 +19971,65 @@
       "production_impact": "No additional production change beyond source-state40d1664b; no race acceptance or clock waiver.",
       "deleted_code": [],
       "revisit_condition": "Additional complete source/world or changed proof/candidate architecture. Preserve old rejected long candidate and same-programme equivalence; no population/budget expansion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-order-holdouts-r739",
+      "baseline_commit": "0685b076",
+      "snapshot_ids": [
+        "20260913-nine-state-reserved-order-seal-r743"
+      ],
+      "hypothesis": "Rejected longer programme delays the same accepted reserved-span certificate beyond the original availability budget.",
+      "changed_dimension": "Prioritize existing distinct reserved span; preserve finite alternatives, source/model/world/clock/bounds and all complete physical proofs.",
+      "result": "accepted",
+      "reason": "Five frozen contexts preserve original proof classes and accepted identities; final publication admission is not inferred.",
+      "production_impact": "One downstream candidate-order repair, no new normal authority or parameter/timeout change. Live acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New frozen scheduled/peer/cursor context or runtime replenishment failure. Never waive original hard wall, final send or rest contract."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-order-old-r740",
+      "baseline_commit": "0685b076",
+      "snapshot_ids": [
+        "20260913-nine-state-reserved-order-seal-r743"
+      ],
+      "hypothesis": "Rejected longer programme delays the same accepted reserved-span certificate beyond the original availability budget.",
+      "changed_dimension": "Prioritize existing distinct reserved span; preserve finite alternatives, source/model/world/clock/bounds and all complete physical proofs.",
+      "result": "rejected",
+      "reason": "Old intermediate-before-peer fixture needs2proof attempts before identical safe Stop instead of1; old negative retained.",
+      "production_impact": "One downstream candidate-order repair, no new normal authority or parameter/timeout change. Live acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New frozen scheduled/peer/cursor context or runtime replenishment failure. Never waive original hard wall, final send or rest contract."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-order-native-r741",
+      "baseline_commit": "0685b076",
+      "snapshot_ids": [
+        "20260913-nine-state-reserved-order-seal-r743"
+      ],
+      "hypothesis": "Rejected longer programme delays the same accepted reserved-span certificate beyond the original availability budget.",
+      "changed_dimension": "Prioritize existing distinct reserved span; preserve finite alternatives, source/model/world/clock/bounds and all complete physical proofs.",
+      "result": "accepted",
+      "reason": "Reserved-span-first distinct member and original full/short alternatives; all166native/source118/build135/package122pass.",
+      "production_impact": "One downstream candidate-order repair, no new normal authority or parameter/timeout change. Live acceptance pending.",
+      "deleted_code": [
+        "Full-horizon-first dependency for an eligible distinct reserved span",
+        "Duplicate interval-count formula"
+      ],
+      "revisit_condition": "New frozen scheduled/peer/cursor context or runtime replenishment failure. Never waive original hard wall, final send or rest contract."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-order-replay-r742",
+      "baseline_commit": "0685b076",
+      "snapshot_ids": [
+        "20260913-nine-state-reserved-order-seal-r743"
+      ],
+      "hypothesis": "Rejected longer programme delays the same accepted reserved-span certificate beyond the original availability budget.",
+      "changed_dimension": "Prioritize existing distinct reserved span; preserve finite alternatives, source/model/world/clock/bounds and all complete physical proofs.",
+      "result": "accepted",
+      "reason": "Actual repository archive reproduces six original source classes and accepted programme/domain fingerprints; original1223~43.44ms combined. No clock waiver.",
+      "production_impact": "One downstream candidate-order repair, no new normal authority or parameter/timeout change. Live acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New frozen scheduled/peer/cursor context or runtime replenishment failure. Never waive original hard wall, final send or rest contract."
     }
   ]
 }

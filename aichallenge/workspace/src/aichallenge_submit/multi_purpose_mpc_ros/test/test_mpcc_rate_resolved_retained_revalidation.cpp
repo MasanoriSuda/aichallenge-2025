@@ -5367,6 +5367,9 @@ TEST(MpccSourceReservation, ProvesIntermediateProgrammeWhenFullDurationCannotSto
   attach_synthetic_source_generation(request, owner.capture());
   const auto result = scheduled::evaluate(request);
   ASSERT_TRUE(result.applied.certificate) << retained::to_string(result.reason);
+  // The reserved span already owns the next replenishment appointments.
+  // Its complete proof must not wait behind a longer rejected programme.
+  EXPECT_EQ(result.diagnostic.terminal_stop_reference_attempts, 1U);
   const auto &certificate = *result.applied.certificate;
   const auto &programme = certificate.suffix().program;
   // The original horizon proposes three positive packets. Its complete applied

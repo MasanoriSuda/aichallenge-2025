@@ -3,6 +3,15 @@
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
 **全体未完。ゲームStart・Rejoin復帰は確認済み。車両Start・周回・統合受入れは未達。**
 
+予約区間優先の候補生成順を実装。元の期限・壁・他車・停止・指令履歴の検証と、
+長い候補・短い候補の代替経路を維持する。R740旧2回検証を再現、R741native166/
+source118、build135全26/package122合格。R742実ビルドで6入力の合否と合格指紋が一致。
+元の遅延入力は約43msで同じ証明を生成。次は固定commitのsingle-r20で実走確認する。
+ゲームStartは確認済みだが車両Start・周回・M4–M6は未完。
+[今回の設計と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-program-order-design.md)。
+
+以下は今回の実装修正前の履歴。
+
 40d1664bのsingle-r19:通常2325送信、Rejoin完了2回、4463callback最大22.09ms、
 実期限外送信ゼロ。863/1194は送信前拒否。ゲーム全体のStartはUnityで確認済み、
 車両Start・周回は未達。復帰後の予約計算を初めて完全取得し、R734で指紋一致再生。

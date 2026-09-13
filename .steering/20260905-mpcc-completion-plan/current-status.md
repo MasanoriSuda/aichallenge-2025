@@ -3,6 +3,16 @@
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
 **全体未完。ゲームStart・車両Start・Rejoin復帰は確認済み。周回・統合受入れは未達。**
 
+single-r26は実送信2180の期限超過で中止。721正常送信とは別に、期限外の通常指令1件と
+直後のfailsafeを保存。元の指令・証明・履歴がR805で一致し、送信前許可→送信後拒否を再現。
+callback3.46msでもROS時刻が25ms進む。直前の記録側clock受信間隔は297msで、原因の
+描画・GC・DDS等は未確定。単純な5ms余裕や期限拡大は採用しない。次は元DLL・物理・
+制御を保つ描画なしsingle-r27診断で時計と送信を比較。r25車両Startは別runの確認済み証拠。
+全コース・周回・統合受入れとM4–M6は未完。
+[期限超過の再生と次の比較](../20260910-mpcc-empirical-plant/receiver-input-enclosure/full-course-publication-timing-audit.md)。
+
+以下は全コース試行前の履歴。
+
 38a562eeのsingle-r25で車両Startを初確認。通常3321送信、実期限外送信ゼロ。
 4573callback中3646の1件が26.73ms（現在検証24.63ms）。その送信は元の期限内で、
 送信前拒否19件からの通常送信はない。壁区間拒否・観測・Recovery操縦・Rejoinは未発生。

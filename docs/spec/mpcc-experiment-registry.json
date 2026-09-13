@@ -1597,6 +1597,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-wall-interval-live-evidence.json",
       "replay_ready": true,
       "reason": "First vehicleStart, sustained normal publications, current proof callback overrun and explicitly unobserved interval query."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-full-course-timing-seal-r806",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-course-publication-timing-evidence.json",
+      "replay_ready": true,
+      "reason": "Same-run first actual late normal2180, exact native selected-proof replay and clock receipt series; all failed diagnostics retained."
     }
   ],
   "experiments": [
@@ -20760,6 +20766,104 @@
       "production_impact": "No control mutation; vehicleStart opens full-course acceptance. Observer did not fire.",
       "deleted_code": [],
       "revisit_condition": "Newly reached full-course range at6laps/600simsec,660hostsec ceiling; or actual exact producer input. No parameter relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-live-audit-r799",
+      "baseline_commit": "549d96a7",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-timing-seal-r806"
+      ],
+      "hypothesis": "Original point-before guard can accept near deadline while clock advances during final publication.",
+      "changed_dimension": "Exact original native/provenance/clock audit, no production mutation.",
+      "result": "rejected",
+      "reason": "Actual normal2180crosses original deadline;721other valid logged sends do not erase it.6lap attempt stopped.",
+      "production_impact": "No timing relaxation or authority change. Full-course acceptance failed.",
+      "deleted_code": [],
+      "revisit_condition": "Independent renderer/clock execution hypothesis on current source, or a supported whole-call temporal proof; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-public-r800",
+      "baseline_commit": "549d96a7",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-timing-seal-r806"
+      ],
+      "hypothesis": "Original point-before guard can accept near deadline while clock advances during final publication.",
+      "changed_dimension": "Exact original native/provenance/clock audit, no production mutation.",
+      "result": "accepted",
+      "reason": "Same-run public state/commands/clock and finite values retained; no race completion.",
+      "production_impact": "No timing relaxation or authority change. Full-course acceptance failed.",
+      "deleted_code": [],
+      "revisit_condition": "Independent renderer/clock execution hypothesis on current source, or a supported whole-call temporal proof; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-interval-replay-r801",
+      "baseline_commit": "549d96a7",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-timing-seal-r806"
+      ],
+      "hypothesis": "Original point-before guard can accept near deadline while clock advances during final publication.",
+      "changed_dimension": "Exact original native/provenance/clock audit, no production mutation.",
+      "result": "inconclusive",
+      "reason": "Current interval query not observed; no replay available.",
+      "production_impact": "No timing relaxation or authority change. Full-course acceptance failed.",
+      "deleted_code": [],
+      "revisit_condition": "Independent renderer/clock execution hypothesis on current source, or a supported whole-call temporal proof; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-single-post-deadline-r802",
+      "baseline_commit": "549d96a7",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-timing-seal-r806"
+      ],
+      "hypothesis": "Original point-before guard can accept near deadline while clock advances during final publication.",
+      "changed_dimension": "Exact original native/provenance/clock audit, no production mutation.",
+      "result": "inconclusive",
+      "reason": "Driver compilation missing read-only /steering mount; no candidate evaluated.",
+      "production_impact": "No timing relaxation or authority change. Full-course acceptance failed.",
+      "deleted_code": [],
+      "revisit_condition": "Independent renderer/clock execution hypothesis on current source, or a supported whole-call temporal proof; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-single-publication-clock-r803",
+      "baseline_commit": "549d96a7",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-timing-seal-r806"
+      ],
+      "hypothesis": "Original point-before guard can accept near deadline while clock advances during final publication.",
+      "changed_dimension": "Exact original native/provenance/clock audit, no production mutation.",
+      "result": "accepted",
+      "reason": "10749clocks exact float32-5ms grid; preceding296.983129ms recorder receipt gap and following cluster, no specific origin attribution.",
+      "production_impact": "No timing relaxation or authority change. Full-course acceptance failed.",
+      "deleted_code": [],
+      "revisit_condition": "Independent renderer/clock execution hypothesis on current source, or a supported whole-call temporal proof; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-single-post-deadline-mounted-r804",
+      "baseline_commit": "549d96a7",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-timing-seal-r806"
+      ],
+      "hypothesis": "Original point-before guard can accept near deadline while clock advances during final publication.",
+      "changed_dimension": "Exact original native/provenance/clock audit, no production mutation.",
+      "result": "inconclusive",
+      "reason": "Compared rebuilt parent to captured selected early domain, stopped before guard replay.",
+      "production_impact": "No timing relaxation or authority change. Full-course acceptance failed.",
+      "deleted_code": [],
+      "revisit_condition": "Independent renderer/clock execution hypothesis on current source, or a supported whole-call temporal proof; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-selected-domain-post-deadline-r805",
+      "baseline_commit": "549d96a7",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-timing-seal-r806"
+      ],
+      "hypothesis": "Original point-before guard can accept near deadline while clock advances during final publication.",
+      "changed_dimension": "Exact original native/provenance/clock audit, no production mutation.",
+      "result": "accepted",
+      "reason": "Original dispatcher selects early evidence; actual source/domain/history/wire/epoch match, before accepts and original actual after rejects.",
+      "production_impact": "No timing relaxation or authority change. Full-course acceptance failed.",
+      "deleted_code": [],
+      "revisit_condition": "Independent renderer/clock execution hypothesis on current source, or a supported whole-call temporal proof; no unchanged failed-run repetition."
     }
   ]
 }

@@ -8,6 +8,16 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 全コース試行の実送信期限超過（2026-09-13）
+
+single-r26は実送信2180の期限超過で中止。721正常送信とは別に、期限外の通常指令1件と
+直後のfailsafeを保存。元の指令・証明・履歴がR805で一致し、送信前許可→送信後拒否を再現。
+callback3.46msでもROS時刻が25ms進む。直前の記録側clock受信間隔は297msで、原因の
+描画・GC・DDS等は未確定。単純な5ms余裕や期限拡大は採用しない。次は元DLL・物理・
+制御を保つ描画なしsingle-r27診断で時計と送信を比較。r25車両Startは別runの確認済み証拠。
+全コース・周回・統合受入れとM4–M6は未完。
+[監査・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-course-publication-timing-audit.md)。
+
 ## 車両Startと全コース検証への移行（2026-09-13）
 
 38a562eeのsingle-r25で車両Startを初確認。通常3321送信、実期限外送信ゼロ。

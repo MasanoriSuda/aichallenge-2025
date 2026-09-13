@@ -684,33 +684,51 @@ TEST(MpccArchitectureComparison, WallBucketAuditKeepsExactProofChain)
 
 TEST(
   MpccArchitectureComparison,
-  TargetFreeCruiseReachesSolverAndExactProofInsteadOfTargetGate)
+  TargetFreeNormalReachesSolverAndExactProofInsteadOfTargetGate)
 {
-  auto source = source_snapshot();
-  auto & context = source.identity.source_context;
-  context.intent = contract::ControlIntent::Cruise;
-  context.target_id.clear();
-  context.target_obstacle_generation = 0U;
-  context.execution_side_sign = 0;
-  context.dynamic_obstacle_constraint_active = false;
-  context.dynamic_obstacle_generation = 0U;
-  context.dynamic_obstacle_id.clear();
-  context.dynamic_obstacle_side_sign = 0;
-  context.fingerprint = 0U;
-  context = contract::seal_problem_context(context);
-  source.dynamic_obstacle_refinement_active = false;
-  source.dynamic_obstacle_pass_side_sign = 0;
-  source.dynamic_obstacle_stages.clear();
+  for (const auto intent : {contract::ControlIntent::Track, contract::ControlIntent::Cruise,
+      contract::ControlIntent::Rejoin})
+  {
+    SCOPED_TRACE(static_cast<int>(intent));
+    auto source = source_snapshot();
+    auto & context = source.identity.source_context;
+    context.intent = intent;
+    context.target_id.clear();
+    context.target_obstacle_generation = 0U;
+    context.execution_side_sign = 0;
+    context.dynamic_obstacle_constraint_active = false;
+    context.dynamic_obstacle_generation = 0U;
+    context.dynamic_obstacle_id.clear();
+    context.dynamic_obstacle_side_sign = 0;
+    context.fingerprint = 0U;
+    context = contract::seal_problem_context(context);
+    source.dynamic_obstacle_refinement_active = false;
+    source.dynamic_obstacle_pass_side_sign = 0;
+    source.dynamic_obstacle_stages.clear();
 
-  const auto report = compare_wall_buckets(recorded(std::move(source)));
+    const auto report = compare_wall_buckets(recorded(source));
 
-  ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 5U);
-  for (const auto & arm : report.arms) {
-    EXPECT_NE(arm.stage, Stage::TerminalSuccessorRejected) << arm.detail;
-    EXPECT_EQ(
-      arm.detail.find("selected current-world target unavailable"),
-      std::string::npos) << arm.detail;
+    ASSERT_TRUE(report.source_accepted) << report.detail;
+    ASSERT_EQ(report.arms.size(), 5U);
+    for (const auto & arm : report.arms) {
+      EXPECT_NE(arm.stage, Stage::TerminalSuccessorRejected) << arm.detail;
+      EXPECT_EQ(
+        arm.detail.find("selected current-world target unavailable"),
+        std::string::npos) << arm.detail;
+    }
+
+    EXPECT_EQ(report.arms.back().stage, Stage::Accepted) << report.arms.back().detail;
+
+    for (auto & input : source.request.inputs) {
+      input.lower[mpcc_rate_resolved::kAccelerationIndex] = 0.0;
+    }
+    const auto unbraked = compare_wall_buckets(recorded(std::move(source)));
+    ASSERT_TRUE(unbraked.source_accepted) << unbraked.detail;
+    for (const auto & arm : unbraked.arms) {
+      EXPECT_EQ(arm.stage, Stage::TerminalSuccessorRejected) << arm.detail;
+      EXPECT_FALSE(arm.bundle.has_value());
+      EXPECT_NE(arm.detail.find("no physical braking authority"), std::string::npos);
+    }
   }
 }
 

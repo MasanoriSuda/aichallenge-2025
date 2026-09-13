@@ -1,0 +1,84 @@
+{
+  "baseline": "79c3e020",
+  "control_baseline": "9c522a95",
+  "authority": false,
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp": "4f50566436ce5c7692b86cc02ffcc2bad87b48113a427e0883cea741ca1b227b",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp": "19e845dcce6eb7548487f8ed4c391ee17a63d4e55b587fa8c8c2ba33d0ac4763"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/build-command.json": "4e3a1fc378f0fb0bf780a806024d03014fce4347af5a398c44bc4fa1eb5d4eda",
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/test.log": "045beaf2b5ec2e1da8426c48bf7951b13b42cda65e08263b6125de5415968113",
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/build.log": "b9a55baaeb3b8197386beb0058b8abf8d88390741d0227beafb504fac967f6a7",
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/test.xml": "5997401fd4c4927674a61e188aa79f6bc1a14da2cc57c62be4ad422448e41ac2",
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/result.json": "9d5fe6f10afa7a479c52e9541d3df4365efc6556c77027362d2e530e8f9d8335",
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/runner.py": "95a8bc7d3f0e3ae4721241214c656f1234d55163788eeec348a88498e29a62d2",
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/test/test_mpcc_architecture_comparison.cpp": "19e845dcce6eb7548487f8ed4c391ee17a63d4e55b587fa8c8c2ba33d0ac4763",
+    "output/20260913-nine-state-rejoin-audit-old-regression-r719/src/mpcc_architecture_comparison.cpp": "b8b04216f3395ef7b7b95b0207b3d91ba8ddd78a2422a85168533a5daf83c32b",
+    "output/20260913-nine-state-rejoin-audit-native-r720/build-command.json": "4e3a1fc378f0fb0bf780a806024d03014fce4347af5a398c44bc4fa1eb5d4eda",
+    "output/20260913-nine-state-rejoin-audit-native-r720/test.log": "5774908661418518b4a9b96416976e253c44ddb466d194d3c83de573efb3ac99",
+    "output/20260913-nine-state-rejoin-audit-native-r720/build.log": "327ba4831e2df66ddcb6701e21a09ce7cd03a0eb7516f0fe1cab71d230fff02b",
+    "output/20260913-nine-state-rejoin-audit-native-r720/test.xml": "8707af42dc56c4743895e6e78e663ac3abccb5dd4587d06c1fb7b86d735df132",
+    "output/20260913-nine-state-rejoin-audit-native-r720/result.json": "6c82f1ea211bcdafeb7184a0318d74c1b5442638ca77622f8e2cc652b18f6f06",
+    "output/20260913-nine-state-rejoin-audit-native-r720/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-audit-native-r720/runner.py": "ea1c1d8359ebf12b48bc0c587f1116a691f70e4c989c82f0d2d55a55f59f7610",
+    "output/20260913-nine-state-rejoin-audit-native-r720/test/test_mpcc_architecture_comparison.cpp": "19e845dcce6eb7548487f8ed4c391ee17a63d4e55b587fa8c8c2ba33d0ac4763",
+    "output/20260913-nine-state-rejoin-audit-native-r720/src/mpcc_architecture_comparison.cpp": "4f50566436ce5c7692b86cc02ffcc2bad87b48113a427e0883cea741ca1b227b",
+    "output/20260913-nine-state-rejoin-audit-replay-r721/replay": "57adc2ecdd16161f14d870f289ab3ed135f7be5c4cf94abae93817aca8bac484",
+    "output/20260913-nine-state-rejoin-audit-replay-r721/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-audit-replay-r721/driver.cpp": "94555b7a49311ebfe617a95c264eda6e511fc968f36c5eb786256d49aab08b5d",
+    "output/20260913-nine-state-rejoin-audit-replay-r721/compile-command.json": "0c6d2b0d0a6db93240e72ca296dd325dc225ef483f4fba8fa87d6f5cdf105014",
+    "output/20260913-nine-state-rejoin-audit-replay-r721/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-audit-replay-r721/result.json": "f5a67f6f5797aa9ced07186c98db3fe5ebf0928b1a2f95a2354b45a4dca5f6d2",
+    "output/20260913-nine-state-rejoin-audit-replay-r721/runner.py": "c39296cb0bbe92aa0f133016d94514c1aeef40167965b2ba76d12f44dc3121ce",
+    "output/20260913-nine-state-rejoin-audit-replay-r721/report.yaml": "4f6947631540a06ed6b92dcd20f362acf87bbc0e4a3a3d04924b49b2f89464e1",
+    "output/20260913-nine-state-build133/status.json": "6d44bb48c0d9fa083e3bd189876f632c7e6d61807c4e3e8578b61c091cc363ff",
+    "output/20260913-nine-state-build133/build.log": "7746a38f4fce29b19f23d945c253f32b1c1a104b77dfe84b6371663c84e4c9c1",
+    "output/20260913-nine-state-build133/runner.py": "aca244a751fda46e17825b968b8319958b4512caad34fa2829e12c66ab7de860",
+    "output/20260913-nine-state-build133/manifest.json": "acced3eb8a70aa2e2313ed0c4047337ef3953e8d776676cbec867161a4c6dc5a",
+    "output/20260913-nine-state-package120/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package120/test.log": "fb43e342aeecc2a01522766a343b7d61749602812eec31fac17213dc2b5d1bb8",
+    "output/20260913-nine-state-package120/status.json": "5646d5fc30c6181d3bb07970ddcf1a4b2c64b08edf61ee7b876263ed78b3c879",
+    "output/20260913-nine-state-package120/test-result.log": "58a7644772894be77cf7e044739ee21d61deb90d43048267aa78a26efbc52851",
+    "output/20260913-nine-state-package120/runner.py": "a751e60a2dafeeca83463bdbe59cdfa4441574a6664ac41012c2192acd744eb8"
+  },
+  "old_regression": "Only target-free Rejoin fails old terminal gate; Track/Cruise and unbraked negatives otherwise pass.",
+  "native_tests": 50,
+  "source_tests": 118,
+  "package_summary": "Summary: 2640 tests, 0 errors, 0 failures, 0 skipped",
+  "replay": {
+    "authority": false,
+    "source": "/output/20260913-nine-state-single-r18/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000537-1954d94a9e9a8dc0-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+    "source_fingerprint": 1825322663503629760,
+    "groups": [
+      {
+        "stage": "wall-proof-rejected",
+        "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=144, wp=31, distance=2.886m, lateral=0.945m, lag=-0.075m, bounds=[-3.711,1.000]m, reserve=0.055m, heading_offset=0.043rad, progress=31.252/33.676m, progress_delta=-2.423m, pose=(89629.341,43129.735,2.356), out_of_map=0, contacts=1",
+        "count": 2
+      },
+      {
+        "stage": "candidate-rejected",
+        "detail": "invalid-side: pass side must be -1 or +1",
+        "count": 1
+      },
+      {
+        "stage": "candidate-rejected",
+        "detail": "unsupported-intent: stateless producer is restricted to Overtake intents",
+        "count": 1528
+      }
+    ],
+    "native": "accepted, progress_wall=accepted/applied=1/solved=1/mismatch=11.7259m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1731/cache_hits=0/cache_misses=20/cache_scanned=1731/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1"
+  },
+  "review": {
+    "scope": "Review exact intent whitelist, canonical target contract, empty dynamic/target guards, braking derivation, all comparison physical proof consumers and production callers; no subagent.",
+    "result": "Rejoin reaches actual solver/full physical checks. Original source537wall144negative retained. Invalid braking still blocks each supported target-free intent. This is a diagnostic-only applicability fix; normal solver/publisher is unchanged.",
+    "limits": "Source semantic upper-speed proof gap and coherent nonlinear correction remain unimplemented; R717is still a temporary diagnostic candidate. No new live race acceptance."
+  },
+  "next": "Define exact original semantic speed/state proof at source and current/retained consumers and coherent native tangent correction. Validate fixed preparation generation on additional frozen worlds before production adoption; all M4–M6 remain."
+}

@@ -41,9 +41,12 @@ maneuver::TerminalResolution resolve_audit_terminal_successor(
     return resolution;
   }
   const auto & context = source.identity.source_context;
+  // Rejoin shares the target-free normal contract. It still needs the
+  // complete wall/peer proof and a physically available Stop contingency.
   const bool target_free_normal =
     (context.intent == contract::ControlIntent::Track ||
-    context.intent == contract::ControlIntent::Cruise) &&
+    context.intent == contract::ControlIntent::Cruise ||
+    context.intent == contract::ControlIntent::Rejoin) &&
     context.target_id.empty() && context.target_obstacle_generation == 0U &&
     !context.dynamic_obstacle_constraint_active &&
     context.dynamic_obstacle_id.empty() &&

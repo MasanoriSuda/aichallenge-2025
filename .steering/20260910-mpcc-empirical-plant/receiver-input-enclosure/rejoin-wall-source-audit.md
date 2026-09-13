@@ -87,3 +87,21 @@ r80D2actual deadline, measurement/contact model, Start/update_vmax, complete M4â
 repeated same-source races, multi-vehicle gates and the same submission/image/eval
 remain open. [Evidence](rejoin-wall-source-evidence.json),
 [prior post-Rejoin issue](post-rejoin-source-audit.md).
+
+## Target-free audit implementation slice
+
+R719extends the real architecture test across Track/Cruise/Rejoin and removes all
+braking authority in a negative case. Only Rejoin fails on old79c3e020; Track/Cruise
+pass and reject the unbraked source. The earliest defect is the hard-coded intent
+set in resolve_audit_terminal_successor; downstream comparison never reaches solver
+or physical proof. Include Rejoin in that diagnostic set while preserving empty
+target/dynamic generations, physical braking and all final proofs. No production
+solver/publisher uses this comparison entry. Rollback baseline79c3e020.
+Acceptance: full architecture suite and real537native outerwall negative preserved.
+Semantic speed proof and nonlinear producer correction remain a separate slice.
+
+R720all50architecture tests/source118pass; build133all26and package120pass
+(Summary: 2640 tests, 0 errors, 0 failures, 0 skipped). R721using the actual new archive reaches Rejoin A/H physical proof;
+original source537still rejects occupiedcell atstage144. Stateless Overtake arms
+remain intentionally inapplicable. No control/runtime experiment was repeated for
+this diagnostic-only slice. [Validation](rejoin-audit-validation.json).

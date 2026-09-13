@@ -1495,6 +1495,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-wall-source-evidence.json",
       "replay_ready": true,
       "reason": "Complete r18source537world and bounded diagnostic comparisons retained; v2source882is only exact-QP evidence. No live post-Rejoin reserved capture."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-rejoin-audit-seal-r722",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-audit-validation.json",
+      "replay_ready": true,
+      "reason": "Old failing Rejoin applicability regression, full suite and actual537negative under new build; no normal control change."
     }
   ],
   "experiments": [
@@ -19704,6 +19710,50 @@
       "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
       "deleted_code": [],
       "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-audit-old-regression-r719",
+      "baseline_commit": "79c3e020",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-audit-seal-r722"
+      ],
+      "hypothesis": "Canonical target-freeRejoin is incorrectly blocked by audit-only terminal whitelist.",
+      "changed_dimension": "Include Rejoin in audit target-free normal resolver; original braking/empty-target/dynamic/fullproof and production authority unchanged.",
+      "result": "rejected",
+      "reason": "Old target-freeRejoin terminal gate fails; Track/Cruise and no-braking checks otherwise pass. One actual extended regression, no weakened assertions.",
+      "production_impact": "Diagnostic applicability only. Source semantic speed-bound and nonlinear correction not promoted.",
+      "deleted_code": [],
+      "revisit_condition": "New applicable intent/contract mismatch or physical proof regression; no gate weakening or unsupported source acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-audit-native-r720",
+      "baseline_commit": "79c3e020",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-audit-seal-r722"
+      ],
+      "hypothesis": "Canonical target-freeRejoin is incorrectly blocked by audit-only terminal whitelist.",
+      "changed_dimension": "Include Rejoin in audit target-free normal resolver; original braking/empty-target/dynamic/fullproof and production authority unchanged.",
+      "result": "accepted",
+      "reason": "Include target-freeRejoin under existing dynamic/braking guards. All50architecture/source118/build133all26/package120all2640pass.",
+      "production_impact": "Diagnostic applicability only. Source semantic speed-bound and nonlinear correction not promoted.",
+      "deleted_code": [
+        "Audit-only implicit Rejoin target requirement"
+      ],
+      "revisit_condition": "New applicable intent/contract mismatch or physical proof regression; no gate weakening or unsupported source acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-audit-replay-r721",
+      "baseline_commit": "79c3e020",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-audit-seal-r722"
+      ],
+      "hypothesis": "Canonical target-freeRejoin is incorrectly blocked by audit-only terminal whitelist.",
+      "changed_dimension": "Include Rejoin in audit target-free normal resolver; original braking/empty-target/dynamic/fullproof and production authority unchanged.",
+      "result": "accepted",
+      "reason": "Actual revised build reaches solver/physical proof for source537; A/Hwallstage144negative retained. Remaining statelessOvertake arms inapplicable, not infeasible.",
+      "production_impact": "Diagnostic applicability only. Source semantic speed-bound and nonlinear correction not promoted.",
+      "deleted_code": [],
+      "revisit_condition": "New applicable intent/contract mismatch or physical proof regression; no gate weakening or unsupported source acceptance."
     }
   ]
 }

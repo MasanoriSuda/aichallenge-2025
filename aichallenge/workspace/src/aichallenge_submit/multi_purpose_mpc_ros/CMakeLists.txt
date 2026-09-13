@@ -150,6 +150,7 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_adapter
 
 add_library(${PROJECT_NAME}_mpcc_architecture_snapshot STATIC
   src/mpcc_architecture_snapshot.cpp
+  src/mpcc_recovery_direction_observation.cpp
 )
 target_include_directories(${PROJECT_NAME}_mpcc_architecture_snapshot PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -158,6 +159,7 @@ target_include_directories(${PROJECT_NAME}_mpcc_architecture_snapshot PUBLIC
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_architecture_snapshot
   Threads::Threads
+  ${PROJECT_NAME}_stuck_recovery_core
   ${PROJECT_NAME}_mpcc_rate_resolved_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
   ${PROJECT_NAME}_mpcc_execution_contract

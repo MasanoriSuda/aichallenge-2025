@@ -1543,6 +1543,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-live-evidence.json",
       "replay_ready": true,
       "reason": "Original-DLL fixed-source live input, unchanged hashes, actual final publication/reservation/Recovery boundary; exact direction candidate input still absent."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-recovery-direction-seal-r761",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-direction-observation-validation.json",
+      "replay_ready": true,
+      "reason": "Observation-only direction input capture and saved-map native positive/negative regressions; live eligibility pending."
     }
   ],
   "experiments": [
@@ -20238,6 +20244,20 @@
       "production_impact": "Offline structural repair remains; live eligibility not reached, full acceptance stays open.",
       "deleted_code": [],
       "revisit_condition": "New exact failed Recovery candidate input or supported structural producer repair; no unchanged campaign repeat or safety/threshold waiver."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-direction-native-r760",
+      "baseline_commit": "89004222",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-direction-seal-r761"
+      ],
+      "hypothesis": "Original Recovery direction rejection cannot be attributed from aggregated wall/course flags; exact actual candidate inputs make native attribution possible.",
+      "changed_dimension": "One bounded diagnostic capture with immutable map and compact actual trials; original candidate order/arguments/course/physical checks and final actuation unchanged.",
+      "result": "accepted",
+      "reason": "245native/source118/build137/package124pass; saved physical/course rejection classes and accepted reverse remain exact, capacity marks incomplete, duplicate is non-destructive. Live capture not yet observed.",
+      "production_impact": "Observation only; no new normal/Recovery authority or deadline/margin/model/parameter change.",
+      "deleted_code": [],
+      "revisit_condition": "Actual eligible failed CheckClearance capture or demonstrated serializer/latency defect; never substitute diagnostics for authority or relax candidate guards."
     }
   ]
 }

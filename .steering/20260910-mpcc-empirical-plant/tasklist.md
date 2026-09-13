@@ -659,3 +659,11 @@ laps. Seven invalid reservations=4latezero-prior/3timelyreserved,914inactive/pre
 mismatch follows override. Capture exact Recovery candidate population/world before
 any producer fix; source physical positives do not authorize unknown geometry or
 detector threshold changes. All M4–M6 remain. See rejoin-preparation-live-audit/evidence.
+
+2026-09-13R760/R761: one first failed CheckClearance direction records actual four-site
+physical candidate inputs/results and course previews, original immutable map and
+selection permissions. V2X summary only. No candidate/authority/guard change. Native245/
+source118/build137all26/package124pass; saved physical/course positives/negatives,
+overflow and duplicate checks pass. Next localcommit/original-DLL single-r22 and native
+per-trial replay; actual eligibility/timing and all remaining M4–M6 remain open.
+See recovery-direction-observation-design/validation and internal schema.

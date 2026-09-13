@@ -8,6 +8,15 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Recovery方向選択の限定観測（2026-09-13）
+
+RecoveryのCheckClearanceで方向を選べなかった最初の1件について、実際の候補入力・
+地図・物理結果とコース条件を限定保存する観測を実装。走行判断・候補順・安全条件は維持。
+R760native245/source118、build137全26/package124合格。保存したセルと入力から元の
+壁拒否・コース拒否・合格例を再生できた。次は固定commitのsingle-r22で実入力を取得。
+Rejoin準備の実走採用・車両Start・周回・M4–M6は未完。追加確認なしで継続する。
+[内部観測形式](../interface/mpcc-recovery-direction-observation.md)、[設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-direction-observation-design.md)。
+
 ## Rejoin準備実装後の単車検証（2026-09-13）
 
 6f42d134のsingle-r21:通常408送信、4248callback最大19.53ms、期限外送信ゼロ。

@@ -27,6 +27,7 @@
 #include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp>
+#include <multi_purpose_mpc_ros/mpcc_recovery_direction_observation.hpp>
 #include <multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp>
@@ -54864,25 +54865,25 @@ private:
         throw std::runtime_error(
             "static wall checks support only yaw-zero maps with valid ROS occupancy thresholds");
       }
-      recovery_grid_ = std::make_unique<recovery_footprint::OccupancyGrid>();
-      recovery_grid_->width = static_cast<std::size_t>(map_->width);
-      recovery_grid_->height = static_cast<std::size_t>(map_->height);
-      recovery_grid_->resolution_m = map_->resolution;
-      recovery_grid_->origin_x_m = map_->origin.at(0);
-      recovery_grid_->origin_y_m = map_->origin.at(1);
-      recovery_grid_->y_axis = recovery_footprint::YAxisConvention::RowZeroAtMaximumY;
-      recovery_grid_->cells.reserve(recovery_grid_->width * recovery_grid_->height);
+      auto recovery_grid = std::make_shared<recovery_footprint::OccupancyGrid>();
+      recovery_grid->width = static_cast<std::size_t>(map_->width);
+      recovery_grid->height = static_cast<std::size_t>(map_->height);
+      recovery_grid->resolution_m = map_->resolution;
+      recovery_grid->origin_x_m = map_->origin.at(0);
+      recovery_grid->origin_y_m = map_->origin.at(1);
+      recovery_grid->y_axis = recovery_footprint::YAxisConvention::RowZeroAtMaximumY;
+      recovery_grid->cells.reserve(recovery_grid->width * recovery_grid->height);
       for (int row = 0; row < map_->height; ++row) {
         for (int column = 0; column < map_->width; ++column) {
           const double normalized_value = map_->raw_normalized_data.at<double>(row, column);
           const double occupancy_probability =
             map_->negate == 0 ? 1.0 - normalized_value : normalized_value;
           if (occupancy_probability > map_->threshold_occupied) {
-            recovery_grid_->cells.push_back(recovery_footprint::CellState::Occupied);
+            recovery_grid->cells.push_back(recovery_footprint::CellState::Occupied);
           } else if (occupancy_probability < map_->threshold_free) {
-            recovery_grid_->cells.push_back(recovery_footprint::CellState::Free);
+            recovery_grid->cells.push_back(recovery_footprint::CellState::Free);
           } else {
-            recovery_grid_->cells.push_back(recovery_footprint::CellState::Unknown);
+            recovery_grid->cells.push_back(recovery_footprint::CellState::Unknown);
           }
         }
       }
@@ -54892,14 +54893,15 @@ private:
         cfg_.stuck_recovery.left_extent_m,
         cfg_.stuck_recovery.right_extent_m,
         cfg_.stuck_recovery.footprint_margin_m};
-      if (!recovery_grid_->valid() || !recovery_footprint_.valid()) {
+      if (!recovery_grid->valid() || !recovery_footprint_.valid()) {
         throw std::runtime_error("static wall map or footprint configuration is invalid");
       }
       // The occupancy cells are final here. Recovery uses the same exact
       // free-area broad phase as normal wall proofs for every later callback.
-      if (!recovery_grid_->build_non_free_integral_index()) {
+      if (!recovery_grid->build_non_free_integral_index()) {
         throw std::runtime_error("failed to build recovery wall-grid broad-phase index");
       }
+      recovery_grid_ = std::move(recovery_grid);
     }
     std::vector<double> wp_x;
     std::vector<double> wp_y;
@@ -56677,7 +56679,8 @@ private:
     const double rejoin_steering_angle_rad,
     const bool reverse_only,
     const stuck_recovery::RecoveryCandidateDirectionPolicy & candidate_direction_policy,
-    const bool evaluate_rollout) const
+    const bool evaluate_rollout,
+    mpcc_recovery_direction_observation::Observation * observation = nullptr) const
   {
     RecoverySafetySnapshot snapshot;
     std::optional<recovery_footprint::FeasibilityResult> forward_deadlock_fallback;
@@ -56688,6 +56691,32 @@ private:
     }
 
     const recovery_footprint::Pose2D recovery_pose{pose.x, pose.y, pose.theta};
+    constexpr double course_worsening_tolerance_m = 0.02;
+    if (observation) {
+      observation->grid = recovery_grid_;
+      observation->footprint = recovery_footprint_;
+      observation->pose = recovery_pose;
+      observation->lateral_error_m = recovery_lateral_error_m;
+      observation->heading_error_rad = recovery_heading_error_rad;
+      observation->course_activation_lateral_m = cfg_.stuck_recovery.core.supervisor.max_rejoin_lateral_error_m;
+      observation->course_worsening_tolerance_m = course_worsening_tolerance_m;
+      observation->reverse_only = reverse_only;
+      observation->forward_probe_allowed = candidate_direction_policy.forward_probe_allowed;
+      observation->prefer_forward = candidate_direction_policy.prefer_forward_course_escape;
+      observation->full_rollout = evaluate_rollout;
+    }
+    const auto evaluate_observed_candidate = [&](const char * phase,
+      recovery_footprint::ReversePrimitive primitive,
+      const recovery_footprint::ReverseRolloutParameters & parameters,
+      recovery_footprint::ContactEscapePolicy policy, double minimum_reduction) {
+        auto result = recovery_footprint::evaluate_recovery_candidate(
+          *recovery_grid_, recovery_footprint_, recovery_pose, primitive,
+          parameters, policy, minimum_reduction);
+        if (observation) mpcc_recovery_direction_observation::append_trial(
+          *observation, phase, primitive, parameters, policy, minimum_reduction, result);
+        return result;
+      };
+
     const bool forward_candidate_evaluation_allowed =
       !reverse_only || candidate_direction_policy.forward_probe_allowed;
     const auto wall_proximity = recovery_footprint::classify_nearby_wall(
@@ -56747,8 +56776,7 @@ private:
           rejoin_steering_angle_rad > 0.0 ?
           recovery_footprint::ReversePrimitive::ForwardLeft :
           recovery_footprint::ReversePrimitive::ForwardRight;
-        const auto rejoin_result = recovery_footprint::evaluate_recovery_candidate(
-          *recovery_grid_, recovery_footprint_, recovery_pose, rejoin_primitive,
+        const auto rejoin_result = evaluate_observed_candidate("rejoin-lookahead", rejoin_primitive,
           rejoin_rollout, recovery_footprint::ContactEscapePolicy::RequireClear, 0.0);
         snapshot.rejoin_forward_static_clear = rejoin_result.feasible;
         snapshot.rejoin_static_reject_reason = rejoin_result.reason;
@@ -56777,8 +56805,7 @@ private:
             auto candidate_rollout = rollout;
             candidate_rollout.reverse_distance_m = reverse_distance_to_check_m;
             candidate_rollout.steering_angle_rad = steering_magnitude_rad;
-            const auto result = recovery_footprint::evaluate_recovery_candidate(
-              *recovery_grid_, recovery_footprint_, recovery_pose, primitive,
+            const auto result = evaluate_observed_candidate("contact-preflight", primitive,
               candidate_rollout,
               recovery_footprint::ContactEscapePolicy::RequireImprovement,
               cfg_.stuck_recovery.side_escape_min_contact_reduction_ratio);
@@ -56833,8 +56860,7 @@ private:
             (recovery_footprint::primitive_is_forward(primitive) ?
             std::max(0.0, forward_distance_to_check_m) :
             std::max(0.0, reverse_distance_to_check_m));
-          return recovery_footprint::evaluate_recovery_candidate(
-            *recovery_grid_, recovery_footprint_, recovery_pose, primitive, candidate_rollout,
+          return evaluate_observed_candidate("candidate", primitive, candidate_rollout,
             clearance_reassessment_step ?
             recovery_footprint::ContactEscapePolicy::RequireClear :
             continuous_contact_candidate_mode ?
@@ -56863,8 +56889,7 @@ private:
           candidate_rollout.steering_angle_rad = steering_magnitude_rad;
           candidate_rollout.reverse_distance_m = std::max(
             0.0, escape_step_distance_to_check_m);
-          return recovery_footprint::evaluate_recovery_candidate(
-            *recovery_grid_, recovery_footprint_, recovery_pose, primitive,
+          return evaluate_observed_candidate("non-worsening", primitive,
             candidate_rollout,
             recovery_footprint::ContactEscapePolicy::AllowNonWorsening, 0.0);
         };
@@ -56919,7 +56944,7 @@ private:
               endpoint.x_m - recovery_pose.x_m,
               endpoint.y_m - recovery_pose.y_m,
               cfg_.stuck_recovery.core.supervisor.max_rejoin_lateral_error_m,
-              0.02});
+              course_worsening_tolerance_m});
         };
       const auto course_candidate_allowed =
         [&](const recovery_footprint::FeasibilityResult & result) {
@@ -58178,6 +58203,12 @@ private:
     if (recovery_safety_scope == stuck_recovery::RecoverySafetyEvaluationScope::CurrentFootprint) {
       ++recovery_rollout_deferred_count_;
     }
+    std::optional<mpcc_recovery_direction_observation::Observation> direction_observation;
+    if (!recovery_direction_observation_attempted_ &&
+      supervisor_state == stuck_recovery::RecoveryState::CheckClearance)
+    {
+      direction_observation.emplace();
+    }
     const auto safety = recovery_safety_required ? evaluate_recovery_safety(
       pose, steady_now, control_time.seconds(), reverse_distance_to_check_m,
       forward_distance_to_check_m,
@@ -58187,7 +58218,8 @@ private:
       checked_rejoin_steering_tire_angle_rad,
       reverse_only,
       candidate_direction_policy,
-      recovery_safety_scope == stuck_recovery::RecoverySafetyEvaluationScope::FullRollout) :
+      recovery_safety_scope == stuck_recovery::RecoverySafetyEvaluationScope::FullRollout,
+      direction_observation ? &*direction_observation : nullptr) :
       RecoverySafetySnapshot{};
     last_current_wall_trace_snapshot_ = CurrentWallTraceSnapshot{
       active_control_decision_id_, safety.wall_proximity_valid,
@@ -58434,6 +58466,38 @@ private:
     input.recovery.heading_error_rad = car_->spatial_state.e_psi;
 
     auto output = stuck_recovery_core_->update(input);
+    if (direction_observation &&
+      output.state_reason == stuck_recovery::RecoveryReason::ManeuverDirectionUnknown)
+    {
+      // One diagnostic write per node, separate from normal failure buckets.
+      // Keep the original safety result and final supervisor decision unchanged.
+      recovery_direction_observation_attempted_ = true;
+      auto & saved = *direction_observation;
+      saved.decision_id = active_control_decision_id_;
+      saved.ros_sec = control_time.seconds();
+      saved.steady_sec = steady_seconds(steady_now);
+      saved.signed_speed_mps = actual_v;
+      saved.current_footprint_clear = safety.current_footprint_clear;
+      saved.wall_region = static_cast<int>(safety.wall_region);
+      saved.selected_direction = static_cast<int>(safety.maneuver_direction);
+      saved.static_clear = safety.rear_static_clear;
+      saved.v2x_clear = safety.rear_v2x_clear;
+      saved.information_complete = safety.rear_information_complete;
+      try {
+        recovery_direction_observation_future_ = std::async(std::launch::async,
+          [saved = std::move(saved), logger = get_logger()]() {
+            auto result = mpcc_recovery_direction_observation::record(saved);
+            RCLCPP_INFO(logger, "Recovery direction observation: decision=%llu, status=%s, file=%s, detail=%s",
+              static_cast<unsigned long long>(saved.decision_id),
+              mpcc_architecture_snapshot::to_string(result.status),
+              result.snapshot_file.string().c_str(), result.detail.c_str());
+            return result;
+          });
+      } catch (const std::exception & error) {
+        RCLCPP_WARN(get_logger(), "Recovery direction observation unavailable: %s", error.what());
+      }
+    }
+
     update_recovery_observation_anchor(pose, car_->s, output.detector.reject_reason);
     const bool entered_awsim_recovery_wait =
       supervisor_state != stuck_recovery::RecoveryState::WaitAwsimRecovery &&
@@ -60230,7 +60294,9 @@ private:
     recovery_incident_ledger_;
   std::unique_ptr<stuck_recovery::RecoveryCollisionWorseningGate>
     recovery_collision_worsening_gate_;
-  std::unique_ptr<recovery_footprint::OccupancyGrid> recovery_grid_;
+  std::shared_ptr<const recovery_footprint::OccupancyGrid> recovery_grid_;
+  bool recovery_direction_observation_attempted_{false};
+  std::future<mpcc_architecture_snapshot::RecordResult> recovery_direction_observation_future_;
   recovery_footprint::FootprintExtents recovery_footprint_;
   std::optional<Pose2D> recovery_observation_anchor_pose_;
   std::optional<double> recovery_observation_anchor_progress_m_;

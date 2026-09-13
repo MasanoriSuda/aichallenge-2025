@@ -1,0 +1,58 @@
+{
+  "baseline": "89004222",
+  "runtime_baseline": "6f42d134",
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt": "be24e33ebde67ae38b6d6cf65e41e34cca63be3512cfcc128df92fa0676993a0",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_recovery_direction_observation.hpp": "f912606abe79a13e22b601c98572501afaf8dc34c3376a147d61beed49ad7a5b",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_recovery_direction_observation.cpp": "dbc0db02f1969ea753ea2522ba0ff6e67fccf57b56056496058769a3b731ee0f",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "e9dfa531b766d30240a50dca0bb744fe603661c9184f84fe9cc87f99a1e79a30",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp": "dc0555d92a0f332652b3502cb8e9b61323e2a6a2761ff5f4a662b1a2aaf95942"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-recovery-direction-native-r760/test_mpcc_architecture_snapshot.log": "b1642b38f799205e69d9c32dafa112d22f5d3918479452997b373c81fdcaa927",
+    "output/20260913-nine-state-recovery-direction-native-r760/build-command.json": "195b01658ef46e9ff5a5721b161a50bd94701ab794b45209bef70e1cd14db2e6",
+    "output/20260913-nine-state-recovery-direction-native-r760/test_recovery_footprint.xml": "f8f6e550f0f738181312591e34149ba0d0bd91761089db0acf20137e506d3391",
+    "output/20260913-nine-state-recovery-direction-native-r760/test_mpcc_architecture_snapshot.xml": "00c9ce589568b9834be6c9edb14efc09e127ab9fddd8bcf0d23f7fc52815bf2f",
+    "output/20260913-nine-state-recovery-direction-native-r760/build.log": "0825793604bf316954ecac9144d72e7b250a8dc11fb57f65cb33355113e31c5a",
+    "output/20260913-nine-state-recovery-direction-native-r760/test_stuck_recovery_core.log": "4b369940cad8a1758798078adbd95a650f41d9a1b501a965085a11a3d9b3fe8b",
+    "output/20260913-nine-state-recovery-direction-native-r760/CMakeLists.txt": "be24e33ebde67ae38b6d6cf65e41e34cca63be3512cfcc128df92fa0676993a0",
+    "output/20260913-nine-state-recovery-direction-native-r760/result.json": "479aeb51d363f296b20e1498a14b80e8d3f128ff112a5c706d9b975ead388c9e",
+    "output/20260913-nine-state-recovery-direction-native-r760/test_stuck_recovery_core.xml": "77e4b467ec287478cc960b9260e337931b7b93aaf6ba41dd07866b5012bba7e9",
+    "output/20260913-nine-state-recovery-direction-native-r760/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-recovery-direction-native-r760/runner.py": "8cdc1c1bb4295ae57373cf8b1a9508f64e0f2e0a1054874b3c82de4de68790c5",
+    "output/20260913-nine-state-recovery-direction-native-r760/test_recovery_footprint.log": "1112aad4c79c79d5419cbaceac050d207683ea4901557820f7f68b201e3c962a",
+    "output/20260913-nine-state-recovery-direction-native-r760/test/test_mpcc_architecture_snapshot.cpp": "dc0555d92a0f332652b3502cb8e9b61323e2a6a2761ff5f4a662b1a2aaf95942",
+    "output/20260913-nine-state-recovery-direction-native-r760/include/multi_purpose_mpc_ros/mpcc_recovery_direction_observation.hpp": "f912606abe79a13e22b601c98572501afaf8dc34c3376a147d61beed49ad7a5b",
+    "output/20260913-nine-state-recovery-direction-native-r760/src/mpcc_recovery_direction_observation.cpp": "dbc0db02f1969ea753ea2522ba0ff6e67fccf57b56056496058769a3b731ee0f",
+    "output/20260913-nine-state-recovery-direction-native-r760/src/mpc_controller_cpp.cpp": "e9dfa531b766d30240a50dca0bb744fe603661c9184f84fe9cc87f99a1e79a30",
+    "output/20260913-nine-state-build137/status.json": "187103a4bdd53d72bc7ae7b568c9cffc3a0016554c8b603a0d89fadf7aae2a39",
+    "output/20260913-nine-state-build137/build.log": "f1760ceb78fa7348c6e73c43e92cdcb66f770f9bfc836df51038202a8d314620",
+    "output/20260913-nine-state-build137/runner.py": "173cf5aae7d08447009fd939461b261a21cef5cb2ab943b07c08d2b5f6a0b7de",
+    "output/20260913-nine-state-build137/manifest.json": "39211f4e2a740f3d22477a6e04d0cd3cf2e7b4f0ef916a7fd60eaa040c08cc71",
+    "output/20260913-nine-state-package124/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package124/test.log": "7e5c75ae488f1940d2da7ce3a779e9d3e23093ba63fd32b3743ae1a8cfd88caa",
+    "output/20260913-nine-state-package124/status.json": "0c020a55427f7158100cd0b68ea694eb721b724508c336c5150d78e06f19db7f",
+    "output/20260913-nine-state-package124/test-result.log": "86cc22c4126e24479b52b797e8e27d83a39512032a3909eb89074d6cb7362bb1",
+    "output/20260913-nine-state-package124/runner.py": "33b608d307991b8ea148b7f29ddd27c596eff86ac97671705f17add0af271803",
+    "output/20260913-nine-state-recovery-direction-seal-r761/source.log": "44ec254ab148b43aab551cdeb83fdb8ff4c9287e88e955aac42b052e0eacf6f6"
+  },
+  "native_tests": 245,
+  "source_tests": 118,
+  "build": {
+    "return_code": 0,
+    "elapsed_sec": 252.66518833098235,
+    "sources_unchanged": true
+  },
+  "package_summary": "Summary: 2647 tests, 0 errors, 0 failures, 0 skipped",
+  "review": {
+    "scope": "Four original physical evaluation sites wrapped without changed arguments or ordering; original course tolerance shared with its observation, CheckClearance-only collection, first unknown-direction write, immutable grid ownership after original one-time construction, async lifetime/drain and diagnostics only.",
+    "result": "Existing physical positive/course negative, physical negative and accepted reverse examples replay exactly from saved cells/parameters. Existing Recovery151/footprint65 and snapshot29 pass. Capacity256 marks incomplete while counting calls; duplicate never overwrites prior observation. Complete map hashing/serialization executes in one node-owned future. No Store, solver, normal/recovery actuation or guard change.",
+    "limits": "No live capture yet. V2X snapshot is summary only, so peer rejection needs separate full input. Course previews are diagnostics and not final selection. Original-DLL single-r22 must measure callback/actual-send timing and obtain an eligible failed CheckClearance before claiming useful observation."
+  },
+  "next": "Commit observation source slice; run fixed-source original-DLL single-r22, then exact native per-trial replay and structural comparison at the recorded direction boundary. Continue remaining M4–M6."
+}

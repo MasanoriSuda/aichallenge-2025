@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
+#include "multi_purpose_mpc_ros/mpcc_recovery_direction_observation.hpp"
 
 #include <gtest/gtest.h>
 
@@ -1734,6 +1735,117 @@ TEST(MpccArchitectureSnapshot, NativeInitializerIsSerializedAndBoundToFingerprin
     { std::ofstream file(written.snapshot_file); file << document; }
     EXPECT_FALSE(load_recorded_interaction_snapshot(written.snapshot_file));
   }
+}
+
+namespace direction = mpcc_recovery_direction_observation;
+
+direction::Observation recovery_direction_fixture()
+{
+  direction::Observation observation;
+  observation.decision_id = 901;
+  observation.ros_sec = 12.5;
+  observation.steady_sec = 27.5;
+  observation.full_rollout = true;
+  auto grid = std::make_shared<recovery_footprint::OccupancyGrid>();
+  grid->width = 50; grid->height = 50; grid->resolution_m = 0.1;
+  grid->y_axis = recovery_footprint::YAxisConvention::RowZeroAtMinimumY;
+  grid->cells.assign(2500, recovery_footprint::CellState::Free);
+  for (std::size_t row = 0; row < 50; ++row) grid->cells[row * 50 + 40] = recovery_footprint::CellState::Occupied;
+  observation.grid = grid;
+  observation.footprint = {0.2, 0.2, 0.1, 0.1, 0.0};
+  observation.pose = {2.5, 2.5, 0.0};
+  observation.lateral_error_m = 0.8;
+  observation.course_activation_lateral_m = 0.4;
+  observation.course_worsening_tolerance_m = 0.02;
+  observation.output_root = std::filesystem::temp_directory_path() /
+    ("mpcc-recovery-direction-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  return observation;
+}
+
+TEST(MpccArchitectureSnapshot, RecoveryDirectionPreservesDistinctPhysicalAndCourseFailures)
+{
+  auto observation = recovery_direction_fixture();
+  const std::array<recovery_footprint::ReversePrimitive, 3> primitives{
+    recovery_footprint::ReversePrimitive::ForwardLeft,
+    recovery_footprint::ReversePrimitive::ForwardStraight,
+    recovery_footprint::ReversePrimitive::Straight};
+  for (std::size_t i = 0; i < primitives.size(); ++i) {
+    const recovery_footprint::ReverseRolloutParameters parameters{i == 1 ? 2.0 : 1.0, 0.05, 0.025, 1.0, i == 0 ? 0.3 : 0.0};
+    const auto result = recovery_footprint::evaluate_recovery_candidate(
+      *observation.grid, observation.footprint, observation.pose, primitives[i], parameters,
+      recovery_footprint::ContactEscapePolicy::RequireClear, 0.0);
+    direction::append_trial(observation, "candidate", primitives[i], parameters,
+      recovery_footprint::ContactEscapePolicy::RequireClear, 0.0, result);
+  }
+  ASSERT_EQ(observation.trials.size(), 3U);
+  ASSERT_TRUE(observation.trials[0].result_without_rollout.feasible);
+  ASSERT_FALSE(observation.trials[0].course.candidate_allowed);
+  ASSERT_FALSE(observation.trials[1].result_without_rollout.feasible);
+  ASSERT_TRUE(observation.trials[2].result_without_rollout.feasible);
+  ASSERT_TRUE(observation.trials[2].course.candidate_allowed);
+  auto worker = std::async(std::launch::async, [observation]() {return direction::record(observation);});
+  const auto written = worker.get();
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+  const auto document = YAML::LoadFile(written.snapshot_file.string());
+  EXPECT_FALSE(document["authority"].as<bool>());
+  EXPECT_TRUE(document["complete"].as<bool>());
+  auto restored_grid = *observation.grid;
+  restored_grid.cells.assign(restored_grid.cells.size(), recovery_footprint::CellState::Unknown);
+  std::ifstream cells(written.snapshot_file.parent_path() / "wall-grid.bin", std::ios::binary);
+  for (auto & cell : restored_grid.cells) {
+    std::int8_t byte{};
+    ASSERT_TRUE(cells.read(reinterpret_cast<char *>(&byte), sizeof(byte)));
+    cell = static_cast<recovery_footprint::CellState>(byte);
+  }
+  EXPECT_EQ(restored_grid.cells, observation.grid->cells);
+  EXPECT_EQ(recovery_footprint::occupancy_grid_fingerprint(restored_grid), document["grid"]["fingerprint"].as<std::uint64_t>());
+  const auto pose = document["pose"].as<std::vector<double>>();
+  const auto footprint = document["footprint"].as<std::vector<double>>();
+  const auto course = document["course"].as<std::vector<double>>();
+  for (const auto & row : document["trials"]) {
+    const auto p = row["rollout_parameters"].as<std::vector<double>>();
+    const auto actual = recovery_footprint::evaluate_recovery_candidate(
+      restored_grid, {footprint[0],footprint[1],footprint[2],footprint[3],footprint[4]},
+      {pose[0],pose[1],pose[2]}, static_cast<recovery_footprint::ReversePrimitive>(row["primitive"].as<int>()),
+      {p[0],p[1],p[2],p[3],p[4]}, static_cast<recovery_footprint::ContactEscapePolicy>(row["contact_policy"].as<int>()),
+      row["minimum_contact_reduction_ratio"].as<double>());
+    EXPECT_EQ(actual.feasible, row["feasible"].as<bool>());
+    EXPECT_EQ(static_cast<int>(actual.reason), row["reason"].as<int>());
+    EXPECT_EQ(actual.checked_pose_count, row["checked_pose_count"].as<std::size_t>());
+    EXPECT_DOUBLE_EQ(actual.rejected_at_distance_m, row["rejected_at_distance_m"].as<double>());
+    ASSERT_FALSE(actual.rollout.empty());
+    const auto & end = actual.rollout.back().pose;
+    const auto progress = stuck_recovery::resolve_recovery_course_progress({
+      course[0],pose[2],course[1],end.x_m-pose[0],end.y_m-pose[1],course[2],course[3]});
+    EXPECT_EQ(progress.candidate_allowed, row["course_preview"]["candidate_allowed"].as<bool>());
+    EXPECT_DOUBLE_EQ(progress.lateral_improvement_m, row["course_preview"]["lateral_improvement_m"].as<double>());
+  }
+  observation.pose.x_m += 0.25;
+  EXPECT_EQ(direction::record(observation).status, RecordStatus::Duplicate);
+  EXPECT_DOUBLE_EQ(YAML::LoadFile(written.snapshot_file.string())["pose"][0].as<double>(), pose[0]);
+  std::filesystem::remove_all(observation.output_root);
+}
+
+TEST(MpccArchitectureSnapshot, RecoveryDirectionOverflowCannotClaimCompleteEvidence)
+{
+  auto observation = recovery_direction_fixture();
+  const recovery_footprint::ReverseRolloutParameters parameters{1.0,0.05,0.025,1.0,0.0};
+  const auto result = recovery_footprint::evaluate_recovery_candidate(*observation.grid,
+    observation.footprint, observation.pose, recovery_footprint::ReversePrimitive::Straight,
+    parameters, recovery_footprint::ContactEscapePolicy::RequireClear, 0.0);
+  for (std::size_t i = 0; i <= direction::kMaximumTrials; ++i) {
+    direction::append_trial(observation, "candidate", recovery_footprint::ReversePrimitive::Straight,
+      parameters, recovery_footprint::ContactEscapePolicy::RequireClear, 0.0, result);
+  }
+  EXPECT_EQ(observation.trials.size(), direction::kMaximumTrials);
+  EXPECT_EQ(observation.attempted_trial_count, direction::kMaximumTrials + 1U);
+  EXPECT_FALSE(observation.complete);
+  const auto written = direction::record(observation);
+  ASSERT_EQ(written.status, RecordStatus::Written);
+  EXPECT_FALSE(YAML::LoadFile(written.snapshot_file.string())["complete"].as<bool>());
+  observation.grid.reset();
+  EXPECT_EQ(direction::record(observation).status, RecordStatus::InvalidInput);
+  std::filesystem::remove_all(observation.output_root);
 }
 
 }  // namespace

@@ -3,6 +3,15 @@
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
 **全体未完。ゲームStart・Rejoin復帰は確認済み。車両Start・周回・統合受入れは未達。**
 
+RecoveryのCheckClearanceで方向を選べなかった最初の1件について、実際の候補入力・
+地図・物理結果とコース条件を限定保存する観測を実装。走行判断・候補順・安全条件は維持。
+R760native245/source118、build137全26/package124合格。保存したセルと入力から元の
+壁拒否・コース拒否・合格例を再生できた。次は固定commitのsingle-r22で実入力を取得。
+Rejoin準備の実走採用・車両Start・周回・M4–M6は未完。追加確認なしで継続する。
+[限定観測の設計・検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-direction-observation-design.md)。
+
+以下は観測実装前の履歴。
+
 6f42d134のsingle-r21:通常408送信、4248callback最大19.53ms、期限外送信ゼロ。
 913のRecovery停止後、方向候補を選べずSafeStop。Rejoin準備は適用場面に到達せず、
 実走採用は未検証。予約無効7件は期限超過4/期限前3で、914は停止後の世代・履歴拒否。

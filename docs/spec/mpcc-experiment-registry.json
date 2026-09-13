@@ -1489,6 +1489,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-rejoin-observation-validation.json",
       "replay_ready": true,
       "reason": "Bounded diagnostic producer/writer native validation; new live post-Rejoin worker request still pending."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-rejoin-wall-seal-r718",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-wall-source-evidence.json",
+      "replay_ready": true,
+      "reason": "Complete r18source537world and bounded diagnostic comparisons retained; v2source882is only exact-QP evidence. No live post-Rejoin reserved capture."
     }
   ],
   "experiments": [
@@ -19544,6 +19550,160 @@
       "production_impact": "Observation only; first reserved Cruise past original deadline after actual Rejoin. Same writer thread, max4leaf inputs, one admitted event. Runtime data not yet accepted.",
       "deleted_code": [],
       "revisit_condition": "New missing input or changed causal boundary; native/live diagnosis before any budget or programme change."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-live-audit-r706",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "rejected",
+      "reason": "r18noRejoin/Start/laps;357normal sends,max19.482284ms,zero pre/post-window refusal. Recorder eligibility absent; not live observer validation.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-public-r707",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "accepted",
+      "reason": "Same-run public topics:maximum1.036103606mps; no Start/laps or private plant truth.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-wall-source-inputs-r708",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "accepted",
+      "reason": "Sealed sources527/537/882 join actual final912and earlier normal901; version3complete inputs versus version2exact-QP-only scope preserved.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-wall-source-replay-r710",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "inconclusive",
+      "reason": "527solver failure class reproduced,537native physical adapter accepted but outerwall not accepted; A/Hmissing target-freeRejoin, statelessunsupported.882loaderSIGABRTis setup failure.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-cell-geometry-r711",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "accepted",
+      "reason": "Original source537outerwall dense144/0.725s/cell471815reproduced; original9.168mmgap and0.520mmoverlap isolated.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-oracles-r712",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "inconclusive",
+      "reason": "Two right preparation witnesses pass physical oracle; original/left rejected. Uses default zero tolerance adapter, so not valid original solver-envelope seeds; corrected byR715.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-free-seed-r713",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "rejected",
+      "reason": "Diagnostic-only YAML iterator C++compile error; no comparison executed.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-free-seed-r714",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "rejected",
+      "reason": "Original baseline wall144reproduced; R712rawseed exceeds original tightened solver envelope, abort preserved. No tolerance relaxation.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-oracles-r715",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "accepted",
+      "reason": "Same four witnesses generated with original SolverContext tolerance:2preparationstages,two right physical positives,two left wall negatives. Raw controls only.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-free-seed-r716",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "rejected",
+      "reason": "Right2freeQP passes old audit chain but exactu2.317426407exceeds semantic2cap; finalQPu0.008201322. Right4maxiter failure preserved. No normal promotion.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-velocity-boundary-r717",
+      "baseline_commit": "9c522a95",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-wall-seal-r718"
+      ],
+      "hypothesis": "A frozen target-free Rejoin wall failure may be avoidable with stationary steering preparation and coherent nonlinear state correction; all semantic bounds must survive physical proof.",
+      "changed_dimension": "Same source537world; explicit diagnostic applicability/preparation/seed/velocity-boundary dimensions. Setup failures retained separately. No production change.",
+      "result": "accepted",
+      "reason": "Three predeclared semantic speed/correction arms. Oldovercap observed; addedguard+oldaffinetangent hitswall529; coherent native tangent+one existingcorrection passes speed/fullwall/dynamic/Stop. Diagnostic only; broader constraints/production/live not validated.",
+      "production_impact": "None; observation and temporary native copies only. Old audit acceptance without semantic velocity cap is not normal authority.",
+      "deleted_code": [],
+      "revisit_condition": "New complete world/input or named structural producer/applicability correction; no unchanged live repeat, seed expansion or safety/numerical relaxation."
     }
   ]
 }

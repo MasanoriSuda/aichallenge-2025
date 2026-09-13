@@ -8,6 +8,16 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Rejoin壁拒否と非線形速度の検証境界（2026-09-13）
+
+9c522a95のsingle-r18は認証済みRejoinに到達せず、Start/周回なし。4234callback最大
+19.482284ms、通常357件、実期限外送信ゼロ。source537の壁接触を同一世界で再現した。
+診断の停止操舵準備から壁を避けるQP解は得られたが、非線形速度2.317m/sは元の2m/s
+上限を超えた。従来の壁・他車・停止継続合格を、全状態制約の合格へ読み替えない。
+R717では元の速度検証と連続した非線形状態からの線形化により、既存補正1回で同場面の
+速度・壁・他車・停止継続に合格した。本番未採用。元の制約のsource/current/retainedへの
+保持と追加場面・実走検証が必要。[根拠と実装境界](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-wall-source-audit.md)。
+
 ## Rejoin実送信後の検証結果（2026-09-13）
 
 b3613667のsingle-r17は認証済みRejoinを実送信し、通常Cruiseへの復帰を2回確認した。

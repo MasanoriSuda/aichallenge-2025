@@ -8,6 +8,14 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 通常移動前の初回壁区間観測（2026-09-13）
+
+初回の壁区間拒否を通常移動前も保存する観測へ修正。先行通常記録は任意の実証拠とし、
+元の地図・クエリ・判定・安全条件を維持。R812旧版1失敗を再現、R813native34/source118、
+build141全26package、package128全2660tests合格。次は標準描画のsingle-r28で初回実入力を
+取得して一致再生する。壁区間の原因・標準描画の期限問題・全コース/M4–M6は未完。
+[設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/first-wall-interval-design.md)。
+
 ## 描画診断と初回壁区間の観測境界（2026-09-13）
 
 single-r27の描画なし診断は通常738送信、4281callback最大24.392ms、実期限外送信ゼロ。

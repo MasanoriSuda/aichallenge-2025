@@ -1,0 +1,111 @@
+{
+  "baseline": "176bb53d",
+  "authority": false,
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt": "34732a48bc87fbe39918e4474e4a5397889fe7ae51d3706fab49dfc50065da9b",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp": "7e1cf256e220673a073e9667c7493f5011e734c6ac4ad521edc20bfc5a368ba4",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_current_wall_interval_observation.cpp": "091a67a7abed95a6c4f6279fb1bb5749eac4e35ce796e3800e804d1373ba9808",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "b45cd6a70d5e7621ad957937a7505b52d858b1947714fd3ec2cfc62bf168a111",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp": "87274bc78a80b464a9b126b16497fcd200e497aa784049c3a070d2357ca7e988"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-first-wall-interval-native-r813/test_mpcc_architecture_snapshot.log": "ea23258f1f5a3eefe6eaac449cf32945f910763a6898c6742eb79870bed8bee0",
+    "output/20260913-nine-state-first-wall-interval-native-r813/build-command.json": "c9d91f79503c4b094d768ac5fed71a4915a651851a7153937e5bdfb83579dcbe",
+    "output/20260913-nine-state-first-wall-interval-native-r813/test_mpcc_architecture_snapshot.xml": "6c83450f7f4a4046985173900f999cb73d780dd532e38234e5945a8be4897a01",
+    "output/20260913-nine-state-first-wall-interval-native-r813/build.log": "5c9c9362f5b20a4c222458d989b681654f567551992c64187eb9644e2b246246",
+    "output/20260913-nine-state-first-wall-interval-native-r813/CMakeLists.txt": "34732a48bc87fbe39918e4474e4a5397889fe7ae51d3706fab49dfc50065da9b",
+    "output/20260913-nine-state-first-wall-interval-native-r813/result.json": "490b6dea8011f98b08d8bc0f73eecf7ac98d455ae00274fa8fd114dd514cd38a",
+    "output/20260913-nine-state-first-wall-interval-native-r813/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-first-wall-interval-native-r813/runner.py": "07ef86d91ef9d73b86c0970ccc2ea9dd0792de0defcdc836a846a16e03a5f788",
+    "output/20260913-nine-state-first-wall-interval-native-r813/test/test_mpcc_architecture_snapshot.cpp": "7b426be0871544146fe14a46c833d28a69547f4b10901d15427db061e15105b3",
+    "output/20260913-nine-state-first-wall-interval-native-r813/include/multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp": "7e1cf256e220673a073e9667c7493f5011e734c6ac4ad521edc20bfc5a368ba4",
+    "output/20260913-nine-state-first-wall-interval-native-r813/src/mpc_controller_cpp.cpp": "b45cd6a70d5e7621ad957937a7505b52d858b1947714fd3ec2cfc62bf168a111",
+    "output/20260913-nine-state-first-wall-interval-native-r813/src/mpcc_current_wall_interval_observation.cpp": "091a67a7abed95a6c4f6279fb1bb5749eac4e35ce796e3800e804d1373ba9808",
+    "output/20260913-nine-state-build141/status.json": "aef8ca6fcfbb4dc5f698082815f8e78ea188a227c7e7ad96652f9e1f2a7b4707",
+    "output/20260913-nine-state-build141/build.log": "ce3dd34d9e0e6d63a4353d4fa2baf6e8ed352a89dda9461ac88c01e342e593d0",
+    "output/20260913-nine-state-build141/runner.py": "9672928c1b7c5fcfc6edd7a595d06f410460a6a068b1ca6cdb7ccaf97d303db7",
+    "output/20260913-nine-state-build141/manifest.json": "23492db1bae471ea1bf6da15476e9d04766529f976a40d1ab06088c82727eed5",
+    "output/20260913-nine-state-package128/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package128/test.log": "4a57d9218c0da52bb74fa925a8327854082efeae8a02ce02eaf21a0e7bd9822f",
+    "output/20260913-nine-state-package128/status.json": "468b71ed432257b593eb31a780c7918dd3bf9925762816517145075c2f4678ad",
+    "output/20260913-nine-state-package128/test-result.log": "bdfda003625921ac786a420b569b71b86e595e0296a571c990d640d45ba2f259",
+    "output/20260913-nine-state-package128/runner.py": "b3e5a6ff494dfd22b075990ccad226ad27b92dcca2081abdcef7142e74a7596e",
+    "output/20260913-nine-state-first-wall-interval-old-r812/test_mpcc_architecture_snapshot.log": "268d342cbc0d5395c15890fd77232609c0eab7e94045b154c0670641528f1a98",
+    "output/20260913-nine-state-first-wall-interval-old-r812/build-command.json": "c9d91f79503c4b094d768ac5fed71a4915a651851a7153937e5bdfb83579dcbe",
+    "output/20260913-nine-state-first-wall-interval-old-r812/test_mpcc_architecture_snapshot.xml": "e5cb2108de440c6ad2276e2d48ee0c4bc23b5236d2c57732376cd25d962259c7",
+    "output/20260913-nine-state-first-wall-interval-old-r812/build.log": "18f4a1df2861d9eb0b4e9974ddc9b59ee34ae57758810143e7077a5688a5021a",
+    "output/20260913-nine-state-first-wall-interval-old-r812/CMakeLists.txt": "34732a48bc87fbe39918e4474e4a5397889fe7ae51d3706fab49dfc50065da9b",
+    "output/20260913-nine-state-first-wall-interval-old-r812/result.json": "f8818a9caa0ad6d85a8c884e33b00cbc134dd65f7f95576ac87a44af1ea98a9d",
+    "output/20260913-nine-state-first-wall-interval-old-r812/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-first-wall-interval-old-r812/runner.py": "7f24b9420be83daee809e6394a8cc328e7171fb50e7091c3317052786291f928",
+    "output/20260913-nine-state-first-wall-interval-old-r812/test/test_mpcc_architecture_snapshot.cpp": "d293a9f41706d5fc6e849f7595bab298edb2d09d996c0ebe8ff14ef6bc483518",
+    "output/20260913-nine-state-first-wall-interval-old-r812/include/multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp": "6fa62252cf7807a3c88ad41d757cac770080b4b157fb143e11aeaabfe7212c48",
+    "output/20260913-nine-state-first-wall-interval-old-r812/src/mpc_controller_cpp.cpp": "52a34d4f06efb35540d7481be4abf6042ae56c431328d61c9ece142f532a311b",
+    "output/20260913-nine-state-first-wall-interval-old-r812/src/mpcc_current_wall_interval_observation.cpp": "1d578240695be6ea27a4e7defcfa43abe77990ff1577cd089cd3c6ae178ac51c"
+  },
+  "native_tests": [
+    {
+      "file": "test_mpcc_architecture_snapshot.xml",
+      "tests": "34",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "0.594",
+      "timestamp": "2026-09-13T15:59:45",
+      "name": "AllTests"
+    }
+  ],
+  "source_tests": 118,
+  "build": {
+    "return_code": 0,
+    "elapsed_sec": 254.5964876349899,
+    "sources_unchanged": true
+  },
+  "package": {
+    "results": [
+      {
+        "command": [
+          "colcon",
+          "test",
+          "--packages-select",
+          "multi_purpose_mpc_ros",
+          "--return-code-on-test-failure",
+          "--event-handlers",
+          "console_direct+"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 44.6811531970161
+      },
+      {
+        "command": [
+          "colcon",
+          "test-result",
+          "--verbose",
+          "--test-result-base",
+          "build/multi_purpose_mpc_ros"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 1.8727970289764926
+      }
+    ],
+    "all_pass": true
+  },
+  "package_tests": 2660,
+  "original_controller_identical_after_removing_observer": true,
+  "old_failure": "R812 existing recorder rejects actual blocked query without prior normal movement; other32 tests pass.",
+  "review": [
+    "First actual rejected live ordinary query; worker and behavior override exclusions unchanged. Earlier normal witness is optional and never fabricated.",
+    "v2 explicit null/mapping predecessor, nonpreceding/nonfinite/inconsistent metadata rejected. Oldv1 retained as distinct historical format.",
+    "Native34 includes original-grid replay with and without predecessor, disconnected and clear preferred cases, duplicate/overflow/invalid bounds and metadata. R813 precedes const-reference loop warning cleanup; build141/package128 verify final source.",
+    "One owned async writer with fixed32 run records and immutable shared map; no extra geometry, model, solver, safety or authority changes."
+  ],
+  "limits": [
+    "Actual single-r28 capture and native replay still required. No current-wall physical algorithm repair or race acceptance.",
+    "Standard rendering actual publication deadline remains unresolved, M4–M6 open."
+  ]
+}

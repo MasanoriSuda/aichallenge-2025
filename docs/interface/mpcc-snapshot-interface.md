@@ -26,3 +26,10 @@ policyは入力候補の数値的な意味であり、実行指令や認証で�
 clearance・sampling anchor、連結した空き区間、選択結果とpreferred containmentを含む。
 最大32区間を保存し、超過時は`complete=false`。不完全・未知schemaの記録から
 完全再生や走行認証を主張しない。読み取り側はこのschemaを明示して既存v3と区別する。
+
+`mpcc-current-wall-interval-observation/v2`は通常移動前も含む初回の実クエリ拒否へ
+観測範囲を拡張する。v1の3つのflatな`prior_moving_*`フィールドに代えて、
+`prior_moving`を未観測時はnull、観測済みなら`decision_id`・`pose_sec`・
+`velocity_mps`のmappingとする。先行判断IDは正で現在ID未満、時刻と速度は有限。
+v1をv2として読み替えず、旧記録は元の必須先行観測を持つv1として再生する。
+地図・クエリ・区間の形式、32区間の上限、authority=falseは維持。

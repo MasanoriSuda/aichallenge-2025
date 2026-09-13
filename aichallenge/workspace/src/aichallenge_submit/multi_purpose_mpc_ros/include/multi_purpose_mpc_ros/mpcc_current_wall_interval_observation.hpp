@@ -14,6 +14,7 @@ struct Observation
 {
   std::uint64_t decision_id{};
   double ros_sec{};
+  /// Zero means no authenticated earlier moving normal send; both scalars stay zero.
   std::uint64_t prior_moving_decision_id{};
   double prior_moving_pose_sec{};
   double prior_moving_velocity_mps{};

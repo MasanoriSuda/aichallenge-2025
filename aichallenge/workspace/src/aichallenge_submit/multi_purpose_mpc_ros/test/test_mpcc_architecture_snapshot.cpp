@@ -1884,8 +1884,16 @@ interval_observation::Observation current_interval_fixture(const double preferre
 
 TEST(MpccArchitectureSnapshot, CurrentWallIntervalRoundTripPreservesDisconnectedPreferredRejection)
 {
-  for (const double preferred : {0.0, -0.8}) {
+  for (const auto & [preferred, has_prior] : {
+    std::pair{0.0, true}, std::pair{-0.8, true},
+    std::pair{0.0, false}, std::pair{-0.8, false}})
+  {
     auto o = current_interval_fixture(preferred);
+    if (!has_prior) {
+      o.prior_moving_decision_id = 0;
+      o.prior_moving_pose_sec = 0.0;
+      o.prior_moving_velocity_mps = 0.0;
+    }
     ASSERT_TRUE(o.selected.valid); ASSERT_TRUE(o.selected.feasible);
     ASSERT_EQ(o.selected.preferred_lateral_contained, preferred < 0.0);
     ASSERT_GT(o.actual_run_count, 1U);
@@ -1893,7 +1901,15 @@ TEST(MpccArchitectureSnapshot, CurrentWallIntervalRoundTripPreservesDisconnected
     const auto saved = worker.get();
     ASSERT_EQ(saved.status, RecordStatus::Written) << saved.detail;
     const auto d = YAML::LoadFile(saved.snapshot_file.string());
-    ASSERT_EQ(d["schema"].as<std::string>(), "mpcc-current-wall-interval-observation/v1");
+    ASSERT_EQ(d["schema"].as<std::string>(), "mpcc-current-wall-interval-observation/v2");
+    if (has_prior) {
+      ASSERT_TRUE(d["prior_moving"].IsMap());
+      EXPECT_EQ(d["prior_moving"]["decision_id"].as<std::uint64_t>(), o.prior_moving_decision_id);
+      EXPECT_DOUBLE_EQ(d["prior_moving"]["pose_sec"].as<double>(), o.prior_moving_pose_sec);
+      EXPECT_DOUBLE_EQ(d["prior_moving"]["velocity_mps"].as<double>(), o.prior_moving_velocity_mps);
+    } else {
+      EXPECT_TRUE(d["prior_moving"].IsNull());
+    }
     EXPECT_FALSE(d["authority"].as<bool>()); ASSERT_TRUE(d["complete"].as<bool>());
     auto grid = *o.grid;
     grid.cells.assign(grid.cells.size(), recovery_footprint::CellState::Unknown);
@@ -1931,6 +1947,41 @@ TEST(MpccArchitectureSnapshot, CurrentWallIntervalRoundTripPreservesDisconnected
     EXPECT_EQ(interval_observation::record(o).status, RecordStatus::Duplicate);
     EXPECT_DOUBLE_EQ(YAML::LoadFile(saved.snapshot_file.string())["projection_lag_lateral_heading"][1].as<double>(), preferred);
     std::filesystem::remove_all(o.output_root);
+  }
+}
+
+TEST(MpccArchitectureSnapshot, CurrentWallIntervalRecordsRejectionBeforeAnyMovingNormalSend)
+{
+  auto o = current_interval_fixture(0.0);
+  ASSERT_FALSE(o.selected.preferred_lateral_contained);
+  o.prior_moving_decision_id = 0;
+  o.prior_moving_pose_sec = 0.0;
+  o.prior_moving_velocity_mps = 0.0;
+  const auto saved = interval_observation::record(o);
+  ASSERT_EQ(saved.status, RecordStatus::Written) << saved.detail;
+  const auto d = YAML::LoadFile(saved.snapshot_file.string());
+  EXPECT_TRUE(d["prior_moving"].IsNull());
+  EXPECT_FALSE(d["selected"]["preferred_lateral_contained"].as<bool>());
+  EXPECT_EQ(d["grid"]["fingerprint"].as<std::uint64_t>(),
+    recovery_footprint::occupancy_grid_fingerprint(*o.grid));
+  std::filesystem::remove_all(o.output_root);
+}
+
+TEST(MpccArchitectureSnapshot, CurrentWallIntervalRejectsInvalidPredecessorEvidence)
+{
+  const auto original = current_interval_fixture(0.0);
+  for (int scenario = 0; scenario < 6; ++scenario) {
+    auto o = original;
+    switch (scenario) {
+      case 0: o.prior_moving_decision_id = o.decision_id; break;
+      case 1: o.prior_moving_decision_id = o.decision_id + 1; break;
+      case 2: o.prior_moving_pose_sec = std::numeric_limits<double>::quiet_NaN(); break;
+      case 3: o.prior_moving_velocity_mps = std::numeric_limits<double>::infinity(); break;
+      case 4: o.prior_moving_decision_id = 0; o.prior_moving_pose_sec = 0.0; break;
+      case 5: o.prior_moving_decision_id = 0; o.prior_moving_velocity_mps = 0.0; break;
+    }
+    EXPECT_EQ(interval_observation::record(o).status, RecordStatus::InvalidInput) << scenario;
+    EXPECT_FALSE(std::filesystem::exists(o.output_root));
   }
 }
 

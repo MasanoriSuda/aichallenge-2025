@@ -29,8 +29,11 @@ mpcc_architecture_snapshot::RecordResult record(const Observation & o) noexcept
 {
   namespace archive = mpcc_architecture_snapshot;
   archive::RecordResult result;
-  if (!o.decision_id || !o.prior_moving_decision_id ||
+  if (!o.decision_id ||
     o.prior_moving_decision_id >= o.decision_id || !std::isfinite(o.ros_sec) ||
+    !std::isfinite(o.prior_moving_pose_sec) || !std::isfinite(o.prior_moving_velocity_mps) ||
+    (!o.prior_moving_decision_id &&
+    (o.prior_moving_pose_sec != 0.0 || o.prior_moving_velocity_mps != 0.0)) ||
     !o.grid || !o.grid->valid() || !o.footprint.valid() || o.output_root.empty())
   {
     result.detail = "invalid current wall interval observation";
@@ -53,14 +56,18 @@ mpcc_architecture_snapshot::RecordResult record(const Observation & o) noexcept
       throw std::runtime_error("previous current wall observation temporary directory exists");
     }
     YAML::Node root;
-    root["schema"] = "mpcc-current-wall-interval-observation/v1";
+    root["schema"] = "mpcc-current-wall-interval-observation/v2";
     root["authority"] = false;
     root["complete"] = o.actual_run_count <= kMaximumClearRuns;
     root["decision_id"] = o.decision_id;
     root["ros_sec"] = o.ros_sec;
-    root["prior_moving_decision_id"] = o.prior_moving_decision_id;
-    root["prior_moving_pose_sec"] = o.prior_moving_pose_sec;
-    root["prior_moving_velocity_mps"] = o.prior_moving_velocity_mps;
+    root["prior_moving"] = YAML::Node(YAML::NodeType::Null);
+    if (o.prior_moving_decision_id) {
+      auto prior = root["prior_moving"];
+      prior["decision_id"] = o.prior_moving_decision_id;
+      prior["pose_sec"] = o.prior_moving_pose_sec;
+      prior["velocity_mps"] = o.prior_moving_velocity_mps;
+    }
     root["intent"] = o.intent;
     root["waypoint"] = o.waypoint;
     const auto pose = [](const recovery_footprint::Pose2D & p) {

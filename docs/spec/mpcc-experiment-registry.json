@@ -1609,6 +1609,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/renderer-clock-live-evidence.json",
       "replay_ready": false,
       "reason": "Same-run clock, command, velocity and source evidence; original interval still unavailable."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-first-wall-interval-validation-r814",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/first-wall-interval-validation.json",
+      "replay_ready": true,
+      "reason": "Bounded original-query recording tests/build/package; live actual interval remains to capture."
     }
   ],
   "experiments": [
@@ -20926,6 +20932,54 @@
       "production_impact": "No production fix or canonical acceptance.",
       "deleted_code": [],
       "revisit_condition": "A new actual interval capture boundary or controlled clock producer experiment; no unchanged repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-first-wall-interval-old-r812",
+      "baseline_commit": "176bb53d",
+      "snapshot_ids": [
+        "20260913-nine-state-first-wall-interval-validation-r814"
+      ],
+      "hypothesis": "Post-motion prerequisite excludes the first actual live interval failure.",
+      "changed_dimension": "First original live query diagnostic and optional predecessor; no control change.",
+      "result": "rejected",
+      "reason": "Original recorder rejects real query without prior normal movement;32other tests pass.",
+      "production_impact": "Observation only; no authority/model/safety/timing changes.",
+      "deleted_code": [
+        "Diagnostic post-motion eligibility prerequisite only"
+      ],
+      "revisit_condition": "Exact actual capture and replay before producer repair; remove/review observer after declared single-r28."
+    },
+    {
+      "experiment_id": "20260913-nine-state-first-wall-interval-native-r813",
+      "baseline_commit": "176bb53d",
+      "snapshot_ids": [
+        "20260913-nine-state-first-wall-interval-validation-r814"
+      ],
+      "hypothesis": "Post-motion prerequisite excludes the first actual live interval failure.",
+      "changed_dimension": "First original live query diagnostic and optional predecessor; no control change.",
+      "result": "accepted",
+      "reason": "34native/source118 pass; faithful grid replay with optional prior and invalid metadata rejection.",
+      "production_impact": "Observation only; no authority/model/safety/timing changes.",
+      "deleted_code": [
+        "Diagnostic post-motion eligibility prerequisite only"
+      ],
+      "revisit_condition": "Exact actual capture and replay before producer repair; remove/review observer after declared single-r28."
+    },
+    {
+      "experiment_id": "20260913-nine-state-first-wall-interval-validation-r814",
+      "baseline_commit": "176bb53d",
+      "snapshot_ids": [
+        "20260913-nine-state-first-wall-interval-validation-r814"
+      ],
+      "hypothesis": "Post-motion prerequisite excludes the first actual live interval failure.",
+      "changed_dimension": "First original live query diagnostic and optional predecessor; no control change.",
+      "result": "accepted",
+      "reason": "Final build141all26/package128all2660, original controller computation unchanged outside observer.",
+      "production_impact": "Observation only; no authority/model/safety/timing changes.",
+      "deleted_code": [
+        "Diagnostic post-motion eligibility prerequisite only"
+      ],
+      "revisit_condition": "Exact actual capture and replay before producer repair; remove/review observer after declared single-r28."
     }
   ]
 }

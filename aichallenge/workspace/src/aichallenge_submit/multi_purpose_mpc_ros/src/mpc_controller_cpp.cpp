@@ -22488,8 +22488,6 @@ struct MPC
                 kInitialWallBoundaryGuardM);
               if (!current_wall_interval_observation_attempted_ &&
                 behavior_override == nullptr && !mpcc_lite_async_worker_context_ &&
-                last_moving_normal_observation_ &&
-                last_moving_normal_observation_->decision_id < active_control_decision_id_ &&
                 !(interval.valid && interval.feasible && interval.preferred_lateral_contained &&
                 std::isfinite(interval.lower_lateral_offset_m) &&
                 std::isfinite(interval.upper_lateral_offset_m) &&
@@ -22503,9 +22501,13 @@ struct MPC
                   observation::Observation saved;
                   saved.decision_id = active_control_decision_id_;
                   saved.ros_sec = now_sec;
-                  saved.prior_moving_decision_id = last_moving_normal_observation_->decision_id;
-                  saved.prior_moving_pose_sec = last_moving_normal_observation_->pose_sec;
-                  saved.prior_moving_velocity_mps = last_moving_normal_observation_->forward_velocity_mps;
+                  if (last_moving_normal_observation_ &&
+                    last_moving_normal_observation_->decision_id < active_control_decision_id_)
+                  {
+                    saved.prior_moving_decision_id = last_moving_normal_observation_->decision_id;
+                    saved.prior_moving_pose_sec = last_moving_normal_observation_->pose_sec;
+                    saved.prior_moving_velocity_mps = last_moving_normal_observation_->forward_velocity_mps;
+                  }
                   saved.intent = static_cast<int>(problem_intent);
                   saved.waypoint = current_waypoint;
                   saved.grid = overtake_static_wall_grid_snapshot_owner_;

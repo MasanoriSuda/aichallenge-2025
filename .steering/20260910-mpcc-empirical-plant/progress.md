@@ -428,3 +428,10 @@ Recoveryの実選択12件はすべて前進で、小操舵の後退実行は未�
 後半は停止軌道のコース形状を生成できない。保存したRejoin537/538・656/743を再生し、
 現在接触・軌道の壁拒否・後段の入力欠落を分離する。全安全条件を維持しM4–M6を継続。
 See receiver-input-enclosure/recovery-steering-live-audit.md and evidence.json.
+
+2026-09-13R776–R783: R776–R782でsingle-r23のRejoin入力を監査。537は現在姿勢が無接触で、3.615秒先の
+壁接触を再現した。補正の継続条件へ完全な壁検証を加える診断では、537/656が元の
+最大3回内に状態・壁・他車・停止継続を満たす。壁の近似制約を再生成する別方式は
+537で拒否、656で合格。本番は未変更。次は現在接触などの負例と追加入力を検証し、
+元の上限内の最小修正を実装・build・実走へ進める。全体・M4–M6は未完。
+See receiver-input-enclosure/rejoin-full-wall-feedback-audit.md and evidence.json.

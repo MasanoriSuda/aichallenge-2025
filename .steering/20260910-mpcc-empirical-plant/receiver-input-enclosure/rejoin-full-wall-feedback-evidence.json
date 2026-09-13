@@ -1,0 +1,2120 @@
+{
+  "authority": false,
+  "baseline": "e6b5c740",
+  "source_runtime": "single-r23/226e4f84",
+  "production_unchanged": true,
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-rejoin-r23-source-inputs-r776/generator.py": "182072280abbedbc58154904b5af68e056d4fd081ac188bb19f6d2d7396d990f",
+    "output/20260913-nine-state-rejoin-r23-source-inputs-r776/report.json": "80b33f98330463813692f580795e6b6823074caedcbc8576bba6f829942f0f39",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/generator.py": "73d531c329f740a69f58e5e1bf6961f5d926987c7332d0670d6ac43bc7ebf61a",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/results.json": "e754d91bc21f3da2815caa04fd62a2b82a04e00b741f19b9e478c0e404352b39",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/replay": "527d869a640fa3a7c10cfc0f1ca884191511fe94600edbdbbcf331b48991f1bb",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/driver.cpp": "94555b7a49311ebfe617a95c264eda6e511fc968f36c5eb786256d49aab08b5d",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/compile-command.json": "4ce74a96707ac1a8f8cf8fc9b78dd215b0b421dc78b62337711918dcd64a973a",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/declared-plan.json": "1be3324296b7b1554c59b1a11cfd34b6de40b31a96157324672ee329f2f14d8e",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "01da8b8afaab94607b845a3ee0c0019bfb58f30bad0597bd0ae5fd7a8c325e0a",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/report.yaml": "74950a41e0398006b6bbdd5bd7d5c8ffd90f0df9a2d92eeed3dd032ba607e8be",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/report.yaml": "af2ca8980f95df8d32fa42de955cc01ee112e03a3e85ffc09282836e652e6ef1",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "ad8cf8d67d765947dcf09440da2971abfecd4a5efc8ab2488c6da991f09e4917",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "ad8cf8d67d765947dcf09440da2971abfecd4a5efc8ab2488c6da991f09e4917",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/report.yaml": "ad48b9a2242ee4c01deb0f10303a5f4bb0869968a729c60418bec78162df2f77",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "17c768134704079eb6a0cb06f708b7fe5935ad9e8511acf0ac116cd55649cb4c",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "17c768134704079eb6a0cb06f708b7fe5935ad9e8511acf0ac116cd55649cb4c",
+    "output/20260913-nine-state-rejoin-r23-source-replay-r777/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/mpcc_architecture_snapshots/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/generator.py": "bf6f80d3f27eaee6b0970d6da285bfc284d062a30e84a8c6a4db6744260130d9",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/replay": "7e55098f16d64eb93343b68b3d393fef509b5ecfb06ae832d8d4711fa135ed96",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/driver.cpp": "b3524a9829d85f2f08805d3e986600f4049aa528942d0812e57d1fb77f106ee3",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/compile-command.json": "de2b408f4585388286f126d2721d2dbfe9eff0904226f094afc5d12cd8d4c202",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/result.json": "8e25c86f0f8a0a1d72ad92a84c444e7381d435f94ae823664eca5d6cb4f955da",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/report.yaml": "05034ec30d54f2b162802200b92ebdd0f6e848332c538dc9181e12d92b45c46b",
+    "output/20260913-nine-state-rejoin-r23-cell-geometry-r778/declared-plan.json": "b96e98e86683a2a11686cdebc2db24de70767bc91c9e3d9687dd30fff02a81c8",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r779/mpcc_rate_resolved_shadow.cpp": "3d91ee5b689fd6a0bbb53c052832348e10117c958b506f553c22872b3851f477",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r779/runner.py": "686677c8d01278798c504553c249750b44774fbd758e89fa67206a9b9477b26c",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r779/declared-plan.json": "673016bd49f23bba60cd6741780510634845d64de9f73ca6caa465d5348f4dc9",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/results.json": "6ee4ba33fd2f48c3788fd65115e4ac220531bce5036649cb1d7c1d84d9dd780f",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/replay": "9c2b7a22e471d039be78f1255e70109af06bc23d8447911863d4b9cde7faeb55",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/mpcc_rate_resolved_shadow.cpp": "3d91ee5b689fd6a0bbb53c052832348e10117c958b506f553c22872b3851f477",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/driver.cpp": "27c3f063bf19b9b08c9d9e769ec31ce826c5f8ccd9509a84880691de06bb5f55",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/compile-command.json": "67d28394a4086f1dd29ac74a04a4fc9c53d5f30d947af200318b658417a997a3",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/mpcc_architecture_comparison.cpp": "38bbcd474fdd792c9eadfec976aefb1076623b038a8bae10fa1c06455f8e01cf",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/source-sha256.json": "5a44fa44ba7938ef3699597351cb329d9ea5727721c4786f515c902157d0c4ef",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/runner.py": "95189a0e33b429d448368abfef2071d8130cc6dd49133c95b2b2cbbb77f6b8a3",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/declared-plan.json": "01456ac31b35922fd567750ee554578da5770cbec59a4d4e206e5d673c96a2ae",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-dynamics/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-dynamics/report.yaml": "1e66e5e838dea3986720b7441cb03804560708848673fd04c70b05a0870f85c5",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-dynamics/trace.yaml-lines": "150a03498d791e49b16fe63969a32c6b694197e764dfc3834e2d9deb98fccfaa",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-coherent/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-coherent/report.yaml": "4727efc5de0897216ba62c1b1471f783beb021b8ed3ae70e1323bc53fcce6df9",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-coherent/trace.yaml-lines": "0e4373b4ad2c51d40957e67a6fdd316a996f975d4d9fd88b4d16bffa3ace26a3",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-observe/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-observe/report.yaml": "9e66c11e2de7568ea685994802bffa94a0a6537355f0cf2bedd297b5c8871646",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-observe/trace.yaml-lines": "fb60045f439d9e6bd97f5af112bbad9d93d82a1b0f612d48275daabda5fcae9d",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/results.json": "343d6edb67bc47835dddba2f7780899ca1303f7d3623ed8bb7e7da09b8aac363",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/replay": "a3e1d7920ddb7c18e49aa57b94201dbb7113aee28623f67db15494ed1b3ac503",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/mpcc_rate_resolved_shadow.cpp": "205310df6b4155f916065cf6d28205e373c03dae68f23ced2ca40dc576091de1",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/driver.cpp": "27c3f063bf19b9b08c9d9e769ec31ce826c5f8ccd9509a84880691de06bb5f55",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/compile-command.json": "5cf89a4b96d477680326fec76f824e2752dd81aee049f153f610518d8cbc3b5c",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/mpcc_architecture_comparison.cpp": "38bbcd474fdd792c9eadfec976aefb1076623b038a8bae10fa1c06455f8e01cf",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/source-sha256.json": "5a44fa44ba7938ef3699597351cb329d9ea5727721c4786f515c902157d0c4ef",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/runner.py": "78ddaddb01c9bab40b750e5bae09ae3200432fd418c93cbabbc0eb9c5f060761",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/declared-plan.json": "29dedff749c47237795dd5c47f6e36df66195169e8c7859582400d61288b89a6",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/537-coherent/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/537-coherent/report.yaml": "4727efc5de0897216ba62c1b1471f783beb021b8ed3ae70e1323bc53fcce6df9",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r781/537-coherent/trace.yaml-lines": "0e4373b4ad2c51d40957e67a6fdd316a996f975d4d9fd88b4d16bffa3ace26a3",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/results.json": "2082ec373f6eeca8efa4e97585779eb14e38445fe83a26a20b174afea5abd32d",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/replay": "f4eaa2cb568f670fb29bc3e7cdc6c3cf81b580052f2f8ef27f2e3f654bdda373",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/mpcc_rate_resolved_shadow.cpp": "3d680bad8a1f4a594d39bdcfaab63c5b53a67ecebfca1dbefe14efa206f3f448",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/driver.cpp": "27c3f063bf19b9b08c9d9e769ec31ce826c5f8ccd9509a84880691de06bb5f55",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/compile-command.json": "4b7cf01b239addd1cd99b81e634d3ec34abf25bd378dc426f899e2a6b15f1827",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/mpcc_architecture_comparison.cpp": "38bbcd474fdd792c9eadfec976aefb1076623b038a8bae10fa1c06455f8e01cf",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/source-sha256.json": "5a44fa44ba7938ef3699597351cb329d9ea5727721c4786f515c902157d0c4ef",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/runner.py": "6b70f886f2ddc05f350d0f4d18d359ebe28a42f54ad3a954650084156141506f",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/declared-plan.json": "fc44a60ec976a1581b1c48d775f1c2e85e950f920fd1f3a5ba92538223b6add9",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-dynamics/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-dynamics/report.yaml": "7e50b0b9b07526ac23d40b19d3a942dce648e07f73acc6e4e15c4dd1d0a8a160",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-dynamics/trace.yaml-lines": "e9469b132018a0b349858dc5b966113db6215a1fdff19571415217356561a59d",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/538-coherent/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/538-coherent/report.yaml": "84f60c4db1911d5ebda03ec0086622974ac0437a5f607ee1ad9387e2e4d0c984",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/538-coherent/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "8c69dbf27519a713c4f4093a8e1e97e49c4b8c153ae9c708336ab5eadff5d09f",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/538-coherent/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/538-coherent/mpcc_architecture_snapshots/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "8c69dbf27519a713c4f4093a8e1e97e49c4b8c153ae9c708336ab5eadff5d09f",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/538-coherent/mpcc_architecture_snapshots/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-coherent/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-coherent/report.yaml": "3d80c7c0f27c21d8ca8e078e7bc0388c99bb4d7ec947e38be4a241be94a544d0",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-coherent/trace.yaml-lines": "2557c7ca15ffbd9e8263cc2f0bc655cc34c26a5f5cff98638db4a5b925d99d7d",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/537-coherent/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/537-coherent/report.yaml": "fd6f62ddd246ce4f0404dda7a09d753ee055969ee2fb2842e501ab3365b6c4d4",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/537-coherent/trace.yaml-lines": "0e4373b4ad2c51d40957e67a6fdd316a996f975d4d9fd88b4d16bffa3ace26a3",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/743-coherent/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/743-coherent/report.yaml": "4d1d1646666f35065943f954accfc3df732c7c891dcaf29622e58710ae7de842",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/743-coherent/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "55be47aa284a0ba5c21ce01c33b2895fe49dc5323e30e7d84ae362c20a10cdbd",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/743-coherent/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/743-coherent/mpcc_architecture_snapshots/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "55be47aa284a0ba5c21ce01c33b2895fe49dc5323e30e7d84ae362c20a10cdbd",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/743-coherent/mpcc_architecture_snapshots/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-observe/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-observe/report.yaml": "651ff46f6f2378fda17066e271b60b8512e64d0ed260efb7ebf6e4446612d27e",
+    "output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-observe/trace.yaml-lines": "9d2e81835fa931e64a96ddf6cb0b95c3c77ef56df521efebd866886b452651cf"
+  },
+  "actual_inputs": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r23",
+    "baseline_commit": "226e4f84a8c459f116c361bf75e4aec655a904b4",
+    "actual_final_decisions": [
+      913
+    ],
+    "rows": [
+      {
+        "path": "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "source_sequence": 538,
+        "source_snapshot_sec": 12.464999721,
+        "source_control_decision_id": 964,
+        "policy": 0,
+        "tag": {
+          "schema": "mpcc-post-motion-final-loss/v1",
+          "authority": false,
+          "status": "valid",
+          "final_decision_id": 913,
+          "final_clock_sec": 11.014999753,
+          "moving_decision_id": 904,
+          "moving_pose_sec": 10.744999759,
+          "moving_forward_velocity_mps": 0.32607463002204895,
+          "actual_moving_publication": {
+            "sequence": 904,
+            "nominal_wire_acceleration_wire_steering_before_after": [
+              10.749999821,
+              1.3295960426330566,
+              0.2703486382961273,
+              10.759999759,
+              10.759999759
+            ],
+            "recorded_publication_sec": 10.759999759,
+            "source_job_solution_problem_input_index": [
+              899,
+              521,
+              8476506059126177990,
+              15211349169688754933,
+              2
+            ]
+          }
+        },
+        "interaction_fingerprint": 7587156902152541954,
+        "pipeline_stage": "wall-refinement",
+        "failure_outcome": "solve-rejected",
+        "failure_detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00474119, dua_res=3.59892, failed_iterate_row=497, value=0.921006, bounds=[-inf,0.911941], violation=0.00906488, tolerance=0.00192101, normalized=4.71882",
+        "exact_qp_available": true,
+        "warm_start_fields": [
+          "available",
+          "primal",
+          "dual"
+        ],
+        "observation": {
+          "pose_source_sec": 12.444999721,
+          "velocity_source_sec": 12.424999722,
+          "yaw_rate_source_sec": 12.399999722,
+          "tire_source_sec": 12.424999722,
+          "now_sec": 12.464999721,
+          "control_origin_sec": 12.594999721,
+          "nominal_acceleration_application_delay_sec": 0,
+          "nominal_steering_application_delay_sec": 0.1,
+          "initial_x_y_yaw_u_vy_r_desired_tire": [
+            89629.91637425608,
+            43129.22521160799,
+            2.4187183877913796,
+            0.4196816086769104,
+            -0.009021326899528503,
+            -0.04150641709566116,
+            -0.1559233449477352,
+            -0.17499995231628418
+          ],
+          "published_time_wire_acceleration_wire_steering": [
+            [
+              11.809999736,
+              1,
+              -0.25
+            ],
+            [
+              11.844999735,
+              1,
+              -0.25
+            ],
+            [
+              11.879999734,
+              1,
+              -0.25
+            ],
+            [
+              11.894999734,
+              1,
+              -0.25
+            ],
+            [
+              11.929999733,
+              1,
+              -0.25
+            ],
+            [
+              11.959999732,
+              1,
+              -0.25
+            ],
+            [
+              11.994999731,
+              1,
+              -0.25
+            ],
+            [
+              12.029999731,
+              1,
+              -0.25
+            ],
+            [
+              12.04499973,
+              1,
+              -0.25
+            ],
+            [
+              12.079999729,
+              1,
+              -0.25
+            ],
+            [
+              12.109999729,
+              1,
+              -0.25
+            ],
+            [
+              12.129999728,
+              1,
+              -0.25
+            ],
+            [
+              12.159999728,
+              1,
+              -0.25
+            ],
+            [
+              12.194999727,
+              1,
+              -0.25
+            ],
+            [
+              12.209999727,
+              1,
+              -0.25
+            ],
+            [
+              12.244999726,
+              1,
+              -0.25
+            ],
+            [
+              12.279999725,
+              1,
+              -0.25
+            ],
+            [
+              12.294999725,
+              1,
+              -0.25
+            ],
+            [
+              12.329999724,
+              1,
+              -0.25
+            ],
+            [
+              12.359999723,
+              1,
+              -0.25
+            ],
+            [
+              12.379999723,
+              1,
+              -0.25
+            ],
+            [
+              12.409999722,
+              1,
+              -0.25
+            ],
+            [
+              12.444999721,
+              -3,
+              -0.2237500101327896
+            ]
+          ]
+        }
+      },
+      {
+        "path": "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "source_sequence": 656,
+        "source_snapshot_sec": 14.059999685,
+        "source_control_decision_id": 1024,
+        "policy": 0,
+        "tag": {
+          "schema": "mpcc-post-motion-final-loss/v1",
+          "authority": false,
+          "status": "valid",
+          "final_decision_id": 913,
+          "final_clock_sec": 11.014999753,
+          "moving_decision_id": 904,
+          "moving_pose_sec": 10.744999759,
+          "moving_forward_velocity_mps": 0.32607463002204895,
+          "actual_moving_publication": {
+            "sequence": 904,
+            "nominal_wire_acceleration_wire_steering_before_after": [
+              10.749999821,
+              1.3295960426330566,
+              0.2703486382961273,
+              10.759999759,
+              10.759999759
+            ],
+            "recorded_publication_sec": 10.759999759,
+            "source_job_solution_problem_input_index": [
+              899,
+              521,
+              8476506059126177990,
+              15211349169688754933,
+              2
+            ]
+          }
+        },
+        "interaction_fingerprint": 16519427920263069651,
+        "pipeline_stage": "physical-proof",
+        "failure_outcome": "outer-exact-physical-wall-rejected",
+        "failure_detail": "outer exact physical wall proof rejected/outcome=stage-wall-rejected/reason=hard-wall-contact/stage=803/detail=rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=803, wp=34, distance=16.045m, lateral=0.707m, lag=-1.188m, bounds=[-3.711,1.000]m, reserve=0.293m, heading_offset=0.099rad, progress=33.720/46.835m, progress_delta=-13.115m, pose=(89628.512,43130.923,2.302), out_of_map=0, contacts=1",
+        "exact_qp_available": false,
+        "warm_start_fields": [],
+        "observation": {
+          "pose_source_sec": 14.044999686,
+          "velocity_source_sec": 14.034999686,
+          "yaw_rate_source_sec": 13.999999687,
+          "tire_source_sec": 14.034999686,
+          "now_sec": 14.059999685,
+          "control_origin_sec": 14.189999685,
+          "nominal_acceleration_application_delay_sec": 0,
+          "nominal_steering_application_delay_sec": 0.1,
+          "initial_x_y_yaw_u_vy_r_desired_tire": [
+            89629.82162983686,
+            43129.30963940454,
+            2.3985624902094886,
+            0.1443866789340973,
+            0.0022227540612220764,
+            0.0063289739191532135,
+            -0.05434254632178914,
+            -0.04768194258213043
+          ],
+          "published_time_wire_acceleration_wire_steering": [
+            [
+              13.4099997,
+              -3,
+              0
+            ],
+            [
+              13.429999699,
+              -3,
+              0
+            ],
+            [
+              13.459999699,
+              -3,
+              0
+            ],
+            [
+              13.494999698,
+              0.25843754410743713,
+              -0.026739992201328278
+            ],
+            [
+              13.509999698,
+              -3,
+              -0.026739992201328278
+            ],
+            [
+              13.544999697,
+              -3,
+              -0.026739992201328278
+            ],
+            [
+              13.559999696,
+              -0.3101635277271271,
+              -0.031504109501838684
+            ],
+            [
+              13.594999696,
+              -0.3101635277271271,
+              -0.031504109501838684
+            ],
+            [
+              13.609999695,
+              -0.3101635277271271,
+              -0.031504109501838684
+            ],
+            [
+              13.644999695,
+              -0.31014424562454224,
+              -0.035837769508361816
+            ],
+            [
+              13.659999694,
+              -0.31014424562454224,
+              -0.035837769508361816
+            ],
+            [
+              13.694999693,
+              -0.31014424562454224,
+              -0.035837769508361816
+            ],
+            [
+              13.709999693,
+              1.3295961618423462,
+              -0.04701601713895798
+            ],
+            [
+              13.744999692,
+              1.3295961618423462,
+              -0.04701601713895798
+            ],
+            [
+              13.759999692,
+              1.3295961618423462,
+              -0.04701601713895798
+            ],
+            [
+              13.794999691,
+              1.3295961618423462,
+              -0.0581938810646534
+            ],
+            [
+              13.809999691,
+              1.3295961618423462,
+              -0.0581938810646534
+            ],
+            [
+              13.84499969,
+              1.3295961618423462,
+              -0.0581938810646534
+            ],
+            [
+              13.85999969,
+              1.3295961618423462,
+              -0.06937155872583389
+            ],
+            [
+              13.894999689,
+              1.3295961618423462,
+              -0.06937155872583389
+            ],
+            [
+              13.909999689,
+              1.3295961618423462,
+              -0.06937155872583389
+            ],
+            [
+              13.944999688,
+              1.3294016122817993,
+              -0.07367655634880066
+            ],
+            [
+              13.959999687,
+              1.3294016122817993,
+              -0.07367655634880066
+            ],
+            [
+              13.994999687,
+              1.3294016122817993,
+              -0.07367655634880066
+            ],
+            [
+              14.009999686,
+              1.3295960426330566,
+              -0.07798155397176743
+            ],
+            [
+              14.044999686,
+              1.3295960426330566,
+              -0.07798155397176743
+            ]
+          ]
+        }
+      },
+      {
+        "path": "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "source_sequence": 537,
+        "source_snapshot_sec": 12.464999721,
+        "source_control_decision_id": 964,
+        "policy": 2,
+        "tag": {
+          "schema": "mpcc-post-motion-final-loss/v1",
+          "authority": false,
+          "status": "valid",
+          "final_decision_id": 913,
+          "final_clock_sec": 11.014999753,
+          "moving_decision_id": 904,
+          "moving_pose_sec": 10.744999759,
+          "moving_forward_velocity_mps": 0.32607463002204895,
+          "actual_moving_publication": {
+            "sequence": 904,
+            "nominal_wire_acceleration_wire_steering_before_after": [
+              10.749999821,
+              1.3295960426330566,
+              0.2703486382961273,
+              10.759999759,
+              10.759999759
+            ],
+            "recorded_publication_sec": 10.759999759,
+            "source_job_solution_problem_input_index": [
+              899,
+              521,
+              8476506059126177990,
+              15211349169688754933,
+              2
+            ]
+          }
+        },
+        "interaction_fingerprint": 13552597408078219522,
+        "pipeline_stage": "physical-proof",
+        "failure_outcome": "outer-exact-physical-wall-rejected",
+        "failure_detail": "outer exact physical wall proof rejected/outcome=stage-wall-rejected/reason=hard-wall-contact/stage=722/detail=rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=722, wp=32, distance=14.426m, lateral=0.904m, lag=-0.533m, bounds=[-3.711,1.011]m, reserve=0.106m, heading_offset=0.099rad, progress=31.691/45.215m, progress_delta=-13.524m, pose=(89629.356,43129.749,2.392), out_of_map=0, contacts=1",
+        "exact_qp_available": false,
+        "warm_start_fields": [],
+        "observation": {
+          "pose_source_sec": 12.444999721,
+          "velocity_source_sec": 12.424999722,
+          "yaw_rate_source_sec": 12.399999722,
+          "tire_source_sec": 12.424999722,
+          "now_sec": 12.464999721,
+          "control_origin_sec": 12.594999721,
+          "nominal_acceleration_application_delay_sec": 0,
+          "nominal_steering_application_delay_sec": 0.1,
+          "initial_x_y_yaw_u_vy_r_desired_tire": [
+            89629.91637425608,
+            43129.22521160799,
+            2.4187183877913796,
+            0.4196816086769104,
+            -0.009021326899528503,
+            -0.04150641709566116,
+            -0.1559233449477352,
+            -0.17499995231628418
+          ],
+          "published_time_wire_acceleration_wire_steering": [
+            [
+              11.809999736,
+              1,
+              -0.25
+            ],
+            [
+              11.844999735,
+              1,
+              -0.25
+            ],
+            [
+              11.879999734,
+              1,
+              -0.25
+            ],
+            [
+              11.894999734,
+              1,
+              -0.25
+            ],
+            [
+              11.929999733,
+              1,
+              -0.25
+            ],
+            [
+              11.959999732,
+              1,
+              -0.25
+            ],
+            [
+              11.994999731,
+              1,
+              -0.25
+            ],
+            [
+              12.029999731,
+              1,
+              -0.25
+            ],
+            [
+              12.04499973,
+              1,
+              -0.25
+            ],
+            [
+              12.079999729,
+              1,
+              -0.25
+            ],
+            [
+              12.109999729,
+              1,
+              -0.25
+            ],
+            [
+              12.129999728,
+              1,
+              -0.25
+            ],
+            [
+              12.159999728,
+              1,
+              -0.25
+            ],
+            [
+              12.194999727,
+              1,
+              -0.25
+            ],
+            [
+              12.209999727,
+              1,
+              -0.25
+            ],
+            [
+              12.244999726,
+              1,
+              -0.25
+            ],
+            [
+              12.279999725,
+              1,
+              -0.25
+            ],
+            [
+              12.294999725,
+              1,
+              -0.25
+            ],
+            [
+              12.329999724,
+              1,
+              -0.25
+            ],
+            [
+              12.359999723,
+              1,
+              -0.25
+            ],
+            [
+              12.379999723,
+              1,
+              -0.25
+            ],
+            [
+              12.409999722,
+              1,
+              -0.25
+            ],
+            [
+              12.444999721,
+              -3,
+              -0.2237500101327896
+            ]
+          ]
+        }
+      },
+      {
+        "path": "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "source_sequence": 743,
+        "source_snapshot_sec": 15.159999661,
+        "source_control_decision_id": 1068,
+        "policy": 2,
+        "tag": {
+          "schema": "mpcc-post-motion-final-loss/v1",
+          "authority": false,
+          "status": "valid",
+          "final_decision_id": 913,
+          "final_clock_sec": 11.014999753,
+          "moving_decision_id": 904,
+          "moving_pose_sec": 10.744999759,
+          "moving_forward_velocity_mps": 0.32607463002204895,
+          "actual_moving_publication": {
+            "sequence": 904,
+            "nominal_wire_acceleration_wire_steering_before_after": [
+              10.749999821,
+              1.3295960426330566,
+              0.2703486382961273,
+              10.759999759,
+              10.759999759
+            ],
+            "recorded_publication_sec": 10.759999759,
+            "source_job_solution_problem_input_index": [
+              899,
+              521,
+              8476506059126177990,
+              15211349169688754933,
+              2
+            ]
+          }
+        },
+        "interaction_fingerprint": 12988834927668665292,
+        "pipeline_stage": "wall-refinement",
+        "failure_outcome": "solve-rejected",
+        "failure_detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00472288, dua_res=0.317653, failed_iterate_row=497, value=0.920971, bounds=[-inf,0.911941], violation=0.00902987, tolerance=0.00192097, normalized=4.70068",
+        "exact_qp_available": true,
+        "warm_start_fields": [
+          "available",
+          "primal",
+          "dual"
+        ],
+        "observation": {
+          "pose_source_sec": 15.144999661,
+          "velocity_source_sec": 15.119999662,
+          "yaw_rate_source_sec": 15.099999662,
+          "tire_source_sec": 15.119999662,
+          "now_sec": 15.159999661,
+          "control_origin_sec": 15.289999661000001,
+          "nominal_acceleration_application_delay_sec": 0,
+          "nominal_steering_application_delay_sec": 0.1,
+          "initial_x_y_yaw_u_vy_r_desired_tire": [
+            89629.46362412894,
+            43129.64289392972,
+            2.3791253931259924,
+            0.05905527621507645,
+            0.0012620966881513596,
+            -0.012876437045633793,
+            -0.11157746514376862,
+            -0.10432117432355881
+          ],
+          "published_time_wire_acceleration_wire_steering": [
+            [
+              14.509999675,
+              1.3296352624893188,
+              -0.11544367671012878
+            ],
+            [
+              14.544999674,
+              1.3296352624893188,
+              -0.12330861389636993
+            ],
+            [
+              14.559999674,
+              1.3296352624893188,
+              -0.12330861389636993
+            ],
+            [
+              14.594999673,
+              1.3296352624893188,
+              -0.12330861389636993
+            ],
+            [
+              14.609999673,
+              1.3296525478363037,
+              -0.13188259303569794
+            ],
+            [
+              14.644999672,
+              1.3296525478363037,
+              -0.13188259303569794
+            ],
+            [
+              14.659999672,
+              1.3296525478363037,
+              -0.13188259303569794
+            ],
+            [
+              14.694999671,
+              1.3296465873718262,
+              -0.14045657217502594
+            ],
+            [
+              14.709999671,
+              1.3296465873718262,
+              -0.14045657217502594
+            ],
+            [
+              14.74499967,
+              1.3296465873718262,
+              -0.14045657217502594
+            ],
+            [
+              14.75999967,
+              1.3296499252319336,
+              -0.14903055131435394
+            ],
+            [
+              14.794999669,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              14.809999668,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              14.844999668,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              14.859999667,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              14.894999667,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              14.909999666,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              14.944999665,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              14.959999665,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              14.994999664,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              15.009999664,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              15.044999663,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              15.059999663,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              15.094999662,
+              -3,
+              -0.14903055131435394
+            ],
+            [
+              15.109999662,
+              1.3295960426330566,
+              -0.16011366248130798
+            ],
+            [
+              15.144999661,
+              1.3295960426330566,
+              -0.16011366248130798
+            ]
+          ]
+        }
+      }
+    ],
+    "payload_sha256": {
+      "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "f9a81021fd90498e8ad3d9fd8e18020f386ea3c828f3f824128bd7fd3d5668cd",
+      "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "7826f6729ebc4afca92bafc761456232df0af4a6d08e6082d754bd992e4b006c",
+      "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+      "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "0906a60eebcf355e5ea45d5954d07124a0fa9a7c5b8f781ae36dad3feaa6c738",
+      "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    "limits": [
+      "Source sequence and control decision are independent namespaces.",
+      "Failure capture is after the actual final loss; this alone does not prove the source defect cause.",
+      "Both original physical safety and solver budgets remain. Exact QP and original warm start must be distinguished from cold source reassembly."
+    ]
+  },
+  "cold_replay": [
+    {
+      "source_sequence": 538,
+      "policy": 0,
+      "native_detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00474119, dua_res=3.59892, failed_iterate_row=497, value=0.921006, bounds=[-inf,0.911941], violation=0.00906488, tolerance=0.00192101, normalized=4.71882",
+      "original_arm": {
+        "arm": "persistent-a",
+        "stage": "solver-rejected",
+        "candidate_fingerprint": 7587156902152541954,
+        "source_fingerprint": 7587156902152541954,
+        "bundle": false,
+        "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00474119, dua_res=3.59892, failed_iterate_row=497, value=0.921006, bounds=[-inf,0.911941], violation=0.00906488, tolerance=0.00192101, normalized=4.71882, architecture_snapshot=mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "ms": 231.219081
+      },
+      "restoration_arm": {
+        "arm": "wall-restoration-h",
+        "stage": "wall-proof-rejected",
+        "candidate_fingerprint": 7587156902152541954,
+        "source_fingerprint": 7587156902152541954,
+        "bundle": false,
+        "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=543, wp=32, distance=10.847m, lateral=0.804m, lag=0.424m, bounds=[-3.711,1.011]m, reserve=0.207m, heading_offset=0.045rad, progress=31.789/41.637m, progress_delta=-9.848m, pose=(89628.731,43130.608,2.333), out_of_map=0, contacts=1",
+        "ms": 128.156493
+      },
+      "other_arm_classes": {
+        "('persistent-a', 'solver-rejected')": 1,
+        "('persistent-target-bound-a2', 'candidate-rejected')": 1,
+        "('stateless-left-b', 'candidate-rejected')": 1,
+        "('stateless-right-b', 'candidate-rejected')": 1,
+        "('rough-left-c', 'candidate-rejected')": 210,
+        "('rough-right-c', 'candidate-rejected')": 210,
+        "('offline-left-d', 'candidate-rejected')": 210,
+        "('offline-right-d', 'candidate-rejected')": 210,
+        "('diagonal-left-e', 'candidate-rejected')": 171,
+        "('diagonal-right-e', 'candidate-rejected')": 171,
+        "('physical-diagonal-left-f', 'candidate-rejected')": 171,
+        "('physical-diagonal-right-f', 'candidate-rejected')": 171,
+        "('production-left-g', 'candidate-rejected')": 1,
+        "('production-right-g', 'candidate-rejected')": 1,
+        "('wall-restoration-h', 'wall-proof-rejected')": 1
+      },
+      "exact_qp": [
+        {
+          "warm": true,
+          "loaded": true,
+          "warm_available": true,
+          "solved": false,
+          "detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00509406, dua_res=20.3881, failed_iterate_row=497, value=0.921681, bounds=[-inf,0.911941], violation=0.00973954, tolerance=0.00192168, normalized=5.06824",
+          "iterations": 4000,
+          "primal_residual": 0.00509405652195305,
+          "dual_residual": 20.388068640405194
+        },
+        {
+          "warm": false,
+          "loaded": true,
+          "warm_available": true,
+          "solved": false,
+          "detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00557826, dua_res=4.33014, failed_iterate_row=497, value=0.922607, bounds=[-inf,0.911941], violation=0.0106653, tolerance=0.00192261, normalized=5.54731",
+          "iterations": 4000,
+          "primal_residual": 0.005578256932172787,
+          "dual_residual": 4.330142722357516
+        }
+      ]
+    },
+    {
+      "source_sequence": 656,
+      "policy": 0,
+      "native_detail": "accepted, progress_wall=accepted/applied=1/solved=1/mismatch=15.7236m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1714/cache_hits=0/cache_misses=20/cache_scanned=1714/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requested=1/applied=1/bootstrap=1/solved=1/count=1/proof=1/1",
+      "original_arm": {
+        "arm": "persistent-a",
+        "stage": "wall-proof-rejected",
+        "candidate_fingerprint": 16519427920263069651,
+        "source_fingerprint": 16519427920263069651,
+        "bundle": false,
+        "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=834, wp=34, distance=16.665m, lateral=0.710m, lag=-1.195m, bounds=[-3.711,1.000]m, reserve=0.290m, heading_offset=0.099rad, progress=33.719/47.454m, progress_delta=-13.735m, pose=(89628.514,43130.915,2.303), out_of_map=0, contacts=1",
+        "ms": 31.600772
+      },
+      "restoration_arm": {
+        "arm": "wall-restoration-h",
+        "stage": "wall-proof-rejected",
+        "candidate_fingerprint": 16519427920263069651,
+        "source_fingerprint": 16519427920263069651,
+        "bundle": false,
+        "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=834, wp=34, distance=16.665m, lateral=0.710m, lag=-1.195m, bounds=[-3.711,1.000]m, reserve=0.290m, heading_offset=0.099rad, progress=33.719/47.454m, progress_delta=-13.735m, pose=(89628.514,43130.915,2.303), out_of_map=0, contacts=1",
+        "ms": 31.032604
+      },
+      "other_arm_classes": {
+        "('persistent-a', 'wall-proof-rejected')": 1,
+        "('persistent-target-bound-a2', 'candidate-rejected')": 1,
+        "('stateless-left-b', 'candidate-rejected')": 1,
+        "('stateless-right-b', 'candidate-rejected')": 1,
+        "('rough-left-c', 'candidate-rejected')": 210,
+        "('rough-right-c', 'candidate-rejected')": 210,
+        "('offline-left-d', 'candidate-rejected')": 210,
+        "('offline-right-d', 'candidate-rejected')": 210,
+        "('diagonal-left-e', 'candidate-rejected')": 171,
+        "('diagonal-right-e', 'candidate-rejected')": 171,
+        "('physical-diagonal-left-f', 'candidate-rejected')": 171,
+        "('physical-diagonal-right-f', 'candidate-rejected')": 171,
+        "('production-left-g', 'candidate-rejected')": 1,
+        "('production-right-g', 'candidate-rejected')": 1,
+        "('wall-restoration-h', 'wall-proof-rejected')": 1
+      },
+      "exact_qp": []
+    },
+    {
+      "source_sequence": 537,
+      "policy": 2,
+      "native_detail": "accepted, progress_wall=accepted/applied=1/solved=1/mismatch=17.3928m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1594/cache_hits=1/cache_misses=19/cache_scanned=1515/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requested=1/applied=1/bootstrap=1/solved=1/count=1/proof=1/1",
+      "original_arm": {
+        "arm": "persistent-a",
+        "stage": "wall-proof-rejected",
+        "candidate_fingerprint": 13552597408078219522,
+        "source_fingerprint": 13552597408078219522,
+        "bundle": false,
+        "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=722, wp=32, distance=14.426m, lateral=0.904m, lag=-0.533m, bounds=[-3.711,1.011]m, reserve=0.106m, heading_offset=0.099rad, progress=31.691/45.215m, progress_delta=-13.524m, pose=(89629.356,43129.749,2.392), out_of_map=0, contacts=1",
+        "ms": 31.683217
+      },
+      "restoration_arm": {
+        "arm": "wall-restoration-h",
+        "stage": "wall-proof-rejected",
+        "candidate_fingerprint": 13552597408078219522,
+        "source_fingerprint": 13552597408078219522,
+        "bundle": false,
+        "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=722, wp=32, distance=14.426m, lateral=0.904m, lag=-0.533m, bounds=[-3.711,1.011]m, reserve=0.106m, heading_offset=0.099rad, progress=31.691/45.215m, progress_delta=-13.524m, pose=(89629.356,43129.749,2.392), out_of_map=0, contacts=1",
+        "ms": 31.197223
+      },
+      "other_arm_classes": {
+        "('persistent-a', 'wall-proof-rejected')": 1,
+        "('persistent-target-bound-a2', 'candidate-rejected')": 1,
+        "('stateless-left-b', 'candidate-rejected')": 1,
+        "('stateless-right-b', 'candidate-rejected')": 1,
+        "('rough-left-c', 'candidate-rejected')": 210,
+        "('rough-right-c', 'candidate-rejected')": 210,
+        "('offline-left-d', 'candidate-rejected')": 210,
+        "('offline-right-d', 'candidate-rejected')": 210,
+        "('diagonal-left-e', 'candidate-rejected')": 171,
+        "('diagonal-right-e', 'candidate-rejected')": 171,
+        "('physical-diagonal-left-f', 'candidate-rejected')": 171,
+        "('physical-diagonal-right-f', 'candidate-rejected')": 171,
+        "('production-left-g', 'candidate-rejected')": 1,
+        "('production-right-g', 'candidate-rejected')": 1,
+        "('wall-restoration-h', 'wall-proof-rejected')": 1
+      },
+      "exact_qp": []
+    },
+    {
+      "source_sequence": 743,
+      "policy": 2,
+      "native_detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00473565, dua_res=0.774599, failed_iterate_row=497, value=0.920996, bounds=[-inf,0.911941], violation=0.00905429, tolerance=0.001921, normalized=4.71333",
+      "original_arm": {
+        "arm": "persistent-a",
+        "stage": "solver-rejected",
+        "candidate_fingerprint": 12988834927668665292,
+        "source_fingerprint": 12988834927668665292,
+        "bundle": false,
+        "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00473565, dua_res=0.774599, failed_iterate_row=497, value=0.920996, bounds=[-inf,0.911941], violation=0.00905429, tolerance=0.001921, normalized=4.71333, architecture_snapshot=mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "ms": 234.450683
+      },
+      "restoration_arm": {
+        "arm": "wall-restoration-h",
+        "stage": "accepted",
+        "candidate_fingerprint": 12988834927668665292,
+        "source_fingerprint": 12988834927668665292,
+        "bundle": true,
+        "detail": "accepted, progress_wall=accepted/applied=1/solved=1/mismatch=16.8181m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1640/cache_hits=0/cache_misses=40/cache_scanned=3218/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, wall_restoration=attempted/seed=1/sqp_count=3/final_built=1/final_solved=1/detail=accepted-as-seed-and-full-refinement-solved",
+        "ms": 140.0968
+      },
+      "other_arm_classes": {
+        "('persistent-a', 'solver-rejected')": 1,
+        "('persistent-target-bound-a2', 'candidate-rejected')": 1,
+        "('stateless-left-b', 'candidate-rejected')": 1,
+        "('stateless-right-b', 'candidate-rejected')": 1,
+        "('rough-left-c', 'candidate-rejected')": 210,
+        "('rough-right-c', 'candidate-rejected')": 210,
+        "('offline-left-d', 'candidate-rejected')": 210,
+        "('offline-right-d', 'candidate-rejected')": 210,
+        "('diagonal-left-e', 'candidate-rejected')": 171,
+        "('diagonal-right-e', 'candidate-rejected')": 171,
+        "('physical-diagonal-left-f', 'candidate-rejected')": 171,
+        "('physical-diagonal-right-f', 'candidate-rejected')": 171,
+        "('production-left-g', 'candidate-rejected')": 1,
+        "('production-right-g', 'candidate-rejected')": 1,
+        "('wall-restoration-h', 'accepted')": 1
+      },
+      "exact_qp": [
+        {
+          "warm": true,
+          "loaded": true,
+          "warm_available": true,
+          "solved": false,
+          "detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00495916, dua_res=20.7707, failed_iterate_row=497, value=0.921423, bounds=[-inf,0.911941], violation=0.00948163, tolerance=0.00192142, normalized=4.93469",
+          "iterations": 4000,
+          "primal_residual": 0.004959161359067543,
+          "dual_residual": 20.770698425494526
+        },
+        {
+          "warm": false,
+          "loaded": true,
+          "warm_available": true,
+          "solved": false,
+          "detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00495847, dua_res=8.59279, failed_iterate_row=497, value=0.921422, bounds=[-inf,0.911941], violation=0.0094803, tolerance=0.00192142, normalized=4.934",
+          "iterations": 4000,
+          "primal_residual": 0.0049584696757531965,
+          "dual_residual": 8.592789625841805
+        }
+      ]
+    }
+  ],
+  "cell_geometry": {
+    "command": [
+      "/output/20260913-nine-state-rejoin-r23-cell-geometry-r778/replay",
+      "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "/output/20260913-nine-state-rejoin-r23-cell-geometry-r778/report.yaml"
+    ],
+    "return_code": 0,
+    "result": {
+      "authority": false,
+      "source_sequence": 537,
+      "interaction_fingerprint": 13552597408078219522,
+      "proof_detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=722, wp=32, distance=14.426m, lateral=0.904m, lag=-0.533m, bounds=[-3.711,1.011]m, reserve=0.106m, heading_offset=0.099rad, progress=31.691/45.215m, progress_delta=-13.524m, pose=(89629.356,43129.749,2.392), out_of_map=0, contacts=1",
+      "proof_outcome": "stage-wall-rejected",
+      "first_stage": 722,
+      "clearance_footprint": [
+        1.615,
+        0.51,
+        0.968,
+        0.968,
+        0.05
+      ],
+      "poses": [
+        {
+          "name": "current",
+          "pose": [
+            89629.9104502319,
+            43129.23047618303,
+            2.417913516492721
+          ],
+          "sample_valid": true,
+          "out_of_map": false,
+          "nearest_cells": [
+            {
+              "cell": 476325,
+              "gap_m": 0.14480639484762264,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.14480639484762264,
+                -1.504842380059921,
+                0.06320165218376332,
+                0.07222742865239055
+              ],
+              "cell_x": 89627.79387016429,
+              "cell_y": 43129.551653267445,
+              "cell_body_forward": 1.798777696140242,
+              "cell_body_left": 1.1608034726104135,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.1373126480459939,
+                0.15230014164925137,
+                0.13818493286024364,
+                0.15142785683500165,
+                0.14313237406204044,
+                0.14652845987782553
+              ]
+            },
+            {
+              "cell": 477076,
+              "gap_m": 0.14716489662848536,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.14480639484762264,
+                -1.4048423800613763,
+                -0.003012967750513476,
+                0.14716489662848536
+              ],
+              "cell_x": 89627.79387016429,
+              "cell_y": 43129.451653267446,
+              "cell_body_forward": 1.7325630762059652,
+              "cell_body_left": 1.2357409405865083,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.14716489662674387,
+                0.15230014164925137,
+                0.13818493286024364,
+                0.15716489662189442,
+                0.14313237406204044,
+                0.155791304351372
+              ]
+            },
+            {
+              "cell": 477828,
+              "gap_m": 0.15588774468057381,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.04480639485635378,
+                -1.3048423800555555,
+                -0.14416505566025045,
+                0.15588774468057381
+              ],
+              "cell_x": 89627.89387016428,
+              "cell_y": 43129.35165326744,
+              "cell_body_forward": 1.5914109882962284,
+              "cell_body_left": 1.2444637886385965,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.15588774467883232,
+                0.1558877446823153,
+                0.14588774468716498,
+                0.16588774467398265,
+                0.14793785636425238,
+                0.16380828586920282
+              ]
+            },
+            {
+              "cell": 478580,
+              "gap_m": 0.1646105927175741,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.05519360514946699,
+                -1.2048423800570107,
+                -0.28531714357607413,
+                0.1646105927175741
+              ],
+              "cell_x": 89627.99387016428,
+              "cell_y": 43129.25165326744,
+              "cell_body_forward": 1.4502589003804045,
+              "cell_body_left": 1.2531866366755968,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.16461059271583262,
+                0.16461059271931583,
+                0.1546105927241655,
+                0.17461059271098317,
+                0.15736635286479372,
+                0.17182526737191595
+              ]
+            },
+            {
+              "cell": 479332,
+              "gap_m": 0.17333344076421026,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.15519360514073582,
+                -1.104842380058466,
+                -0.4264692314809934,
+                0.17333344076421026
+              ],
+              "cell_x": 89628.09387016427,
+              "cell_y": 43129.15165326744,
+              "cell_body_forward": 1.3091068124754852,
+              "cell_body_left": 1.261909484722233,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.17333344076246854,
+                0.17333344076595175,
+                0.1633334407708012,
+                0.1833334407576191,
+                0.16679484937491584,
+                0.17984224888431843
+              ]
+            },
+            {
+              "cell": 477827,
+              "gap_m": 0.2221023646100327,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.14480639484762264,
+                -1.3048423800555555,
+                -0.06922758768960798,
+                0.2221023646100327
+              ],
+              "cell_x": 89627.79387016429,
+              "cell_y": 43129.35165326744,
+              "cell_body_forward": 1.6663484562668707,
+              "cell_body_left": 1.3106784085680556,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.2221023646082912,
+                0.2221023646117744,
+                0.21210236461662385,
+                0.23210236460344175,
+                0.2137769628340287,
+                0.23039676389629504
+              ]
+            },
+            {
+              "cell": 478579,
+              "gap_m": 0.23082521265666883,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.04480639485635378,
+                -1.2048423800570107,
+                -0.21037967559452703,
+                0.23082521265666883
+              ],
+              "cell_x": 89627.89387016428,
+              "cell_y": 43129.25165326744,
+              "cell_body_forward": 1.5251963683619518,
+              "cell_body_left": 1.3194012566146913,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.23082521265492711,
+                0.23082521265841033,
+                0.22082521266326,
+                0.24082521265007745,
+                0.22320545934415081,
+                0.23841374540869775
+              ]
+            },
+            {
+              "cell": 479331,
+              "gap_m": 0.23954806069366913,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.05519360514946699,
+                -1.104842380058466,
+                -0.3515317635103509,
+                0.23954806069366913
+              ],
+              "cell_x": 89627.99387016428,
+              "cell_y": 43129.15165326744,
+              "cell_body_forward": 1.3840442804461277,
+              "cell_body_left": 1.3281241046516918,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.23954806069192763,
+                0.23954806069541085,
+                0.2295480607002603,
+                0.24954806068707797,
+                0.23263395584469215,
+                0.24643072691141066
+              ]
+            }
+          ]
+        },
+        {
+          "name": "control_origin",
+          "pose": [
+            89629.88886281088,
+            43129.24950775434,
+            2.414602986618492
+          ],
+          "sample_valid": true,
+          "out_of_map": false,
+          "nearest_cells": [
+            {
+              "cell": 476325,
+              "gap_m": 0.12435379175742049,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.12435379175742049,
+                -1.4849623495333246,
+                0.030556390979686918,
+                0.07803438857312099
+              ],
+              "cell_x": 89627.79387016429,
+              "cell_y": 43129.551653267445,
+              "cell_body_forward": 1.7661464867956482,
+              "cell_body_left": 1.1666244843855427,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.11688200653163143,
+                0.13182557698320957,
+                0.11770755782646951,
+                0.1310000256883715,
+                0.12264795583397574,
+                0.1261076435632637
+              ]
+            },
+            {
+              "cell": 477076,
+              "gap_m": 0.15275224082995004,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.12435379175742049,
+                -1.3849623495347798,
+                -0.03590594838506629,
+                0.15275224082995004
+              ],
+              "cell_x": 89627.79387016429,
+              "cell_y": 43129.451653267446,
+              "cell_body_forward": 1.699684147430895,
+              "cell_body_left": 1.2413423366423717,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.15275224083118838,
+                0.15275224082871192,
+                0.14275224083368793,
+                0.16275224082621237,
+                0.14425985983040446,
+                0.16121535309271712
+              ]
+            },
+            {
+              "cell": 477828,
+              "gap_m": 0.1610077537322981,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.024353791766151642,
+                -1.284962349528959,
+                -0.17708614000604767,
+                0.1610077537322981
+              ],
+              "cell_x": 89627.89387016428,
+              "cell_y": 43129.35165326744,
+              "cell_body_forward": 1.5585039558099132,
+              "cell_body_left": 1.2495978495447195,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.1610077537335362,
+                0.16100775373105997,
+                0.15100775373603575,
+                0.17100775372856042,
+                0.15322116755591086,
+                0.16876486478451408
+              ]
+            },
+            {
+              "cell": 478580,
+              "gap_m": 0.169263266619538,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.07564620823966912,
+                -1.1849623495304142,
+                -0.31826633163306667,
+                0.169263266619538
+              ],
+              "cell_x": 89627.99387016428,
+              "cell_y": 43129.25165326744,
+              "cell_body_forward": 1.4173237641828946,
+              "cell_body_left": 1.2578533624319594,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.16926326662077634,
+                0.16926326661829988,
+                0.1592632666232759,
+                0.17926326661580033,
+                0.16218247526633933,
+                0.17631437646117337
+              ]
+            },
+            {
+              "cell": 479332,
+              "gap_m": 0.1775187795164495,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.17564620823093796,
+                -1.0849623495318694,
+                -0.45944652324921237,
+                0.1775187795164495
+              ],
+              "cell_x": 89628.09387016427,
+              "cell_y": 43129.15165326744,
+              "cell_body_forward": 1.2761435725667485,
+              "cell_body_left": 1.266108875328871,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.17751877951768785,
+                0.1775187795152114,
+                0.1675187795201874,
+                0.18751877951271184,
+                0.171143782986385,
+                0.18386388814755822
+              ]
+            },
+            {
+              "cell": 475573,
+              "gap_m": 0.22435379176324127,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.22435379176324127,
+                -1.5150801733265864,
+                0.17173658260670593,
+                0.06977887568588108
+              ],
+              "cell_x": 89627.69387016428,
+              "cell_y": 43129.65165326744,
+              "cell_body_forward": 1.9073266784226668,
+              "cell_body_left": 1.1583689714983025,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.2168820065374522,
+                0.23182557698903034,
+                0.2177075578322903,
+                0.23100002569419226,
+                0.22264795583979652,
+                0.22610764356908447
+              ]
+            },
+            {
+              "cell": 476324,
+              "gap_m": 0.22435379176324127,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.22435379176324127,
+                -1.4849623495333246,
+                0.10527424324195249,
+                0.14449672794271012
+              ],
+              "cell_x": 89627.69387016428,
+              "cell_y": 43129.551653267445,
+              "cell_body_forward": 1.8408643390579136,
+              "cell_body_left": 1.2330868237551316,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.2168820065374522,
+                0.23182557698903034,
+                0.2177075578322903,
+                0.23100002569419226,
+                0.22264795583979652,
+                0.22610764356908447
+              ]
+            },
+            {
+              "cell": 477827,
+              "gap_m": 0.2274700930922156,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.12435379175742049,
+                -1.284962349528959,
+                -0.10236828775465541,
+                0.2274700930922156
+              ],
+              "cell_x": 89627.79387016429,
+              "cell_y": 43129.35165326744,
+              "cell_body_forward": 1.633221808061306,
+              "cell_body_left": 1.316060188904637,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.22747009309345373,
+                0.2274700930909775,
+                0.21747009309595328,
+                0.23747009308847794,
+                0.21930908843368002,
+                0.2355999610715575
+              ]
+            }
+          ]
+        },
+        {
+          "name": "first_rejected_native",
+          "pose": [
+            89629.35611953771,
+            43129.7490734034,
+            2.391963987158252
+          ],
+          "sample_valid": true,
+          "out_of_map": false,
+          "contact_cells": [
+            471815
+          ],
+          "nearest_cells": [
+            {
+              "cell": 471815,
+              "gap_m": -6.556491515159746e-05,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -6.556491515159746e-05,
+                -1.527013100175491,
+                -0.025108207147241324,
+                -0.046318538341869886
+              ],
+              "cell_x": 89627.39387016428,
+              "cell_y": 43130.15165326744,
+              "cell_body_forward": 1.710557240155402,
+              "cell_body_left": 1.0423469089661124,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                -0.007384984254334384,
+                0.007253854424031189,
+                -0.00687923504536532,
+                0.006748105215062125,
+                -0.0019884488527058403,
+                0.00190512679791692
+              ]
+            },
+            {
+              "cell": 472566,
+              "gap_m": 0.02687565503460293,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -6.556491515159746e-05,
+                -1.4792622795732588,
+                -0.09324490838582827,
+                0.02687565503460293
+              ],
+              "cell_x": 89627.39387016428,
+              "cell_y": 43130.051653267445,
+              "cell_body_forward": 1.6424205389168152,
+              "cell_body_left": 1.1155411023425854,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.02687565503288253,
+                0.02687565503632311,
+                0.0168756550292945,
+                0.03687565503991136,
+                0.018663169317990544,
+                0.035062018919549076
+              ]
+            },
+            {
+              "cell": 473318,
+              "gap_m": 0.03193314716753143,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.10006556492097236,
+                -1.379262279574714,
+                -0.23457580300621356,
+                0.03193314716753143
+              ],
+              "cell_x": 89627.49387016428,
+              "cell_y": 43129.951653267446,
+              "cell_body_forward": 1.5010896442964294,
+              "cell_body_left": 1.1205985944755137,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.03193314716581103,
+                0.03193314716925161,
+                0.021933147162222777,
+                0.04193314717283986,
+                0.02442724976111081,
+                0.039412796305245634
+              ]
+            },
+            {
+              "cell": 474070,
+              "gap_m": 0.0369906393157004,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.2000655649122412,
+                -1.2792622795688933,
+                -0.3759066976209054,
+                0.0369906393157004
+              ],
+              "cell_x": 89627.59387016427,
+              "cell_y": 43129.85165326744,
+              "cell_body_forward": 1.3597587496817378,
+              "cell_body_left": 1.1256560866236827,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.03699063931398022,
+                0.036990639317420804,
+                0.026990639310391973,
+                0.04699063932100905,
+                0.030191330219443355,
+                0.04376357370621109
+              ]
+            },
+            {
+              "cell": 471814,
+              "gap_m": 0.09993443507611725,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                0.09993443507611725,
+                -1.527013100175491,
+                0.048085986223905974,
+                0.021818162891759474
+              ],
+              "cell_x": 89627.29387016429,
+              "cell_y": 43130.15165326744,
+              "cell_body_forward": 1.7837514335265494,
+              "cell_body_left": 1.1104836101997415,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.09261501573693447,
+                0.10725385441530004,
+                0.09312076494590353,
+                0.10674810520633098,
+                0.09801155113856301,
+                0.10190512678918577
+              ]
+            },
+            {
+              "cell": 473317,
+              "gap_m": 0.10006984841107597,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -6.556491515159746e-05,
+                -1.379262279574714,
+                -0.16138160962441522,
+                0.10006984841107597
+              ],
+              "cell_x": 89627.39387016428,
+              "cell_y": 43129.951653267446,
+              "cell_body_forward": 1.574283837678228,
+              "cell_body_left": 1.1887352957190582,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.10006984840935557,
+                0.10006984841279615,
+                0.09006984840576754,
+                0.1100698484163844,
+                0.09219712985563248,
+                0.10791461528383073
+              ]
+            },
+            {
+              "cell": 474069,
+              "gap_m": 0.10512734054932976,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.10006556492097236,
+                -1.2792622795688933,
+                -0.3027125042497581,
+                0.10512734054932976
+              ],
+              "cell_x": 89627.49387016428,
+              "cell_y": 43129.85165326744,
+              "cell_body_forward": 1.4329529430528851,
+              "cell_body_left": 1.193792787857312,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.10512734054760958,
+                0.10512734055105016,
+                0.09512734054402133,
+                0.11512734055463841,
+                0.09796121030410292,
+                0.11226539267482794
+              ]
+            },
+            {
+              "cell": 474821,
+              "gap_m": 0.11018483269217344,
+              "world_x_world_y_body_forward_body_left_gap_m": [
+                -0.2000655649122412,
+                -1.1792622795703485,
+                -0.44404339885949234,
+                0.11018483269217344
+              ],
+              "cell_x": 89627.59387016427,
+              "cell_y": 43129.75165326744,
+              "cell_body_forward": 1.2916220484431509,
+              "cell_body_left": 1.1988502800001557,
+              "gap_after_forward_backward_left_right_yaw_left_yaw_right": [
+                0.11018483269045304,
+                0.11018483269389362,
+                0.10018483268686479,
+                0.12018483269748187,
+                0.10372529075708507,
+                0.11661617007049274
+              ]
+            }
+          ]
+        }
+      ],
+      "first_elapsed_sec": 3.614999999999945
+    },
+    "source_sha256": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096"
+  },
+  "feedback_comparison": [
+    {
+      "source_sequence": 537,
+      "mode": "observe",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r780/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-observe/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 13552597408078219522,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "wall-proof-rejected",
+            "candidate_fingerprint": 13552597408078219522,
+            "source_fingerprint": 13552597408078219522,
+            "bundle": false,
+            "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=722, wp=32, distance=14.426m, lateral=0.904m, lag=-0.533m, bounds=[-3.711,1.011]m, reserve=0.106m, heading_offset=0.099rad, progress=31.691/45.215m, progress_delta=-13.524m, pose=(89629.356,43129.749,2.392), out_of_map=0, contacts=1",
+            "ms": 35.572367
+          }
+        ]
+      },
+      "correction_trace": [
+        {
+          "correction": 0,
+          "adapter_reason": "exact-trajectory-rejected",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false
+        },
+        {
+          "correction": 1,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": true,
+          "full_wall_outcome": "stage-wall-rejected",
+          "full_wall_detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=722, wp=32, distance=14.426m, lateral=0.904m, lag=-0.533m, bounds=[-3.711,1.011]m, reserve=0.106m, heading_offset=0.099rad, progress=31.691/45.215m, progress_delta=-13.524m, pose=(89629.356,43129.749,2.392), out_of_map=0, contacts=1",
+          "full_wall_stage": 722
+        }
+      ]
+    },
+    {
+      "source_sequence": 537,
+      "mode": "dynamics",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r780/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-dynamics/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 13552597408078219522,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "accepted",
+            "candidate_fingerprint": 13552597408078219522,
+            "source_fingerprint": 13552597408078219522,
+            "bundle": true,
+            "detail": "accepted",
+            "ms": 67.895363
+          }
+        ]
+      },
+      "correction_trace": [
+        {
+          "correction": 0,
+          "adapter_reason": "exact-trajectory-rejected",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false
+        },
+        {
+          "correction": 1,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": true,
+          "full_wall_outcome": "stage-wall-rejected",
+          "full_wall_detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=722, wp=32, distance=14.426m, lateral=0.904m, lag=-0.533m, bounds=[-3.711,1.011]m, reserve=0.106m, heading_offset=0.099rad, progress=31.691/45.215m, progress_delta=-13.524m, pose=(89629.356,43129.749,2.392), out_of_map=0, contacts=1",
+          "full_wall_stage": 722
+        },
+        {
+          "correction": 2,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false,
+          "full_wall_outcome": "accepted",
+          "full_wall_detail": "physical solution horizon accepted, reason=accepted, stage=999, wp=33, distance=19.962m, lateral=-1.150m, lag=2.149m, bounds=[-3.711,1.011]m, reserve=2.161m, heading_offset=-0.586rad, progress=32.783/50.751m, progress_delta=-17.968m, pose=(89628.524,43133.963,1.656), out_of_map=0, contacts=0",
+          "full_wall_stage": 999
+        },
+        {
+          "correction": 3,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": true,
+          "full_wall_outcome": "accepted",
+          "full_wall_detail": "physical solution horizon accepted, reason=accepted, stage=999, wp=33, distance=19.962m, lateral=0.549m, lag=1.659m, bounds=[-3.711,1.011]m, reserve=0.462m, heading_offset=-0.016rad, progress=32.783/50.751m, progress_delta=-17.968m, pose=(89627.500,43132.522,2.227), out_of_map=0, contacts=0",
+          "full_wall_stage": 999
+        }
+      ]
+    },
+    {
+      "source_sequence": 537,
+      "mode": "coherent",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r780/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r780/537-coherent/report.yaml"
+      ],
+      "return_code": 1,
+      "result": {
+        "authority": false,
+        "source_accepted": false,
+        "source_fingerprint": 13552597408078219522,
+        "detail": "R779 coherent arm inapplicable",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority."
+      },
+      "classification": "diagnostic-inapplicable",
+      "correction_trace": [
+        {
+          "correction": 0,
+          "adapter_reason": "exact-trajectory-rejected",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false
+        }
+      ]
+    },
+    {
+      "source_sequence": 537,
+      "mode": "coherent",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/537-coherent/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 13552597408078219522,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "solver-rejected",
+            "candidate_fingerprint": 13552597408078219522,
+            "source_fingerprint": 13552597408078219522,
+            "bundle": false,
+            "detail": "R779 coherent native wall rows rejected/progress=accepted/physical=empty-trust-region",
+            "ms": 35.236092
+          }
+        ]
+      },
+      "correction_trace": [
+        {
+          "correction": 0,
+          "adapter_reason": "exact-trajectory-rejected",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false
+        }
+      ]
+    },
+    {
+      "source_sequence": 656,
+      "mode": "observe",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "7826f6729ebc4afca92bafc761456232df0af4a6d08e6082d754bd992e4b006c",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-observe/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 16519427920263069651,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "wall-proof-rejected",
+            "candidate_fingerprint": 16519427920263069651,
+            "source_fingerprint": 16519427920263069651,
+            "bundle": false,
+            "detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=834, wp=34, distance=16.665m, lateral=0.710m, lag=-1.195m, bounds=[-3.711,1.000]m, reserve=0.290m, heading_offset=0.099rad, progress=33.719/47.454m, progress_delta=-13.735m, pose=(89628.514,43130.915,2.303), out_of_map=0, contacts=1",
+            "ms": 36.377154
+          }
+        ]
+      },
+      "correction_trace": [
+        {
+          "correction": 0,
+          "adapter_reason": "exact-trajectory-rejected",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false
+        },
+        {
+          "correction": 1,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": true,
+          "full_wall_outcome": "stage-wall-rejected",
+          "full_wall_detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=834, wp=34, distance=16.665m, lateral=0.710m, lag=-1.195m, bounds=[-3.711,1.000]m, reserve=0.290m, heading_offset=0.099rad, progress=33.719/47.454m, progress_delta=-13.735m, pose=(89628.514,43130.915,2.303), out_of_map=0, contacts=1",
+          "full_wall_stage": 834
+        }
+      ]
+    },
+    {
+      "source_sequence": 656,
+      "mode": "dynamics",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "7826f6729ebc4afca92bafc761456232df0af4a6d08e6082d754bd992e4b006c",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-dynamics/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 16519427920263069651,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "accepted",
+            "candidate_fingerprint": 16519427920263069651,
+            "source_fingerprint": 16519427920263069651,
+            "bundle": true,
+            "detail": "accepted",
+            "ms": 64.984234
+          }
+        ]
+      },
+      "correction_trace": [
+        {
+          "correction": 0,
+          "adapter_reason": "exact-trajectory-rejected",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false
+        },
+        {
+          "correction": 1,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": true,
+          "full_wall_outcome": "stage-wall-rejected",
+          "full_wall_detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=834, wp=34, distance=16.665m, lateral=0.710m, lag=-1.195m, bounds=[-3.711,1.000]m, reserve=0.290m, heading_offset=0.099rad, progress=33.719/47.454m, progress_delta=-13.735m, pose=(89628.514,43130.915,2.303), out_of_map=0, contacts=1",
+          "full_wall_stage": 834
+        },
+        {
+          "correction": 2,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false,
+          "full_wall_outcome": "stage-wall-rejected",
+          "full_wall_detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=914, wp=34, distance=18.263m, lateral=-2.884m, lag=1.650m, bounds=[-3.711,1.000]m, reserve=0.828m, heading_offset=-1.101rad, progress=33.775/49.053m, progress_delta=-15.278m, pose=(89629.700,43135.375,1.100), out_of_map=0, contacts=1",
+          "full_wall_stage": 914
+        },
+        {
+          "correction": 3,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": true,
+          "full_wall_outcome": "accepted",
+          "full_wall_detail": "physical solution horizon accepted, reason=accepted, stage=999, wp=35, distance=19.962m, lateral=0.039m, lag=0.365m, bounds=[-3.711,1.000]m, reserve=0.961m, heading_offset=-0.163rad, progress=34.275/50.751m, progress_delta=-16.476m, pose=(89627.808,43133.021,2.021), out_of_map=0, contacts=0",
+          "full_wall_stage": 999
+        }
+      ]
+    },
+    {
+      "source_sequence": 656,
+      "mode": "coherent",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "source_sha256": "7826f6729ebc4afca92bafc761456232df0af4a6d08e6082d754bd992e4b006c",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/656-coherent/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 16519427920263069651,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "accepted",
+            "candidate_fingerprint": 16519427920263069651,
+            "source_fingerprint": 16519427920263069651,
+            "bundle": true,
+            "detail": "accepted",
+            "ms": 90.438457
+          }
+        ]
+      },
+      "correction_trace": [
+        {
+          "correction": 0,
+          "adapter_reason": "exact-trajectory-rejected",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false
+        },
+        {
+          "correction": 1,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": true,
+          "full_wall_outcome": "stage-wall-rejected",
+          "full_wall_detail": "rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=834, wp=34, distance=16.665m, lateral=0.710m, lag=-1.195m, bounds=[-3.711,1.000]m, reserve=0.290m, heading_offset=0.099rad, progress=33.719/47.454m, progress_delta=-13.735m, pose=(89628.514,43130.915,2.303), out_of_map=0, contacts=1",
+          "full_wall_stage": 834
+        },
+        {
+          "correction": 2,
+          "adapter_reason": "exact-trajectory-rejected",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": false
+        },
+        {
+          "correction": 3,
+          "adapter_reason": "none",
+          "native_state_bounds_valid": true,
+          "native_state_bounds_satisfied": true,
+          "full_wall_outcome": "accepted",
+          "full_wall_detail": "physical solution horizon accepted, reason=accepted, stage=999, wp=35, distance=19.962m, lateral=0.056m, lag=-0.250m, bounds=[-3.711,1.000]m, reserve=0.944m, heading_offset=-0.185rad, progress=34.770/50.751m, progress_delta=-15.981m, pose=(89627.851,43132.907,1.981), out_of_map=0, contacts=0",
+          "full_wall_stage": 999
+        }
+      ]
+    },
+    {
+      "source_sequence": 538,
+      "mode": "coherent",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "source_sha256": "f9a81021fd90498e8ad3d9fd8e18020f386ea3c828f3f824128bd7fd3d5668cd",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/538-coherent/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 7587156902152541954,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "solver-rejected",
+            "candidate_fingerprint": 7587156902152541954,
+            "source_fingerprint": 7587156902152541954,
+            "bundle": false,
+            "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00474119, dua_res=3.59892, failed_iterate_row=497, value=0.921006, bounds=[-inf,0.911941], violation=0.00906488, tolerance=0.00192101, normalized=4.71882, architecture_snapshot=mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+            "ms": 225.685663
+          }
+        ]
+      }
+    },
+    {
+      "source_sequence": 743,
+      "mode": "coherent",
+      "source": "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "source_sha256": "0906a60eebcf355e5ea45d5954d07124a0fa9a7c5b8f781ae36dad3feaa6c738",
+      "command": [
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/replay",
+        "/output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "/output/20260913-nine-state-rejoin-full-wall-feedback-r782/743-coherent/report.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "source_accepted": true,
+        "source_fingerprint": 12988834927668665292,
+        "detail": "accepted",
+        "scope": "Complete frozen solver failure source, world, state, reference, model and hard constraints shared by A/B/C/D. Exact failed convex problem and warm start remain separately captured; this architecture comparison does not establish that all later source failures have the same cause or grant live authority.",
+        "arms": [
+          {
+            "arm": "persistent-a",
+            "stage": "solver-rejected",
+            "candidate_fingerprint": 12988834927668665292,
+            "source_fingerprint": 12988834927668665292,
+            "bundle": false,
+            "detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00473565, dua_res=0.774599, failed_iterate_row=497, value=0.920996, bounds=[-inf,0.911941], violation=0.00905429, tolerance=0.001921, normalized=4.71333, architecture_snapshot=mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+            "ms": 235.347006
+          }
+        ]
+      }
+    }
+  ],
+  "limits": [
+    "R777target-free B/C/D etc are inapplicable, not physical failure; H is a separate restoration candidate and743positive does not authorize execution.",
+    "537original cold wall stage722 exactly matches capture.656recorded stage803 differs from cold834; internal warm state is absent. Paired coldA/B656 uses identical immutable inputs.",
+    "R779 stopped before compilation; R780/R781C lacked preserved pre-wall problem in target-free mode; all diagnostic failures retained. R782 explicitly preserves it, then537C rejects empty-trust-region and656Cpasses.",
+    "Current-pose and control-origin clear; first537wall contact3.615sec is future. No safety guard is a mask to remove.",
+    "B route uses original max3 numerical corrections and all original full wall/dynamic/Stop bundle gates; only temporary source compiled. No production change or live timing acceptance."
+  ],
+  "next": "Validate trajectory-wall-only trigger with negative current-contact/input/control-prefix cases and prior saved worlds, then implement minimal full-world wall feedback within existing max3 corrections. Keep independent outer certificate, all parameters and normal authority unchanged; build/package/committed live required."
+}

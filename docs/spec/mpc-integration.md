@@ -8,6 +8,15 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Rejoinの完全壁検証と補正条件の比較（2026-09-13）
+
+R776–R782でsingle-r23のRejoin入力を監査。537は現在姿勢が無接触で、3.615秒先の
+壁接触を再現した。補正の継続条件へ完全な壁検証を加える診断では、537/656が元の
+最大3回内に状態・壁・他車・停止継続を満たす。壁の近似制約を再生成する別方式は
+537で拒否、656で合格。本番は未変更。次は現在接触などの負例と追加入力を検証し、
+元の上限内の最小修正を実装・build・実走へ進める。全体・M4–M6は未完。
+[監査・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-full-wall-feedback-audit.md)。
+
 ## 後退候補修正後の単車検証（2026-09-13）
 
 226e4f84のsingle-r23は通常522送信、4260callback最大23.50ms、期限外送信ゼロ。

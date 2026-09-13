@@ -1567,6 +1567,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-steering-live-evidence.json",
       "replay_ready": true,
       "reason": "Fixed226e4f84single-r23live authority/timing, same-run public state and saved Rejoin physical failures; no Unknown-direction capture."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-rejoin-full-wall-feedback-seal-r783",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-full-wall-feedback-evidence.json",
+      "replay_ready": true,
+      "reason": "Actual r23 Rejoin sources, complete native wall geometry and bounded correction feedback comparison with preserved failed/inapplicable diagnostics."
     }
   ],
   "experiments": [
@@ -20440,6 +20446,104 @@
       "production_impact": "No additional production change; reverse execution remains unverified and race incomplete.",
       "deleted_code": [],
       "revisit_condition": "New sealed same-world producer hypothesis/fix or newly eligible reverse scene; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-r23-source-inputs-r776",
+      "baseline_commit": "e6b5c740",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-full-wall-feedback-seal-r783"
+      ],
+      "hypothesis": "Source correction ends before complete-world wall violation can feed back into existing bounded numerical correction.",
+      "changed_dimension": "Observation and bounded copied-source correction feedback, full original world/model/hard oracle. No production mutation.",
+      "result": "accepted",
+      "reason": "Same-run final913/source537/538/656/743binding and payloads sealed.",
+      "production_impact": "None; trajectory-only trigger/holdouts/build/live still required.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing producer/warm input, corrected diagnostic applicability, or predeclared trajectory-only implementation with original hard guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-r23-source-replay-r777",
+      "baseline_commit": "e6b5c740",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-full-wall-feedback-seal-r783"
+      ],
+      "hypothesis": "Source correction ends before complete-world wall violation can feed back into existing bounded numerical correction.",
+      "changed_dimension": "Observation and bounded copied-source correction feedback, full original world/model/hard oracle. No production mutation.",
+      "result": "inconclusive",
+      "reason": "537wall and538/743solver rejection,656cold differs from runtime warm path; target-free B/C/D unsupported. SeparateH743positive, no global infeasibility or promotion.",
+      "production_impact": "None; trajectory-only trigger/holdouts/build/live still required.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing producer/warm input, corrected diagnostic applicability, or predeclared trajectory-only implementation with original hard guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-r23-cell-geometry-r778",
+      "baseline_commit": "e6b5c740",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-full-wall-feedback-seal-r783"
+      ],
+      "hypothesis": "Source correction ends before complete-world wall violation can feed back into existing bounded numerical correction.",
+      "changed_dimension": "Observation and bounded copied-source correction feedback, full original world/model/hard oracle. No production mutation.",
+      "result": "accepted",
+      "reason": "537current/control poses clear; exact3.615sec left-frontcell471815intersection under original hard clearance.",
+      "production_impact": "None; trajectory-only trigger/holdouts/build/live still required.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing producer/warm input, corrected diagnostic applicability, or predeclared trajectory-only implementation with original hard guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-full-wall-feedback-r779",
+      "baseline_commit": "e6b5c740",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-full-wall-feedback-seal-r783"
+      ],
+      "hypothesis": "Source correction ends before complete-world wall violation can feed back into existing bounded numerical correction.",
+      "changed_dimension": "Observation and bounded copied-source correction feedback, full original world/model/hard oracle. No production mutation.",
+      "result": "inconclusive",
+      "reason": "Driver construction expected unique code block and stopped before compilation; original source unchanged.",
+      "production_impact": "None; trajectory-only trigger/holdouts/build/live still required.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing producer/warm input, corrected diagnostic applicability, or predeclared trajectory-only implementation with original hard guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-full-wall-feedback-r780",
+      "baseline_commit": "e6b5c740",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-full-wall-feedback-seal-r783"
+      ],
+      "hypothesis": "Source correction ends before complete-world wall violation can feed back into existing bounded numerical correction.",
+      "changed_dimension": "Observation and bounded copied-source correction feedback, full original world/model/hard oracle. No production mutation.",
+      "result": "inconclusive",
+      "reason": "537A wall722/Bfeedback fullyaccepted at original3corrections; Cdiagnostic lacks preserved broad problem and stopped remainder.",
+      "production_impact": "None; trajectory-only trigger/holdouts/build/live still required.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing producer/warm input, corrected diagnostic applicability, or predeclared trajectory-only implementation with original hard guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-full-wall-feedback-r781",
+      "baseline_commit": "e6b5c740",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-full-wall-feedback-seal-r783"
+      ],
+      "hypothesis": "Source correction ends before complete-world wall violation can feed back into existing bounded numerical correction.",
+      "changed_dimension": "Observation and bounded copied-source correction feedback, full original world/model/hard oracle. No production mutation.",
+      "result": "inconclusive",
+      "reason": "Cremains inapplicable: target-free path does not preserve broad pre-wall problem; no later arms evaluated.",
+      "production_impact": "None; trajectory-only trigger/holdouts/build/live still required.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing producer/warm input, corrected diagnostic applicability, or predeclared trajectory-only implementation with original hard guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-full-wall-feedback-r782",
+      "baseline_commit": "e6b5c740",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-full-wall-feedback-seal-r783"
+      ],
+      "hypothesis": "Source correction ends before complete-world wall violation can feed back into existing bounded numerical correction.",
+      "changed_dimension": "Observation and bounded copied-source correction feedback, full original world/model/hard oracle. No production mutation.",
+      "result": "accepted",
+      "reason": "Explicit Cprerequisites:537Creject empty-trust-region,656Awall834/BandCfullbundlepass at3,538/743pre-wallsolverreject. Bminimal route supported across2worlds; production unchanged.",
+      "production_impact": "None; trajectory-only trigger/holdouts/build/live still required.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing producer/warm input, corrected diagnostic applicability, or predeclared trajectory-only implementation with original hard guards."
     }
   ]
 }

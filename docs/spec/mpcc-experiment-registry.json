@@ -1549,6 +1549,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-direction-observation-validation.json",
       "replay_ready": true,
       "reason": "Observation-only direction input capture and saved-map native positive/negative regressions; live eligibility pending."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-recovery-direction-live-seal-r765",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-direction-live-evidence.json",
+      "replay_ready": true,
+      "reason": "Actual first failed CheckClearance1921and all4original candidate native replays, fixed-source live timing/authority evidence."
     }
   ],
   "experiments": [
@@ -20258,6 +20264,48 @@
       "production_impact": "Observation only; no new normal/Recovery authority or deadline/margin/model/parameter change.",
       "deleted_code": [],
       "revisit_condition": "Actual eligible failed CheckClearance capture or demonstrated serializer/latency defect; never substitute diagnostics for authority or relax candidate guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-direction-live-audit-r762",
+      "baseline_commit": "1b478b27",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-direction-live-seal-r765"
+      ],
+      "hypothesis": "Exact Recovery trial inputs distinguish physical candidate rejection from course or upstream selection failure.",
+      "changed_dimension": "Observation-only fixed live source and unchanged native replay; no parameter/model/guard change.",
+      "result": "inconclusive",
+      "reason": "1133normal/3selectedRejoins/onecompletion; max24.70ms/noactuallate. No vehicleStart/laps. Actual direction capture complete.",
+      "production_impact": "Diagnostic evidence only; no new normal/Recovery actuation. Moving rear-hazard input and full race acceptance remain missing.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed candidate shape or exact earlier moving-hazard input. Never infer global infeasibility or lower hard requirements."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-direction-public-r763",
+      "baseline_commit": "1b478b27",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-direction-live-seal-r765"
+      ],
+      "hypothesis": "Exact Recovery trial inputs distinguish physical candidate rejection from course or upstream selection failure.",
+      "changed_dimension": "Observation-only fixed live source and unchanged native replay; no parameter/model/guard change.",
+      "result": "accepted",
+      "reason": "Same-run public frequencies and max1.74118mps; no direct physical force/receiver truth.",
+      "production_impact": "Diagnostic evidence only; no new normal/Recovery actuation. Moving rear-hazard input and full race acceptance remain missing.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed candidate shape or exact earlier moving-hazard input. Never infer global infeasibility or lower hard requirements."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-direction-replay-r764",
+      "baseline_commit": "1b478b27",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-direction-live-seal-r765"
+      ],
+      "hypothesis": "Exact Recovery trial inputs distinguish physical candidate rejection from course or upstream selection failure.",
+      "changed_dimension": "Observation-only fixed live source and unchanged native replay; no parameter/model/guard change.",
+      "result": "accepted",
+      "reason": "All4actual1921Recovery kinematic trials replay exactly, including map/counters/endpoints/course; reverse8m candidates fail wall6/3.55/7m.",
+      "production_impact": "Diagnostic evidence only; no new normal/Recovery actuation. Moving rear-hazard input and full race acceptance remain missing.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed candidate shape or exact earlier moving-hazard input. Never infer global infeasibility or lower hard requirements."
     }
   ]
 }

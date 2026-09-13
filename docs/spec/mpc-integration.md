@@ -8,6 +8,15 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Recovery方向候補の実入力再生（2026-09-13）
+
+1b478b27のsingle-r22:通常1133送信、4329callback最大24.70ms、実期限外送信ゼロ。
+認証済みRejoin実送信3件以上・復帰完了1回、準備候補のsource認証も確認。周回は未達。
+判断1921の方向選択失敗を完全保存し、R764で全4件を一致再生。8m後退3候補はすべて壁拒否。
+先行する後退中の障害停止と、その後の要求距離8mへの増加を分け、同じ地図で候補形状と
+元の4m要求を比較する。安全条件は維持。ゲームStart成立、車両Start・M4–M6は未完。
+[監査と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-direction-live-audit.md)。
+
 ## Recovery方向選択の限定観測（2026-09-13）
 
 RecoveryのCheckClearanceで方向を選べなかった最初の1件について、実際の候補入力・

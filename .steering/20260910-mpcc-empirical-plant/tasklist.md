@@ -667,3 +667,11 @@ source118/build137all26/package124pass; saved physical/course positives/negative
 overflow and duplicate checks pass. Next localcommit/original-DLL single-r22 and native
 per-trial replay; actual eligibility/timing and all remaining M4–M6 remain open.
 See recovery-direction-observation-design/validation and internal schema.
+
+2026-09-13R762–R765:single-r22/1b478b27normal1133/actualRejoin>=3/onecompletion,
+max24.70ms/noactuallate;1489pre-refused. Preparation sourcecertifications separate
+from individual published-policy mapping. Capture1921complete/4trials, nativeR764
+allmatch; three8mreverse wall rejects at6/3.55/7m. Earlier moving rear hazard remains
+uncaptured; retry increased4to8. Compare base4and bounded piecewise8on same world,
+preserve original hard oracle and no raw normal promotion. AllM4–M6stillopen.
+See recovery-direction-live-audit/evidence.

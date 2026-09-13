@@ -8,6 +8,19 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Recoveryの候補順序と評価省略（2026-09-13）
+
+7f263cc2の標準描画single-r28は通常675送信、Rejoin送信3件・復帰完了1回、実期限外送信ゼロ。
+4271callback中495の1件25.218ms（初期化14.746ms/Recovery6.402ms）、連続超過なし。
+2771は送信前拒否。ゲームStart成立、車両Start・周回は未達。壁区間拒否は発生せず観測なし。
+後半のRecovery2906をR818で完全再生。前進3候補は全て壁またはコース条件で拒否され、
+「前進優先」の分岐が後退評価まで省く。これはordering-onlyという宣言と不整合。
+R819は同じ地図・姿勢で既存後退4m/+0.15rad、8m/+0.10radの物理・コース検証に合格。
+未評価の元の後退距離は未保存なので、これらは明示した距離での診断であり実行許可ではない。
+次は優先指定が候補を消さない選択処理の回帰・修正・検証。先行する通常停止の原因、
+標準描画の期限問題・全コース/M4–M6は未完。
+[監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/first-interval-live-audit.md)。
+
 ## 通常移動前の初回壁区間観測（2026-09-13）
 
 初回の壁区間拒否を通常移動前も保存する観測へ修正。先行通常記録は任意の実証拠とし、

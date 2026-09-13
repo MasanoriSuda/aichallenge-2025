@@ -1,0 +1,1152 @@
+{
+  "authority": false,
+  "baseline": "7f263cc2",
+  "run_id": "20260913-nine-state-single-r28",
+  "result": "incomplete",
+  "source_and_binary_unchanged": true,
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-first-interval-live-audit-r815/generator.py": "80c2d3e418b9b362c9bde50497d1b4b189c22caea60e833ab0e8f98301cd2a2c",
+    "output/20260913-nine-state-first-interval-live-audit-r815/report.json": "878cfbb775b6459d913fcdb5a25a33809809a1a4d733c1690cad57146dd088cf",
+    "output/20260913-nine-state-first-interval-public-r816/generator.py": "a0c7e979b8d988bee58e40d420e34ff9f5083a1d6edf9e0f74afbdd0ad9e348c",
+    "output/20260913-nine-state-first-interval-public-r816/report.json": "20a8a42ac4102d13019effebec5026159b8de601b5d2c29a614b8d013500f422",
+    "output/20260913-nine-state-first-interval-public-r816/d1.json": "0b1b8da7a4e0715849c4dd5bb85982db0fd1782469a32302fa94f2de24ba4e5b",
+    "output/20260913-nine-state-first-interval-replay-r817/results.json": "8e13485e3a1035cb45d8d7ffed32998db58be9002ea13600ed6ef774645b9ff2",
+    "output/20260913-nine-state-first-interval-replay-r817/driver.cpp": "1538408d0e5caeaad505396a4e7bcdc0efac65568695c5aba8e472368a867cb2",
+    "output/20260913-nine-state-first-interval-replay-r817/runner.py": "4d8f0cd4ad9fc6109636b2e87af55d776e2a78f5a199ad85dfa88575156556fe",
+    "output/20260913-nine-state-first-interval-replay-r817/declared-plan.json": "98bdb3b5f46c7a9edfd540ae382d68d242d1de83974b42990fb671d67c5ee527",
+    "output/20260913-nine-state-recovery-direction-replay-r818/results.json": "6ab9147f8253ca34344a76ad915e2eaa78a3cb5018d0894de1621e883b51dd7a",
+    "output/20260913-nine-state-recovery-direction-replay-r818/replay": "8c71050a3e1df407860acf4d16e412fbb786d652c8aa9ffa2be1589072befaac",
+    "output/20260913-nine-state-recovery-direction-replay-r818/input-sha256.json": "0151e8822a7e743ad61e263f7bc82b7110e5aabf0ce2bb2cc3acdcf0f3457605",
+    "output/20260913-nine-state-recovery-direction-replay-r818/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-direction-replay-r818/driver.cpp": "bb5da2ef1f69ef3e25b3ac40fffd34f146b1e1a2c5e9a32a9c17615377aca219",
+    "output/20260913-nine-state-recovery-direction-replay-r818/compile-command.json": "df974bf3264d57ecbe5706da836f740936f13fc90d17cb0c9f462efa123857e1",
+    "output/20260913-nine-state-recovery-direction-replay-r818/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-recovery-direction-replay-r818/runner.py": "2cd101ce51dc1e08f75ac59b6f9a896102a7cce98607495fd13b6df3650c4d72",
+    "output/20260913-nine-state-recovery-direction-replay-r818/declared-plan.json": "0ce8691f22f02cf0209ca0dde9b831bbf9bfcc5471d61fab9594fdf39f4d6fb0",
+    "output/20260913-nine-state-recovery-direction-replay-r818/decision-000000002906/replay.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-direction-replay-r818/decision-000000002906/report.yaml": "a8dde75f7389f3bfd07afbe7406f7652a8be190cc87d5b602d300a9d64edf12e",
+    "output/20260913-nine-state-recovery-preference-compare-r819/results.json": "81d17c4ecb19e5a58ed40e8fe0666ec059ab519a5c579348a97996a28a9a0701",
+    "output/20260913-nine-state-recovery-preference-compare-r819/input-sha256.json": "45d2cb42b11ecb6b2e79fcd5f42615d086501ac7088271c08b944bdc1e9581b5",
+    "output/20260913-nine-state-recovery-preference-compare-r819/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-preference-compare-r819/driver.cpp": "340d11616b1b8e138cb19a0391875b30dfbf79ab898bc3a4513473ee488fc386",
+    "output/20260913-nine-state-recovery-preference-compare-r819/compile-command.json": "adedb55904f9cf30426746b13c9d66314519f162054b150cc000232fbaf2cc92",
+    "output/20260913-nine-state-recovery-preference-compare-r819/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-recovery-preference-compare-r819/runner.py": "120e5f22b31090b69fa69ab67ccb4aa53678387b0e698a05cb065e3f3044bb34",
+    "output/20260913-nine-state-recovery-preference-compare-r819/compare": "1e6b9b284bc5081b98bbe1bf28ea65de4fc4c2ac55abd5606d98b4241310abbf",
+    "output/20260913-nine-state-recovery-preference-compare-r819/declared-plan.json": "3ac0f9e12e2da3a758765377cbc4d8425c42805152195b00338fa83475c2f1ef",
+    "output/20260913-nine-state-recovery-preference-compare-r819/3.9995/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-preference-compare-r819/3.9995/report.yaml": "c42302a001e164c56dae9f0fa075ffa87baba428cf9b5f56a4e1d1fcf8de1dd5",
+    "output/20260913-nine-state-recovery-preference-compare-r819/4.0005/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-preference-compare-r819/4.0005/report.yaml": "b70d7dbf3c8475a303f3023fe22350dcf31c1b3ea668cf4100b9242bd46d1391",
+    "output/20260913-nine-state-recovery-preference-compare-r819/8.0/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-preference-compare-r819/8.0/report.yaml": "b8b5702fe591ea4aeffcf13969c7423c426ee446878350366ea44cf20babc695",
+    "output/20260913-nine-state-recovery-preference-compare-r819/4.0/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-preference-compare-r819/4.0/report.yaml": "9db3becccbc0d34e62e0722e7f41c7305e841ca15945ef312b9b77e42b80d0d5",
+    "output/20260913-nine-state-single-r28/manifest.json": "2ed396a4b0e48712af0e12eac6e6d8d04cc1ac72d87fa7d79f1b616f139654df",
+    "output/20260913-nine-state-single-r28/monitor-summary.json": "14a91e7213dd8e1b953e13e2ce1099091649bf8fcf15d0a955db10674e9bdaad",
+    "output/20260913-nine-state-single-r28/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-single-r28/unity-player.log": "768d4596b70605cd670b72df912200bf47e2ea35807e0b08242e0088aac7a038",
+    "output/20260913-nine-state-single-r28/d1/autoware.log": "7ed4741612feaa282dec4063f52bb57830ca0cb6a2d65f92169604cf467c8094",
+    "output/20260913-nine-state-single-r28/run_campaign.py": "69cc77759758bb1818d37cd77eac48f4a8b3e42d91eebe3d69d3a8fc95df5f0b",
+    "output/20260913-nine-state-single-r28/build.log": "ce3dd34d9e0e6d63a4353d4fa2baf6e8ed352a89dda9461ac88c01e342e593d0",
+    "output/20260913-nine-state-single-r28/package.log": "bdfda003625921ac786a420b569b71b86e595e0296a571c990d640d45ba2f259",
+    "output/20260913-nine-state-single-r28/dev-six-lap.sh": "608a888bdf192fe7566f4f185d48e9886bc3551693a3e6b2fd087f89d476981a",
+    "output/20260913-nine-state-single-r28/compose-six-lap.yml": "3d1c592c7a4cd32599b98d282dbd8f554d97e3910383fb7b29bc2801d5afaf09",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000504-pre-stationary/snapshot.yaml": "408be42e30e925e952bb7f2d0c3eec0cc5ab132bb2ae8e7c2078a47421cc8cc8",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000504-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000504-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000504-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000499-pre-stationary/snapshot.yaml": "d2c8d633f43ee7c35cce2575ae0fea8f43b2a723399620177143caf909a74cd3",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000499-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000499-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000499-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000001963-298e9ddc79f15507-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml": "ef69c113ee9ced6916087f7c702d72aa42c47dd0ee47b1922ab55da582658efd",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000001963-298e9ddc79f15507-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000001355-524d8d627fe9f13e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml": "810cf9be96133c0157e60bb487eeb11fd92f60222c5988dab0d0f7a242402f31",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000001355-524d8d627fe9f13e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000000833-473b673b587e6dc2-rejoin-side-neutral-initial-solve-rejected/snapshot.yaml": "3d6f4fe21cb7b21522999e11b2d287715735c1aba2d82074a36237129f387c75",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000000833-473b673b587e6dc2-rejoin-side-neutral-initial-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000759-pre-stationary/snapshot.yaml": "6da66dc12c9a8c6ffefb408999ff623eca4a622d6af1227e85cc7270d4361307",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000001072-pre-moving/snapshot.yaml": "05675000674b80368910ea7c3c46250512e5ee0675248023d27915fea7db4d96",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000002525-pre-stationary/snapshot.yaml": "9e0d642e92576d28743f5879119f5b2bfd1fe9969efcfaab54cf6ea7e7a66717",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000759-pre-stationary/snapshot.yaml": "6da66dc12c9a8c6ffefb408999ff623eca4a622d6af1227e85cc7270d4361307",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000001072-pre-moving/snapshot.yaml": "05675000674b80368910ea7c3c46250512e5ee0675248023d27915fea7db4d96",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-final-active/due/after-normal-motion/publication-000000002525-pre-stationary/snapshot.yaml": "9e0d642e92576d28743f5879119f5b2bfd1fe9969efcfaab54cf6ea7e7a66717",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000002865-pre-moving/snapshot.yaml": "f0b26a59a4c078971e58d4abf0704e87120d634d41299049303c9866bef48a90",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000002865-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000002865-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000002865-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000002274-pre-moving/snapshot.yaml": "4dd6af5d91737f4228c3a20f85f04f4a7dec0986b034aaedf4b783589d6f3d19",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000002274-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000002274-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000002274-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000002274-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000002274-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000002274-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000002206-2ec71ad76af9f9ce-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "3074b1ae532e7ff39c131cdc751439e8287ab8272e49ce996c8ffb4055202e7b",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000002206-2ec71ad76af9f9ce-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000002016-cf1998d14211136a-cruise-side-neutral-initial-solve-rejected/snapshot.yaml": "3f9d67085d479029e04caa4d1434f85c53ffac178d078eb30fe70133c9384c6d",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000002016-cf1998d14211136a-cruise-side-neutral-initial-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002206-2ec71ad76af9f9ce-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "3074b1ae532e7ff39c131cdc751439e8287ab8272e49ce996c8ffb4055202e7b",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002206-2ec71ad76af9f9ce-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002158-50bc082b70a14dba-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "438472c87774adbe19a56d5210ee74fd4256c1961b856cdf773ed84278b487e3",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002158-50bc082b70a14dba-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002016-cf1998d14211136a-cruise-side-neutral-initial-solve-rejected/snapshot.yaml": "3f9d67085d479029e04caa4d1434f85c53ffac178d078eb30fe70133c9384c6d",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000002016-cf1998d14211136a-cruise-side-neutral-initial-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001963-298e9ddc79f15507-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml": "ef69c113ee9ced6916087f7c702d72aa42c47dd0ee47b1922ab55da582658efd",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000001963-298e9ddc79f15507-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000002145-396681d84bc1e19f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "97f40b555c60b32db55a584ee6ad538bf727485bf446b1526f00ceb211d14fff",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000002145-396681d84bc1e19f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000760-pre-stationary/snapshot.yaml": "fb13133d891b2f5e11c73d5490189f766b77c62afc41a759cd79d6bfe9604f34",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000760-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000760-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000760-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000002162-pre-moving/snapshot.yaml": "b4226664a4c1a93740fb9ac92533c59d2dd182214e21ef9b4bbf68e16376318c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000002162-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000002162-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000002162-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000002162-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000002162-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000002162-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/publication-000000002771-pre-stationary/snapshot.yaml": "793584eb99060ece2798eca7b635236b0152a97cdb08e5f99b48168d181a5a85",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/publication-000000002771-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/publication-000000002771-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/publication-000000002771-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/publication-000000002771-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/publication-000000002771-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/publication-000000002771-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-final-startup/active/publication-000000000495-pre-stationary/snapshot.yaml": "78a0a2276610bc24c37978bafb598c43f07dba05fe599b58a2d26f16521b71f6",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/scheduled-final-startup/due/publication-000000000495-pre-stationary/snapshot.yaml": "78a0a2276610bc24c37978bafb598c43f07dba05fe599b58a2d26f16521b71f6",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000002145-396681d84bc1e19f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "97f40b555c60b32db55a584ee6ad538bf727485bf446b1526f00ceb211d14fff",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/000000002145-396681d84bc1e19f-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/recovery-direction/decision-000000002906/snapshot.yaml": "aa4c89d131b422ceb78aba506d994517923dcc45e67b6e6b88d7a5ca81026bbc",
+    "output/20260913-nine-state-single-r28/d1/mpcc_architecture_snapshots/recovery-direction/decision-000000002906/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+  },
+  "callback_samples": 4271,
+  "callback_statistics": {
+    "mean_ms": 2.7101914921564054,
+    "p95_ms": 7.4433545,
+    "p99_ms": 13.700658600000008,
+    "max_ms": 25.21819,
+    "consecutive_overruns": []
+  },
+  "overrun_details": [
+    "[mpc_controller_cpp-10] [WARN] [1789283198.857236693] [mpc_controller]: Control callback overrun detail: decision=495, total=25.218ms/budget=25.000ms, regions=pre_mpc:3.404/mpc:14.905/post_mpc:0.005/recovery:6.402/publish:0.500/unattributed:0.001ms, checkpoint=complete, nested=problem_initialization:14.746/publication_successor:0.338/prediction_marker:0.000ms/points:0, normal_join=primary:0.145/stop_lattice:0.000/stop_successor:0.000/output:0.000/snapshots:0.000ms, primary_proof=applied:0.000/continuation:0.000ms, thread_cpu_ms=25.177871, publication_failed=0, ros=entry:0.214999995/mpc_begin:0.214999995/mpc_end:0.214999995/recovery_begin:0.214999995/recovery_end:0.234999994, observation_only=1"
+  ],
+  "normal_publications": 675,
+  "last_publication": {
+    "dispatch": 2887,
+    "job": 2865,
+    "source": 2202,
+    "index": 19,
+    "nominal": 65.739998583,
+    "before": 65.75499853,
+    "after": 65.75499853,
+    "deadline": 65.764998583,
+    "programme_input": 16212942851132294799,
+    "physical_input": 16212942851132294799,
+    "independent": 0
+  },
+  "publication_rejections": [
+    "[mpc_controller_cpp-10] [ERROR] [1789283261.594434749] [mpc_controller]: MPCC scheduled publication rejected: dispatch=2771, job=2768, index=0, nominal=62.754998733, decision_clock=62.759998597, before=62.789998596, deadline=62.779998733"
+  ],
+  "actual_post_send_window_violations": [],
+  "actual_rejoin_publications": [
+    {
+      "decision": 2155,
+      "publication": {
+        "dispatch": 2155,
+        "job": 2154,
+        "source": 831,
+        "index": 0,
+        "nominal": 47.219998945,
+        "before": 47.239998944,
+        "after": 47.239998944,
+        "deadline": 47.244998945,
+        "programme_input": 10658431555757599992,
+        "physical_input": 6690269608396069404,
+        "independent": 1
+      },
+      "trace": "[mpc_controller_cpp-10] [INFO] [1789283246.043218439] [mpc_controller]: Overtake control decision: decision=2155, episode=0, generation=0, target=<none>, side=0, phase=Idle, action=cruise, canonical_intent=cruise/cruise-during-race-session, lateral_owner=racing-line, longitudinal_owner=racing-line, path_source=racing-line, path_age=infs, speed_window=inf/inf/0.00, floor_request=0.00/adjusted=0, front=inf/safety=inf/protected=infm, closing_ref=infm/s, conflict=none, transition=\"no active vehicles\", block=\"none\", corridor_min=6.64@6.00m, wall_min=nanm, valid_until=0.00/0.00m, rear_clear=infm, wall_contract=inf/0.35m, wp_id=16, control_source=mpc-solution, actual=0.46m/s, command=0.39m/s/-0.18m/s2/0.00rad, published_steering=0.00rad, published=1, solver=\"canonical-scheduled-program\", output=\"canonical-scheduled-rejoin-retained-published\", MPCC execution contract: decision=2155, authority=certified-normal-solution, source=mpc-solution, intent=rejoin, formulation=velocity-steering-tire-body-progress-9state, problem=0xc9f3fce51f9d874c, solution=831, plan=831, execution_certificate_decision=2154, canonical_source=retained-certified, retained=1, identity=complete, canonical=satisfied, reason=matching-certified-solution, contract_join=1"
+    },
+    {
+      "decision": 2163,
+      "publication": {
+        "dispatch": 2163,
+        "job": 2162,
+        "source": 834,
+        "index": 0,
+        "nominal": 47.42999894,
+        "before": 47.454998939,
+        "after": 47.454998939,
+        "deadline": 47.45499894,
+        "programme_input": 7345343285982628044,
+        "physical_input": 1281530029818922355,
+        "independent": 1
+      },
+      "trace": "[mpc_controller_cpp-10] [INFO] [1789283246.260219195] [mpc_controller]: Overtake control decision: decision=2163, episode=0, generation=0, target=<none>, side=0, phase=Idle, action=cruise, canonical_intent=cruise/cruise-during-race-session, lateral_owner=racing-line, longitudinal_owner=racing-line, path_source=racing-line, path_age=infs, speed_window=inf/inf/0.00, floor_request=0.00/adjusted=0, front=inf/safety=inf/protected=infm, closing_ref=infm/s, conflict=none, transition=\"no active vehicles\", block=\"none\", corridor_min=6.64@6.00m, wall_min=nanm, valid_until=0.00/0.00m, rear_clear=infm, wall_contract=inf/0.34m, wp_id=16, control_source=mpc-solution, actual=0.11m/s, command=0.09m/s/1.33m/s2/-0.02rad, published_steering=-0.03rad, published=1, solver=\"canonical-scheduled-program\", output=\"canonical-scheduled-rejoin-retained-published\", MPCC execution contract: decision=2163, authority=certified-normal-solution, source=mpc-solution, intent=rejoin, formulation=velocity-steering-tire-body-progress-9state, problem=0xb35cb740df9c6f2c, solution=834, plan=834, execution_certificate_decision=2162, canonical_source=retained-certified, retained=1, identity=complete, canonical=satisfied, reason=matching-certified-solution, contract_join=1"
+    },
+    {
+      "decision": 2418,
+      "publication": {
+        "dispatch": 2418,
+        "job": 2417,
+        "source": 1351,
+        "index": 0,
+        "nominal": 53.859998796,
+        "before": 53.869998795,
+        "after": 53.869998795,
+        "deadline": 53.884998796,
+        "programme_input": 8259568550963385081,
+        "physical_input": 1075968793097449340,
+        "independent": 1
+      },
+      "trace": "[mpc_controller_cpp-10] [INFO] [1789283252.675670459] [mpc_controller]: Overtake control decision: decision=2418, episode=0, generation=0, target=<none>, side=0, phase=Idle, action=cruise, canonical_intent=cruise/cruise-during-race-session, lateral_owner=racing-line, longitudinal_owner=racing-line, path_source=racing-line, path_age=infs, speed_window=inf/inf/0.00, floor_request=0.00/adjusted=0, front=inf/safety=inf/protected=infm, closing_ref=infm/s, conflict=none, transition=\"no active vehicles\", block=\"none\", corridor_min=6.64@1.00m, wall_min=nanm, valid_until=0.00/0.00m, rear_clear=infm, wall_contract=inf/0.33m, wp_id=21, control_source=mpc-solution, actual=1.14m/s, command=1.05m/s/1.33m/s2/0.02rad, published_steering=0.03rad, published=1, solver=\"canonical-scheduled-program\", output=\"canonical-scheduled-rejoin-retained-published\", MPCC execution contract: decision=2418, authority=certified-normal-solution, source=mpc-solution, intent=rejoin, formulation=velocity-steering-tire-body-progress-9state, problem=0x2b670d8d72df1b72, solution=1351, plan=1351, execution_certificate_decision=2417, canonical_source=retained-certified, retained=1, identity=complete, canonical=satisfied, reason=matching-certified-solution, contract_join=1"
+    }
+  ],
+  "rejoin_completion_events": [
+    "[mpc_controller_cpp-10] [INFO] [1789283254.938005175] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=rejoin_complete, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=9, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Forward, primitive=forward_straight, steering=0.000, course_guard=0, course_rejected=0, course_improvement=-0.117 m, stepwise=0, continuous=0, brake=0, adaptive_retry=3, contact_reduction=0, step=0/10, maneuver_distance=0.200 m, clear_forward=0.200 m, episode_distance=0.200 m, stopping_reserve=0.000 m, incident=1/40.61 s/11.322/11.122/0.200 m/3 retry/18 gear, runtime_motion=0.018/0.143 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=1, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.228 rad, e_y=-0.309 m, e_psi=-0.296 rad"
+  ],
+  "states": [
+    "spawned",
+    "grounded",
+    "ready"
+  ],
+  "public": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r28",
+    "domain": 1,
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r28/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "fd05a4ef888c60c7bc24b22a5d0256d47daf807611bd29fea227b1956b92e425"
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 2909,
+        "scope_source_sec": [
+          3.0099999320000004,
+          104.789997657
+        ],
+        "source_hz": 28.57142921006093,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 2909,
+        "scope_source_sec": [
+          3.0099999320000004,
+          104.789997657
+        ],
+        "source_hz": 28.57142921006093,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 2035,
+        "scope_source_sec": [
+          3.09999993,
+          104.799997657
+        ],
+        "source_hz": 20.000000447000993,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 5088,
+        "scope_source_sec": [
+          3.064999931,
+          104.804997657
+        ],
+        "source_hz": 50.000001117554575,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.034999999000000004,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 101,
+        "scope_source_sec": [
+          4.01499991,
+          104.00499767500001
+        ],
+        "source_hz": 1.0001000323554712,
+        "median_source_period_sec": 0.9999999780000001,
+        "max_source_gap_sec": 1.009999978,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 3695,
+        "scope_source_sec": [
+          3.019999932,
+          104.80999765700001
+        ],
+        "source_hz": 36.29040261873137,
+        "median_source_period_sec": 0.029999999000000003,
+        "max_source_gap_sec": 0.094999998,
+        "nonpositive_source_steps": 17
+      },
+      "/clock": {
+        "rows": 20359,
+        "scope_source_sec": [
+          3.019999932,
+          104.80999765700001
+        ],
+        "source_hz": 200.00000446998732,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "rows": 37096,
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789283251691345867,
+      "stamp_ns": 52884998817,
+      "v": 1.6005876064300537,
+      "vy": -0.03782135248184204,
+      "heading_rate": -0.2673281133174896
+    },
+    "limits": [
+      "Source and recorder receipt separate; controller receipt requires this run immutable captures.",
+      "Heading rate is not IMU body yaw rate. Only angular.z supplies body r.",
+      "ROS topics describe public state; no direct force/contact/receiver application instrumentation in this run.",
+      "Frequencies cover the complete recorded source-time range per topic, including startup; no completed race inferred."
+    ]
+  },
+  "interval": {
+    "status": "not-observed",
+    "authority": false,
+    "records": []
+  },
+  "recovery_original_replay": {
+    "authority": false,
+    "decision_id": 2906,
+    "ros_sec": 66.274998518,
+    "input_complete": true,
+    "full_rollout": true,
+    "grid_fingerprint": 1403875087638600848,
+    "current_contact_count": 0,
+    "current_footprint_matches": true,
+    "reverse_only": true,
+    "forward_probe_allowed": true,
+    "prefer_forward": true,
+    "trials": [
+      {
+        "index": 0,
+        "phase": "rejoin-lookahead",
+        "primitive": "forward_right",
+        "parameters": [
+          0.8,
+          0.05,
+          0.05,
+          1.087,
+          0.02625
+        ],
+        "matches_record": true,
+        "physical_accepted": false,
+        "physical_reason": "collision",
+        "course_valid": true,
+        "course_accepted": false,
+        "course_improvement_m": -0.4716878520021499,
+        "rejected_distance_m": 0.625
+      },
+      {
+        "index": 1,
+        "phase": "candidate",
+        "primitive": "forward_straight",
+        "parameters": [
+          0.6,
+          0.05,
+          0.05,
+          1.087,
+          0.25
+        ],
+        "matches_record": true,
+        "physical_accepted": true,
+        "physical_reason": "none",
+        "course_valid": true,
+        "course_accepted": false,
+        "course_improvement_m": -0.3584370183300474,
+        "rejected_distance_m": 0
+      },
+      {
+        "index": 2,
+        "phase": "candidate",
+        "primitive": "forward_left",
+        "parameters": [
+          0.6,
+          0.05,
+          0.05,
+          1.087,
+          0.25
+        ],
+        "matches_record": true,
+        "physical_accepted": false,
+        "physical_reason": "collision",
+        "course_valid": true,
+        "course_accepted": false,
+        "course_improvement_m": -0.3911040524967999,
+        "rejected_distance_m": 0.44999999999999996
+      },
+      {
+        "index": 3,
+        "phase": "candidate",
+        "primitive": "forward_right",
+        "parameters": [
+          0.6,
+          0.05,
+          0.05,
+          1.087,
+          0.25
+        ],
+        "matches_record": true,
+        "physical_accepted": true,
+        "physical_reason": "none",
+        "course_valid": true,
+        "course_accepted": false,
+        "course_improvement_m": -0.32339889500539987,
+        "rejected_distance_m": 0
+      }
+    ],
+    "all_match": true
+  },
+  "recovery_reverse_diagnostics": [
+    {
+      "distance_m": 3.9995,
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "decision_id": 2906,
+        "grid_fingerprint": 1403875087638600848,
+        "trials": [
+          {
+            "primitive": 0,
+            "steering_rad": 0,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 81,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.05,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.2,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.05,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.2,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.924509375,
+            "checked_pose_count": 158,
+            "contacts": [
+              0,
+              1,
+              1
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.8245218750000003,
+            "checked_pose_count": 154,
+            "contacts": [
+              0,
+              2,
+              2
+            ],
+            "course_accepted": false
+          }
+        ],
+        "selected": true,
+        "selected_steering_rad": 0.15,
+        "selected_distance_m": 3.9995,
+        "selected_course_improvement_m": 0.9122324023858694,
+        "elapsed_ms_10_repetitions": [
+          1.090103,
+          0.8054,
+          0.801602,
+          0.797204,
+          0.80038,
+          0.810579,
+          0.801242,
+          0.800541,
+          0.797244,
+          0.800681
+        ]
+      }
+    },
+    {
+      "distance_m": 4.0,
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "decision_id": 2906,
+        "grid_fingerprint": 1403875087638600848,
+        "trials": [
+          {
+            "primitive": 0,
+            "steering_rad": 0,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 127,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.05,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.2,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.05,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.2,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.925,
+            "checked_pose_count": 158,
+            "contacts": [
+              0,
+              1,
+              1
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.825,
+            "checked_pose_count": 154,
+            "contacts": [
+              0,
+              2,
+              2
+            ],
+            "course_accepted": false
+          }
+        ],
+        "selected": true,
+        "selected_steering_rad": 0.15,
+        "selected_distance_m": 4,
+        "selected_course_improvement_m": 0.9121903878523696,
+        "elapsed_ms_10_repetitions": [
+          1.130979,
+          0.886562,
+          0.814206,
+          0.80521,
+          0.81662,
+          0.808706,
+          0.812373,
+          0.807353,
+          0.804127,
+          0.807253
+        ]
+      }
+    },
+    {
+      "distance_m": 4.0005,
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "decision_id": 2906,
+        "grid_fingerprint": 1403875087638600848,
+        "trials": [
+          {
+            "primitive": 0,
+            "steering_rad": 0,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 82,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.05,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 163,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 163,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 163,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.2,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 163,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 163,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.05,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 163,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 163,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 163,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.2,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.9264166666666664,
+            "checked_pose_count": 160,
+            "contacts": [
+              0,
+              1,
+              1
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.827638888888889,
+            "checked_pose_count": 156,
+            "contacts": [
+              0,
+              2,
+              2
+            ],
+            "course_accepted": false
+          }
+        ],
+        "selected": true,
+        "selected_steering_rad": 0.15,
+        "selected_distance_m": 4.0005,
+        "selected_course_improvement_m": 0.9121484079569135,
+        "elapsed_ms_10_repetitions": [
+          1.127543,
+          0.903444,
+          0.875561,
+          0.845715,
+          0.837199,
+          0.84855,
+          0.845785,
+          0.845004,
+          0.84316,
+          0.832861
+        ]
+      }
+    },
+    {
+      "distance_m": 8.0,
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "decision_id": 2906,
+        "grid_fingerprint": 1403875087638600848,
+        "trials": [
+          {
+            "primitive": 0,
+            "steering_rad": 0,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.3,
+            "checked_pose_count": 136,
+            "contacts": [
+              0,
+              2,
+              2
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.05,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.5,
+            "checked_pose_count": 181,
+            "contacts": [
+              0,
+              1,
+              1
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 321,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 321,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.2,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 321,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 321,
+            "contacts": [
+              0,
+              0,
+              0
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.05,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.125,
+            "checked_pose_count": 166,
+            "contacts": [
+              0,
+              2,
+              2
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.1,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.025,
+            "checked_pose_count": 162,
+            "contacts": [
+              0,
+              1,
+              1
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.15,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.074999999999999,
+            "checked_pose_count": 164,
+            "contacts": [
+              0,
+              2,
+              2
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.2,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.925,
+            "checked_pose_count": 158,
+            "contacts": [
+              0,
+              1,
+              1
+            ],
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.825,
+            "checked_pose_count": 154,
+            "contacts": [
+              0,
+              2,
+              2
+            ],
+            "course_accepted": false
+          }
+        ],
+        "selected": true,
+        "selected_steering_rad": 0.1,
+        "selected_distance_m": 8,
+        "selected_course_improvement_m": 0.21774165360480247,
+        "elapsed_ms_10_repetitions": [
+          2.217506,
+          1.972778,
+          1.927763,
+          1.92569,
+          1.925298,
+          1.925569,
+          1.925339,
+          1.925098,
+          1.935899,
+          1.926811
+        ]
+      }
+    }
+  ],
+  "limits": [
+    "Recovery preference excludes reverse evaluation after failed preferred Forward; header explicitly defines ordering only. This is a producer mismatch for Recovery direction, not root cause of preceding normal rest.",
+    "4m is configured diagnostic and bracket3.9995/4.0005m tests rounded-distance uncertainty locally;8m is existing adaptive target. Actual unattempted reverse distance is not recorded.",
+    "No V2X/receiver/normal9state certificate is inferred from kinematic Recovery geometry/course tests.",
+    "No current interval rejection occurred. Observer is unused, not proven broken. Explicit retirement review: retain only through next structurally changed Recovery candidate-order run, then capture/regression or removal review.",
+    "No actual late here does not repair r26 or r80. Original normal authority/guards and integrated acceptance remain required."
+  ]
+}

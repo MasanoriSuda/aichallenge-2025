@@ -1615,6 +1615,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/first-wall-interval-validation.json",
       "replay_ready": true,
       "reason": "Bounded original-query recording tests/build/package; live actual interval remains to capture."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-first-interval-live-seal-r820",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/first-interval-live-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact first Recovery direction failure2906; original four trials and configured reverse diagnostics."
     }
   ],
   "experiments": [
@@ -20980,6 +20986,76 @@
         "Diagnostic post-motion eligibility prerequisite only"
       ],
       "revisit_condition": "Exact actual capture and replay before producer repair; remove/review observer after declared single-r28."
+    },
+    {
+      "experiment_id": "20260913-nine-state-first-interval-live-audit-r815",
+      "baseline_commit": "7f263cc2",
+      "snapshot_ids": [
+        "20260913-nine-state-first-interval-live-seal-r820"
+      ],
+      "hypothesis": "Forward ordering flag excludes reverse population after preferred candidates fail.",
+      "changed_dimension": "Same-run original replay and explicitly bounded existing reverse diagnostics; production unchanged.",
+      "result": "inconclusive",
+      "reason": "675normal/Rejoincomplete1 but no vehicleStart/laps.495single overrun,2771pre-send rejected, no actual late.",
+      "production_impact": "Supports candidate-order repair tests, no authority or safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "Implement/test ordering semantics, preserve all hard negatives and actual downstream V2X/gear; new structural live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-first-interval-public-r816",
+      "baseline_commit": "7f263cc2",
+      "snapshot_ids": [
+        "20260913-nine-state-first-interval-live-seal-r820"
+      ],
+      "hypothesis": "Forward ordering flag excludes reverse population after preferred candidates fail.",
+      "changed_dimension": "Same-run original replay and explicitly bounded existing reverse diagnostics; production unchanged.",
+      "result": "accepted",
+      "reason": "Same-run public sensor/commands/velocity retained; no race acceptance.",
+      "production_impact": "Supports candidate-order repair tests, no authority or safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "Implement/test ordering semantics, preserve all hard negatives and actual downstream V2X/gear; new structural live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-first-interval-replay-r817",
+      "baseline_commit": "7f263cc2",
+      "snapshot_ids": [
+        "20260913-nine-state-first-interval-live-seal-r820"
+      ],
+      "hypothesis": "Forward ordering flag excludes reverse population after preferred candidates fail.",
+      "changed_dimension": "Same-run original replay and explicitly bounded existing reverse diagnostics; production unchanged.",
+      "result": "inconclusive",
+      "reason": "No current interval rejection; no capture or replay.",
+      "production_impact": "Supports candidate-order repair tests, no authority or safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "Implement/test ordering semantics, preserve all hard negatives and actual downstream V2X/gear; new structural live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-direction-replay-r818",
+      "baseline_commit": "7f263cc2",
+      "snapshot_ids": [
+        "20260913-nine-state-first-interval-live-seal-r820"
+      ],
+      "hypothesis": "Forward ordering flag excludes reverse population after preferred candidates fail.",
+      "changed_dimension": "Same-run original replay and explicitly bounded existing reverse diagnostics; production unchanged.",
+      "result": "accepted",
+      "reason": "All four original Recovery2906 trials, full map and course results match. All forward, no reverse evaluated.",
+      "production_impact": "Supports candidate-order repair tests, no authority or safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "Implement/test ordering semantics, preserve all hard negatives and actual downstream V2X/gear; new structural live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-preference-compare-r819",
+      "baseline_commit": "7f263cc2",
+      "snapshot_ids": [
+        "20260913-nine-state-first-interval-live-seal-r820"
+      ],
+      "hypothesis": "Forward ordering flag excludes reverse population after preferred candidates fail.",
+      "changed_dimension": "Same-run original replay and explicitly bounded existing reverse diagnostics; production unchanged.",
+      "result": "accepted",
+      "reason": "Existing reverse population passes physical/course at explicit4m bracket and8m; omitted original distance prevents exact-actual-query claim.",
+      "production_impact": "Supports candidate-order repair tests, no authority or safety relaxation.",
+      "deleted_code": [],
+      "revisit_condition": "Implement/test ordering semantics, preserve all hard negatives and actual downstream V2X/gear; new structural live run."
     }
   ]
 }

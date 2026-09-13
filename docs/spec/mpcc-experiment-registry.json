@@ -1477,6 +1477,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rejoin-handoff-validation.json",
       "replay_ready": true,
       "reason": "Native canonical dispatcher handoff provenance, sealed live admission/override and corrected clock-audit scope; no physical/timing relaxation."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-post-rejoin-seal-r702",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-rejoin-source-evidence.json",
+      "replay_ready": false,
+      "reason": "Live Rejoin handoff validated; first post-Rejoin reserved Cruise input absent. Logs/public commands constrain next observation boundary."
     }
   ],
   "experiments": [
@@ -19462,6 +19468,48 @@
         "Standalone same-ID Recovery handoff heuristic and fabricated positive fixture"
       ],
       "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-live-audit-r699",
+      "baseline_commit": "b3613667",
+      "snapshot_ids": [
+        "20260913-nine-state-post-rejoin-seal-r702"
+      ],
+      "hypothesis": "Authenticated Rejoin handoff resumes normal publication; later Cruise programme/reservation loss may separately cause repeated braking and renewed Recovery.",
+      "changed_dimension": "Fresh committed single run and read-only same-run log/public chronology; no production change.",
+      "result": "rejected",
+      "reason": "single-r17has856normal publications and2RejoinComplete events,at least3complete Rejoin authority/publication joins. No actual late sends; pre-refusal863,callback1009over25ms. LaterSafeStop/noStart/laps; localhandoff acceptance only.",
+      "production_impact": "None in this evidence slice; b3613667handoff maintained.",
+      "deleted_code": [],
+      "revisit_condition": "New complete post-Rejoin worker snapshot and structural comparison; do not repeat unchanged live runs or tune safety/timeout limits."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-public-r700",
+      "baseline_commit": "b3613667",
+      "snapshot_ids": [
+        "20260913-nine-state-post-rejoin-seal-r702"
+      ],
+      "hypothesis": "Authenticated Rejoin handoff resumes normal publication; later Cruise programme/reservation loss may separately cause repeated braking and renewed Recovery.",
+      "changed_dimension": "Fresh committed single run and read-only same-run log/public chronology; no production change.",
+      "result": "accepted",
+      "reason": "Same-run public commands reveal repeated single-positive/brake sequences after returntoCruise. Topic frequencies/maximumspeed preserved; no recorded gear topics, no private physical truth.",
+      "production_impact": "None in this evidence slice; b3613667handoff maintained.",
+      "deleted_code": [],
+      "revisit_condition": "New complete post-Rejoin worker snapshot and structural comparison; do not repeat unchanged live runs or tune safety/timeout limits."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-rejoin-audit-r701",
+      "baseline_commit": "b3613667",
+      "snapshot_ids": [
+        "20260913-nine-state-post-rejoin-seal-r702"
+      ],
+      "hypothesis": "Authenticated Rejoin handoff resumes normal publication; later Cruise programme/reservation loss may separately cause repeated braking and renewed Recovery.",
+      "changed_dimension": "Fresh committed single run and read-only same-run log/public chronology; no production change.",
+      "result": "accepted",
+      "reason": "Seal two post-Rejoin ranges with34late reserved outcomes, job1207=147.670ms and1773acceptedCruise overridden after stationary confirmation. Exact worker input absent; root cause of long proof remains a hypothesis. Explicit decimal windows exclude the earlier first positive packet.",
+      "production_impact": "None in this evidence slice; b3613667handoff maintained.",
+      "deleted_code": [],
+      "revisit_condition": "New complete post-Rejoin worker snapshot and structural comparison; do not repeat unchanged live runs or tune safety/timeout limits."
     }
   ]
 }

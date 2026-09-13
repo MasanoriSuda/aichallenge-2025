@@ -1,0 +1,192 @@
+{
+  "baseline": "b3613667",
+  "authority": false,
+  "run": "20260913-nine-state-single-r17",
+  "domain": 1,
+  "payload_sha256": {
+    "output/20260913-nine-state-recovery-live-audit-r699/generator.py": "4b1d2a2880d46c11fb46f5e7c271f4673c8424e7b5d21dd9624cb0e04597ee9d",
+    "output/20260913-nine-state-recovery-live-audit-r699/report.json": "82b2dadc0fe19548a9f1c053a66ab1068e296e8262255cb20535cb5f48fe815f",
+    "output/20260913-nine-state-recovery-public-r700/generator.py": "d56717635ad08d55f5e51f842ed368408498aaf6748db7dc7547f2c9b2d89d40",
+    "output/20260913-nine-state-recovery-public-r700/report.json": "8b27323d9bfec57f6b30ffb38ece4774c196d90e1d82a757c6ccef145370ccf1",
+    "output/20260913-nine-state-recovery-public-r700/d1.json": "0c45a20d6f2b98ff98d80e963b14081c57939fd57883cc6407939eb815c68377",
+    "output/20260913-nine-state-post-rejoin-audit-r701/generator.py": "f40986742032023380096b86a00469bb2ba88029e0ab0994089352af0cb5cb3b",
+    "output/20260913-nine-state-post-rejoin-audit-r701/report.json": "586275656953efebffe04c1d58aa429af5d31146d419ca365e19f98aef7e7b15"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "callback_samples": 4296,
+  "callback_max_ms": 26.410175,
+  "callback_over25": [
+    [
+      1009,
+      26.410175
+    ]
+  ],
+  "before_send_rejections": [
+    "[mpc_controller_cpp-10] [ERROR] [1789261147.073599919] [mpc_controller]: MPCC scheduled publication rejected: dispatch=863, job=860, index=0, nominal=9.824999826, decision_clock=9.829999780, before=9.854999779, deadline=9.849999826"
+  ],
+  "actual_post_send_violations": [],
+  "normal_publications": 856,
+  "last_normal_decision": 1772,
+  "trace_confirmed_rejoin_publications": [
+    {
+      "decision": 946,
+      "publication": {
+        "dispatch": 946,
+        "job": 945,
+        "source": 507,
+        "index": 0,
+        "nominal": 12.124999729,
+        "before": 12.134999728,
+        "after": 12.134999728,
+        "deadline": 12.149999729,
+        "programme_input": 3655418746890607937,
+        "physical_input": 1795807689268361054,
+        "independent": 1
+      },
+      "trace": "[mpc_controller_cpp-10] [INFO] [1789261149.356639669] [mpc_controller]: Overtake control decision: decision=946, episode=0, generation=0, target=<none>, side=0, phase=Idle, action=cruise, canonical_intent=cruise/cruise-during-race-session, lateral_owner=racing-line, longitudinal_owner=racing-line, path_source=racing-line, path_age=infs, speed_window=inf/inf/0.00, floor_request=0.00/adjusted=0, front=inf/safety=inf/protected=infm, closing_ref=infm/s, conflict=none, transition=\"no active vehicles\", block=\"none\", corridor_min=6.73@7.00m, wall_min=nanm, valid_until=0.00/0.00m, rear_clear=infm, wall_contract=inf/0.33m, wp_id=31, control_source=mpc-solution, actual=0.37m/s, command=0.37m/s/1.33m/s2/-0.05rad, published_steering=-0.07rad, published=1, solver=\"canonical-scheduled-program\", output=\"canonical-scheduled-rejoin-retained-published\", MPCC execution contract: decision=946, authority=certified-normal-solution, source=mpc-solution, intent=rejoin, formulation=velocity-steering-tire-body-progress-9state, problem=0x446e4df64b0b00e6, solution=507, plan=507, execution_certificate_decision=945, canonical_source=retained-certified, retained=1, identity=complete, canonical=satisfied, reason=matching-certified-solution, contract_join=1"
+    },
+    {
+      "decision": 1128,
+      "publication": {
+        "dispatch": 1128,
+        "job": 1127,
+        "source": 689,
+        "index": 0,
+        "nominal": 16.749999626,
+        "before": 16.764999625,
+        "after": 16.764999625,
+        "deadline": 16.774999626,
+        "programme_input": 7095398335429281840,
+        "physical_input": 15510907837702174346,
+        "independent": 1
+      },
+      "trace": "[mpc_controller_cpp-10] [INFO] [1789261154.177922384] [mpc_controller]: Overtake control decision: decision=1128, episode=0, generation=0, target=<none>, side=0, phase=Idle, action=cruise, canonical_intent=cruise/cruise-during-race-session, lateral_owner=racing-line, longitudinal_owner=racing-line, path_source=racing-line, path_age=infs, speed_window=inf/inf/0.00, floor_request=0.00/adjusted=0, front=inf/safety=inf/protected=infm, closing_ref=infm/s, conflict=none, transition=\"no active vehicles\", block=\"none\", corridor_min=6.73@5.00m, wall_min=nanm, valid_until=0.00/0.00m, rear_clear=infm, wall_contract=inf/0.32m, wp_id=33, control_source=mpc-solution, actual=0.01m/s, command=0.09m/s/1.33m/s2/0.02rad, published_steering=0.03rad, published=1, solver=\"canonical-scheduled-program\", output=\"canonical-scheduled-rejoin-retained-published\", MPCC execution contract: decision=1128, authority=certified-normal-solution, source=mpc-solution, intent=rejoin, formulation=velocity-steering-tire-body-progress-9state, problem=0x91f7068f34a985d3, solution=689, plan=689, execution_certificate_decision=1127, canonical_source=retained-certified, retained=1, identity=complete, canonical=satisfied, reason=matching-certified-solution, contract_join=1"
+    },
+    {
+      "decision": 1553,
+      "publication": {
+        "dispatch": 1553,
+        "job": 1552,
+        "source": 933,
+        "index": 0,
+        "nominal": 28.299999368,
+        "before": 28.314999367,
+        "after": 28.314999367,
+        "deadline": 28.324999368,
+        "programme_input": 9958265243278683250,
+        "physical_input": 5197689967750534124,
+        "independent": 1
+      },
+      "trace": "[mpc_controller_cpp-10] [INFO] [1789261165.729334284] [mpc_controller]: Overtake control decision: decision=1553, episode=0, generation=0, target=<none>, side=0, phase=Idle, action=cruise, canonical_intent=cruise/cruise-during-race-session, lateral_owner=racing-line, longitudinal_owner=racing-line, path_source=racing-line, path_age=infs, speed_window=inf/inf/0.00, floor_request=0.00/adjusted=0, front=inf/safety=inf/protected=infm, closing_ref=infm/s, conflict=none, transition=\"no active vehicles\", block=\"none\", corridor_min=6.73@6.00m, wall_min=nanm, valid_until=0.00/0.00m, rear_clear=infm, wall_contract=inf/0.32m, wp_id=32, control_source=mpc-solution, actual=0.22m/s, command=0.12m/s/1.33m/s2/-0.02rad, published_steering=-0.03rad, published=1, solver=\"canonical-scheduled-program\", output=\"canonical-scheduled-rejoin-retained-published\", MPCC execution contract: decision=1553, authority=certified-normal-solution, source=mpc-solution, intent=rejoin, formulation=velocity-steering-tire-body-progress-9state, problem=0xe2efc97ccd7ae801, solution=933, plan=933, execution_certificate_decision=1552, canonical_source=retained-certified, retained=1, identity=complete, canonical=satisfied, reason=matching-certified-solution, contract_join=1"
+    }
+  ],
+  "rejoin_completion_events": [
+    {
+      "line": 1714,
+      "text": "[mpc_controller_cpp-10] [INFO] [1789261155.878187309] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=rejoin_complete, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=17, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Forward, primitive=forward_right, steering=-0.250, course_guard=0, course_rejected=0, course_improvement=0.065 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.201 m, clear_forward=0.201 m, episode_distance=0.201 m, stopping_reserve=0.000 m, incident=1/8.25 s/0.201/0.000/0.201 m/0 retry/0 gear, runtime_motion=0.009/0.100 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=1, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.124 rad, e_y=0.437 m, e_psi=-0.117 rad"
+    },
+    {
+      "line": 2402,
+      "text": "[mpc_controller_cpp-10] [INFO] [1789261169.447426163] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=rejoin_complete, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=9, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Forward, primitive=forward_straight, steering=0.000, course_guard=0, course_rejected=0, course_improvement=0.039 m, stepwise=0, continuous=0, brake=0, adaptive_retry=1, contact_reduction=0, step=0/10, maneuver_distance=0.211 m, clear_forward=0.211 m, episode_distance=0.211 m, stopping_reserve=0.000 m, incident=1/21.82 s/1.676/1.264/0.412 m/1 retry/4 gear, runtime_motion=0.018/0.147 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=1, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.088 rad, e_y=0.483 m, e_psi=-0.100 rad"
+    }
+  ],
+  "maximum_public_velocity": {
+    "topic": "/vehicle/status/velocity_status",
+    "record_ns": 1789261153320447905,
+    "stamp_ns": 16099999640,
+    "v": 1.2041562795639038,
+    "vy": -0.04412311315536499,
+    "heading_rate": -0.28383970260620117
+  },
+  "frequencies": {
+    "/vehicle/status/velocity_status": {
+      "rows": 2917,
+      "scope_source_sec": [
+        3.0099999320000004,
+        105.06999765100001
+      ],
+      "source_hz": 28.571429209988537,
+      "median_source_period_sec": 0.034999999000000004,
+      "max_source_gap_sec": 0.035,
+      "nonpositive_source_steps": 0
+    },
+    "/vehicle/status/steering_status": {
+      "rows": 2917,
+      "scope_source_sec": [
+        3.0099999320000004,
+        105.06999765100001
+      ],
+      "source_hz": 28.571429209988537,
+      "median_source_period_sec": 0.034999999000000004,
+      "max_source_gap_sec": 0.035,
+      "nonpositive_source_steps": 0
+    },
+    "/sensing/imu/imu_raw": {
+      "rows": 2040,
+      "scope_source_sec": [
+        3.09999993,
+        105.04999765100001
+      ],
+      "source_hz": 20.000000447081913,
+      "median_source_period_sec": 0.049999999,
+      "max_source_gap_sec": 0.049999999,
+      "nonpositive_source_steps": 0
+    },
+    "/localization/kinematic_state": {
+      "rows": 5102,
+      "scope_source_sec": [
+        3.044999931,
+        105.08499765100001
+      ],
+      "source_hz": 49.99020103858936,
+      "median_source_period_sec": 0.02,
+      "max_source_gap_sec": 0.054999998,
+      "nonpositive_source_steps": 0
+    },
+    "/planning/scenario_planning/trajectory": {
+      "rows": 102,
+      "scope_source_sec": [
+        4.00499991,
+        105.004997652
+      ],
+      "source_hz": 1.000000022356436,
+      "median_source_period_sec": 0.9999999780000001,
+      "max_source_gap_sec": 1.004999978,
+      "nonpositive_source_steps": 0
+    },
+    "/control/command/control_cmd": {
+      "rows": 3723,
+      "scope_source_sec": [
+        3.0199999390000003,
+        105.089997651
+      ],
+      "source_hz": 36.465171778508015,
+      "median_source_period_sec": 0.029999934500000002,
+      "max_source_gap_sec": 0.059999999000000005,
+      "nonpositive_source_steps": 20
+    },
+    "/clock": {
+      "rows": 20418,
+      "scope_source_sec": [
+        3.004999932,
+        105.089997651
+      ],
+      "source_hz": 200.0000044688251,
+      "median_source_period_sec": 0.005,
+      "max_source_gap_sec": 0.005,
+      "nonpositive_source_steps": 0
+    }
+  },
+  "limitations": [
+    "No full immutable snapshot of the first post-Rejoin reserved job exists: existing failure buckets were consumed earlier. Cannot claim exact replay, cause of long computation, infeasibility or source-horizon rejection yet.",
+    "Other geometry/model and actual r80post-send timing failures remain separate. No Start/laps/fullrace acceptance.",
+    "Three trace-confirmed Rejoin sends is a lower bound because authority traces are selected; no assertion of exactly three Rejoin packets.",
+    "R701explicit decimal windows start just after the first positive packet in each recovery; their3positive counts exclude that earlier first packet and are not complete phase counts.",
+    "No gear topics were recorded; controller gear traces are partial evidence only."
+  ],
+  "next": "Capture the first reserved Cruise worker result after actual Rejoin with complete immutable request/source/current ledger/timing and each source-horizon/short-program proof outcome. Replay and compare programme/scheduling structures before a production fix; no longer timeout/reservation/grace or numerical tuning."
+}

@@ -8,6 +8,15 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Rejoin実送信後の検証結果（2026-09-13）
+
+b3613667のsingle-r17は認証済みRejoinを実送信し、通常Cruiseへの復帰を2回確認した。
+4296callback最大26.41ms、通常856件、実期限外送信ゼロ。送信前拒否863は元期限を維持する。
+その後のCruiseでは短い加速と制動を反復し、予約した後続証明が期限を超過。1773は
+通常認証後も停止確認でRecoveryが上書きし、最終SafeStopとなった。Start/周回は未達。
+この後続計算の完全入力が保存されていないため、限定した観測追加と構造比較を次に行う。
+[実走根拠と未解決境界](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/post-rejoin-source-audit.md)。
+
 ## Rejoin引き継ぎと非同期証明ID（2026-09-13）
 
 single-r16ではRejoin候補供給が再開し、952でsource528/job951の現在証明も受理したが、

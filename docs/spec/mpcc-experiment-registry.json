@@ -1603,6 +1603,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-course-publication-timing-evidence.json",
       "replay_ready": true,
       "reason": "Same-run first actual late normal2180, exact native selected-proof replay and clock receipt series; all failed diagnostics retained."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-renderer-seal-r811",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/renderer-clock-live-evidence.json",
+      "replay_ready": false,
+      "reason": "Same-run clock, command, velocity and source evidence; original interval still unavailable."
     }
   ],
   "experiments": [
@@ -20864,6 +20870,62 @@
       "production_impact": "No timing relaxation or authority change. Full-course acceptance failed.",
       "deleted_code": [],
       "revisit_condition": "Independent renderer/clock execution hypothesis on current source, or a supported whole-call temporal proof; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-renderer-live-audit-r807",
+      "baseline_commit": "b56ecdab",
+      "snapshot_ids": [
+        "20260913-nine-state-renderer-seal-r811"
+      ],
+      "hypothesis": "Rendering contributes to clustered clock execution; original interval failure precedes observation eligibility.",
+      "changed_dimension": "Unity batchmode/nographics only; original controller and safety conditions.",
+      "result": "accepted",
+      "reason": "Bounded diagnostic738normal, no actual late or callback25ms overrun; no race completion.",
+      "production_impact": "No production fix or canonical acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "A new actual interval capture boundary or controlled clock producer experiment; no unchanged repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-renderer-public-r808",
+      "baseline_commit": "b56ecdab",
+      "snapshot_ids": [
+        "20260913-nine-state-renderer-seal-r811"
+      ],
+      "hypothesis": "Rendering contributes to clustered clock execution; original interval failure precedes observation eligibility.",
+      "changed_dimension": "Unity batchmode/nographics only; original controller and safety conditions.",
+      "result": "accepted",
+      "reason": "Actual small reverse steering command and subsequent negative velocity, original sensor frequencies.",
+      "production_impact": "No production fix or canonical acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "A new actual interval capture boundary or controlled clock producer experiment; no unchanged repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-renderer-interval-replay-r809",
+      "baseline_commit": "b56ecdab",
+      "snapshot_ids": [
+        "20260913-nine-state-renderer-seal-r811"
+      ],
+      "hypothesis": "Rendering contributes to clustered clock execution; original interval failure precedes observation eligibility.",
+      "changed_dimension": "Unity batchmode/nographics only; original controller and safety conditions.",
+      "result": "inconclusive",
+      "reason": "First rejection before required moving predecessor; no interval capture.",
+      "production_impact": "No production fix or canonical acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "A new actual interval capture boundary or controlled clock producer experiment; no unchanged repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-renderer-publication-clock-r810",
+      "baseline_commit": "b56ecdab",
+      "snapshot_ids": [
+        "20260913-nine-state-renderer-seal-r811"
+      ],
+      "hypothesis": "Rendering contributes to clustered clock execution; original interval failure precedes observation eligibility.",
+      "changed_dimension": "Unity batchmode/nographics only; original controller and safety conditions.",
+      "result": "accepted",
+      "reason": "Same float32 clock grid, receipt distribution changes with no graphics; different paths preclude root-cause attribution.",
+      "production_impact": "No production fix or canonical acceptance.",
+      "deleted_code": [],
+      "revisit_condition": "A new actual interval capture boundary or controlled clock producer experiment; no unchanged repetition."
     }
   ]
 }

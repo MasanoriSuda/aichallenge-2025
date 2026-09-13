@@ -8,6 +8,18 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 描画診断と初回壁区間の観測境界（2026-09-13）
+
+single-r27の描画なし診断は通常738送信、4281callback最大24.392ms、実期限外送信ゼロ。
+時計の記録側受信間隔中央値5.001ms・最大14.327ms（標準描画r26は中央値0.574ms・
+最大296.983ms）。環境差への支持はあるが、経路・場面が異なり描画の原因確定ではない。
+Recoveryは後退25/前進3選択、小操舵−0.05radの指令と実負速度を確認。Rejoin送信2回、
+復帰完了・車両Start・周回はこのrunでは未達。壁区間拒否は初の通常移動記録より前に
+現れ、既存の観測範囲から外れていた。last_physicalは過去値の保持で、連続拒否を意味しない。
+次は先行通常移動を必須としない初回実クエリ観測へ置換し、原地図・元の判定を一致再生する。
+標準描画の送信期限問題と全コース・M4–M6は未完。
+[監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/renderer-clock-live-audit.md)。
+
 ## 全コース試行の実送信期限超過（2026-09-13）
 
 single-r26は実送信2180の期限超過で中止。721正常送信とは別に、期限外の通常指令1件と

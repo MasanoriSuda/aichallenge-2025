@@ -1639,6 +1639,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-course-current-audit-evidence.json",
       "replay_ready": true,
       "reason": "Exact current interval1263 and actual deadline8440 source/history/proof-route replay."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-render-cap-seal-r843",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/render-cap-live-evidence.json",
+      "replay_ready": true,
+      "reason": "Original reservation501/856, interval2163 and direction4164 retained with source/clock/ledger identity."
     }
   ],
   "experiments": [
@@ -21292,6 +21298,76 @@
       "production_impact": "No source change. Actual deadline unresolved; guarded interval result is correct.",
       "deleted_code": [],
       "revisit_condition": "Rendering-cap confound isolated by graphical200FPS diagnostic; do not repeat unchanged failed full-course or relax safety guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-render-cap-audit-r838",
+      "baseline_commit": "e8ec1e2c29b5f7136aba8953309a00c49bfc1372",
+      "snapshot_ids": [
+        "20260913-nine-state-render-cap-seal-r843"
+      ],
+      "hypothesis": "Original graphical60FPS cap contributes to FixedUpdate clock bursts; isolate it while retaining rendering.",
+      "changed_dimension": "Supported graphical --target-fps 200 only; all original controller/physical/clock/publication guards.",
+      "result": "inconclusive",
+      "reason": "4217callbacks no over25ms; no normal sends, vehicleStart/Rejoin/laps. Cannot test normal actual publication deadlines.",
+      "production_impact": "Diagnostic only. No default cap/clock/control policy promotion.",
+      "deleted_code": [],
+      "revisit_condition": "Exact original reservation source/ledger/time causal replay or justified producer change; do not repeat unchanged failed live."
+    },
+    {
+      "experiment_id": "20260913-nine-state-render-cap-public-r839",
+      "baseline_commit": "e8ec1e2c29b5f7136aba8953309a00c49bfc1372",
+      "snapshot_ids": [
+        "20260913-nine-state-render-cap-seal-r843"
+      ],
+      "hypothesis": "Original graphical60FPS cap contributes to FixedUpdate clock bursts; isolate it while retaining rendering.",
+      "changed_dimension": "Supported graphical --target-fps 200 only; all original controller/physical/clock/publication guards.",
+      "result": "accepted",
+      "reason": "Same-run public reverse movement and original source sensor/clock frequency retained.",
+      "production_impact": "Diagnostic only. No default cap/clock/control policy promotion.",
+      "deleted_code": [],
+      "revisit_condition": "Exact original reservation source/ledger/time causal replay or justified producer change; do not repeat unchanged failed live."
+    },
+    {
+      "experiment_id": "20260913-nine-state-render-cap-clock-r840",
+      "baseline_commit": "e8ec1e2c29b5f7136aba8953309a00c49bfc1372",
+      "snapshot_ids": [
+        "20260913-nine-state-render-cap-seal-r843"
+      ],
+      "hypothesis": "Original graphical60FPS cap contributes to FixedUpdate clock bursts; isolate it while retaining rendering.",
+      "changed_dimension": "Supported graphical --target-fps 200 only; all original controller/physical/clock/publication guards.",
+      "result": "accepted",
+      "reason": "Graphical200FPS clock receipt median5.004ms/max13.948ms vs standard60FPS0.600ms/max294.599ms; no future-bound claim.",
+      "production_impact": "Diagnostic only. No default cap/clock/control policy promotion.",
+      "deleted_code": [],
+      "revisit_condition": "Exact original reservation source/ledger/time causal replay or justified producer change; do not repeat unchanged failed live."
+    },
+    {
+      "experiment_id": "20260913-nine-state-render-cap-interval-r841",
+      "baseline_commit": "e8ec1e2c29b5f7136aba8953309a00c49bfc1372",
+      "snapshot_ids": [
+        "20260913-nine-state-render-cap-seal-r843"
+      ],
+      "hypothesis": "Original graphical60FPS cap contributes to FixedUpdate clock bursts; isolate it while retaining rendering.",
+      "changed_dimension": "Supported graphical --target-fps 200 only; all original controller/physical/clock/publication guards.",
+      "result": "accepted",
+      "reason": "Original interval2163 all147poses exact; normal expanded preferred footprint contacts occupied556811.",
+      "production_impact": "Diagnostic only. No default cap/clock/control policy promotion.",
+      "deleted_code": [],
+      "revisit_condition": "Exact original reservation source/ledger/time causal replay or justified producer change; do not repeat unchanged failed live."
+    },
+    {
+      "experiment_id": "20260913-nine-state-render-cap-direction-r842",
+      "baseline_commit": "e8ec1e2c29b5f7136aba8953309a00c49bfc1372",
+      "snapshot_ids": [
+        "20260913-nine-state-render-cap-seal-r843"
+      ],
+      "hypothesis": "Original graphical60FPS cap contributes to FixedUpdate clock bursts; isolate it while retaining rendering.",
+      "changed_dimension": "Supported graphical --target-fps 200 only; all original controller/physical/clock/publication guards.",
+      "result": "accepted",
+      "reason": "Both actual4164Recovery trials exact: physicalclear/courseworsening. Untried paths remain Unknown.",
+      "production_impact": "Diagnostic only. No default cap/clock/control policy promotion.",
+      "deleted_code": [],
+      "revisit_condition": "Exact original reservation source/ledger/time causal replay or justified producer change; do not repeat unchanged failed live."
     }
   ]
 }

@@ -8,6 +8,18 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 描画上限比較と予約採用の未達（2026-09-13）
+
+描画を保つ200FPS診断single-r31で、時計受信間隔は中央値5.004ms・最大13.948ms。
+標準r30の中央値0.600ms・最大294.599msとの差はフレーム上限の関与を支持するが、将来の上限ではない。
+4217callback最大23.941ms、通常送信0件。車両Start/Rejoin/周回は未達で、期限問題の修復とは判定しない。
+初期501とactive856は証明worker33.429/29.854ms、採用時刻が予約期限を約5ms超過。
+同時に履歴も更新済みなので、期限だけを唯一原因と断定せず、元の入力・世代・履歴を再生する。
+壁区間2163とRecovery4164は元の判定に完全一致。余裕込み壁接触とコース悪化を正しく拒否。
+次は役目を終えた壁区間observerを削除して1263の境界回帰を残し、予約生成・採用の時間と履歴を監査。
+無変更の走行を反復せず、25ms期限・物理条件・正常系の認証を維持。全コース/M4–M6は未完。
+[監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/render-cap-live-audit.md)。
+
 ## 現行全コースの実送信期限超過と壁区間再生（2026-09-13）
 
 single-r30は実送信8440の期限超過で中止。正常送信2420件とは別に失敗した通常送信1件を保持。

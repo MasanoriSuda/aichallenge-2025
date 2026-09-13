@@ -28,6 +28,7 @@
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp>
 #include <multi_purpose_mpc_ros/mpcc_recovery_direction_observation.hpp>
+#include <multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp>
 #include <multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp>
@@ -22485,6 +22486,62 @@ struct MPC
               interval = recovery_footprint::select_lateral_clear_interval(
                 runs, scalar_lower_m, scalar_upper_m, initial_frenet->lateral_m,
                 kInitialWallBoundaryGuardM);
+              if (!current_wall_interval_observation_attempted_ &&
+                behavior_override == nullptr && !mpcc_lite_async_worker_context_ &&
+                last_moving_normal_observation_ &&
+                last_moving_normal_observation_->decision_id < active_control_decision_id_ &&
+                !(interval.valid && interval.feasible && interval.preferred_lateral_contained &&
+                std::isfinite(interval.lower_lateral_offset_m) &&
+                std::isfinite(interval.upper_lateral_offset_m) &&
+                interval.lower_lateral_offset_m <= interval.upper_lateral_offset_m))
+              {
+                // Observe the original query once. No new scan, map copy, or
+                // authority decision; the unchanged predicate below owns it.
+                current_wall_interval_observation_attempted_ = true;
+                try {
+                  namespace observation = mpcc_current_wall_interval_observation;
+                  observation::Observation saved;
+                  saved.decision_id = active_control_decision_id_;
+                  saved.ros_sec = now_sec;
+                  saved.prior_moving_decision_id = last_moving_normal_observation_->decision_id;
+                  saved.prior_moving_pose_sec = last_moving_normal_observation_->pose_sec;
+                  saved.prior_moving_velocity_mps = last_moving_normal_observation_->forward_velocity_mps;
+                  saved.intent = static_cast<int>(problem_intent);
+                  saved.waypoint = current_waypoint;
+                  saved.grid = overtake_static_wall_grid_snapshot_owner_;
+                  saved.footprint = overtake_static_wall_footprint_;
+                  saved.temporal_pose = {model->temporal_state.x, model->temporal_state.y, model->temporal_state.psi};
+                  saved.reference_pose = {current_waypoint_pose.x, current_waypoint_pose.y, current_waypoint_pose.psi};
+                  saved.query_pose = {current_waypoint_pose.x + initial_lag_m * std::cos(current_waypoint_pose.psi),
+                    current_waypoint_pose.y + initial_lag_m * std::sin(current_waypoint_pose.psi), current_waypoint_pose.psi};
+                  saved.projected_lag_m = initial_frenet->lag_m;
+                  saved.projected_lateral_m = initial_frenet->lateral_m;
+                  saved.projected_heading_rad = initial_frenet->heading_offset_rad;
+                  saved.applied_lag_m = initial_lag_m;
+                  saved.spatial_lateral_m = model->spatial_state.e_y;
+                  saved.spatial_heading_rad = model->spatial_state.e_psi;
+                  saved.lower_m = scalar_lower_m; saved.upper_m = scalar_upper_m;
+                  saved.clearance_m = progress_execution_physical_wall_clearance_m;
+                  saved.sample_step_m = sample_step_m;
+                  saved.boundary_guard_m = kInitialWallBoundaryGuardM;
+                  saved.sampling_anchor = {initial_frenet->lateral_m-kInitialWallBoundaryGuardM,
+                    initial_frenet->lateral_m+kInitialWallBoundaryGuardM};
+                  observation::capture_result(saved, runs, interval);
+                  current_wall_interval_observation_future_ = std::async(std::launch::async,
+                    [saved = std::move(saved)]() {
+                      auto result = observation::record(saved);
+                      RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
+                        "Current wall interval observation: decision=%llu, status=%s, file=%s, detail=%s",
+                        static_cast<unsigned long long>(saved.decision_id),
+                        mpcc_architecture_snapshot::to_string(result.status),
+                        result.snapshot_file.string().c_str(), result.detail.c_str());
+                      return result;
+                    });
+                } catch (const std::exception & error) {
+                  RCLCPP_WARN(rclcpp::get_logger("mpc_controller"),
+                    "Current wall interval observation unavailable: %s", error.what());
+                }
+              }
             }
             if (
               interval.valid && interval.feasible && interval.preferred_lateral_contained &&
@@ -22503,6 +22560,9 @@ struct MPC
               detail << "current-physical-envelope-rejected/valid="
                      << (interval.valid ? 1 : 0)
                      << "/feasible=" << (interval.feasible ? 1 : 0)
+                     << "/preferred=" << (interval.preferred_lateral_contained ? 1 : 0)
+                     << "/selected=[" << interval.lower_lateral_offset_m << ','
+                     << interval.upper_lateral_offset_m << "]"
                      << "/bounds=[" << scalar_lower_m << ','
                      << scalar_upper_m << "]"
                      << "/lateral=" << model->spatial_state.e_y
@@ -31885,6 +31945,8 @@ struct MPC
   std::shared_ptr<mpcc_architecture_snapshot::FirstPublicationFailureRecorder> post_rejoin_reserved_recorder_;
   std::optional<mpcc_architecture_snapshot::ScheduledRejoinPublicationObservation> last_rejoin_publication_observation_;
   bool post_rejoin_reserved_recorded_{false};
+  bool current_wall_interval_observation_attempted_{false};
+  std::future<mpcc_architecture_snapshot::RecordResult> current_wall_interval_observation_future_;
   std::optional<mpcc_architecture_snapshot::PublishedNormalMotionObservation> last_moving_normal_observation_;
   std::shared_ptr<const mpcc_architecture_snapshot::PostMotionFinalLossObservation> post_motion_final_loss_;
   double normal_motion_observation_clock_sec_{std::numeric_limits<double>::quiet_NaN()};

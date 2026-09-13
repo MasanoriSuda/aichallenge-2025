@@ -8,6 +8,15 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 現在の物理壁区間の実入力観測（2026-09-13）
+
+現在の壁区間が拒否される最初の実入力を、通常走行の認証済み送信後に一度だけ保存する
+観測を追加。地図・姿勢・元の区間計算・preferred containmentを保持し、走行判断は維持。
+R793native220/source118、build140全26、package127全2658tests合格。
+次は固定commitのsingle-r25で実入力を取得し、元の地図・安全条件のまま一致再生する。
+壁区間の原因は未確定。車両Start・周回・全体M4–M6は未完。
+[設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-wall-interval-observation-design.md)。
+
 ## 壁補正後の単車実送信（2026-09-13）
 
 1648f338のsingle-r24は通常552送信、4267callback最大24.30ms、期限外送信ゼロ。

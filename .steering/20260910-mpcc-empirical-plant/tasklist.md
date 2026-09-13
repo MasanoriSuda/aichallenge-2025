@@ -713,3 +713,10 @@ See receiver-input-enclosure/rejoin-full-wall-feedback-design.md and validation.
 次は元の入力・地図・区間結果を一度だけ保存して再生し、生成元の原因を確定する。
 全安全条件を維持。小操舵の後退実行と全体M4–M6は未完。
 See receiver-input-enclosure/full-wall-feedback-live-audit.md and evidence.json.
+
+2026-09-13 R793–R794: 現在の壁区間が拒否される最初の実入力を、通常走行の認証済み送信後に一度だけ保存する
+観測を追加。地図・姿勢・元の区間計算・preferred containmentを保持し、走行判断は維持。
+R793native220/source118、build140全26、package127全2658tests合格。
+次は固定commitのsingle-r25で実入力を取得し、元の地図・安全条件のまま一致再生する。
+壁区間の原因は未確定。車両Start・周回・全体M4–M6は未完。
+See receiver-input-enclosure/current-wall-interval-observation-design.md and validation.json.

@@ -151,6 +151,7 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_adapter
 add_library(${PROJECT_NAME}_mpcc_architecture_snapshot STATIC
   src/mpcc_architecture_snapshot.cpp
   src/mpcc_recovery_direction_observation.cpp
+  src/mpcc_current_wall_interval_observation.cpp
 )
 target_include_directories(${PROJECT_NAME}_mpcc_architecture_snapshot PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

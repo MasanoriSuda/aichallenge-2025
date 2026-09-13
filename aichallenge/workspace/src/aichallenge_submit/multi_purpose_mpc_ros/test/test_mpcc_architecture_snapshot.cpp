@@ -5,6 +5,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_scheduled_failure_observation.hpp"
 #include "multi_purpose_mpc_ros/mpcc_recovery_direction_observation.hpp"
+#include "multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp"
 
 #include <gtest/gtest.h>
 
@@ -1846,6 +1847,133 @@ TEST(MpccArchitectureSnapshot, RecoveryDirectionOverflowCannotClaimCompleteEvide
   observation.grid.reset();
   EXPECT_EQ(direction::record(observation).status, RecordStatus::InvalidInput);
   std::filesystem::remove_all(observation.output_root);
+}
+
+namespace interval_observation = mpcc_current_wall_interval_observation;
+
+interval_observation::Observation current_interval_fixture(const double preferred)
+{
+  interval_observation::Observation o;
+  o.decision_id = 920; o.ros_sec = 12.0;
+  o.prior_moving_decision_id = 915; o.prior_moving_pose_sec = 11.85;
+  o.prior_moving_velocity_mps = 0.45;
+  auto grid = std::make_shared<recovery_footprint::OccupancyGrid>();
+  grid->width = 60; grid->height = 60; grid->resolution_m = 0.1;
+  grid->origin_x_m = -3.0; grid->origin_y_m = -3.0;
+  grid->y_axis = recovery_footprint::YAxisConvention::RowZeroAtMinimumY;
+  grid->cells.assign(3600, recovery_footprint::CellState::Free);
+  for (std::size_t i = 0; i < 60; ++i) {
+    grid->cells[30 * 60 + i] = recovery_footprint::CellState::Occupied;
+    grid->cells[45 * 60 + i] = recovery_footprint::CellState::Unknown;
+  }
+  o.grid = grid; o.footprint = {0.2, 0.2, 0.1, 0.1, 0.0};
+  o.lower_m = -2.0; o.upper_m = 2.0; o.clearance_m = 0.1;
+  o.sample_step_m = 0.05; o.boundary_guard_m = 0.001;
+  o.projected_lateral_m = preferred; o.temporal_pose = {0.0, preferred, 0.0};
+  o.sampling_anchor = {preferred - o.boundary_guard_m, preferred + o.boundary_guard_m};
+  const auto runs = recovery_footprint::find_clear_lateral_runs_with_heading(
+    *o.grid, o.footprint, o.query_pose, o.lower_m, o.upper_m,
+    o.projected_heading_rad, o.clearance_m, o.sample_step_m, o.sampling_anchor);
+  const auto selected = recovery_footprint::select_lateral_clear_interval(
+    runs, o.lower_m, o.upper_m, preferred, o.boundary_guard_m);
+  interval_observation::capture_result(o, runs, selected);
+  o.output_root = std::filesystem::temp_directory_path() /
+    ("mpcc-current-interval-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  return o;
+}
+
+TEST(MpccArchitectureSnapshot, CurrentWallIntervalRoundTripPreservesDisconnectedPreferredRejection)
+{
+  for (const double preferred : {0.0, -0.8}) {
+    auto o = current_interval_fixture(preferred);
+    ASSERT_TRUE(o.selected.valid); ASSERT_TRUE(o.selected.feasible);
+    ASSERT_EQ(o.selected.preferred_lateral_contained, preferred < 0.0);
+    ASSERT_GT(o.actual_run_count, 1U);
+    auto worker = std::async(std::launch::async, [o]() {return interval_observation::record(o);});
+    const auto saved = worker.get();
+    ASSERT_EQ(saved.status, RecordStatus::Written) << saved.detail;
+    const auto d = YAML::LoadFile(saved.snapshot_file.string());
+    ASSERT_EQ(d["schema"].as<std::string>(), "mpcc-current-wall-interval-observation/v1");
+    EXPECT_FALSE(d["authority"].as<bool>()); ASSERT_TRUE(d["complete"].as<bool>());
+    auto grid = *o.grid;
+    grid.cells.assign(grid.cells.size(), recovery_footprint::CellState::Unknown);
+    std::ifstream input(saved.snapshot_file.parent_path() / "wall-grid.bin", std::ios::binary);
+    for (auto & cell : grid.cells) {
+      std::int8_t value{}; ASSERT_TRUE(input.read(reinterpret_cast<char *>(&value), sizeof(value)));
+      cell = static_cast<recovery_footprint::CellState>(value);
+    }
+    EXPECT_EQ(grid.cells, o.grid->cells);
+    EXPECT_EQ(recovery_footprint::occupancy_grid_fingerprint(grid), d["grid"]["fingerprint"].as<std::uint64_t>());
+    const auto fp = d["footprint"].as<std::vector<double>>();
+    const auto pose = d["query_pose"].as<std::vector<double>>();
+    const auto bounds = d["bounds"].as<std::vector<double>>();
+    const auto projection = d["projection_lag_lateral_heading"].as<std::vector<double>>();
+    const auto anchor = d["sampling_anchor"].as<std::vector<double>>();
+    const auto runs = recovery_footprint::find_clear_lateral_runs_with_heading(
+      grid, {fp[0], fp[1], fp[2], fp[3], fp[4]}, {pose[0], pose[1], pose[2]},
+      bounds[0], bounds[1], projection[2], d["clearance_m"].as<double>(),
+      d["sample_step_m"].as<double>(), recovery_footprint::LateralClearRun{anchor[0], anchor[1]});
+    ASSERT_EQ(runs.clear_runs.size(), d["actual_run_count"].as<std::size_t>());
+    EXPECT_EQ(runs.checked_pose_count, d["checked_pose_count"].as<std::size_t>());
+    for (std::size_t i = 0; i < runs.clear_runs.size(); ++i) {
+      EXPECT_DOUBLE_EQ(runs.clear_runs[i].lower_lateral_offset_m, d["clear_runs"][i][0].as<double>());
+      EXPECT_DOUBLE_EQ(runs.clear_runs[i].upper_lateral_offset_m, d["clear_runs"][i][1].as<double>());
+    }
+    const auto selected = recovery_footprint::select_lateral_clear_interval(
+      runs, bounds[0], bounds[1], projection[1], d["boundary_guard_m"].as<double>());
+    EXPECT_EQ(selected.valid, d["selected"]["valid"].as<bool>());
+    EXPECT_EQ(selected.feasible, d["selected"]["feasible"].as<bool>());
+    EXPECT_EQ(selected.preferred_lateral_contained, d["selected"]["preferred_lateral_contained"].as<bool>());
+    EXPECT_DOUBLE_EQ(selected.lower_lateral_offset_m, d["selected"]["lower_m"].as<double>());
+    EXPECT_DOUBLE_EQ(selected.upper_lateral_offset_m, d["selected"]["upper_m"].as<double>());
+    EXPECT_EQ(selected.checked_pose_count, d["selected"]["checked_pose_count"].as<std::size_t>());
+    o.projected_lateral_m = 1.0;
+    EXPECT_EQ(interval_observation::record(o).status, RecordStatus::Duplicate);
+    EXPECT_DOUBLE_EQ(YAML::LoadFile(saved.snapshot_file.string())["projection_lag_lateral_heading"][1].as<double>(), preferred);
+    std::filesystem::remove_all(o.output_root);
+  }
+}
+
+TEST(MpccArchitectureSnapshot, CurrentWallIntervalOverflowCannotClaimCompleteQueryEvidence)
+{
+  auto o = current_interval_fixture(0.0);
+  recovery_footprint::LateralClearRunsResult runs;
+  runs.valid = true; runs.checked_pose_count = 100;
+  runs.clear_runs.assign(interval_observation::kMaximumClearRuns + 1U, {-1.0, 1.0});
+  interval_observation::capture_result(o, runs, o.selected);
+  const auto saved = interval_observation::record(o);
+  ASSERT_EQ(saved.status, RecordStatus::Written);
+  const auto d = YAML::LoadFile(saved.snapshot_file.string());
+  EXPECT_FALSE(d["complete"].as<bool>());
+  EXPECT_EQ(d["clear_runs"].size(), interval_observation::kMaximumClearRuns);
+  EXPECT_EQ(d["actual_run_count"].as<std::size_t>(), interval_observation::kMaximumClearRuns + 1U);
+  o.grid.reset();
+  EXPECT_EQ(interval_observation::record(o).status, RecordStatus::InvalidInput);
+  std::filesystem::remove_all(o.output_root);
+}
+
+TEST(MpccArchitectureSnapshot, CurrentWallIntervalInvalidOriginalBoundsRemainInvalidOnReplay)
+{
+  auto o = current_interval_fixture(0.0);
+  o.lower_m = 1.0; o.upper_m = -1.0;
+  const auto runs = recovery_footprint::find_clear_lateral_runs_with_heading(
+    *o.grid, o.footprint, o.query_pose, o.lower_m, o.upper_m, o.projected_heading_rad,
+    o.clearance_m, o.sample_step_m, o.sampling_anchor);
+  const auto selected = recovery_footprint::select_lateral_clear_interval(
+    runs, o.lower_m, o.upper_m, o.projected_lateral_m, o.boundary_guard_m);
+  ASSERT_FALSE(runs.valid); ASSERT_FALSE(selected.valid);
+  interval_observation::capture_result(o, runs, selected);
+  const auto saved = interval_observation::record(o);
+  ASSERT_EQ(saved.status, RecordStatus::Written);
+  const auto d = YAML::LoadFile(saved.snapshot_file.string());
+  EXPECT_FALSE(d["runs_valid"].as<bool>());
+  EXPECT_FALSE(d["selected"]["valid"].as<bool>());
+  EXPECT_EQ(d["clear_runs"].size(), 0U);
+  const auto replay = recovery_footprint::find_clear_lateral_runs_with_heading(
+    *o.grid, o.footprint, o.query_pose, d["bounds"][0].as<double>(), d["bounds"][1].as<double>(),
+    o.projected_heading_rad, o.clearance_m, o.sample_step_m, o.sampling_anchor);
+  EXPECT_FALSE(replay.valid);
+  std::filesystem::remove_all(o.output_root);
 }
 
 }  // namespace

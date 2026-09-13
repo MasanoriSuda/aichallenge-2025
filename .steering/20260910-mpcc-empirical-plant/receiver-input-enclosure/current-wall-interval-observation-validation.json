@@ -1,0 +1,136 @@
+{
+  "baseline": "cd93cec0",
+  "source_runtime": "single-r24/1648f338",
+  "authority": false,
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt": "34732a48bc87fbe39918e4474e4a5397889fe7ae51d3706fab49dfc50065da9b",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp": "6fa62252cf7807a3c88ad41d757cac770080b4b157fb143e11aeaabfe7212c48",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_current_wall_interval_observation.cpp": "1d578240695be6ea27a4e7defcfa43abe77990ff1577cd089cd3c6ae178ac51c",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "52a34d4f06efb35540d7481be4abf6042ae56c431328d61c9ece142f532a311b",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp": "4a21f82f1370d5c4bd16dae94d59f810a6554defec03d925d89cdef4038d065b"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-current-wall-interval-native-r793/test_mpcc_architecture_snapshot.log": "7aaa2d30180d8f22d73da83a3ab22ed792f57335f82607ab873ff86378e2010c",
+    "output/20260913-nine-state-current-wall-interval-native-r793/build-command.json": "f0f315d382a1904f3492c337fbc2971354ffc61653dfafe0800ecbf01d8115a5",
+    "output/20260913-nine-state-current-wall-interval-native-r793/test_recovery_footprint.xml": "134164644d4728421588a1fae365c5cefa382694e769d0a269e8ea48c2a251fd",
+    "output/20260913-nine-state-current-wall-interval-native-r793/test_mpcc_architecture_snapshot.xml": "7078ff2ebf46c787146a9d1fecc14c36cc869d0583e3019a06e08866d34b0554",
+    "output/20260913-nine-state-current-wall-interval-native-r793/test_mpcc_architecture_comparison.log": "d00d6c32f260c60e0b27fd100b3efec6f26a93e479bfb042436ff4a188f2d2a4",
+    "output/20260913-nine-state-current-wall-interval-native-r793/build.log": "b3e636ca64158d155d3ce68e0035e796c65f671dcef4885621bfa45e62dedd56",
+    "output/20260913-nine-state-current-wall-interval-native-r793/test_mpcc_rate_resolved_shadow.xml": "e4c7e38d2dd46f21098f1a65778926ecab30b87d18c77d7e25e3b2a8d837a9a6",
+    "output/20260913-nine-state-current-wall-interval-native-r793/test_mpcc_architecture_comparison.xml": "e453fb56b93ea3a9177668b3c40f716baa21c1a8b1862080eae14f1d38ac7ceb",
+    "output/20260913-nine-state-current-wall-interval-native-r793/CMakeLists.txt": "34732a48bc87fbe39918e4474e4a5397889fe7ae51d3706fab49dfc50065da9b",
+    "output/20260913-nine-state-current-wall-interval-native-r793/result.json": "0529c4b20c51332e97331551ed3a8b7d13283f5bd506486337fde1c23acb2dea",
+    "output/20260913-nine-state-current-wall-interval-native-r793/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-current-wall-interval-native-r793/runner.py": "a9f68b743898e8a802986504299c41693da4851d091918ec2dc2440be31e3edc",
+    "output/20260913-nine-state-current-wall-interval-native-r793/test_recovery_footprint.log": "fa9a7dcb4b65ed7ca69aad80563ddfac46af2d3d453802c30dc1df8ba9fc75f9",
+    "output/20260913-nine-state-current-wall-interval-native-r793/test_mpcc_rate_resolved_shadow.log": "20addfd28068ba2b187c8d66491f85de8fb6b7ac2197b59e2094c1abc6dc844f",
+    "output/20260913-nine-state-current-wall-interval-native-r793/test/test_mpcc_architecture_snapshot.cpp": "4a21f82f1370d5c4bd16dae94d59f810a6554defec03d925d89cdef4038d065b",
+    "output/20260913-nine-state-current-wall-interval-native-r793/include/multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp": "6fa62252cf7807a3c88ad41d757cac770080b4b157fb143e11aeaabfe7212c48",
+    "output/20260913-nine-state-current-wall-interval-native-r793/src/mpc_controller_cpp.cpp": "0200e5ee7bbc9cad164dcc767432337dd10b5f29832b35734afc191ee3fad3b2",
+    "output/20260913-nine-state-current-wall-interval-native-r793/src/mpcc_current_wall_interval_observation.cpp": "1d578240695be6ea27a4e7defcfa43abe77990ff1577cd089cd3c6ae178ac51c",
+    "output/20260913-nine-state-build140/status.json": "dfe91402720c96d845a1e7f10d31783e1ec55d0e51d4dfaae965dec08e41b20d",
+    "output/20260913-nine-state-build140/build.log": "e1775cde457e12c21c76187deac1f0885ad2541876cded85ce994ebce147d9bd",
+    "output/20260913-nine-state-build140/runner.py": "0c4c4002c6d06f55a734a97791ebfa3486acf46a7e2c885adc67ff872ecd174d",
+    "output/20260913-nine-state-build140/manifest.json": "23245b00e3710545aa00de6736f7142c37979b1efe48bc2e0fc650242cfa8fd7",
+    "output/20260913-nine-state-package127/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package127/test.log": "fd92831a891a1484df0ecc9d4937eab30c7434bc9819cb3372188cfe74821c3d",
+    "output/20260913-nine-state-package127/status.json": "0de19e57c8d051714e908093c1c3bf0023b1fbdf8be0e97b6e2707e4d05f968d",
+    "output/20260913-nine-state-package127/test-result.log": "4622c8946d126d37c700ad3fa6258eba50e6cfd5a78b7e762c814fe2608a37b4",
+    "output/20260913-nine-state-package127/runner.py": "5268f5720984367894c71a28f191186a86f1d950f61ce4ecdfc0a1ddd94aa7de"
+  },
+  "native_tests": [
+    {
+      "file": "test_recovery_footprint.xml",
+      "tests": "69",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "0.056",
+      "timestamp": "2026-09-13T14:58:40",
+      "name": "AllTests"
+    },
+    {
+      "file": "test_mpcc_architecture_snapshot.xml",
+      "tests": "32",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "0.589",
+      "timestamp": "2026-09-13T14:58:40",
+      "name": "AllTests"
+    },
+    {
+      "file": "test_mpcc_rate_resolved_shadow.xml",
+      "tests": "65",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "0.3",
+      "timestamp": "2026-09-13T14:58:40",
+      "name": "AllTests"
+    },
+    {
+      "file": "test_mpcc_architecture_comparison.xml",
+      "tests": "54",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "3.972",
+      "timestamp": "2026-09-13T14:58:36",
+      "name": "AllTests"
+    }
+  ],
+  "source_tests": 118,
+  "build": {
+    "return_code": 0,
+    "elapsed_sec": 252.82464540901128,
+    "sources_unchanged": true
+  },
+  "package": {
+    "results": [
+      {
+        "command": [
+          "colcon",
+          "test",
+          "--packages-select",
+          "multi_purpose_mpc_ros",
+          "--return-code-on-test-failure",
+          "--event-handlers",
+          "console_direct+"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 44.96582662203582
+      },
+      {
+        "command": [
+          "colcon",
+          "test-result",
+          "--verbose",
+          "--test-result-base",
+          "build/multi_purpose_mpc_ros"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 1.9029082040069625
+      }
+    ],
+    "all_pass": true
+  },
+  "package_tests": 2658,
+  "original_controller_identical_after_removing_declared_diagnostic_additions": true,
+  "review": [
+    "Only live ordinary init_problem with authenticated prior moving decision can record; no hypothetical behavior override or clone.",
+    "One owner-held future, immutable shared grid, fixed32scalar run storage and explicit incomplete overflow. No new scan/map copy/hash/IO on callback.",
+    "Original interval query, preferred containment and final wall/dynamic/Stop/publication conditions unchanged; new log fields expose original result.",
+    "R793 saved sources precede final behavior_override null restriction; final build140/source118/package127 verify the final exact source hashes."
+  ],
+  "limits": [
+    "This repairs missing evidence, not a proven interval algorithm defect. No old behavioral failure claimed.",
+    "Runtime capture and replay still required in single-r25; retire observer after supported producer regression/fix or if declared scenario is not observed.",
+    "M4–M6 and prior physical/timing concerns remain open."
+  ]
+}

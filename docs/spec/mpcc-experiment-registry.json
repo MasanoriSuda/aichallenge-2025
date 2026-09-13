@@ -1585,6 +1585,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-wall-feedback-live-evidence.json",
       "replay_ready": true,
       "reason": "Fixed1648f338 single-r24 full authority/public evidence and actual post-motion source failures. Late physical interval query still missing."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-current-wall-interval-validation-r794",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-wall-interval-observation-validation.json",
+      "replay_ready": true,
+      "reason": "Bounded original-query recording tests/build/package; live actual interval remains to capture."
     }
   ],
   "experiments": [
@@ -20678,6 +20684,34 @@
       "production_impact": "No additional control change; integrated race incomplete.",
       "deleted_code": [],
       "revisit_condition": "New exact producer observation/fix or newly eligible scene, no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-current-wall-interval-native-r793",
+      "baseline_commit": "cd93cec0",
+      "snapshot_ids": [
+        "20260913-nine-state-current-wall-interval-validation-r794"
+      ],
+      "hypothesis": "Late current-envelope rejection lacks the exact preferred interval query/result required for causal replay.",
+      "changed_dimension": "One first actual query observation with immutable grid and original compact result; no query or control change.",
+      "result": "accepted",
+      "reason": "Native220/source118 pass: original saved map/results reproduce disconnected rejected preferred, clear preferred, invalid bounds; incomplete overflow/duplicate preservation.",
+      "production_impact": "Observation only. No solver, bound, margin, authority or timing-rule change.",
+      "deleted_code": [],
+      "revisit_condition": "Actual same-run capture permits deterministic producer replay; remove observer after supported fix/regression or if declared scenario is absent."
+    },
+    {
+      "experiment_id": "20260913-nine-state-current-wall-interval-validation-r794",
+      "baseline_commit": "cd93cec0",
+      "snapshot_ids": [
+        "20260913-nine-state-current-wall-interval-validation-r794"
+      ],
+      "hypothesis": "Late current-envelope rejection lacks the exact preferred interval query/result required for causal replay.",
+      "changed_dimension": "One first actual query observation with immutable grid and original compact result; no query or control change.",
+      "result": "accepted",
+      "reason": "Final source118/build140all26/package127all2658; controller original text recovered by removing declared diagnostic additions. No live capture yet.",
+      "production_impact": "Observation only. No solver, bound, margin, authority or timing-rule change.",
+      "deleted_code": [],
+      "revisit_condition": "Actual same-run capture permits deterministic producer replay; remove observer after supported fix/regression or if declared scenario is absent."
     }
   ]
 }

@@ -8,6 +8,16 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 壁補正後の単車実送信（2026-09-13）
+
+1648f338のsingle-r24は通常552送信、4267callback最大24.30ms、期限外送信ゼロ。
+壁補正1回を経て認証されたsource785から3送信を確認。Rejoin送信2件以上、復帰完了なし。
+ゲームStart成立、車両Start・周回は未達。後半は現在の物理的な横幅区間が採用されず、
+停止コース形状が欠落する。現ログはpreferred containmentと実区間を欠くため、
+次は元の入力・地図・区間結果を一度だけ保存して再生し、生成元の原因を確定する。
+全安全条件を維持。小操舵の後退実行と全体M4–M6は未完。
+[監査・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-wall-feedback-live-audit.md)。
+
 ## 完全壁検証を既存の数値補正へ接続（2026-09-13）
 
 完全な壁検証で将来の軌道接触を検出し、元の最大3回内で数値補正を続ける修正を実装。

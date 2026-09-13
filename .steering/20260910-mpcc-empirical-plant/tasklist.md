@@ -705,3 +705,11 @@ Rejoin537/656の認証が成立し、追加3場面の元の拒否を保持。bui
 package126は2655tests合格。次は固定commitのsingle-r24で計算・送信時刻とRejoinを確認。
 全体・車両Start・周回・M4–M6は未完。
 See receiver-input-enclosure/rejoin-full-wall-feedback-design.md and validation.json.
+
+2026-09-13 R789–R792: 1648f338のsingle-r24は通常552送信、4267callback最大24.30ms、期限外送信ゼロ。
+壁補正1回を経て認証されたsource785から3送信を確認。Rejoin送信2件以上、復帰完了なし。
+ゲームStart成立、車両Start・周回は未達。後半は現在の物理的な横幅区間が採用されず、
+停止コース形状が欠落する。現ログはpreferred containmentと実区間を欠くため、
+次は元の入力・地図・区間結果を一度だけ保存して再生し、生成元の原因を確定する。
+全安全条件を維持。小操舵の後退実行と全体M4–M6は未完。
+See receiver-input-enclosure/full-wall-feedback-live-audit.md and evidence.json.

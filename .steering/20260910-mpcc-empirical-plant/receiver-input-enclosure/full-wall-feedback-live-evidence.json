@@ -1,0 +1,1126 @@
+{
+  "authority": false,
+  "baseline": "1648f338",
+  "run_id": "20260913-nine-state-single-r24",
+  "source_and_binary_unchanged": true,
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-full-wall-live-audit-r789/generator.py": "e935d39a749e0d76cdc54a4d5133d03a6798fe4d18b238adaf8d3a3beb705207",
+    "output/20260913-nine-state-full-wall-live-audit-r789/report.json": "8b4936695bd13686fef9796539f2f3aa806c967b548928b6cf00e2edcbd00ec3",
+    "output/20260913-nine-state-full-wall-public-r790/generator.py": "9ab5c6e18d50f0e54dfd39cc0557bd4c86d8fddf40b40f36038818b321e90a4a",
+    "output/20260913-nine-state-full-wall-public-r790/report.json": "68d0ce24faf4185133d87ca474483acd9a35e4a6de1768294c927b8aa17d9682",
+    "output/20260913-nine-state-full-wall-public-r790/d1.json": "59eeb1314f2eacbc0151d3d46c2b6a733d5636a065db4682f4d3006254c56776",
+    "output/20260913-nine-state-rejoin-r24-source-inputs-r791/generator.py": "cdac678d3ade5b2ed76aa12869be9d36025604df9f97d078cd351f92dd980a20",
+    "output/20260913-nine-state-rejoin-r24-source-inputs-r791/report.json": "ad0e14ec1fd537ef6bbaea2cfa1e94c1cc3e0bf1130f1f4c04e20a010f9bee69",
+    "output/20260913-nine-state-single-r24/manifest.json": "3ce5690d11dd4eac30e1ed93e29c8f9556c97bc71760dc0b5caa4b3b6bb44554",
+    "output/20260913-nine-state-single-r24/monitor-summary.json": "21e0bee64250b2f6604adbf9a5d7855710c3a20144da05a1d022469411f9f7f2",
+    "output/20260913-nine-state-single-r24/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-single-r24/unity-player.log": "f24526789af590594e5d7f1f1bc9654f02df4bb346ad057187314b9e12357540",
+    "output/20260913-nine-state-single-r24/d1/autoware.log": "402f6c063ad581b763c4934b6fbf7cc444010dbbb23de889c1431389acaca631",
+    "output/20260913-nine-state-single-r24/run_campaign.py": "cb8a1cfa083423eede685612c14de2f9569263f109680d8991a76eaf4c9648b6",
+    "output/20260913-nine-state-single-r24/build.log": "559b912cb187d44d0061ab87eb6134a2e4506b4e1568b38f5d4799bbf0f33ac7",
+    "output/20260913-nine-state-single-r24/package.log": "244c11dbf73c2a5ba6f9bff155a69721dc5cbbda4ba0d96a1c505ff4675d2983",
+    "output/20260913-nine-state-single-r24/dev-six-lap.sh": "e65aa1717b2138349551faa710a50a58539a1b6ed5c3cdcf9502a19dcf355479",
+    "output/20260913-nine-state-single-r24/compose-six-lap.yml": "56be8cd50761de8b1aec7d7229ed6530503d9c85382f2e0f07d3f402c3785ff2",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000515-pre-stationary/snapshot.yaml": "e9de547fdff4efc8b96a0baaa214334c99104c20df678410667cb460d3f8051e",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000515-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000515-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000515-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000509-pre-stationary/snapshot.yaml": "dbccdadaadd32bef6a18b50c8c974f1c110ea7d11c86a50dafa44bb88cc56413",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000509-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000509-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000509-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000837-c32b5b00fdf68c31-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "d2ed6ff4acdfa32f4c05008690bae5c1aef13db8d567e70db605c3e674fcd88e",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000837-c32b5b00fdf68c31-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000529-a2072582937cf1a2-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "9b8b5b14bfe3472c0910a9606c5eefec9cd0d10cb16c6da55744a39f845fd706",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000529-a2072582937cf1a2-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000946-pre-moving/snapshot.yaml": "ad985ae125563f6df7a9c54b1be63121c977684dcb6a0c5ad39bb803f34a144c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000946-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000946-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000946-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000946-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000946-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000946-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000000949-pre-stationary/snapshot.yaml": "2526ffea3cb8f866ebd7a0117a30101dcee6507674c4c71fcc3a2ed455beab74",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000797-pre-stationary/snapshot.yaml": "5dad950233be0038074da1760f357637a7b3e20cdbbd05a044795d4f5654e3ff",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000797-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000797-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000797-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000797-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000797-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000797-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000946-pre-moving/snapshot.yaml": "88bebbce407ec44b08fd9f5acb538be9b4b19624400d69353223427767d10a3d",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/due/after-normal-motion/publication-000000000949-pre-stationary/snapshot.yaml": "2526ffea3cb8f866ebd7a0117a30101dcee6507674c4c71fcc3a2ed455beab74",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000797-pre-stationary/snapshot.yaml": "556e3a2121115671c7173b004eb3dd030d5419605f1cf9cfd8a66c689ed1bb63",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000926-pre-moving/snapshot.yaml": "53c3d9744a676040cf3dc9c596ef4b31823a13e6611b6fc45e6919a9d0399736",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000926-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000926-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000926-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000639-a74c33f559367e52-rejoin-side-neutral-initial-solve-rejected/snapshot.yaml": "0c5c547b24e1d5ba1565e5a3b675bd9f886bf219ac50616b3db94d958f90a9df",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000639-a74c33f559367e52-rejoin-side-neutral-initial-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000851-pre-moving/snapshot.yaml": "1ccc88848347b7301706c9c13e88629c9f65ef9294128224edcb18d79304651e",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000851-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000851-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000851-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000851-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000851-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000851-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000793-65dbb7629d36898e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml": "98aab4d64d660dbd76773755d972432bdf5fdd0e7f21835a5973755cb6349eb7",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000793-65dbb7629d36898e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000837-c32b5b00fdf68c31-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "d2ed6ff4acdfa32f4c05008690bae5c1aef13db8d567e70db605c3e674fcd88e",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000837-c32b5b00fdf68c31-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000639-a74c33f559367e52-rejoin-side-neutral-initial-solve-rejected/snapshot.yaml": "0c5c547b24e1d5ba1565e5a3b675bd9f886bf219ac50616b3db94d958f90a9df",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000639-a74c33f559367e52-rejoin-side-neutral-initial-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000793-65dbb7629d36898e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml": "98aab4d64d660dbd76773755d972432bdf5fdd0e7f21835a5973755cb6349eb7",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000793-65dbb7629d36898e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000717-04283db40908aaba-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "70629f79a916f1e2249ad90d46696732bfbcd7a38c0847927bfc97d1a6dd6c08",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000717-04283db40908aaba-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000920-pre-moving/snapshot.yaml": "7fda6deb520feabca365546d4f6ebc6207a1a30f04f671e083272508bc39f55a",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000920-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000920-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000920-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000797-pre-stationary/snapshot.yaml": "380551c119a3ecd8a9ad195f146330953463b7ac92b5b343ad3b5745b052c89b",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000797-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000797-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000797-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000797-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000797-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000797-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-startup/active/publication-000000000506-pre-stationary/snapshot.yaml": "46fec6b44974dde382f643171d238f5a8ab5123eaf3d8e1217a3a4ed7f9920d4",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/scheduled-final-startup/due/publication-000000000506-pre-stationary/snapshot.yaml": "46fec6b44974dde382f643171d238f5a8ab5123eaf3d8e1217a3a4ed7f9920d4",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000717-04283db40908aaba-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "70629f79a916f1e2249ad90d46696732bfbcd7a38c0847927bfc97d1a6dd6c08",
+    "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/000000000717-04283db40908aaba-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+  },
+  "log": {
+    "publication_rejections": [],
+    "callback_samples": 4267,
+    "callback_max_ms": 24.299706,
+    "callback_over25": [],
+    "scheduled_publications": 552,
+    "last_publication": {
+      "dispatch": 1226,
+      "job": 1222,
+      "source": 957,
+      "index": 1,
+      "nominal": 18.764999608,
+      "before": 18.76999958,
+      "after": 18.76999958,
+      "deadline": 18.789999608,
+      "programme_input": 17560283486941623662,
+      "physical_input": 17896896399694180094,
+      "independent": 1
+    },
+    "window_violations": [],
+    "states": [
+      "spawned",
+      "grounded",
+      "ready"
+    ],
+    "post_motion_pairs": 1,
+    "post_motion_decisions": [
+      949
+    ],
+    "last_source_supply": "[mpc_controller_cpp-10] [INFO] [1789278518.126357416] [mpc_controller]: MPCC source supply: decision=4236, now=103.774997680, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=18413909542055781346, normal_submitted=1363/rejected:2368, worker=1363/1193/1193/running:0/pending:0/exceptions:0, mailbox=2436/2435/invalid:0, store=983/accepted:467/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:terminal Stop course geometry unavailable/nominal=21/inputs=20/horizon=20/wall_progress=0/wall_lower=0/wall_upper=0/wall_refinement=0/wall_diagnostic=current-physical-envelope-rejected/valid=1/feasible=1/bounds=[-4.78017,2.08087]/lateral=0.926355/heading=0.0401562, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=8157/decision:4236/site:apply_stuck_recovery_arbitration, mailbox_result=build-rejected/geometry:18413909542055781346/detail:native initializer population identity/physical source/owners unavailable, authority=observation-only",
+    "actual_post_send_window_violations": [],
+    "rejoin_completion_events": [],
+    "incomplete_v2x_overrides": [],
+    "laps": [],
+    "game_state_transitions": [
+      "PlayStart",
+      "Ready",
+      "WaitStart",
+      "Start",
+      "Terminate"
+    ],
+    "game_start_observed": true,
+    "preparation_source_traces": [
+      "[mpc_controller_cpp-10] [INFO] [1789278428.721193733] [mpc_controller]: MPCC source supply: decision=1050, now=14.359999679, draft=available, scheduled=submitted, successor=normal-submitted, plans=2/contexts_rejected:0/requests:2, geometry=7297210173200458920, normal_submitted=461/rejected:84, worker=461/431/430/running:1/pending:1/exceptions:0, mailbox=632/625/invalid:0, store=625/accepted:430/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=2/0/0, generation_rejected=0/invalid:0, invalidation=1303/decision:1027/site:reference-path-mutation, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=steering-before-drive/attempts=1/total_ms=45.519421/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=17.4395m, complete_wall_feedback=accepted/stage=-1/corrections=0, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1596/cache_hits=14/cache_misses=6/cache_scanned=475/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requested, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789278429.746243906] [mpc_controller]: MPCC source supply: decision=1091, now=15.384999656, draft=available, scheduled=scheduled-busy, successor=normal-submitted, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=502/rejected:84, worker=502/442/441/running:1/pending:1/exceptions:0, mailbox=714/701/invalid:0, store=701/accepted:441/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1303/decision:1027/site:reference-path-mutation, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=steering-before-drive/attempts=1/total_ms=80.548720/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=16.0815m, complete_wall_feedback=accepted/stage=-1/corrections=1, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1736/cache_hits=0/cache_misses=20/cache_scanned=1736/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requeste, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789278430.783176724] [mpc_controller]: MPCC source supply: decision=1132, now=16.409999633, draft=available, scheduled=scheduled-busy, successor=normal-submitted, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=543/rejected:84, worker=543/451/450/running:1/pending:1/exceptions:0, mailbox=796/785/invalid:0, store=785/accepted:450/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1303/decision:1027/site:reference-path-mutation, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=steering-before-drive/attempts=1/total_ms=99.318021/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=16.0688m, complete_wall_feedback=accepted/stage=-1/corrections=1, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1740/cache_hits=5/cache_misses=15/cache_scanned=1305/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requeste, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789278433.804263086] [mpc_controller]: MPCC source supply: decision=1250, now=19.449999565, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=3957399223715686782, normal_submitted=637/rejected:108, worker=637/467/467/running:0/pending:0/exceptions:0, mailbox=984/983/invalid:0, store=983/accepted:467/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1679/decision:1250/site:apply_stuck_recovery_arbitration, mailbox_result=solved/geometry:3957399223715686782/detail:native-initialization/policy=steering-before-drive/attempts=1/total_ms=124.743029/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=17.2077m, complete_wall_feedback=accepted/stage=-1/corrections=1, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1607/cache_hits=7/cache_misses=13/cache_scanned=1037/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/request, authority=observation-only"
+    ],
+    "maneuver_selections": [
+      "[mpc_controller_cpp-10] [INFO] [1789278426.286923643] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=front, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.017 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=0",
+      "[mpc_controller_cpp-10] [INFO] [1789278427.236046733] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=front, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.007 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=0",
+      "[mpc_controller_cpp-10] [INFO] [1789278433.487717002] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=front, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.015 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=0",
+      "[mpc_controller_cpp-10] [INFO] [1789278440.137660658] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=front, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.015 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=1",
+      "[mpc_controller_cpp-10] [INFO] [1789278446.421578012] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.014 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=1",
+      "[mpc_controller_cpp-10] [INFO] [1789278447.572245406] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.005 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=1",
+      "[mpc_controller_cpp-10] [INFO] [1789278449.089490097] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.015 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=2",
+      "[mpc_controller_cpp-10] [INFO] [1789278455.271791060] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.009 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=2",
+      "[mpc_controller_cpp-10] [INFO] [1789278456.672262622] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.035 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=2"
+    ],
+    "recovery_direction_records": [],
+    "actual_rejoin_lower_bound": [
+      {
+        "decision": 1038,
+        "publication": {
+          "dispatch": 1038,
+          "job": 1037,
+          "source": 599,
+          "index": 0,
+          "nominal": 14.054999686,
+          "before": 14.064999685,
+          "after": 14.064999685,
+          "deadline": 14.079999686,
+          "programme_input": 1256016562051877775,
+          "physical_input": 8672713355478702927,
+          "independent": 1
+        }
+      },
+      {
+        "decision": 1177,
+        "publication": {
+          "dispatch": 1177,
+          "job": 1176,
+          "source": 868,
+          "index": 0,
+          "nominal": 17.539999608,
+          "before": 17.549999607,
+          "after": 17.549999607,
+          "deadline": 17.564999608,
+          "programme_input": 16171400880099930895,
+          "physical_input": 13321209248086125174,
+          "independent": 1
+        }
+      }
+    ]
+  },
+  "feedback_source785": {
+    "source_trace": "[mpc_controller_cpp-10] [INFO] [1789278430.783176724] [mpc_controller]: MPCC source supply: decision=1132, now=16.409999633, draft=available, scheduled=scheduled-busy, successor=normal-submitted, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=543/rejected:84, worker=543/451/450/running:1/pending:1/exceptions:0, mailbox=796/785/invalid:0, store=785/accepted:450/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1303/decision:1027/site:reference-path-mutation, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=steering-before-drive/attempts=1/total_ms=99.318021/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=16.0688m, complete_wall_feedback=accepted/stage=-1/corrections=1, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1740/cache_hits=5/cache_misses=15/cache_scanned=1305/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requeste, authority=observation-only",
+    "actual_publications": [
+      "[mpc_controller_cpp-10] [INFO] [1789278431.272448161] [mpc_controller]: MPCC scheduled publication: dispatch=1152, job=1149, source=785, index=0, nominal=16.904999686, before=16.914999621, after=16.914999621, deadline=16.929999686, programme_input=15927909363168520605, physical_input=9214939866527029833, independent=1, starting_domain=1, guard_end=16.914999621, raw_end=16.914999621, call_wall_ms=0.000712/0.016711/0.073417",
+      "[mpc_controller_cpp-10] [INFO] [1789278431.288917170] [mpc_controller]: MPCC scheduled publication: dispatch=1153, job=1149, source=785, index=1, nominal=16.929999686, before=16.934999621, after=16.934999621, deadline=16.954999686, programme_input=15927909363168520605, physical_input=3138490015182887548, independent=1, starting_domain=1, guard_end=16.934999621, raw_end=16.934999621, call_wall_ms=0.000662/0.007354/0.142757",
+      "[mpc_controller_cpp-10] [INFO] [1789278431.320961324] [mpc_controller]: MPCC scheduled publication: dispatch=1154, job=1149, source=785, index=2, nominal=16.954999686, before=16.964999620, after=16.964999620, deadline=16.979999686, programme_input=15927909363168520605, physical_input=13976774904418249469, independent=1, starting_domain=1, guard_end=16.964999620, raw_end=16.964999620, call_wall_ms=0.000441/0.005661/0.192921"
+    ],
+    "interpretation": "Same mailbox latest-published/store sequence785 and result detail; subsequent actual source785 sends. Inner feedback is not publication authority."
+  },
+  "public": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r24",
+    "domain": 1,
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r24/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "5bbe6fb9530c7327fbbd425d1beb63c72c84fda335f9e3e924bcc0c203de7e1a"
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 2904,
+        "scope_source_sec": [
+          3.0099999320000004,
+          104.614997661
+        ],
+        "source_hz": 28.57142921003608,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 2904,
+        "scope_source_sec": [
+          3.0099999320000004,
+          104.614997661
+        ],
+        "source_hz": 28.57142921003608,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 2031,
+        "scope_source_sec": [
+          3.09999993,
+          104.599997662
+        ],
+        "source_hz": 20.00000044689656,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 5079,
+        "scope_source_sec": [
+          3.064999931,
+          104.62499766100001
+        ],
+        "source_hz": 50.00000111756599,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.030000000000000002,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 101,
+        "scope_source_sec": [
+          4.00499991,
+          104.00499767500001
+        ],
+        "source_hz": 1.0000000223500005,
+        "median_source_period_sec": 0.9999999780000001,
+        "max_source_gap_sec": 1.004999977,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 3678,
+        "scope_source_sec": [
+          3.0149999370000002,
+          104.62499766100001
+        ],
+        "source_hz": 36.187383942156146,
+        "median_source_period_sec": 0.029999999000000003,
+        "max_source_gap_sec": 0.039999999,
+        "nonpositive_source_steps": 21
+      },
+      "/clock": {
+        "rows": 20322,
+        "scope_source_sec": [
+          3.019999932,
+          104.62499766100001
+        ],
+        "source_hz": 200.00000447025255,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "rows": 37019,
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789278425169548506,
+      "stamp_ns": 10814999758,
+      "v": 1.0768520832061768,
+      "vy": 0.026911497116088867,
+      "heading_rate": 0.16325177252292633
+    },
+    "limits": [
+      "Source and recorder receipt separate; controller receipt requires this run immutable captures.",
+      "Heading rate is not IMU body yaw rate. Only angular.z supplies body r.",
+      "ROS topics describe public state; no direct force/contact/receiver application instrumentation in this run.",
+      "Frequencies cover the complete recorded source-time range per topic, including startup; no completed race inferred."
+    ]
+  },
+  "saved_sources": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r24",
+    "baseline_commit": "1648f338c9001d9c5b3c0cbb22166e709b6a118f",
+    "actual_final_decisions": [
+      949
+    ],
+    "rows": [
+      {
+        "path": "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000639-a74c33f559367e52-rejoin-side-neutral-initial-solve-rejected/snapshot.yaml",
+        "source_sequence": 639,
+        "source_snapshot_sec": 14.459999676,
+        "source_control_decision_id": 1054,
+        "policy": 2,
+        "tag": {
+          "schema": "mpcc-post-motion-final-loss/v1",
+          "authority": false,
+          "status": "valid",
+          "final_decision_id": 949,
+          "final_clock_sec": 11.539999742,
+          "moving_decision_id": 944,
+          "moving_pose_sec": 11.384999745,
+          "moving_forward_velocity_mps": 0.187836691737175,
+          "actual_moving_publication": {
+            "sequence": 944,
+            "nominal_wire_acceleration_wire_steering_before_after": [
+              11.399999819,
+              1.329595923423767,
+              0.18643048405647278,
+              11.414999744,
+              11.414999744
+            ],
+            "recorded_publication_sec": 11.414999744,
+            "source_job_solution_problem_input_index": [
+              941,
+              575,
+              14189326610258030378,
+              15765426155993337910,
+              0
+            ]
+          }
+        },
+        "interaction_fingerprint": 12055067431420722770,
+        "pipeline_stage": "initial",
+        "failure_outcome": "solve-rejected",
+        "failure_detail": "stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000507824, dua_res=0.0134277, failed_iterate_row=210, value=-0.000507824, bounds=[0,2], violation=0.000507824, tolerance=0.00100051, normalized=0.507566, row_semantic=state-box/stage=2/element=3, first_vtheta=coupled/inconclusive/declared:[0,2]/implied:[0,2]/limit_state:[-1,-1]",
+        "exact_qp_available": true,
+        "warm_start_fields": [
+          "available",
+          "primal",
+          "dual"
+        ],
+        "observation": {
+          "pose_source_sec": 14.449999677,
+          "velocity_source_sec": 14.419999677,
+          "yaw_rate_source_sec": 14.449999677,
+          "tire_source_sec": 14.419999677,
+          "now_sec": 14.459999676,
+          "control_origin_sec": 14.589999676000001,
+          "nominal_acceleration_application_delay_sec": 0,
+          "nominal_steering_application_delay_sec": 0.1,
+          "initial_x_y_yaw_u_vy_r_desired_tire": [
+            89629.82972417062,
+            43129.3364778765,
+            2.3861478214918255,
+            0.02256213128566742,
+            0.002346017397940159,
+            0.008317441679537296,
+            -0.0336049385368824,
+            -0.025554824620485306
+          ],
+          "published_time_wire_acceleration_wire_steering": [
+            [
+              13.799999691,
+              -3,
+              -0.17125000059604645
+            ],
+            [
+              13.83499969,
+              -3,
+              -0.14499999582767487
+            ],
+            [
+              13.86499969,
+              -3,
+              -0.11875000596046448
+            ],
+            [
+              13.899999689,
+              -3,
+              -0.0924999937415123
+            ],
+            [
+              13.934999688,
+              -3,
+              -0.06624999642372131
+            ],
+            [
+              13.949999688,
+              -3,
+              -0.03999999910593033
+            ],
+            [
+              13.984999687,
+              -3,
+              -0.013749999925494194
+            ],
+            [
+              13.999999687,
+              -3,
+              0
+            ],
+            [
+              14.034999686,
+              -3,
+              0
+            ],
+            [
+              14.064999685,
+              -0.31014540791511536,
+              -0.02540399879217148
+            ],
+            [
+              14.084999685,
+              -3,
+              -0.02540399879217148
+            ],
+            [
+              14.114999684,
+              -3,
+              -0.02540399879217148
+            ],
+            [
+              14.134999684,
+              -0.31014540791511536,
+              -0.02980799786746502
+            ],
+            [
+              14.164999683,
+              -0.31014540791511536,
+              -0.02980799786746502
+            ],
+            [
+              14.184999682,
+              -0.31014540791511536,
+              -0.02980799786746502
+            ],
+            [
+              14.214999682,
+              -0.31014057993888855,
+              -0.034355197101831436
+            ],
+            [
+              14.234999681,
+              -0.31014057993888855,
+              -0.034355197101831436
+            ],
+            [
+              14.264999681,
+              -0.31014057993888855,
+              -0.034355197101831436
+            ],
+            [
+              14.28499968,
+              1.3295905590057373,
+              -0.03903456777334213
+            ],
+            [
+              14.31499968,
+              1.3295905590057373,
+              -0.03903456777334213
+            ],
+            [
+              14.334999679,
+              1.3295905590057373,
+              -0.03903456777334213
+            ],
+            [
+              14.364999678,
+              1.3295955657958984,
+              -0.04363420233130455
+            ],
+            [
+              14.384999678,
+              1.3295955657958984,
+              -0.04363420233130455
+            ],
+            [
+              14.414999677,
+              1.3295955657958984,
+              -0.04363420233130455
+            ],
+            [
+              14.434999677,
+              1.3295984268188477,
+              -0.04822308570146561
+            ]
+          ]
+        }
+      },
+      {
+        "path": "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000717-04283db40908aaba-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+        "source_sequence": 717,
+        "source_snapshot_sec": 15.434999655,
+        "source_control_decision_id": 1093,
+        "policy": 2,
+        "tag": {
+          "schema": "mpcc-post-motion-final-loss/v1",
+          "authority": false,
+          "status": "valid",
+          "final_decision_id": 949,
+          "final_clock_sec": 11.539999742,
+          "moving_decision_id": 944,
+          "moving_pose_sec": 11.384999745,
+          "moving_forward_velocity_mps": 0.187836691737175,
+          "actual_moving_publication": {
+            "sequence": 944,
+            "nominal_wire_acceleration_wire_steering_before_after": [
+              11.399999819,
+              1.329595923423767,
+              0.18643048405647278,
+              11.414999744,
+              11.414999744
+            ],
+            "recorded_publication_sec": 11.414999744,
+            "source_job_solution_problem_input_index": [
+              941,
+              575,
+              14189326610258030378,
+              15765426155993337910,
+              0
+            ]
+          }
+        },
+        "interaction_fingerprint": 299557218675108538,
+        "pipeline_stage": "physical-proof",
+        "failure_outcome": "outer-exact-physical-wall-rejected",
+        "failure_detail": "outer exact physical wall proof rejected/outcome=stage-wall-rejected/reason=hard-wall-contact/stage=931/detail=rate-resolved stage hard wall contact, reason=hard-wall-contact, stage=931, wp=33, distance=18.603m, lateral=0.759m, lag=0.794m, bounds=[-3.711,1.000]m, reserve=0.241m, heading_offset=-0.002rad, progress=32.783/49.393m, progress_delta=-16.610m, pose=(89627.874,43131.714,2.241), out_of_map=0, contacts=1",
+        "exact_qp_available": false,
+        "warm_start_fields": [],
+        "observation": {
+          "pose_source_sec": 15.404999655,
+          "velocity_source_sec": 15.399999655,
+          "yaw_rate_source_sec": 15.399999655,
+          "tire_source_sec": 15.399999655,
+          "now_sec": 15.434999655,
+          "control_origin_sec": 15.564999655000001,
+          "nominal_acceleration_application_delay_sec": 0,
+          "nominal_steering_application_delay_sec": 0.1,
+          "initial_x_y_yaw_u_vy_r_desired_tire": [
+            89629.58734126344,
+            43129.56259774832,
+            2.3875904544484263,
+            0.6638528108596802,
+            -0.008363604545593262,
+            -0.03739145025610924,
+            -0.0768380921061446,
+            -0.06940927356481552
+          ],
+          "published_time_wire_acceleration_wire_steering": [
+            [
+              14.764999669,
+              1.329595923423767,
+              -0.06638392060995102
+            ],
+            [
+              14.784999669,
+              1.329595923423767,
+              -0.06638392060995102
+            ],
+            [
+              14.814999668,
+              1.329595923423767,
+              -0.07092570513486862
+            ],
+            [
+              14.834999668,
+              1.329595923423767,
+              -0.07092570513486862
+            ],
+            [
+              14.864999667,
+              1.329595923423767,
+              -0.07092570513486862
+            ],
+            [
+              14.884999667,
+              1.3295978307724,
+              -0.07666566967964172
+            ],
+            [
+              14.914999666,
+              1.3295978307724,
+              -0.07666566967964172
+            ],
+            [
+              14.934999666,
+              1.3295978307724,
+              -0.07666566967964172
+            ],
+            [
+              14.964999665,
+              1.3295961618423462,
+              -0.08240563422441483
+            ],
+            [
+              14.984999665,
+              1.3295961618423462,
+              -0.08240563422441483
+            ],
+            [
+              15.014999664,
+              1.3295961618423462,
+              -0.08240563422441483
+            ],
+            [
+              15.034999663,
+              1.3297512531280518,
+              -0.08774952590465546
+            ],
+            [
+              15.064999663,
+              1.3297512531280518,
+              -0.08774952590465546
+            ],
+            [
+              15.084999662,
+              1.3297512531280518,
+              -0.08774952590465546
+            ],
+            [
+              15.114999662,
+              1.3297512531280518,
+              -0.09309341013431549
+            ],
+            [
+              15.134999661,
+              1.3297512531280518,
+              -0.09309341013431549
+            ],
+            [
+              15.164999661,
+              1.3297512531280518,
+              -0.09309341013431549
+            ],
+            [
+              15.18499966,
+              1.3295973539352417,
+              -0.09810692071914673
+            ],
+            [
+              15.214999659,
+              1.3295973539352417,
+              -0.09810692071914673
+            ],
+            [
+              15.234999659,
+              1.3295973539352417,
+              -0.09810692071914673
+            ],
+            [
+              15.264999658,
+              0.7377462983131409,
+              -0.10382610559463501
+            ],
+            [
+              15.284999658,
+              0.7377462983131409,
+              -0.10382610559463501
+            ],
+            [
+              15.314999657,
+              0.7377462983131409,
+              -0.10382610559463501
+            ],
+            [
+              15.334999657,
+              1.3295960426330566,
+              -0.1102626621723175
+            ],
+            [
+              15.364999656,
+              -3,
+              -0.1102626621723175
+            ],
+            [
+              15.384999656,
+              -3,
+              -0.1102626621723175
+            ],
+            [
+              15.414999655,
+              -3,
+              -0.1102626621723175
+            ]
+          ]
+        }
+      },
+      {
+        "path": "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000793-65dbb7629d36898e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+        "source_sequence": 793,
+        "source_snapshot_sec": 16.384999633,
+        "source_control_decision_id": 1131,
+        "policy": 2,
+        "tag": {
+          "schema": "mpcc-post-motion-final-loss/v1",
+          "authority": false,
+          "status": "valid",
+          "final_decision_id": 949,
+          "final_clock_sec": 11.539999742,
+          "moving_decision_id": 944,
+          "moving_pose_sec": 11.384999745,
+          "moving_forward_velocity_mps": 0.187836691737175,
+          "actual_moving_publication": {
+            "sequence": 944,
+            "nominal_wire_acceleration_wire_steering_before_after": [
+              11.399999819,
+              1.329595923423767,
+              0.18643048405647278,
+              11.414999744,
+              11.414999744
+            ],
+            "recorded_publication_sec": 11.414999744,
+            "source_job_solution_problem_input_index": [
+              941,
+              575,
+              14189326610258030378,
+              15765426155993337910,
+              0
+            ]
+          }
+        },
+        "interaction_fingerprint": 7339661651902630286,
+        "pipeline_stage": "post-refinement-linearization",
+        "failure_outcome": "solve-rejected",
+        "failure_detail": "rate-resolved post-refinement relinearized QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0012106, dua_res=0.0316805, failed_iterate_row=467, value=0.914256, bounds=[-inf,0.911941], violation=0.0023146, tolerance=0.00191426, normalized=1.20914, row_semantic=progress-aligned-wall-upper/stage=4/element=0",
+        "exact_qp_available": true,
+        "warm_start_fields": [
+          "available",
+          "primal",
+          "dual"
+        ],
+        "observation": {
+          "pose_source_sec": 16.364999634,
+          "velocity_source_sec": 16.344999634,
+          "yaw_rate_source_sec": 16.349999634,
+          "tire_source_sec": 16.344999634,
+          "now_sec": 16.384999633,
+          "control_origin_sec": 16.514999633,
+          "nominal_acceleration_application_delay_sec": 0,
+          "nominal_steering_application_delay_sec": 0.1,
+          "initial_x_y_yaw_u_vy_r_desired_tire": [
+            89629.4047312965,
+            43129.73759885859,
+            2.3700086709976214,
+            0.5205885171890259,
+            -0.008695363998413086,
+            -0.04726052284240723,
+            -0.11832783654176399,
+            -0.10796572268009186
+          ],
+          "published_time_wire_acceleration_wire_steering": [
+            [
+              15.734999648,
+              1.3295822143554688,
+              -0.12174247205257416
+            ],
+            [
+              15.764999647,
+              1.3295822143554688,
+              -0.12174247205257416
+            ],
+            [
+              15.784999647,
+              1.3295954465866089,
+              -0.13031645119190216
+            ],
+            [
+              15.814999646,
+              1.3295954465866089,
+              -0.13031645119190216
+            ],
+            [
+              15.834999646,
+              1.3295954465866089,
+              -0.13031645119190216
+            ],
+            [
+              15.864999645,
+              1.3296310901641846,
+              -0.13488413393497467
+            ],
+            [
+              15.884999644,
+              1.3296310901641846,
+              -0.13488413393497467
+            ],
+            [
+              15.914999644,
+              1.3296310901641846,
+              -0.13488413393497467
+            ],
+            [
+              15.934999643,
+              1.3295961618423462,
+              -0.13974487781524658
+            ],
+            [
+              15.964999643,
+              1.3295961618423462,
+              -0.13974487781524658
+            ],
+            [
+              15.984999642,
+              1.3295961618423462,
+              -0.13974487781524658
+            ],
+            [
+              16.014999642,
+              1.3295955657958984,
+              -0.14475835859775543
+            ],
+            [
+              16.034999641,
+              1.3295955657958984,
+              -0.14475835859775543
+            ],
+            [
+              16.06499964,
+              1.3295955657958984,
+              -0.14475835859775543
+            ],
+            [
+              16.08499964,
+              1.329595685005188,
+              -0.14977183938026428
+            ],
+            [
+              16.114999639,
+              1.329595685005188,
+              -0.14977183938026428
+            ],
+            [
+              16.134999639,
+              1.329595685005188,
+              -0.14977183938026428
+            ],
+            [
+              16.164999638,
+              1.3296005725860596,
+              -0.15478532016277313
+            ],
+            [
+              16.184999638,
+              1.3296005725860596,
+              -0.15478532016277313
+            ],
+            [
+              16.214999637,
+              1.3296005725860596,
+              -0.15478532016277313
+            ],
+            [
+              16.234999637,
+              1.3296005725860596,
+              -0.15979880094528198
+            ],
+            [
+              16.264999636,
+              1.3296005725860596,
+              -0.15979880094528198
+            ],
+            [
+              16.284999636,
+              1.3296005725860596,
+              -0.15979880094528198
+            ],
+            [
+              16.314999635,
+              1.3295960426330566,
+              -0.16980044543743134
+            ],
+            [
+              16.334999634,
+              1.3295960426330566,
+              -0.16980044543743134
+            ],
+            [
+              16.369999634,
+              1.3295960426330566,
+              -0.16980044543743134
+            ]
+          ]
+        }
+      },
+      {
+        "path": "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000837-c32b5b00fdf68c31-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+        "source_sequence": 837,
+        "source_snapshot_sec": 16.934999621,
+        "source_control_decision_id": 1153,
+        "policy": 2,
+        "tag": {
+          "schema": "mpcc-post-motion-final-loss/v1",
+          "authority": false,
+          "status": "valid",
+          "final_decision_id": 949,
+          "final_clock_sec": 11.539999742,
+          "moving_decision_id": 944,
+          "moving_pose_sec": 11.384999745,
+          "moving_forward_velocity_mps": 0.187836691737175,
+          "actual_moving_publication": {
+            "sequence": 944,
+            "nominal_wire_acceleration_wire_steering_before_after": [
+              11.399999819,
+              1.329595923423767,
+              0.18643048405647278,
+              11.414999744,
+              11.414999744
+            ],
+            "recorded_publication_sec": 11.414999744,
+            "source_job_solution_problem_input_index": [
+              941,
+              575,
+              14189326610258030378,
+              15765426155993337910,
+              0
+            ]
+          }
+        },
+        "interaction_fingerprint": 14063434321213426737,
+        "pipeline_stage": "wall-refinement",
+        "failure_outcome": "solve-rejected",
+        "failure_detail": "rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0262242, dua_res=2.48914, failed_iterate_row=497, value=0.962081, bounds=[-inf,0.911941], violation=0.0501391, tolerance=0.00196208, normalized=25.554",
+        "exact_qp_available": true,
+        "warm_start_fields": [
+          "available",
+          "primal",
+          "dual"
+        ],
+        "observation": {
+          "pose_source_sec": 16.904999622,
+          "velocity_source_sec": 16.904999622,
+          "yaw_rate_source_sec": 16.899999622,
+          "tire_source_sec": 16.904999622,
+          "now_sec": 16.934999621,
+          "control_origin_sec": 17.064999621,
+          "nominal_acceleration_application_delay_sec": 0,
+          "nominal_steering_application_delay_sec": 0.1,
+          "initial_x_y_yaw_u_vy_r_desired_tire": [
+            89629.2524788617,
+            43129.88922998165,
+            2.3494475027831982,
+            0,
+            0,
+            0,
+            -0.1303132027387619,
+            -0.12689627707004547
+          ],
+          "published_time_wire_acceleration_wire_steering": [
+            [
+              16.264999636,
+              1.3296005725860596,
+              -0.15979880094528198
+            ],
+            [
+              16.284999636,
+              1.3296005725860596,
+              -0.15979880094528198
+            ],
+            [
+              16.314999635,
+              1.3295960426330566,
+              -0.16980044543743134
+            ],
+            [
+              16.334999634,
+              1.3295960426330566,
+              -0.16980044543743134
+            ],
+            [
+              16.369999634,
+              1.3295960426330566,
+              -0.16980044543743134
+            ],
+            [
+              16.384999633,
+              0.9741081595420837,
+              -0.17554043233394623
+            ],
+            [
+              16.414999633,
+              0.9741081595420837,
+              -0.17554043233394623
+            ],
+            [
+              16.434999632,
+              0.9741081595420837,
+              -0.17554043233394623
+            ],
+            [
+              16.464999631,
+              1.329595923423767,
+              -0.18128040432929993
+            ],
+            [
+              16.484999631,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.51499963,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.53499963,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.564999629,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.584999629,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.614999628,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.634999628,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.664999627,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.684999627,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.714999626,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.734999625,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.764999625,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.784999624,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.814999624,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.834999623,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.864999623,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.884999622,
+              -3,
+              -0.18128040432929993
+            ],
+            [
+              16.914999621,
+              1.3295958042144775,
+              -0.18699944019317627
+            ]
+          ]
+        }
+      }
+    ],
+    "payload_sha256": {
+      "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000639-a74c33f559367e52-rejoin-side-neutral-initial-solve-rejected/snapshot.yaml": "0c5c547b24e1d5ba1565e5a3b675bd9f886bf219ac50616b3db94d958f90a9df",
+      "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000639-a74c33f559367e52-rejoin-side-neutral-initial-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000717-04283db40908aaba-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "70629f79a916f1e2249ad90d46696732bfbcd7a38c0847927bfc97d1a6dd6c08",
+      "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000717-04283db40908aaba-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000793-65dbb7629d36898e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml": "98aab4d64d660dbd76773755d972432bdf5fdd0e7f21835a5973755cb6349eb7",
+      "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000793-65dbb7629d36898e-rejoin-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000837-c32b5b00fdf68c31-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "d2ed6ff4acdfa32f4c05008690bae5c1aef13db8d567e70db605c3e674fcd88e",
+      "output/20260913-nine-state-single-r24/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000837-c32b5b00fdf68c31-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    "limits": [
+      "Source sequence and control decision are independent namespaces.",
+      "Failure capture is after the actual final loss; this alone does not prove the source defect cause.",
+      "Both original physical safety and solver budgets remain. Exact QP and original warm start must be distinguished from cold source reassembly."
+    ]
+  },
+  "limits": [
+    "Actual source785 feedback and three sends established; gameStart only, no Rejoin completion/vehicleStart/laps. Other candidates and r23/r24 are not paired worlds.",
+    "All9Recovery selections Forward, small-steering reverse unobserved; no Unknown-direction capture.",
+    "Post-motion949 is the first saved stationary final failure, not terminal authority loss; later sends resume through1226.",
+    "Late source producer rejects current physical envelope; valid/feasible alone do not identify missing preferred containment, exact interval or physical clearance.",
+    "Callback <25ms does not establish all-intent/multivehicle acceptance. Prior r80 D2 actual publication timing, physical observation and M4–M6 remain open."
+  ],
+  "next": "Capture the first actual current-physical-envelope rejection after authenticated normal motion, including exact semantic pose/frame/lag/heading, immutable map, bounds, clearance, sampling anchor, connected clear runs and preferred interval result. Existing valid/feasible logs cannot prove preferred containment. Replay before a producer fix; retain all hard guards. Saved source639/717/793/837 failures remain independently available."
+}

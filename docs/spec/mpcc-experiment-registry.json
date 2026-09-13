@@ -1579,6 +1579,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-full-wall-feedback-validation.json",
       "replay_ready": true,
       "reason": "Original saved inputs and exact fixture map; old failing regression, trajectory-only negative holdouts, production archive, build/package evidence."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-full-wall-live-seal-r792",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-wall-feedback-live-evidence.json",
+      "replay_ready": true,
+      "reason": "Fixed1648f338 single-r24 full authority/public evidence and actual post-motion source failures. Late physical interval query still missing."
     }
   ],
   "experiments": [
@@ -20630,6 +20636,48 @@
         "Correction termination based only on adapter/state proof."
       ],
       "revisit_condition": "New immutable world or live failure with exact producer evidence; do not increase budgets or relax guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-wall-live-audit-r789",
+      "baseline_commit": "1648f338",
+      "snapshot_ids": [
+        "20260913-nine-state-full-wall-live-seal-r792"
+      ],
+      "hypothesis": "Bounded full wall feedback produces physically certified sources eligible for existing runtime authority.",
+      "changed_dimension": "Fixed implementation, standard original-DLL single runtime.",
+      "result": "inconclusive",
+      "reason": "Source785 certified after full wall feedback sends3;552normal/noactuallate/max24.30ms but no Rejoin completion/Start/laps.",
+      "production_impact": "No additional control change; integrated race incomplete.",
+      "deleted_code": [],
+      "revisit_condition": "New exact producer observation/fix or newly eligible scene, no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-wall-public-r790",
+      "baseline_commit": "1648f338",
+      "snapshot_ids": [
+        "20260913-nine-state-full-wall-live-seal-r792"
+      ],
+      "hypothesis": "Bounded full wall feedback produces physically certified sources eligible for existing runtime authority.",
+      "changed_dimension": "Fixed implementation, standard original-DLL single runtime.",
+      "result": "accepted",
+      "reason": "Same-run public frequencies/peak1.076852083; no private receiver/contact truth.",
+      "production_impact": "No additional control change; integrated race incomplete.",
+      "deleted_code": [],
+      "revisit_condition": "New exact producer observation/fix or newly eligible scene, no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-r24-source-inputs-r791",
+      "baseline_commit": "1648f338",
+      "snapshot_ids": [
+        "20260913-nine-state-full-wall-live-seal-r792"
+      ],
+      "hypothesis": "Bounded full wall feedback produces physically certified sources eligible for existing runtime authority.",
+      "changed_dimension": "Fixed implementation, standard original-DLL single runtime.",
+      "result": "accepted",
+      "reason": "Actual949-bound source639/717/793/837 original input/QP/warm capture provenance verified; late physical interval input not captured.",
+      "production_impact": "No additional control change; integrated race incomplete.",
+      "deleted_code": [],
+      "revisit_condition": "New exact producer observation/fix or newly eligible scene, no unchanged failed-run repetition."
     }
   ]
 }

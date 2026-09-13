@@ -1125,3 +1125,62 @@ TEST(MpccRateResolvedAdapter, NativeCorrectionIgnoresDisconnectedAffineStateGues
   disconnected[states] = std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(adapter::relinearize_around_native_rollout(request, disconnected, second).applied);
 }
+
+TEST(MpccRateResolvedAdapter, PreparationTangentPreservesMovingStateAndFreeProblem)
+{
+  for (const double lateral : {-0.8, 0.8}) for (const double velocity : {0.0, 0.1}) {
+    auto request = curved_request(6);
+    request.initial_state[model::kLateralIndex] = lateral;
+    request.initial_state[model::kVelocityIndex] = velocity;
+    request.maximum_abs_steering_rad = 0.15;
+    request.maximum_abs_steering_rate_radps = 0.9;
+    for (auto &input : request.inputs) {
+      input.stage_dt_sec = 0.25;
+      input.path_curvature_radpm = 0.0;
+      input.lower[model::kSteeringRateIndex] = -0.9;
+      input.upper[model::kSteeringRateIndex] = 0.9;
+    }
+    const auto original = adapter::build(request, kSolverTolerance);
+    ASSERT_TRUE(original);
+    request.initial_tangent_policy = static_cast<adapter::InitialTangentPolicy>(2);
+    const auto prepared = adapter::build(request, kSolverTolerance);
+    ASSERT_TRUE(prepared);
+    const auto &problem = prepared->problem;
+    EXPECT_TRUE(problem.input_lower.isApprox(original->problem.input_lower, 0.0));
+    EXPECT_TRUE(problem.input_upper.isApprox(original->problem.input_upper, 0.0));
+    EXPECT_TRUE(problem.input_reference.isApprox(original->problem.input_reference, 0.0));
+    EXPECT_TRUE(problem.input_weight.isApprox(original->problem.input_weight, 0.0));
+    EXPECT_TRUE(problem.additional_linear_cost.isApprox(original->problem.additional_linear_cost, 0.0));
+    EXPECT_TRUE((problem.state_lower.array() == original->problem.state_lower.array()).all());
+    EXPECT_TRUE((problem.state_upper.array() == original->problem.state_upper.array()).all());
+    EXPECT_TRUE(problem.state_reference.isApprox(original->problem.state_reference, 0.0));
+    EXPECT_TRUE(problem.state_weight.isApprox(original->problem.state_weight, 0.0));
+    auto state = problem.initial_state;
+    const auto &prefix = *problem.steering_rate_prefix_bounds;
+    const double target = lateral > 0 ? prefix.minimum_cumulative_delta_rad : prefix.maximum_cumulative_delta_rad;
+    for (int stage = 0; stage < 6; ++stage) {
+      const int input = model::kInputDimension * stage;
+      // This fixture reaches its steering target in one original stage,
+      // then has exactly two drive stages and the original braking tail.
+      model::InputVector control = model::InputVector::Zero();
+      control[model::kAccelerationIndex] = stage == 0 ? 0.0 :
+        (stage <= 2 ? problem.input_upper[input] : problem.input_lower[input]);
+      control[model::kSteeringRateIndex] = stage == 0 ? target / 0.25 : 0.0;
+      const auto next = model::evaluate_temporal_frenet_transition({
+        state[0], state[1], state[2], state[3], state[4], state[5], state[6],
+        control[0], control[1], control[2], 0.0, request.wheelbase_m, 0.25,
+        request.minimum_frenet_denominator, request.minimum_stage_dt_sec,
+        request.maximum_stage_dt_sec, request.course_frame, state[7], state[8],
+        request.vehicle_model});
+      ASSERT_TRUE(next);
+      const auto &tangent = problem.linearizations[static_cast<std::size_t>(stage)];
+      EXPECT_TRUE((tangent.state_matrix * state + tangent.input_matrix * control -
+        tangent.equality_offset).isApprox(next->next_state, 1e-10)) << "stage=" << stage
+        << " state=" << state.transpose() << " control=" << control.transpose()
+        << " difference=" << (tangent.state_matrix * state + tangent.input_matrix * control -
+        tangent.equality_offset - next->next_state).transpose();
+      if (stage == 0 && velocity > 0) EXPECT_GT(next->next_state[model::kVelocityIndex], 0.0);
+      state = next->next_state;
+    }
+  }
+}

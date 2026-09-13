@@ -8,6 +8,21 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Rejoinの数値初期化（2026-09-13）
+
+対象車なし・左右中立・前進目的のRejoinでは、既存の2つのsolver ownerを使い、
+操舵準備の非線形軌道で線形化した候補、元の初期化候補の順に一度ずつ解く。
+候補IDは計算前に予約する。準備軌道は初期線形化だけに使い、元のQP入力は自由変数とし、
+認証済みの最終解だけをStoreへ渡す。Cruiseの候補と制約・証明・期限は維持する。
+[snapshot policyの互換性](../interface/mpcc-snapshot-interface.md)。
+
+Rejoinの数値初期化を、操舵準備から加速へ進む候補と元の候補の2件に接続した。
+QPの入力・状態制約・目的関数・物理証明・送信期限は維持。R753native208/source118、
+build136全26/package123合格。実装で保存537/548の完全物理証明が成立し、元候補と
+追加3場面の元の拒否を保持。527の準備候補は現在の壁接触で拒否する。
+次は固定commitのsingle-r21。ゲームStart確認済み、車両Start・周回・M4–M6は未完。
+[設計・検証・未解決点](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-design.md)。
+
 ## 予約順修正後の単車検証（2026-09-13）
 
 7468cf46のsingle-r20:通常534送信、認証済みRejoin1件、4257callback最大17.98ms、

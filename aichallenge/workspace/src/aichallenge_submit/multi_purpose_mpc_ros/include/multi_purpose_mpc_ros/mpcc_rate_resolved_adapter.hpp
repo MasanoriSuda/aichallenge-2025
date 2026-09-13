@@ -13,18 +13,20 @@
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_adapter
 {
 
-/// Numerical initialization only. Both policies leave every QP control free
+/// Numerical initialization only. All policies leave every QP control free
 /// and require the same solved-trajectory and physical certificates.
 enum class InitialTangentPolicy
 {
   CurrentSteering = 0,
   ReferenceSteeringWithRestLaunch = 1,
+  SteeringBeforeDrive = 2,
 };
 
 constexpr bool initial_tangent_policy_valid(InitialTangentPolicy policy) noexcept
 {
   return policy == InitialTangentPolicy::CurrentSteering ||
-         policy == InitialTangentPolicy::ReferenceSteeringWithRestLaunch;
+         policy == InitialTangentPolicy::ReferenceSteeringWithRestLaunch ||
+         policy == InitialTangentPolicy::SteeringBeforeDrive;
 }
 
 inline constexpr int kLegacyStateDimension = 5;

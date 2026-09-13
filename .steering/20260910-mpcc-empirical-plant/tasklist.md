@@ -642,3 +642,13 @@ C5 r45 first-failure checkpoint (baselinea8c70824):
 2026-09-13R744–R746:single-r20/7468cf46normal534,oneauthenticatedRejoin970,noRejoinComplete/vehicleStart/laps; game-wideStartpresent. Max17.98ms/noactualdeadlinefailure/pre-send1111refusal.13reservation invalids=9late(1reserved)+4timely;577/780capturedgenerationinactive. Missing Stop/wall profile first observed1242/20.01sec, exact later producer input missing; no clearance waiver. Complete earlier548world available for bounded preparation/free-QP holdout. See reserved-order-live-audit/evidence; all M4–M6 still open.
 
 2026-09-13R747–R749:independentRejoin548, same fixed raw4preparation candidates=3physical positives. Paired free-QP study accepts right-drive2(81.08ms) and preserves originalwall720/right-drive4wall957.548source-only means original live719warmiterate unavailable; raw cold-controls progress rejection reported separately. Next declare bounded Rejoin initial-tangent population and snapshot compatibility, then focused tests/source replay/fullbuild/package/live. No production preparation yet; see rejoin-preparation-holdout-evidence.
+
+2026-09-13R750–R756: Rejoin numerical preparation added to existing two-owner population;
+free objectives/boxes and all native wall/dynamic/Stop/current/clock guards unchanged.
+Old2regressions fail, offset-sign fixture errors retained and corrected; R753native208/
+source118/build136all26/package123pass. Actual repository537/548 preparation passes;
+430/622originals and527 original solver failure retained,527preparation wall-rejects.
+R754recursive-policy inapplicability and R755optional capture metadata assertion retained;
+R756 validates existing per-case evidence. Next localcommit/original-DLL single-r21;
+actual source admission, callback/final-send windows and remaining M4–M6 stay open.
+See receiver-input-enclosure/rejoin-preparation-design.md and validation JSON.

@@ -2698,11 +2698,45 @@ TEST(MpccRateResolvedShadow, NativePopulationReservesTwoIndependentSourcesBefore
   EXPECT_FALSE(native::build(source, 72U));
 }
 
+TEST(MpccRateResolvedShadow, RejoinUsesIndependentPreparationAndOriginalSources)
+{
+  namespace native = multi_purpose_mpc_ros::mpcc_native_initialization;
+  auto source = snapshot(71U);
+  source.identity.source_context.intent = contract::ControlIntent::Rejoin;
+  source.identity.source_context.fingerprint = 0U;
+  source.identity.source_context = contract::seal_problem_context(source.identity.source_context);
+  const auto population = native::build(source, 72U);
+  ASSERT_TRUE(population);
+  EXPECT_EQ(population->candidates[0].request.initial_tangent_policy,
+    static_cast<adapter::InitialTangentPolicy>(2));
+  EXPECT_EQ(population->candidates[1].request.initial_tangent_policy,
+    adapter::InitialTangentPolicy::CurrentSteering);
+  EXPECT_EQ(population->candidates[0].identity.sequence, 71U);
+  EXPECT_EQ(population->candidates[1].identity.sequence, 72U);
+  for (const auto &candidate : population->candidates) {
+    EXPECT_TRUE((candidate.request.initial_state.array() == source.request.initial_state.array()).all());
+    EXPECT_EQ(candidate.identity.source_context.fingerprint, source.identity.source_context.fingerprint);
+    EXPECT_EQ(candidate.wall_grid, source.wall_grid);
+    EXPECT_EQ(candidate.wall_lower_m, source.wall_lower_m);
+    EXPECT_EQ(candidate.wall_upper_m, source.wall_upper_m);
+  }
+  source.request.maximum_braking_feasibility = true;
+  EXPECT_FALSE(native::build(source, 72U));
+  source.request.maximum_braking_feasibility = false;
+  source.identity.source_context.target_id = "d2";
+  EXPECT_FALSE(native::build(source, 72U));
+  source.identity.source_context.target_id.clear();
+  for (auto & stage : source.request.states) stage.reference[model::kVelocityIndex] = 0.0;
+  EXPECT_FALSE(native::build(source, 72U));
+}
+
 TEST(MpccRateResolvedShadow, RecedingWarmStartDoesNotCrossInitializerOwnership)
 {
+  for (const auto policy : {adapter::InitialTangentPolicy::ReferenceSteeringWithRestLaunch,
+      adapter::InitialTangentPolicy::SteeringBeforeDrive}) {
   auto old = snapshot(1U);
   auto current = snapshot(2U);
-  current.request.initial_tangent_policy = adapter::InitialTangentPolicy::ReferenceSteeringWithRestLaunch;
+  current.request.initial_tangent_policy = policy;
   const auto adapted = adapter::build(current.request, solver::PhysicalConstraintTolerance{1e-4,1e-4});
   ASSERT_TRUE(adapted);
   const int variables = model::kStateDimension * (current.request.horizon_steps + 1) +
@@ -2715,6 +2749,7 @@ TEST(MpccRateResolvedShadow, RecedingWarmStartDoesNotCrossInitializerOwnership)
   previous.initial_tangent_policy = current.request.initial_tangent_policy;
   const auto same = shadow::resolve_receding_warm_start(previous,current,adapted->problem,80U);
   EXPECT_NE(same.reason, shadow::RecedingWarmStartReason::SemanticMismatch);
+  }
 }
 
 TEST(MpccRateResolvedShadow, ExactNativeStateBoxesCannotBorrowAffineOrMixedUnitSlack)

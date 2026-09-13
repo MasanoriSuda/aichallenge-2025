@@ -1531,6 +1531,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-holdout-evidence.json",
       "replay_ready": true,
       "reason": "IndependentRejoin548world preserves hard proof; fixed preparations and paired free-QP initialization comparison."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-rejoin-preparation-seal-r756",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-validation.json",
+      "replay_ready": true,
+      "reason": "Original failures, native regression tests, actual repository preparation source replays and full build/package verification."
     }
   ],
   "experiments": [
@@ -20098,6 +20104,106 @@
       "production_impact": "Offline diagnostic only; no source population/model/clock/parameter or authority change.",
       "deleted_code": [],
       "revisit_condition": "New valid sealed world or declared numerical initialization producer. Preserve original/longer negatives; no tolerance/budget inflation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-old-r750",
+      "baseline_commit": "49cecda1",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-preparation-seal-r756"
+      ],
+      "hypothesis": "Coherent steering preparation can supply a valid numerical starting trajectory for original free nine-state Rejoin optimization.",
+      "changed_dimension": "Existing two-owner initialization population supports forward target-free Rejoin; initial tangents only. Original model, free controls/costs/boxes, physical/Stop and deadlines stay.",
+      "result": "rejected",
+      "reason": "Old policy2 and Rejoin population fail the new regression, before source implementation.",
+      "production_impact": "Bounded source initialization only; full fixed-source runtime acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed source/world or fixed-source runtime result; retain original and physically rejected alternatives, without increasing solver budget or relaxing safety."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-native-r751",
+      "baseline_commit": "49cecda1",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-preparation-seal-r756"
+      ],
+      "hypothesis": "Coherent steering preparation can supply a valid numerical starting trajectory for original free nine-state Rejoin optimization.",
+      "changed_dimension": "Existing two-owner initialization population supports forward target-free Rejoin; initial tangents only. Original model, free controls/costs/boxes, physical/Stop and deadlines stay.",
+      "result": "inconclusive",
+      "reason": "Production native suites pass except new transition test with reversed equality offset sign; no proof relaxed.",
+      "production_impact": "Bounded source initialization only; full fixed-source runtime acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed source/world or fixed-source runtime result; retain original and physically rejected alternatives, without increasing solver budget or relaxing safety."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-native-r752",
+      "baseline_commit": "49cecda1",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-preparation-seal-r756"
+      ],
+      "hypothesis": "Coherent steering preparation can supply a valid numerical starting trajectory for original free nine-state Rejoin optimization.",
+      "changed_dimension": "Existing two-owner initialization population supports forward target-free Rejoin; initial tangents only. Original model, free controls/costs/boxes, physical/Stop and deadlines stay.",
+      "result": "inconclusive",
+      "reason": "Diagnostic state/control output preserves same new test sign error; existing equation identifies test producer.",
+      "production_impact": "Bounded source initialization only; full fixed-source runtime acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed source/world or fixed-source runtime result; retain original and physically rejected alternatives, without increasing solver budget or relaxing safety."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-native-r753",
+      "baseline_commit": "49cecda1",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-preparation-seal-r756"
+      ],
+      "hypothesis": "Coherent steering preparation can supply a valid numerical starting trajectory for original free nine-state Rejoin optimization.",
+      "changed_dimension": "Existing two-owner initialization population supports forward target-free Rejoin; initial tangents only. Original model, free controls/costs/boxes, physical/Stop and deadlines stay.",
+      "result": "accepted",
+      "reason": "Correct existing equation; all208native/source118/build136/package123pass including serialization and warm policy isolation.",
+      "production_impact": "Bounded source initialization only; full fixed-source runtime acceptance pending.",
+      "deleted_code": [
+        "Rejoin-only single numerical initialization restriction"
+      ],
+      "revisit_condition": "New sealed source/world or fixed-source runtime result; retain original and physically rejected alternatives, without increasing solver budget or relaxing safety."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-policy-replay-r754",
+      "baseline_commit": "49cecda1",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-preparation-seal-r756"
+      ],
+      "hypothesis": "Coherent steering preparation can supply a valid numerical starting trajectory for original free nine-state Rejoin optimization.",
+      "changed_dimension": "Existing two-owner initialization population supports forward target-free Rejoin; initial tangents only. Original model, free controls/costs/boxes, physical/Stop and deadlines stay.",
+      "result": "inconclusive",
+      "reason": "Actual policy2 accepts537/548 with original native/state/wall/dynamic/Stop proof; original members retain wall144/720. Runner stops on correctly ineligible already-policy1Cruise430.",
+      "production_impact": "Bounded source initialization only; full fixed-source runtime acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed source/world or fixed-source runtime result; retain original and physically rejected alternatives, without increasing solver budget or relaxing safety."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-policy-holdouts-r755",
+      "baseline_commit": "49cecda1",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-preparation-seal-r756"
+      ],
+      "hypothesis": "Coherent steering preparation can supply a valid numerical starting trajectory for original free nine-state Rejoin optimization.",
+      "changed_dimension": "Existing two-owner initialization population supports forward target-free Rejoin; initial tangents only. Original model, free controls/costs/boxes, physical/Stop and deadlines stay.",
+      "result": "inconclusive",
+      "reason": "All3remaining cases execute; old430solver/622wall/527solver retained,527preparation wall-rejected. Final detail assertion included optional one-time recorder path; R756 validates identical physical/status/row fields.",
+      "production_impact": "Bounded source initialization only; full fixed-source runtime acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed source/world or fixed-source runtime result; retain original and physically rejected alternatives, without increasing solver budget or relaxing safety."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-seal-r756",
+      "baseline_commit": "49cecda1",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-preparation-seal-r756"
+      ],
+      "hypothesis": "Coherent steering preparation can supply a valid numerical starting trajectory for original free nine-state Rejoin optimization.",
+      "changed_dimension": "Existing two-owner initialization population supports forward target-free Rejoin; initial tangents only. Original model, free controls/costs/boxes, physical/Stop and deadlines stay.",
+      "result": "accepted",
+      "reason": "Validate saved5world case results with original solver/physical outcomes and identities; exclude only optional diagnostic capture metadata from cold original-member equivalence. No runtime acceptance inferred.",
+      "production_impact": "Bounded source initialization only; full fixed-source runtime acceptance pending.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed source/world or fixed-source runtime result; retain original and physically rejected alternatives, without increasing solver budget or relaxing safety."
     }
   ]
 }

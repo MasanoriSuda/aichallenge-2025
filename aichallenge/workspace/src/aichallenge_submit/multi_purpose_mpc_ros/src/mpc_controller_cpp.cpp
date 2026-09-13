@@ -7402,7 +7402,9 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
         selected.certified_plan.plan != nullptr;
       const double total_ms = std::chrono::duration<double, std::milli>(SteadyClock::now() - started).count();
       selected.solver.detail = std::string("native-initialization/policy=") +
-        (index == 0 ? "reference-rest" : "current-steering") + "/attempts=" +
+        (candidate.request.initial_tangent_policy ==
+          mpcc_native_initialization::adapter::InitialTangentPolicy::SteeringBeforeDrive ?
+          "steering-before-drive" : index == 0 ? "reference-rest" : "current-steering") + "/attempts=" +
         std::to_string(index + 1) + "/total_ms=" + std::to_string(total_ms) +
         "/certified=" + (certified ? "1" : "0") + ", pipeline=" + selected.solver.detail;
       if (certified) {

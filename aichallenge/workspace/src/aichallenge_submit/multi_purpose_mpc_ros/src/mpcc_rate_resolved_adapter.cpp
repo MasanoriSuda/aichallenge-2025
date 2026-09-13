@@ -732,6 +732,17 @@ std::optional<Result> build(
     problem.initial_state[model::kYawRateIndex] == 0.0;
   const bool reference_initialization = request.initial_tangent_policy ==
     InitialTangentPolicy::ReferenceSteeringWithRestLaunch;
+  const bool preparation_initialization = forward_objective &&
+    request.initial_tangent_policy == InitialTangentPolicy::SteeringBeforeDrive;
+  const auto & steering_prefix = *problem.steering_rate_prefix_bounds;
+  const double lateral_direction = request.states[1].reference[model::kLateralIndex] -
+    problem.initial_state[model::kLateralIndex];
+  const double preparation_target = request.current_steering_rad +
+    (lateral_direction < 0.0 ? steering_prefix.minimum_cumulative_delta_rad :
+    lateral_direction > 0.0 ? steering_prefix.maximum_cumulative_delta_rad : 0.0);
+  bool steering_prepared = preparation_target == request.current_steering_rad;
+  constexpr int kPreparationDriveStages = 2;
+  int preparation_drive_stages = 0;
   auto tangent_state = problem.initial_state;
   problem.linearizations.reserve(static_cast<std::size_t>(horizon));
   for (int stage = 0; stage < horizon; ++stage) {
@@ -748,11 +759,22 @@ std::optional<Result> build(
       tangent_state[model::kVelocityIndex] == 0.0 &&
       tangent_state[model::kLateralVelocityIndex] == 0.0 &&
       tangent_state[model::kYawRateIndex] == 0.0;
-    const double acceleration = std::clamp(
+    double acceleration = std::clamp(
       (launch_from_rest || later_rest_launch) ? (speed_target - tangent_state[model::kVelocityIndex]) / dt :
       problem.input_reference[input + model::kAccelerationIndex],
       problem.input_lower[input + model::kAccelerationIndex],
       problem.input_upper[input + model::kAccelerationIndex]);
+    if (preparation_initialization) {
+      // This bounded phase pattern supplies derivatives, never fixed QP
+      // controls. Preserve moving observations while steering before drive.
+      const double requested = !steering_prepared ? 0.0 :
+        preparation_drive_stages < kPreparationDriveStages ?
+        problem.input_upper[input + model::kAccelerationIndex] :
+        problem.input_lower[input + model::kAccelerationIndex];
+      acceleration = std::clamp(requested,
+        problem.input_lower[input + model::kAccelerationIndex],
+        problem.input_upper[input + model::kAccelerationIndex]);
+    }
     const auto & prefix = *problem.steering_rate_prefix_bounds;
     const double rate_lower = std::max(
       problem.input_lower[input + model::kSteeringRateIndex],
@@ -769,9 +791,10 @@ std::optional<Result> build(
       result.steering_reference_rad[static_cast<std::size_t>(stage + 1)],
       request.current_steering_rad + prefix.minimum_cumulative_delta_rad,
       request.current_steering_rad + prefix.maximum_cumulative_delta_rad);
-    const double steering_rate = std::clamp(reference_initialization ?
-      (seed_target - tangent_state[model::kSteeringIndex]) / dt : 0.0,
-      rate_lower, rate_upper);
+    const double requested_rate = preparation_initialization ?
+      (preparation_target - tangent_state[model::kSteeringIndex]) / dt :
+      reference_initialization ? (seed_target - tangent_state[model::kSteeringIndex]) / dt : 0.0;
+    const double steering_rate = std::clamp(requested_rate, rate_lower, rate_upper);
     const double projected_speed =
       tangent_state[model::kVelocityIndex] * std::cos(tangent_state[model::kHeadingIndex]) -
       tangent_state[model::kLateralVelocityIndex] * std::sin(tangent_state[model::kHeadingIndex]);
@@ -779,7 +802,8 @@ std::optional<Result> build(
     const double progress_upper = problem.input_upper[input + model::kVirtualProgressSpeedIndex];
     const auto virtual_speed = select_virtual_speed_tangent(
       request.course_frame, tangent_state[model::kProgressIndex], dt,
-      std::clamp(projected_speed, progress_lower, progress_upper), progress_lower, progress_upper);
+      std::clamp(preparation_initialization ? 0.0 : projected_speed,
+        progress_lower, progress_upper), progress_lower, progress_upper);
     if (!virtual_speed) {
       return reject(RejectReason::LinearizationUnavailable, stage);
     }
@@ -796,6 +820,12 @@ std::optional<Result> build(
       return reject(RejectReason::LinearizationUnavailable, stage);
     }
     problem.linearizations.push_back(*linearization);
+    if (preparation_initialization) {
+      if (steering_prepared && preparation_drive_stages < kPreparationDriveStages)
+        ++preparation_drive_stages;
+      else if (!steering_prepared && requested_rate >= rate_lower && requested_rate <= rate_upper)
+        steering_prepared = true;
+    }
     tangent_state = next->next_state;
   }
   return result;

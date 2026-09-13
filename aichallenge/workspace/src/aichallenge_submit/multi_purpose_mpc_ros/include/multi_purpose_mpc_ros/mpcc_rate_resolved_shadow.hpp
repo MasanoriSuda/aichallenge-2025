@@ -678,6 +678,27 @@ struct Result
   std::string detail;
 };
 
+struct NativeStateBoundsResult
+{
+  bool valid{false};
+  bool satisfied{false};
+  int stage{-1};
+  int element{-1};
+  double value{};
+  double lower{};
+  double upper{};
+  double tolerance{};
+};
+
+/// Check exact native state knots of the declared executable prefix against
+/// the source problem's original state boxes. This does not certify swept
+/// geometry, peers, a shifted current state or a new applied programme.
+NativeStateBoundsResult verify_native_state_bounds(
+  const mpcc_rate_resolved_problem::AssemblyRequest & problem,
+  const std::vector<artifact::PredictedState> & native_states,
+  std::size_t execution_prefix_steps,
+  persistent_osqp::PhysicalConstraintTolerance tolerance) noexcept;
+
 bool identity_valid(const Identity & identity) noexcept;
 bool result_valid(const Result & result) noexcept;
 

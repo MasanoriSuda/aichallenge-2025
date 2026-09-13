@@ -308,6 +308,15 @@ TEST(MpccRateResolvedPhysicalAdapter, ReplaysControlsThroughNonlinearModel)
     source.vehicle_model, .2);
   ASSERT_TRUE(body);
   EXPECT_NEAR(exact.velocity_mps.back(), body->state.forward_velocity_mps, 1e-12);
+  ASSERT_EQ(result.native_stage_states.size(), source.control_stages.size() + 1U);
+  EXPECT_DOUBLE_EQ(result.native_stage_states.front().velocity_mps,
+    source.semantic_initial_state->velocity_mps);
+  EXPECT_DOUBLE_EQ(result.native_stage_states.back().velocity_mps, exact.velocity_mps.back());
+  EXPECT_DOUBLE_EQ(result.native_stage_states.back().lateral_m, exact.lateral_m.back());
+  EXPECT_NEAR(result.native_stage_states.back().lateral_velocity_mps,
+    body->state.lateral_velocity_mps, 1e-12);
+  EXPECT_NEAR(result.native_stage_states.back().yaw_rate_radps,
+    body->state.yaw_rate_radps, 1e-12);
   EXPECT_GT(exact.minimum_lateral_bound_reserve_m, 0.0);
   EXPECT_LT(exact.minimum_lateral_bound_reserve_m, 1.0);
   EXPECT_DOUBLE_EQ(

@@ -888,4 +888,45 @@ RelinearizationResult relinearize_around_primal(
   return result;
 }
 
+RelinearizationResult relinearize_around_native_rollout(
+  const Request & request, const Eigen::VectorXd & primal,
+  mpcc_rate_resolved_problem::AssemblyRequest & problem) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  const int horizon = request.horizon_steps;
+  const int state_values = model::kStateDimension * (horizon + 1);
+  if (horizon <= 0 || problem.horizon_steps != horizon ||
+    request.inputs.size() != static_cast<std::size_t>(horizon))
+  {
+    return {};
+  }
+  if (primal.size() != state_values + model::kInputDimension * horizon ||
+    !primal.allFinite() || !problem.initial_state.allFinite())
+  {
+    return {RelinearizationReason::InvalidPrimal, -1, false};
+  }
+  Eigen::VectorXd native_primal = primal;
+  auto state = problem.initial_state;
+  native_primal.head<model::kStateDimension>() = state;
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int input = state_values + model::kInputDimension * stage;
+    const auto & semantic = request.inputs[static_cast<std::size_t>(stage)];
+    const auto next = model::evaluate_temporal_frenet_transition(
+      model::LinearizationRequest{
+        state[0], state[1], state[2], state[3], state[4], state[5], state[6],
+        primal[input], primal[input + 1], primal[input + 2],
+        semantic.path_curvature_radpm, request.wheelbase_m, semantic.stage_dt_sec,
+        request.minimum_frenet_denominator, request.minimum_stage_dt_sec,
+        request.maximum_stage_dt_sec, request.course_frame, state[7], state[8],
+        request.vehicle_model});
+    if (!next) {
+      return {RelinearizationReason::LinearizationUnavailable, stage, false};
+    }
+    state = next->next_state;
+    native_primal.segment<model::kStateDimension>(
+      model::kStateDimension * (stage + 1)) = state;
+  }
+  return relinearize_around_primal(request, native_primal, problem);
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_adapter

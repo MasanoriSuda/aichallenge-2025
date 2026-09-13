@@ -357,8 +357,8 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_FALSE(result.post_refinement_linearization_applied);
   EXPECT_FALSE(result.post_refinement_linearization_bootstrap_applied);
   EXPECT_FALSE(result.post_refinement_linearization_solved);
-  EXPECT_FALSE(result.post_refinement_physical_proof_checked);
-  EXPECT_FALSE(result.post_refinement_physical_proof_accepted);
+  EXPECT_TRUE(result.post_refinement_physical_proof_checked);
+  EXPECT_TRUE(result.post_refinement_physical_proof_accepted);
   EXPECT_EQ(result.post_refinement_linearization_count, 0U);
   EXPECT_FALSE(result.physical_dynamic_sqp_audit_requested);
   EXPECT_FALSE(result.physical_dynamic_sqp_audit_applied);
@@ -2715,4 +2715,62 @@ TEST(MpccRateResolvedShadow, RecedingWarmStartDoesNotCrossInitializerOwnership)
   previous.initial_tangent_policy = current.request.initial_tangent_policy;
   const auto same = shadow::resolve_receding_warm_start(previous,current,adapted->problem,80U);
   EXPECT_NE(same.reason, shadow::RecedingWarmStartReason::SemanticMismatch);
+}
+
+TEST(MpccRateResolvedShadow, ExactNativeStateBoxesCannotBorrowAffineOrMixedUnitSlack)
+{
+  shadow::SolverContext context;
+  const auto input = snapshot();
+  const auto solved = context.evaluate(input);
+  ASSERT_EQ(solved.outcome, shadow::Outcome::Solved) << solved.detail;
+  ASSERT_TRUE(solved.latest_state_feedback_preparation);
+  const auto exact = physical::build(*solved.execution_artifact,
+    input.identity.source_context.intent, input.identity.source_context.stage_geometry_id);
+  ASSERT_TRUE(exact.exact_trajectory);
+  ASSERT_EQ(exact.native_stage_states.size(), 4U);
+  auto boxes = solved.latest_state_feedback_preparation->final_problem;
+  const auto tolerance = context.physical_constraint_tolerance();
+  const auto valid = shadow::verify_native_state_bounds(boxes, exact.native_stage_states, 3U, tolerance);
+  ASSERT_TRUE(valid.valid);
+  ASSERT_TRUE(valid.satisfied);
+
+  // A large bound on another coordinate must not become velocity slack.
+  boxes.state_upper[2 * model::kStateDimension + model::kProgressIndex] = 1e6;
+  const double exact_velocity = exact.native_stage_states.back().velocity_mps;
+  boxes.state_upper[3 * model::kStateDimension + model::kVelocityIndex] = exact_velocity - 0.1;
+  const auto rejected = shadow::verify_native_state_bounds(boxes, exact.native_stage_states, 3U, tolerance);
+  ASSERT_TRUE(rejected.valid);
+  EXPECT_FALSE(rejected.satisfied);
+  EXPECT_EQ(rejected.stage, 3);
+  EXPECT_EQ(rejected.element, model::kVelocityIndex);
+  EXPECT_DOUBLE_EQ(rejected.value, exact_velocity);
+  EXPECT_LT(rejected.tolerance, 0.1);
+  // A shorter executable prefix does not certify the unexecuted final knot.
+  const std::vector<execution::PredictedState> prefix{
+    exact.native_stage_states.begin(), exact.native_stage_states.begin() + 3};
+  EXPECT_TRUE(shadow::verify_native_state_bounds(boxes, prefix, 2U, tolerance).satisfied);
+  EXPECT_FALSE(shadow::verify_native_state_bounds(boxes, prefix, 3U, tolerance).valid);
+}
+
+TEST(MpccRateResolvedShadow, NativeStateProofRetainsNonVelocityBoxesAndRejectsMissingState)
+{
+  shadow::SolverContext context;
+  const auto input = snapshot();
+  const auto solved = context.evaluate(input);
+  ASSERT_EQ(solved.outcome, shadow::Outcome::Solved) << solved.detail;
+  ASSERT_TRUE(solved.latest_state_feedback_preparation);
+  const auto exact = physical::build(*solved.execution_artifact,
+    input.identity.source_context.intent, input.identity.source_context.stage_geometry_id);
+  auto boxes = solved.latest_state_feedback_preparation->final_problem;
+  const auto tolerance = context.physical_constraint_tolerance();
+  boxes.state_lower[model::kStateDimension + model::kLagIndex] =
+    exact.native_stage_states.at(1).lag_m + 0.1;
+  const auto rejected = shadow::verify_native_state_bounds(boxes, exact.native_stage_states, 3U, tolerance);
+  ASSERT_TRUE(rejected.valid);
+  EXPECT_FALSE(rejected.satisfied);
+  EXPECT_EQ(rejected.stage, 1);
+  EXPECT_EQ(rejected.element, model::kLagIndex);
+  auto missing = exact.native_stage_states;
+  missing.back().yaw_rate_radps = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(shadow::verify_native_state_bounds(boxes, missing, 3U, tolerance).valid);
 }

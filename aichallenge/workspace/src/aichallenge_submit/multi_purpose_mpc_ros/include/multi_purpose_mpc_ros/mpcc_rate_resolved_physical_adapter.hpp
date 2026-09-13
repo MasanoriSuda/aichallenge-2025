@@ -51,6 +51,10 @@ struct Result
   double certified_progress_regression_tolerance_m{};
   std::optional<race_mpcc_foundation::ExactPhysicalExecutionTrajectory>
   exact_trajectory;
+  /// Exact semantic state zero and native control-stage endpoints. These
+  /// numerical observations carry no execution or publication authority.
+  std::vector<mpcc_rate_resolved_execution_artifact::PredictedState>
+  native_stage_states;
 };
 
 /// Convert one immutable nine-state solve into the established exact physical

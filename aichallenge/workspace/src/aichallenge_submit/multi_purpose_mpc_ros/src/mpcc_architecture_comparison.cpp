@@ -2825,6 +2825,49 @@ Report verify_external_primal(
       report.arms.push_back(std::move(arm_result));
       return report;
     }
+    shadow::SolverContext tolerance_owner;
+    const auto tolerance = tolerance_owner.physical_constraint_tolerance();
+    auto state_problem = mpcc_rate_resolved_adapter::build(source.request, tolerance);
+    shadow::NativeStateBoundsResult native_bounds;
+    if (state_problem.has_value()) {
+      constexpr int dimension = mpcc_rate_resolved::kStateDimension;
+      const int state_values = dimension * (source.request.horizon_steps + 1);
+      const bool nonlinear_oracle =
+        policy == ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle ||
+        policy == ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle;
+      if (!nonlinear_oracle) {
+        // Keep each recorded policy's explicit wall bucket omissions. The
+        // nonlinear trajectory must satisfy every remaining state-box row.
+        state_problem->problem.state_lower =
+          verification_problem->lower_bound.segment(state_values, state_values);
+        state_problem->problem.state_upper =
+          verification_problem->upper_bound.segment(state_values, state_values);
+      } else {
+        // The physical oracle owns semantic source bounds, while exact wall
+        // proof replaces the artificial affine lateral pose bucket.
+        for (int stage = 0; stage <= source.execution_prefix_steps; ++stage) {
+          const int lateral = stage * dimension + mpcc_rate_resolved::kLateralIndex;
+          state_problem->problem.state_lower[lateral] =
+            built.value->lateral_lower_m[static_cast<std::size_t>(stage)];
+          state_problem->problem.state_upper[lateral] =
+            built.value->lateral_upper_m[static_cast<std::size_t>(stage)];
+        }
+      }
+      native_bounds = shadow::verify_native_state_bounds(
+        state_problem->problem, adapted.native_stage_states,
+        static_cast<std::size_t>(source.execution_prefix_steps), tolerance);
+    }
+    if (!native_bounds.valid || !native_bounds.satisfied) {
+      arm_result.stage = Stage::ExactTrajectoryRejected;
+      std::ostringstream detail;
+      detail << "native-state-bounds=" << (native_bounds.valid ? "violated" : "invalid")
+             << "/stage=" << native_bounds.stage << "/element=" << native_bounds.element
+             << "/value=" << native_bounds.value << "/bounds=[" << native_bounds.lower
+             << ',' << native_bounds.upper << "]/tolerance=" << native_bounds.tolerance;
+      arm_result.detail = detail.str();
+      report.arms.push_back(std::move(arm_result));
+      return report;
+    }
     auto exact = adapted.exact_trajectory.value();
     arm_result.minimum_lateral_bound_reserve_m =
       exact.minimum_lateral_bound_reserve_m;

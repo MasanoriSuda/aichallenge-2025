@@ -209,6 +209,13 @@ RelinearizationResult relinearize_around_primal(
   const Request & request, const Eigen::VectorXd & primal,
   mpcc_rate_resolved_problem::AssemblyRequest & problem) noexcept;
 
+/// Reconstruct the complete native state sequence from semantic x0 and the
+/// unmodified solved inputs, then use it to select the existing bounded
+/// numerical tangents. Costs, constraints and solved inputs are unchanged.
+RelinearizationResult relinearize_around_native_rollout(
+  const Request & request, const Eigen::VectorXd & primal,
+  mpcc_rate_resolved_problem::AssemblyRequest & problem) noexcept;
+
 const char * to_string(RelinearizationReason reason) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_adapter

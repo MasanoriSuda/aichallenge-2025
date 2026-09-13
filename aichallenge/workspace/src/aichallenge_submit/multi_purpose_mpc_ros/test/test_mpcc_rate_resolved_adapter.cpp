@@ -1092,3 +1092,36 @@ TEST(MpccRateResolvedAdapter, UnknownInitializerIsRejected)
   request.initial_tangent_policy = static_cast<adapter::InitialTangentPolicy>(99);
   EXPECT_FALSE(adapter::build(request, kSolverTolerance));
 }
+
+TEST(MpccRateResolvedAdapter, NativeCorrectionIgnoresDisconnectedAffineStateGuesses)
+{
+  const auto request = curved_request();
+  const auto adapted = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(adapted);
+  auto first = adapted->problem;
+  auto second = adapted->problem;
+  const int states = model::kStateDimension * (request.horizon_steps + 1);
+  Eigen::VectorXd original = Eigen::VectorXd::Zero(states + model::kInputDimension * request.horizon_steps);
+  for (int stage = 0; stage < request.horizon_steps; ++stage) {
+    original[states + model::kInputDimension * stage] = 0.1;
+    original[states + model::kInputDimension * stage + 1] = 0.15;
+    original[states + model::kInputDimension * stage + 2] = 3.0;
+  }
+  Eigen::VectorXd disconnected = original;
+  disconnected.head(states).setConstant(0.5);
+  const auto retained_input = original;
+  ASSERT_TRUE(adapter::relinearize_around_native_rollout(request, original, first).applied);
+  ASSERT_TRUE(adapter::relinearize_around_native_rollout(request, disconnected, second).applied);
+  EXPECT_TRUE(original.isApprox(retained_input, 0.0));
+  EXPECT_TRUE((first.state_upper.array() == adapted->problem.state_upper.array()).all());
+  EXPECT_TRUE(first.input_upper.isApprox(adapted->problem.input_upper, 0.0));
+  EXPECT_TRUE(first.state_weight.isApprox(adapted->problem.state_weight, 0.0));
+  EXPECT_TRUE(first.input_reference.isApprox(adapted->problem.input_reference, 0.0));
+  for (std::size_t stage = 0; stage < first.linearizations.size(); ++stage) {
+    EXPECT_TRUE(first.linearizations[stage].state_matrix.isApprox(second.linearizations[stage].state_matrix, 0.0));
+    EXPECT_TRUE(first.linearizations[stage].input_matrix.isApprox(second.linearizations[stage].input_matrix, 0.0));
+    EXPECT_TRUE(first.linearizations[stage].equality_offset.isApprox(second.linearizations[stage].equality_offset, 0.0));
+  }
+  disconnected[states] = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(adapter::relinearize_around_native_rollout(request, disconnected, second).applied);
+}

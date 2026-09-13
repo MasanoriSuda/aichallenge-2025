@@ -7,6 +7,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -951,11 +952,8 @@ bool result_valid(const Result & result) noexcept
          result.successive_linearization_solved &&
          result.successive_linearization_reason ==
          mpcc_rate_resolved_adapter::RelinearizationReason::Accepted &&
-         result.post_refinement_physical_proof_checked ==
-         (result.progress_wall_refinement_solved ||
-         result.dynamic_obstacle_refinement_solved) &&
-         (!result.post_refinement_physical_proof_checked ||
-         result.post_refinement_physical_proof_accepted) &&
+         result.post_refinement_physical_proof_checked &&
+         result.post_refinement_physical_proof_accepted &&
          (!result.post_refinement_linearization_requested ||
          (result.post_refinement_linearization_applied &&
          result.post_refinement_linearization_bootstrap_applied &&
@@ -2991,6 +2989,67 @@ Result SolverContext::evaluate_stop_physical_support_audit(const Snapshot & snap
   return evaluate_impl(snapshot, false, std::nullopt, 0U, nullptr, true);
 }
 
+NativeStateBoundsResult verify_native_state_bounds(
+  const mpcc_rate_resolved_problem::AssemblyRequest & problem,
+  const std::vector<artifact::PredictedState> & native_states,
+  const std::size_t execution_prefix_steps,
+  const persistent_osqp::PhysicalConstraintTolerance tolerance) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  NativeStateBoundsResult result;
+  const int count = model::kStateDimension * (problem.horizon_steps + 1);
+  if (problem.horizon_steps <= 0 || execution_prefix_steps == 0U ||
+    execution_prefix_steps > static_cast<std::size_t>(problem.horizon_steps) ||
+    native_states.size() != execution_prefix_steps + 1U ||
+    problem.state_lower.size() != count || problem.state_upper.size() != count ||
+    !std::isfinite(tolerance.absolute) || tolerance.absolute < 0.0 ||
+    !std::isfinite(tolerance.relative) || tolerance.relative < 0.0)
+  {
+    return result;
+  }
+  result.valid = true;
+  result.satisfied = true;
+  for (std::size_t stage = 0U; stage < native_states.size(); ++stage) {
+    const auto & state = native_states[stage];
+    const std::array<double, model::kStateDimension> values{
+      state.lateral_m, state.lag_m, state.heading_offset_rad, state.velocity_mps,
+      state.progress_m, state.steering_rad, state.response_steering_rad,
+      state.lateral_velocity_mps, state.yaw_rate_radps};
+    for (int element = 0; element < model::kStateDimension; ++element) {
+      const int index = static_cast<int>(stage) * model::kStateDimension + element;
+      const double value = values[static_cast<std::size_t>(element)];
+      const double lower = problem.state_lower[index], upper = problem.state_upper[index];
+      if (!std::isfinite(value) || std::isnan(lower) || std::isnan(upper) || lower > upper) {
+        result.valid = false;
+        result.satisfied = false;
+        result.stage = static_cast<int>(stage);
+        result.element = element;
+        return result;
+      }
+      const double slack = tolerance.absolute + tolerance.relative * std::max({
+        std::abs(value), std::isfinite(lower) ? std::abs(lower) : 0.0,
+        std::isfinite(upper) ? std::abs(upper) : 0.0});
+      if (!std::isfinite(slack)) {
+        result.valid = false;
+        result.satisfied = false;
+        result.stage = static_cast<int>(stage);
+        result.element = element;
+        return result;
+      }
+      if (result.satisfied && (value < lower - slack || value > upper + slack)) {
+        result.satisfied = false;
+        result.stage = static_cast<int>(stage);
+        result.element = element;
+        result.value = value;
+        result.lower = lower;
+        result.upper = upper;
+        result.tolerance = slack;
+      }
+    }
+  }
+  return result;
+}
+
 Result SolverContext::evaluate_impl(
   const Snapshot & source_snapshot,
   const bool wall_feasibility_restoration_audit,
@@ -3140,6 +3199,25 @@ Result SolverContext::evaluate_impl(
     return finish();
   }
   result.adapter_built = true;
+  double executable_duration_sec = 0.0;
+  for (int stage = 0; stage < snapshot.execution_prefix_steps; ++stage) {
+    executable_duration_sec += snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec;
+  }
+  if (snapshot.publication_interval_sec > executable_duration_sec + 1e-12) {
+    // Preserve the publication-horizon rejection before constructing a
+    // physical artifact, whose timing validation would hide this cause.
+    result.outcome = Outcome::ActuationSampleRejected;
+    result.actuation_sample_reason =
+      mpcc_rate_resolved::ActuationSampleReason::PublicationAfterHorizonEnd;
+    result.planning_stage_count = static_cast<std::size_t>(snapshot.request.horizon_steps);
+    result.certified_stage_count = static_cast<std::size_t>(snapshot.execution_prefix_steps);
+    result.publication_interval_sec = snapshot.publication_interval_sec;
+    result.first_stage_duration_sec = snapshot.request.inputs.front().stage_dt_sec;
+    result.certified_horizon_duration_sec = executable_duration_sec;
+    result.detail = "publication interval exceeds the certified source horizon";
+    return finish();
+  }
+
   if (fixed_steering_rate_radps != nullptr) {
     if (
       fixed_steering_rate_radps->size() !=
@@ -4444,25 +4522,15 @@ Result SolverContext::evaluate_impl(
       "bounded dynamics/obstacle/wall SQP solved";
   }
 
-  // Physical refinements can move the final primal away from the nonlinear
-  // trajectory represented by the pre-refinement tangent.  First replay the
-  // exact execution prefix: when it is already physically valid, another QP
-  // solve would add latency and a new failure mode without improving proof.
-  // Only a demonstrated model/proof gap requests a current-problem SQP
-  // correction.  Every correction preserves the complete refined problem and
-  // is rechecked by the same exact proof before artifact publication.
-  // Complete Stop owns physical rest as well as lateral geometry. A tangent
-  // inside the absorbing rest branch has zero rows and is only locally valid;
-  // a later QP may move its predecessor out of that branch. Detect this in the
-  // same exact proof before considering the existing bounded SQP corrections.
-  const bool physical_problem_refined =
-    result.progress_wall_refinement_solved || result.dynamic_obstacle_refinement_solved ||
-    (snapshot.execution_prefix_steps == snapshot.request.horizon_steps &&
-    snapshot.request.states.back().lower[mpcc_rate_resolved::kVelocityIndex] == 0.0 &&
-    snapshot.request.states.back().upper[mpcc_rate_resolved::kVelocityIndex] == 0.0);
+  // Every executable source prefix needs exact state feasibility, including
+  // sources without wall refinement. An affine QP state box does not constrain
+  // the independently integrated body. Only a demonstrated physical/state
+  // violation requests one of the existing bounded numerical corrections.
+  NativeStateBoundsResult native_state_bounds;
   mpcc_rate_resolved_physical_adapter::Result post_refinement_proof;
   ExecutionArtifactBuildResult post_refinement_artifact_build;
   const auto evaluate_post_refinement_proof = [&]() {
+      native_state_bounds = {};
       post_refinement_artifact_build = build_execution_artifact(
         snapshot, adapted->problem, outcome,
         snapshot.identity.snapshot_sec +
@@ -4471,28 +4539,31 @@ Result SolverContext::evaluate_impl(
       if (!post_refinement_artifact_build.execution_artifact.has_value()) {
         return mpcc_rate_resolved_physical_adapter::Result{};
       }
-      return mpcc_rate_resolved_physical_adapter::build(
+      auto proof = mpcc_rate_resolved_physical_adapter::build(
         post_refinement_artifact_build.execution_artifact.value(),
         snapshot.identity.source_context.intent,
         snapshot.identity.source_context.stage_geometry_id);
+      native_state_bounds = verify_native_state_bounds(
+        adapted->problem, proof.native_stage_states,
+        static_cast<std::size_t>(snapshot.execution_prefix_steps),
+        solver_.physical_constraint_tolerance());
+      return proof;
     };
-  if (physical_problem_refined) {
-    result.post_refinement_physical_proof_checked = true;
-    post_refinement_proof = evaluate_post_refinement_proof();
-  }
+  result.post_refinement_physical_proof_checked = true;
+  post_refinement_proof = evaluate_post_refinement_proof();
   while (
-    physical_problem_refined &&
     (post_refinement_proof.reason ==
     mpcc_rate_resolved_physical_adapter::RejectReason::ExactTrajectoryRejected ||
     post_refinement_proof.reason ==
-    mpcc_rate_resolved_physical_adapter::RejectReason::TerminalRestNotReached) &&
+    mpcc_rate_resolved_physical_adapter::RejectReason::TerminalRestNotReached ||
+    (native_state_bounds.valid && !native_state_bounds.satisfied)) &&
     result.post_refinement_linearization_count <
     kMaximumPhysicalProofSqpCorrections)
   {
     result.post_refinement_linearization_requested = true;
     ++result.post_refinement_linearization_count;
     const auto post_refinement_linearization =
-      mpcc_rate_resolved_adapter::relinearize_around_primal(
+      mpcc_rate_resolved_adapter::relinearize_around_native_rollout(
       snapshot.request, outcome.result->primal, adapted->problem);
     result.post_refinement_linearization_reason =
       post_refinement_linearization.reason;
@@ -4586,7 +4657,7 @@ Result SolverContext::evaluate_impl(
     result.post_refinement_linearization_solved = true;
     post_refinement_proof = evaluate_post_refinement_proof();
   }
-  if (physical_problem_refined) {
+  {
     if (!post_refinement_artifact_build.execution_artifact.has_value()) {
       result.outcome = Outcome::ArtifactRejected;
       result.solved = false;
@@ -4605,7 +4676,8 @@ Result SolverContext::evaluate_impl(
     }
     result.post_refinement_physical_proof_accepted =
       post_refinement_proof.reason ==
-      mpcc_rate_resolved_physical_adapter::RejectReason::None;
+      mpcc_rate_resolved_physical_adapter::RejectReason::None &&
+      native_state_bounds.valid && native_state_bounds.satisfied;
     if (!result.post_refinement_physical_proof_accepted) {
       result.outcome = Outcome::PhysicalProofRejected;
       result.solved = false;
@@ -4619,6 +4691,15 @@ Result SolverContext::evaluate_impl(
              << "/stage=" << post_refinement_proof.rejected_stage
              << "/corrections=" <<
         result.post_refinement_linearization_count;
+      if (!native_state_bounds.valid || !native_state_bounds.satisfied) {
+        detail << ", native-state-bounds=" <<
+          (native_state_bounds.valid ? "violated" : "invalid") <<
+          "/stage=" << native_state_bounds.stage <<
+          "/element=" << native_state_bounds.element <<
+          "/value=" << native_state_bounds.value <<
+          "/bounds=[" << native_state_bounds.lower << ',' << native_state_bounds.upper <<
+          "]/tolerance=" << native_state_bounds.tolerance;
+      }
       result.detail = detail.str();
       capture_failure(
         mpcc_architecture_snapshot::PipelineStage::PhysicalProof,

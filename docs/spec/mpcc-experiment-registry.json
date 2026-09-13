@@ -1501,6 +1501,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-audit-validation.json",
       "replay_ready": true,
       "reason": "Old failing Rejoin applicability regression, full suite and actual537negative under new build; no normal control change."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-native-state-seal-r731",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/nonlinear-source-state-validation.json",
+      "replay_ready": true,
+      "reason": "Native source-state invariant, old oracle failing regression, full build/package and frozen positive/negative replay evidence."
     }
   ],
   "experiments": [
@@ -19754,6 +19760,121 @@
       "production_impact": "Diagnostic applicability only. Source semantic speed-bound and nonlinear correction not promoted.",
       "deleted_code": [],
       "revisit_condition": "New applicable intent/contract mismatch or physical proof regression; no gate weakening or unsupported source acceptance."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-source-state-r723",
+      "baseline_commit": "58436f9f",
+      "snapshot_ids": [
+        "20260913-nine-state-native-state-seal-r731"
+      ],
+      "hypothesis": "Affine state-box feasibility alone misses exact nonlinear state departures; disconnected affine tangents can preserve that gap.",
+      "changed_dimension": "Require exact executable-prefix nine-state bounds from original semantic x0 and solved controls, with original row tolerances. Existing bounded correction selects coherent native tangents. Raw external oracle retains source semantic state limits. No new authority, preparation population, model, parameter or clock change.",
+      "result": "rejected",
+      "reason": "Initial tests expose old result_valid assumption, preserved publication-horizon reason, and infinity-equality fixture issue; no physical safety assertion weakened.",
+      "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
+      "deleted_code": [],
+      "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-free-seed-r724",
+      "baseline_commit": "58436f9f",
+      "snapshot_ids": [
+        "20260913-nine-state-native-state-seal-r731"
+      ],
+      "hypothesis": "Affine state-box feasibility alone misses exact nonlinear state departures; disconnected affine tangents can preserve that gap.",
+      "changed_dimension": "Require exact executable-prefix nine-state bounds from original semantic x0 and solved controls, with original row tolerances. Existing bounded correction selects coherent native tangents. Raw external oracle retains source semantic state limits. No new authority, preparation population, model, parameter or clock change.",
+      "result": "accepted",
+      "reason": "New source guard and coherent correction pass original R715right-drive2 seed; source537wall144 and drive4max-iteration negatives retained. Seed is diagnostic only.",
+      "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
+      "deleted_code": [],
+      "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-source-state-r725",
+      "baseline_commit": "58436f9f",
+      "snapshot_ids": [
+        "20260913-nine-state-native-state-seal-r731"
+      ],
+      "hypothesis": "Affine state-box feasibility alone misses exact nonlinear state departures; disconnected affine tangents can preserve that gap.",
+      "changed_dimension": "Require exact executable-prefix nine-state bounds from original semantic x0 and solved controls, with original row tolerances. Existing bounded correction selects coherent native tangents. Raw external oracle retains source semantic state limits. No new authority, preparation population, model, parameter or clock change.",
+      "result": "accepted",
+      "reason": "Core129native tests pass after result-valid and fixture alignment.",
+      "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
+      "deleted_code": [],
+      "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-state-oracle-old-r726",
+      "baseline_commit": "58436f9f",
+      "snapshot_ids": [
+        "20260913-nine-state-native-state-seal-r731"
+      ],
+      "hypothesis": "Affine state-box feasibility alone misses exact nonlinear state departures; disconnected affine tangents can preserve that gap.",
+      "changed_dimension": "Require exact executable-prefix nine-state bounds from original semantic x0 and solved controls, with original row tolerances. Existing bounded correction selects coherent native tangents. Raw external oracle retains source semantic state limits. No new authority, preparation population, model, parameter or clock change.",
+      "result": "inconclusive",
+      "reason": "Negative test fixture assumes optional assembly_request absent from recorded_with_solved_qp; fails before intended oracle check.",
+      "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
+      "deleted_code": [],
+      "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-state-oracle-old-r727",
+      "baseline_commit": "58436f9f",
+      "snapshot_ids": [
+        "20260913-nine-state-native-state-seal-r731"
+      ],
+      "hypothesis": "Affine state-box feasibility alone misses exact nonlinear state departures; disconnected affine tangents can preserve that gap.",
+      "changed_dimension": "Require exact executable-prefix nine-state bounds from original semantic x0 and solved controls, with original row tolerances. Existing bounded correction selects coherent native tangents. Raw external oracle retains source semantic state limits. No new authority, preparation population, model, parameter or clock change.",
+      "result": "rejected",
+      "reason": "Actual old oracle accepts coasting2mps above future1mps bound despite invented affine velocity0.5; native-bound omission reproduced.",
+      "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
+      "deleted_code": [],
+      "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-source-state-r728",
+      "baseline_commit": "58436f9f",
+      "snapshot_ids": [
+        "20260913-nine-state-native-state-seal-r731"
+      ],
+      "hypothesis": "Affine state-box feasibility alone misses exact nonlinear state departures; disconnected affine tangents can preserve that gap.",
+      "changed_dimension": "Require exact executable-prefix nine-state bounds from original semantic x0 and solved controls, with original row tolerances. Existing bounded correction selects coherent native tangents. Raw external oracle retains source semantic state limits. No new authority, preparation population, model, parameter or clock change.",
+      "result": "accepted",
+      "reason": "All179native tests pass, including exact semantic state proof and raw oracle negative; source118/build134/package121pass.",
+      "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
+      "deleted_code": [
+        "Post-refinement reuse of disconnected affine state guesses",
+        "Optional physical-state acceptance for unrefined source"
+      ],
+      "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-state-oracles-r729",
+      "baseline_commit": "58436f9f",
+      "snapshot_ids": [
+        "20260913-nine-state-native-state-seal-r731"
+      ],
+      "hypothesis": "Affine state-box feasibility alone misses exact nonlinear state departures; disconnected affine tangents can preserve that gap.",
+      "changed_dimension": "Require exact executable-prefix nine-state bounds from original semantic x0 and solved controls, with original row tolerances. Existing bounded correction selects coherent native tangents. Raw external oracle retains source semantic state limits. No new authority, preparation population, model, parameter or clock change.",
+      "result": "accepted",
+      "reason": "Same R715four fixed physical preparations with original solver tolerance retain two right positives and original/left wall negatives under new state proof.",
+      "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
+      "deleted_code": [],
+      "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-state-saved-worlds-r730",
+      "baseline_commit": "58436f9f",
+      "snapshot_ids": [
+        "20260913-nine-state-native-state-seal-r731"
+      ],
+      "hypothesis": "Affine state-box feasibility alone misses exact nonlinear state departures; disconnected affine tangents can preserve that gap.",
+      "changed_dimension": "Require exact executable-prefix nine-state bounds from original semantic x0 and solved controls, with original row tolerances. Existing bounded correction selects coherent native tangents. Raw external oracle retains source semantic state limits. No new authority, preparation population, model, parameter or clock change.",
+      "result": "accepted",
+      "reason": "Additional frozen430/622/527source worlds preserve solver/wall negative classes; unavailable stateless targets/intents remain inapplicable.",
+      "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
+      "deleted_code": [],
+      "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
     }
   ]
 }

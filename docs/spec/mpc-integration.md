@@ -8,6 +8,17 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 非線形source状態制約（2026-09-13）
+
+現在は計画の実行区間を非線形再計算し、元の9状態制約を毎回検証する。
+違反時の既存補正は、連続した非線形状態列から線形化する。通常権限・モデル・期限・
+パラメータ・候補数は維持。R727で旧診断の速度超過見逃しを再現し、R728native179/
+source118、build134全26/package121合格。R724自由QP診断、R729固定4候補、
+R730追加3場面で合格例と元の壁・計算拒否を保持した。停止操舵準備は本番未採用。
+次はローカルcommit固定single-r19。current/retainedの速度制約、復帰後の予約計算、
+r80D2実送信期限、Start/周回・M4–M6は未完。
+[設計と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/nonlinear-source-state-design.md)。
+
 ## Rejoin壁拒否と非線形速度の検証境界（2026-09-13）
 
 9c522a95のsingle-r18は認証済みRejoinに到達せず、Start/周回なし。4234callback最大

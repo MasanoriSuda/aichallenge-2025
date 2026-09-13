@@ -406,6 +406,8 @@ Result build(
   }
   const auto & initial = artifact.semantic_initial_state.value();
   NonlinearState nonlinear = initial;
+  result.native_stage_states.reserve(state_count);
+  result.native_stage_states.push_back(nonlinear);
   double elapsed_sec{};
   for (std::size_t stage = 0U; stage < artifact.control_stages.size(); ++stage) {
     auto control = artifact.control_stages[stage];
@@ -453,6 +455,7 @@ Result build(
           nonlinear.lateral_m - lower_m,
           upper_m - nonlinear.lateral_m));
     }
+    result.native_stage_states.push_back(nonlinear);
   }
   if (artifact.terminal_body_rest_required &&
     (nonlinear.velocity_mps != 0.0 || nonlinear.lateral_velocity_mps != 0.0 ||

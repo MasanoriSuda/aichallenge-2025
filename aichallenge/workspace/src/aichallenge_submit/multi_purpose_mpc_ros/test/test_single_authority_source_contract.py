@@ -1121,7 +1121,9 @@ def test_final_physical_refinement_receives_current_problem_sqp_correction() -> 
 
     assert dynamic_refinement < post_refinement < artifact_publication
     assert "evaluate_post_refinement_proof" in correction
-    assert "relinearize_around_primal(" in correction
+    assert "relinearize_around_native_rollout(" in correction
+    assert "relinearize_around_primal(" not in correction
+    assert "native_state_bounds.valid && native_state_bounds.satisfied" in evaluate
     assert "build_current_problem_bootstrap(" in correction
     assert "&outcome.result->primal" in correction
     assert "adapted->problem" in correction

@@ -1839,6 +1839,27 @@ TEST(MpccArchitectureComparison, PhysicalNonlinearOracleCannotBypassExactProofs)
     << accepted.arms.front().detail;
   EXPECT_TRUE(accepted.arms.front().bundle.has_value());
 
+  auto speed_limited = input;
+  ASSERT_TRUE(speed_limited.recorded_qp);
+  constexpr int velocity_variable = model::kStateDimension + model::kVelocityIndex;
+  speed_limited.source.request.states[1].upper[model::kVelocityIndex] = 1.0;
+  speed_limited.recorded_qp->problem.upper_bound[state_values + velocity_variable] = 1.0;
+  auto & limited_context = speed_limited.source.identity.source_context;
+  limited_context.bounds_schema_id += "/one-mps-first-knot";
+  limited_context.fingerprint = 0U;
+  limited_context = contract::seal_problem_context(limited_context);
+  speed_limited.interaction_fingerprint =
+    architecture::fingerprint_interaction_snapshot(speed_limited.source);
+  auto invented_affine = primal;
+  invented_affine[velocity_variable] = 0.5;
+  const auto speed_rejected = verify_external_primal(
+    speed_limited, invented_affine, ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle);
+  ASSERT_TRUE(speed_rejected.source_accepted);
+  ASSERT_EQ(speed_rejected.arms.size(), 1U);
+  EXPECT_EQ(speed_rejected.arms.front().stage, Stage::ExactTrajectoryRejected);
+  EXPECT_FALSE(speed_rejected.arms.front().bundle);
+  EXPECT_NE(speed_rejected.arms.front().detail.find("native-state-bounds"), std::string::npos);
+
   // The physical oracle deliberately ignores affine predicted-state samples
   // and reconstructs them from the current state plus the control sequence.
   // It must still fail closed on the immutable exact wall proof.

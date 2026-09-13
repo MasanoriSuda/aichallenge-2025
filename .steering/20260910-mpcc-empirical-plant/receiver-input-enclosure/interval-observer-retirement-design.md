@@ -26,3 +26,8 @@ source parameters, clock and publication guards remain unchanged.
 Rollback: restore the observer from7f263cc2 only for a new documented evidence
 gap. It must not persist merely because removal needs another validation step.
 [Closed measurement](render-cap-live-audit.md).
+
+R844 native103/source118, build143 all26packages, package130 all2660tests
+pass with zero errors/failures/skips. Control text without only the observation
+block/include/members is byte-identical. Current-source live remains pending
+after a justified next scheduling experiment. [Validation](interval-observer-retirement-validation.json).

@@ -18,6 +18,67 @@ namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 
 constexpr double kPi = 3.14159265358979323846;
 
+TEST(RecoveryFootprintInitialCorridor, Actual1263PreservesGuardAtClearFootprintBoundary)
+{
+  // single-r30/D1/1263,21.194999526: R832 reproduces the full original map.
+  // This existing crop contains the entire query, with all other cells Unknown.
+  const auto grid = mpcc_r28_recovery_fixture::grid();
+  const recovery::FootprintExtents footprint{1.615, 0.51, 0.768, 0.768, 0.05};
+  const recovery::Pose2D query{89629.39658513869, 43131.06749063747, 2.2881892914533593};
+  constexpr double lateral = 0.8337737291834197;
+  constexpr double heading = 0.02031806737947095;
+  constexpr double lower = -4.742362280554696;
+  constexpr double upper = 2.343074902763053;
+  constexpr double guard = 0.001;
+  constexpr double clearance = 0.2;
+  const auto runs = recovery::find_clear_lateral_runs_with_heading(
+    grid, footprint, query, lower, upper, heading, clearance, 0.05,
+    recovery::LateralClearRun{lateral-guard, lateral+guard});
+  ASSERT_TRUE(runs.valid);
+  EXPECT_EQ(runs.checked_pose_count, 146U);
+  ASSERT_EQ(runs.clear_runs.size(), 1U);
+  EXPECT_DOUBLE_EQ(runs.clear_runs.front().lower_lateral_offset_m, -3.4949261567311485);
+  EXPECT_DOUBLE_EQ(runs.clear_runs.front().upper_lateral_offset_m, lateral);
+  const auto selected = recovery::select_lateral_clear_interval(
+    runs, lower, upper, lateral, guard);
+  ASSERT_TRUE(selected.valid);
+  ASSERT_TRUE(selected.feasible);
+  EXPECT_FALSE(selected.preferred_lateral_contained);
+  EXPECT_DOUBLE_EQ(selected.lower_lateral_offset_m, -3.4939261567311486);
+  EXPECT_DOUBLE_EQ(selected.upper_lateral_offset_m, lateral-guard);
+
+  auto expanded = footprint;
+  expanded.left_extent_m += clearance;
+  expanded.right_extent_m += clearance;
+  const auto pose = [&](double offset) {
+      return recovery::Pose2D{
+        query.x_m-std::sin(query.yaw_rad)*offset,
+        query.y_m+std::cos(query.yaw_rad)*offset,
+        std::atan2(std::sin(query.yaw_rad+heading), std::cos(query.yaw_rad+heading))};
+    };
+  const auto current = pose(lateral);
+  EXPECT_DOUBLE_EQ(current.x_m, 89628.76831811441);
+  EXPECT_DOUBLE_EQ(current.y_m, 43130.51934907028);
+  EXPECT_DOUBLE_EQ(current.yaw_rad, 2.30850735883283);
+  for (const double offset : {lateral-guard, lateral, lateral+guard}) {
+    const auto physical = recovery::sample_footprint(grid, footprint, pose(offset));
+    ASSERT_TRUE(physical.valid);
+    EXPECT_FALSE(physical.out_of_map);
+    EXPECT_TRUE(physical.contact_cells.empty());
+    const auto normal = recovery::sample_footprint(grid, expanded, pose(offset));
+    ASSERT_TRUE(normal.valid);
+    EXPECT_FALSE(normal.out_of_map);
+    if (offset <= lateral) {
+      EXPECT_TRUE(normal.contact_cells.empty());
+    } else {
+      ASSERT_EQ(normal.contact_cells.size(), 1U);
+      EXPECT_EQ(normal.contact_cells.front(), 466554U);
+      EXPECT_EQ(grid.cells[466554U], recovery::CellState::Occupied);
+    }
+  }
+}
+
+
 TEST(RecoveryFootprintInitialCorridor, ActualSourcePosePreservesClearInitialState)
 {
   const auto grid = mpcc_r75_corridor_fixture::grid();

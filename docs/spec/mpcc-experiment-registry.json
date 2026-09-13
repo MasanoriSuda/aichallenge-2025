@@ -1645,6 +1645,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/render-cap-live-evidence.json",
       "replay_ready": true,
       "reason": "Original reservation501/856, interval2163 and direction4164 retained with source/clock/ledger identity."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-interval-retirement-seal-r845",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/interval-observer-retirement-validation.json",
+      "replay_ready": true,
+      "reason": "Observer removal equivalence/regression/build/package; exact501/856source and current ledger/window admission."
     }
   ],
   "experiments": [
@@ -21368,6 +21374,40 @@
       "production_impact": "Diagnostic only. No default cap/clock/control policy promotion.",
       "deleted_code": [],
       "revisit_condition": "Exact original reservation source/ledger/time causal replay or justified producer change; do not repeat unchanged failed live."
+    },
+    {
+      "experiment_id": "20260913-nine-state-interval-retirement-native-r844",
+      "baseline_commit": "522d2000",
+      "snapshot_ids": [
+        "20260913-nine-state-interval-retirement-seal-r845"
+      ],
+      "hypothesis": "Answered interval observer can be retired; original bootstrap admission failure has separable clock/history causes.",
+      "changed_dimension": "Observer removal only; native diagnostic replay preserves production physical/control/clock rules.",
+      "result": "accepted",
+      "reason": "103native tests preserve exact1263boundary and unrelated snapshot/Recovery contracts; source118pass.",
+      "production_impact": "Delete temporary observer only. No scheduling or authority change.",
+      "deleted_code": [
+        "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp",
+        "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_current_wall_interval_observation.cpp"
+      ],
+      "revisit_condition": "New documented observation gap only for recorder revival; new fully proved candidate construction comparison before scheduling repair."
+    },
+    {
+      "experiment_id": "20260913-nine-state-admission-replay-r846",
+      "baseline_commit": "522d2000",
+      "snapshot_ids": [
+        "20260913-nine-state-interval-retirement-seal-r845"
+      ],
+      "hypothesis": "Answered interval observer can be retired; original bootstrap admission failure has separable clock/history causes.",
+      "changed_dimension": "Observer removal only; native diagnostic replay preserves production physical/control/clock rules.",
+      "result": "accepted",
+      "reason": "Original501/856source and current history exact. Both originalclock and actualprefix reject;856also generation revoked.",
+      "production_impact": "Delete temporary observer only. No scheduling or authority change.",
+      "deleted_code": [
+        "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp",
+        "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_current_wall_interval_observation.cpp"
+      ],
+      "revisit_condition": "New documented observation gap only for recorder revival; new fully proved candidate construction comparison before scheduling repair."
     }
   ]
 }

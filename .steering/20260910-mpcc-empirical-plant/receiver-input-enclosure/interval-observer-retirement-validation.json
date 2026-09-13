@@ -1,0 +1,188 @@
+{
+  "authority": false,
+  "baseline": "522d2000",
+  "result": "accepted-observer-retirement-only",
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt": "ea50be5de319d421c246dd153394296f68dd3d9a78cac3b9f6952260452ab23c",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "1cd62e60419ffe49d7e61fb1f618e953dcf707c7234b062b6228836518600386",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp": "dc0555d92a0f332652b3502cb8e9b61323e2a6a2761ff5f4a662b1a2aaf95942",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_recovery_footprint.cpp": "82c924534fbf9930d40ee21ab154375907fe7f08aa057e5d66f1cb418730f281"
+  },
+  "deleted_files": [
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_current_wall_interval_observation.hpp",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_current_wall_interval_observation.cpp"
+  ],
+  "node_without_observer_exact": true,
+  "native_tests": 103,
+  "source_tests": 118,
+  "build": {
+    "return_code": 0,
+    "elapsed_sec": 252.16815131902695,
+    "sources_unchanged": true
+  },
+  "package": {
+    "results": [
+      {
+        "command": [
+          "colcon",
+          "test",
+          "--packages-select",
+          "multi_purpose_mpc_ros",
+          "--return-code-on-test-failure",
+          "--event-handlers",
+          "console_direct+"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 44.552643358998466
+      },
+      {
+        "command": [
+          "colcon",
+          "test-result",
+          "--verbose",
+          "--test-result-base",
+          "build/multi_purpose_mpc_ros"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 1.8548255250207148
+      }
+    ],
+    "all_pass": true
+  },
+  "package_test_count": 2660,
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-interval-retirement-native-r844/test_mpcc_architecture_snapshot.log": "157856ce1e33c9e31bdfde70a9611fdae8e92589acbc378191885f4b7f438b53",
+    "output/20260913-nine-state-interval-retirement-native-r844/build-command.json": "b440ed141a2d4ef4a2ce5f0abeebac60437ac45cf43010a4168a1de840a09d42",
+    "output/20260913-nine-state-interval-retirement-native-r844/test_recovery_footprint.xml": "d4780416662f4b85071b87cf975cb256cf8543c3fc51aaf5eb12c95d75d8fbe4",
+    "output/20260913-nine-state-interval-retirement-native-r844/test_mpcc_architecture_snapshot.xml": "3f690fa7b69d4720bec570d0e3ec8aa19c8dd6d69288052c13fbf497b64c65ab",
+    "output/20260913-nine-state-interval-retirement-native-r844/build.log": "f054b6c518e492f7eb3a569ed6b12330b6aa2555d67940dd9ab3add1e576214e",
+    "output/20260913-nine-state-interval-retirement-native-r844/CMakeLists.txt": "ea50be5de319d421c246dd153394296f68dd3d9a78cac3b9f6952260452ab23c",
+    "output/20260913-nine-state-interval-retirement-native-r844/result.json": "f6059d03fe11a9d09c9b151960065d5b9c8ab7050583cc57034576230fb82fb7",
+    "output/20260913-nine-state-interval-retirement-native-r844/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-interval-retirement-native-r844/runner.py": "b8366f6093e67d62fb015cf3a4181c85594677d89d2a57bd2fae979daa8dfc77",
+    "output/20260913-nine-state-interval-retirement-native-r844/test_recovery_footprint.log": "7c05578c198bde9d95bacd5def7a49816a67c1be5379ed80d98f8c93c6d72203",
+    "output/20260913-nine-state-interval-retirement-native-r844/test/test_mpcc_architecture_snapshot.cpp": "dc0555d92a0f332652b3502cb8e9b61323e2a6a2761ff5f4a662b1a2aaf95942",
+    "output/20260913-nine-state-interval-retirement-native-r844/test/test_recovery_footprint.cpp": "82c924534fbf9930d40ee21ab154375907fe7f08aa057e5d66f1cb418730f281",
+    "output/20260913-nine-state-interval-retirement-native-r844/src/mpc_controller_cpp.cpp": "1cd62e60419ffe49d7e61fb1f618e953dcf707c7234b062b6228836518600386",
+    "output/20260913-nine-state-build143/status.json": "e91aae75f431f90efef9a3aae05fb948f8cea9d649eda9b6f9ea49382016a640",
+    "output/20260913-nine-state-build143/build.log": "fa71bd645fbfd7d2e726aea0e3972fdaf8dc9dbb5d0f601b0d53e9a694034809",
+    "output/20260913-nine-state-build143/runner.py": "c8f3578b7d399316247e5ea6b265754d67c54c5b7e0118605087c1d53a434281",
+    "output/20260913-nine-state-build143/manifest.json": "61185017f27bd1166bb64a80c8cb6b7a6a59a0828a122b0016a049c266d416a2",
+    "output/20260913-nine-state-package130/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package130/test.log": "6778fdda841cc030799a13093cf75129eecd5ef34725791ea33293061cd7e778",
+    "output/20260913-nine-state-package130/status.json": "c351b90dea2d29a7aa1efc6b1334ccfe211f7063dd790cb115576d7c0a90662f",
+    "output/20260913-nine-state-package130/test-result.log": "bdfda003625921ac786a420b569b71b86e595e0296a571c990d640d45ba2f259",
+    "output/20260913-nine-state-package130/runner.py": "e12f88097ddb640be583a1956f75bfc8e607368c9b65f34904caab2c4ac9f70b",
+    "output/20260913-nine-state-admission-replay-r846/publication-000000000856-pre-stationary.yaml": "72b02804ecb95881a6c04aa706bae9fcc2a86c64d3fe23638ca2218ec95a2fb2",
+    "output/20260913-nine-state-admission-replay-r846/results.json": "9a41807063acebefc1adc6e7d2eb57af5a84a43ac46e487b4b7bdf5cf06f73ed",
+    "output/20260913-nine-state-admission-replay-r846/replay-production": "8bf99d6aeb1c3647a937630b429221faaed16a3b68353ab09605fb27ecfce1bc",
+    "output/20260913-nine-state-admission-replay-r846/compile.json": "a1c1b1a2801cd7512ef5448328ed2b0906ead06e544bd0fcaa45618a676ad9b9",
+    "output/20260913-nine-state-admission-replay-r846/publication-000000000501-pre-stationary.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-admission-replay-r846/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-admission-replay-r846/driver.cpp": "a4465b61697ee78258a60e1a856e39aefb629f03f401dc0c6541282f3f387797",
+    "output/20260913-nine-state-admission-replay-r846/publication-000000000856-pre-stationary.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-admission-replay-r846/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-admission-replay-r846/runner.py": "b1804a96db31e92e1021812242c757942a8bc41199be7c74bdd994214407acaa",
+    "output/20260913-nine-state-admission-replay-r846/publication-000000000501-pre-stationary.yaml": "7ea9884cb1aacb3699ebb85dace9cea4191e32df8dd4bcbcdeb33e91c0200e21",
+    "output/20260913-nine-state-admission-replay-r846/declared-plan.json": "d9e673cdaf047b6bee2fd021f2658af3c96da09b0abaf4f9aa349c31851fa932"
+  },
+  "admission_replays": [
+    {
+      "source": "/output/20260913-nine-state-single-r31/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000501-pre-stationary/snapshot.yaml",
+      "source_sha256": "78ecd6d2129bb4288b403e941c905e77bbd4f733b7ed82645604e9cddbe94735",
+      "command": [
+        "/output/20260913-nine-state-admission-replay-r846/replay-production",
+        "/output/20260913-nine-state-single-r31/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000501-pre-stationary/snapshot.yaml",
+        "/output/20260913-nine-state-admission-replay-r846/publication-000000000501-pre-stationary.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "generation": "diagnostic lifetime, not live adoption",
+        "recorded_progress": 28.890957139083614,
+        "contract_progress": 28.890957139083614,
+        "producer_association_delta": 0,
+        "elapsed_ms": 19.317283,
+        "reason": "accepted",
+        "physical_reason": 0,
+        "accepted": true,
+        "applied_rejected_sec": NaN,
+        "source_terminal_reason": 0,
+        "source_input_fingerprint_exact": true,
+        "source_history_exact": true,
+        "source_history_count": 499,
+        "before_intervening_transactions_prefix": 0,
+        "current_history_exact": true,
+        "actual_prefix_reason": 4,
+        "recorded_prefix_reason": 4,
+        "prefix_matches_record": true,
+        "actual_transaction_count": 1,
+        "first_sec": 0.414999991,
+        "deadline_sec": 0.439999991,
+        "current_sec": 0.44499999,
+        "expired_by_sec": 0.004999999000000033,
+        "clock_gate_pass": false,
+        "history_empty_gate_pass": false,
+        "source_context_active_at_capture": true,
+        "recorded_worker_ms": 33.428505,
+        "recorded_starting_domain_ms": 10.630556,
+        "timing_scope": "Recorded source duration only; precise worker finish/collection wall times were not captured. No inferred future execution bound.",
+        "admission_scope": "Original no-reservation node requires BOTH original clock window and no intervening ledger transaction; neither passes. Relative sequence replay, exact packet/epoch/history/source identity; no current physical query or publication authority."
+      }
+    },
+    {
+      "source": "/output/20260913-nine-state-single-r31/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000856-pre-stationary/snapshot.yaml",
+      "source_sha256": "af9138add0ad65aa197f9ea5fb0665f5df65858fb6cc03dc4aae153d89f94d61",
+      "command": [
+        "/output/20260913-nine-state-admission-replay-r846/replay-production",
+        "/output/20260913-nine-state-single-r31/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000856-pre-stationary/snapshot.yaml",
+        "/output/20260913-nine-state-admission-replay-r846/publication-000000000856-pre-stationary.yaml"
+      ],
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "generation": "diagnostic lifetime, not live adoption",
+        "recorded_progress": 28.891045636873454,
+        "contract_progress": 28.891045636873454,
+        "producer_association_delta": 0,
+        "elapsed_ms": 18.880353,
+        "reason": "accepted",
+        "physical_reason": 0,
+        "accepted": true,
+        "applied_rejected_sec": NaN,
+        "source_terminal_reason": 0,
+        "source_input_fingerprint_exact": true,
+        "source_history_exact": true,
+        "source_history_count": 24,
+        "before_intervening_transactions_prefix": 0,
+        "current_history_exact": true,
+        "actual_prefix_reason": 4,
+        "recorded_prefix_reason": 4,
+        "prefix_matches_record": true,
+        "actual_transaction_count": 1,
+        "first_sec": 10.409999767,
+        "deadline_sec": 10.434999767,
+        "current_sec": 10.439999766,
+        "expired_by_sec": 0.0049999989999989225,
+        "clock_gate_pass": false,
+        "history_empty_gate_pass": false,
+        "source_context_active_at_capture": false,
+        "recorded_worker_ms": 29.8537,
+        "recorded_starting_domain_ms": 9.668469,
+        "timing_scope": "Recorded source duration only; precise worker finish/collection wall times were not captured. No inferred future execution bound.",
+        "admission_scope": "Original no-reservation node requires BOTH original clock window and no intervening ledger transaction; neither passes. Relative sequence replay, exact packet/epoch/history/source identity; no current physical query or publication authority."
+      }
+    }
+  ],
+  "limits": [
+    "Observer deletion changes no normal/Recovery/proof/clock predicate. Current-source live not yet run; r31 predates deletion.",
+    "501generation active;856generation invalid. Both exact histories and windows independently reject. Source ready wall time/queue latency unavailable; cannot attribute solely to optional StartingDomain cost.",
+    "A certificate for hypothetical future Emergency inputs is not an actual prefix or normal authority. Any comparison must declare and independently prove the whole new composite population, and actual future sends must match before adoption.",
+    "No race, gate, submission/eval or overallM4–M6 completion."
+  ]
+}

@@ -8,6 +8,18 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 壁区間観測の撤去と初期予約の失効再生（2026-09-13）
+
+壁区間observerを撤去し、実記録1263の境界回帰を残した。制御本文は観測ブロック等を除き完全一致。
+R844 native103/source118、build143全26package、package130全2660tests合格。
+R846で予約501/856の元の証明・指紋・全履歴を再生。双方で期限を約5ms超過し、未宣言の
+実停止指令1件によりActualPrefixMismatch。856は加えて世代も失効。正しい拒否であり緩和しない。
+初期候補が「計算中の追加指令なし」を前提に作られる一方、実系は停止を送る点が不整合。
+次は元の物理・停止・履歴・期限条件を保つ候補生成の比較。停止中の将来入力は既存の通常認証済み
+予約と同一視せず、新たな完全証明と実履歴の照合が必要。実装への昇格は比較・回帰の後。
+現行削除後のliveは未実施。期限問題・通常移行・全コース/M4–M6は未完。
+[監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/bootstrap-admission-audit.md)。
+
 ## 描画上限比較と予約採用の未達（2026-09-13）
 
 描画を保つ200FPS診断single-r31で、時計受信間隔は中央値5.004ms・最大13.948ms。

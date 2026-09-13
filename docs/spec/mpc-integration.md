@@ -8,6 +8,16 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 単車検証と復帰後の予約計算（2026-09-13）
+
+40d1664bのsingle-r19:通常2325送信、Rejoin完了2回、4463callback最大22.09ms、
+実期限外送信ゼロ。863/1194は送信前拒否。ゲーム全体のStartはUnityで確認済み、
+車両Start・周回は未達。復帰後の予約計算を初めて完全取得し、R734で指紋一致再生。
+R736は長い候補の壁拒否に約41ms、続く予約区間の候補に約24ms、領域作成に約19ms。
+R737の予約区間優先は同じ指令・証明で合計約43ms（診断のみ）。次は追加入力と負例を
+検証し、この候補生成順の修正境界を固める。速度・期限・安全条件は維持。
+[監査と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-program-order-audit.md)。
+
 ## 非線形source状態制約（2026-09-13）
 
 現在は計画の実行区間を非線形再計算し、元の9状態制約を毎回検証する。

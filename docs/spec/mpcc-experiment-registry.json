@@ -1507,6 +1507,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/nonlinear-source-state-validation.json",
       "replay_ready": true,
       "reason": "Native source-state invariant, old oracle failing regression, full build/package and frozen positive/negative replay evidence."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-live-reservation-seal-r738",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-program-order-evidence.json",
+      "replay_ready": true,
+      "reason": "Frozen source-state live validation and first complete post-Rejoin reserved-source timing input."
     }
   ],
   "experiments": [
@@ -19875,6 +19881,90 @@
       "production_impact": "Source proof and existing numerical correction only; diagnostic seeds have no production authority.",
       "deleted_code": [],
       "revisit_condition": "New native-bound/correction regression, different valid frozen world or consumer contract mismatch. Do not enlarge budgets, relax bounds or call all failures infeasible."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-state-live-audit-r732",
+      "baseline_commit": "40d1664b",
+      "snapshot_ids": [
+        "20260913-nine-state-live-reservation-seal-r738"
+      ],
+      "hypothesis": "Post-Rejoin reserved proof budget is consumed by a rejected longer programme before its accepted reservation-span candidate.",
+      "changed_dimension": "Bounded live observation, exact replay, candidate timing and four existing programme orders; production authority unchanged.",
+      "result": "accepted",
+      "reason": "Live2325normal/2Rejoin/max22.09ms/zeroactualdeadlinefailures; two pre-send refusals. Eligible recorder observed. VehicleStart/laps absent.",
+      "production_impact": "No additional production change beyond source-state40d1664b; no race acceptance or clock waiver.",
+      "deleted_code": [],
+      "revisit_condition": "Additional complete source/world or changed proof/candidate architecture. Preserve old rejected long candidate and same-programme equivalence; no population/budget expansion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-native-state-public-r733",
+      "baseline_commit": "40d1664b",
+      "snapshot_ids": [
+        "20260913-nine-state-live-reservation-seal-r738"
+      ],
+      "hypothesis": "Post-Rejoin reserved proof budget is consumed by a rejected longer programme before its accepted reservation-span candidate.",
+      "changed_dimension": "Bounded live observation, exact replay, candidate timing and four existing programme orders; production authority unchanged.",
+      "result": "accepted",
+      "reason": "Same-run public topic timing and maxspeed1.4333mps; game-wideStart distinguished from vehicle state. No direct physical truth claim.",
+      "production_impact": "No additional production change beyond source-state40d1664b; no race acceptance or clock waiver.",
+      "deleted_code": [],
+      "revisit_condition": "Additional complete source/world or changed proof/candidate architecture. Preserve old rejected long candidate and same-programme equivalence; no population/budget expansion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-post-rejoin-source-replay-r734",
+      "baseline_commit": "40d1664b",
+      "snapshot_ids": [
+        "20260913-nine-state-live-reservation-seal-r738"
+      ],
+      "hypothesis": "Post-Rejoin reserved proof budget is consumed by a rejected longer programme before its accepted reservation-span candidate.",
+      "changed_dimension": "Bounded live observation, exact replay, candidate timing and four existing programme orders; production authority unchanged.",
+      "result": "accepted",
+      "reason": "Original scheduled source, programme and domain fingerprints reproduced for attempt and parent; ~65ms proof+19ms domain.",
+      "production_impact": "No additional production change beyond source-state40d1664b; no race acceptance or clock waiver.",
+      "deleted_code": [],
+      "revisit_condition": "Additional complete source/world or changed proof/candidate architecture. Preserve old rejected long candidate and same-programme equivalence; no population/budget expansion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-candidate-trace-r735",
+      "baseline_commit": "40d1664b",
+      "snapshot_ids": [
+        "20260913-nine-state-live-reservation-seal-r738"
+      ],
+      "hypothesis": "Post-Rejoin reserved proof budget is consumed by a rejected longer programme before its accepted reservation-span candidate.",
+      "changed_dimension": "Bounded live observation, exact replay, candidate timing and four existing programme orders; production authority unchanged.",
+      "result": "inconclusive",
+      "reason": "Candidate costs separated, but inner scheduled result reason fields are defaults; cannot diagnose physical refusal from them.",
+      "production_impact": "No additional production change beyond source-state40d1664b; no race acceptance or clock waiver.",
+      "deleted_code": [],
+      "revisit_condition": "Additional complete source/world or changed proof/candidate architecture. Preserve old rejected long candidate and same-programme equivalence; no population/budget expansion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-candidate-proof-trace-r736",
+      "baseline_commit": "40d1664b",
+      "snapshot_ids": [
+        "20260913-nine-state-live-reservation-seal-r738"
+      ],
+      "hypothesis": "Post-Rejoin reserved proof budget is consumed by a rejected longer programme before its accepted reservation-span candidate.",
+      "changed_dimension": "Bounded live observation, exact replay, candidate timing and four existing programme orders; production authority unchanged.",
+      "result": "accepted",
+      "reason": "Actual scheduled proof reports full-horizon wall rejection at21.084999570 after~41ms; reservation span passes~24ms. Speed-ceiling hypothesis falsified.",
+      "production_impact": "No additional production change beyond source-state40d1664b; no race acceptance or clock waiver.",
+      "deleted_code": [],
+      "revisit_condition": "Additional complete source/world or changed proof/candidate architecture. Preserve old rejected long candidate and same-programme equivalence; no population/budget expansion."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-order-comparison-r737",
+      "baseline_commit": "40d1664b",
+      "snapshot_ids": [
+        "20260913-nine-state-live-reservation-seal-r738"
+      ],
+      "hypothesis": "Post-Rejoin reserved proof budget is consumed by a rejected longer programme before its accepted reservation-span candidate.",
+      "changed_dimension": "Bounded live observation, exact replay, candidate timing and four existing programme orders; production authority unchanged.",
+      "result": "accepted",
+      "reason": "Predeclared span-first order preserves exact accepted programme/domain with~43ms combined cost; shorter two alternative policies differ. Diagnostic only.",
+      "production_impact": "No additional production change beyond source-state40d1664b; no race acceptance or clock waiver.",
+      "deleted_code": [],
+      "revisit_condition": "Additional complete source/world or changed proof/candidate architecture. Preserve old rejected long candidate and same-programme equivalence; no population/budget expansion."
     }
   ]
 }

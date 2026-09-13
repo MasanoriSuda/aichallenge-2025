@@ -421,3 +421,10 @@ R768旧選択失敗→R769native249/source118合格、R770完全地図で元3件
 package125合格。次は固定commitのsingle-r23で実選択・再検証・時刻と周回を確認する。
 全体は未完。先行する後退中の障害停止、車両Start・周回・M4–M6は引き続き未達。
 See receiver-input-enclosure/recovery-steering-population-design.md and validation.json.
+
+2026-09-13R772–R775: 226e4f84のsingle-r23は通常522送信、4260callback最大23.50ms、期限外送信ゼロ。
+認証済みRejoin送信4件以上を確認したが、復帰完了・車両Start・周回は未達。
+Recoveryの実選択12件はすべて前進で、小操舵の後退実行は未検証。方向不明の保存もなし。
+後半は停止軌道のコース形状を生成できない。保存したRejoin537/538・656/743を再生し、
+現在接触・軌道の壁拒否・後段の入力欠落を分離する。全安全条件を維持しM4–M6を継続。
+See receiver-input-enclosure/recovery-steering-live-audit.md and evidence.json.

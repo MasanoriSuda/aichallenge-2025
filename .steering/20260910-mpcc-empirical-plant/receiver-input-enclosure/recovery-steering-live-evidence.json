@@ -1,0 +1,348 @@
+{
+  "baseline": "226e4f84",
+  "run_id": "20260913-nine-state-single-r23",
+  "authority": false,
+  "source_and_binary_unchanged": true,
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-recovery-sampling-live-audit-r772/generator.py": "f14a1d84f3737487199d1cb3ffd07410c3199ba602aa4580de2280c646972fe2",
+    "output/20260913-nine-state-recovery-sampling-live-audit-r772/report.json": "77161877a610d422c7716e1bfef8ae424c045a61cb22bc01e0955d4076ca3eb9",
+    "output/20260913-nine-state-recovery-sampling-public-r773/generator.py": "9cb8ac524c6fe801bda9bb10ce6eede4cec11f931cb07757a5bf8a5b401ce1ad",
+    "output/20260913-nine-state-recovery-sampling-public-r773/report.json": "44dfd7bbcbce521bcba195cb95cafc8af72b7e91752751c0da5493b5f1419c27",
+    "output/20260913-nine-state-recovery-sampling-public-r773/d1.json": "c8bf14f9486354f02326a6cc7d5ffd99765151b5f5805857ba4d16d2f67f13c1",
+    "output/20260913-nine-state-recovery-sampling-direction-replay-r774/results.json": "8e13485e3a1035cb45d8d7ffed32998db58be9002ea13600ed6ef774645b9ff2",
+    "output/20260913-nine-state-recovery-sampling-direction-replay-r774/driver.cpp": "bb5da2ef1f69ef3e25b3ac40fffd34f146b1e1a2c5e9a32a9c17615377aca219",
+    "output/20260913-nine-state-recovery-sampling-direction-replay-r774/runner.py": "fd2e3d5ee10c9697428b7e976167aeb39a185ebc77ac340a4cadc883de0dec43",
+    "output/20260913-nine-state-recovery-sampling-direction-replay-r774/declared-plan.json": "6271d03f27c61c148aae55f8bb0b70fa001ddaee334a4f746edc6150ebd1e1e1",
+    "output/20260913-nine-state-single-r23/manifest.json": "660d1ae3c3d8fe7e3d837b016bfb2822c4d407a708e53cda5d90b580588e3026",
+    "output/20260913-nine-state-single-r23/monitor-summary.json": "77a7d9d92cfca69e61bef96002c2793e8348fb1e86fc381fd565bba04aa8cbfa",
+    "output/20260913-nine-state-single-r23/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-single-r23/unity-player.log": "97bf8fbec10b0d86df9f25a7c324558338a1f989142e25867a0d3ccebf4053bb",
+    "output/20260913-nine-state-single-r23/d1/autoware.log": "c733f7226d6bdcff0af6396837e952b3d85d196a89603ca427f8627736b5f711",
+    "output/20260913-nine-state-single-r23/run_campaign.py": "ef18ea1eb4672b0b19a9569fca369557b30e83817c131d392204c47539732b76",
+    "output/20260913-nine-state-single-r23/build.log": "81990d1f2785e92665db55e5b133e1738996ec0da6b811b7ee80002b089dc837",
+    "output/20260913-nine-state-single-r23/package.log": "799522c5439a1becad728192d6c59df96d1548b015724c648db2b706a45f843d",
+    "output/20260913-nine-state-single-r23/dev-six-lap.sh": "e11bfe1b928100e1b1a17c759515026033cc4aabf8e944ff87d2087a49bbb176",
+    "output/20260913-nine-state-single-r23/compose-six-lap.yml": "03b85b4c172eed3f3fc0600b6b6a3c7b3565ce340e3b805c10759ab767a2f60b",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000499-pre-stationary/snapshot.yaml": "680f085e68e493597345f8420c7ecb1644b42ee65dce411d244407175db894d6",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000499-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000499-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000499-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000494-pre-stationary/snapshot.yaml": "ae9768aac7d517c54d8b43ca6f9a12ad3cfcd247bab05bad102fb719dbd74043",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000494-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000494-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000494-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000906-pre-moving/snapshot.yaml": "6760ceba1b557e2ab203278e980aff633ab3f0c58b7f57c8515803f3ca401053",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000906-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000906-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000906-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000906-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000906-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000906-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000000913-pre-stationary/snapshot.yaml": "f072677ab144e0949428a86052c0319c92b3462f7b840dda6e1a671fd8581d21",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000782-pre-stationary/snapshot.yaml": "494cbfa2570abc6a3b3b0f438540f042562aa3d5c950a74f6ef95f35f4382def",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000782-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000782-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000782-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000782-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000782-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000782-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000906-pre-moving/snapshot.yaml": "ffdc373346869ed12dafeb300635728ac4b1b96f7384122ffc857445e15af901",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/due/after-normal-motion/publication-000000000913-pre-stationary/snapshot.yaml": "f072677ab144e0949428a86052c0319c92b3462f7b840dda6e1a671fd8581d21",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000782-pre-stationary/snapshot.yaml": "b9c843116209b2339032efb252043f957b0338300247ce075e7911f489a917e9",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001104-pre-stationary/snapshot.yaml": "2f0f09a1867cb92d89016ec5a3e4a5cf05ea6bfc9822133b7522d081cc3c76d9",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001104-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001104-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000001104-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000882-pre-moving/snapshot.yaml": "1ac9f5eb1c1e19ae85f3f3abb44bbf49b033051b2e14769c62c060a214a4ccee",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000882-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000882-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000882-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000833-pre-moving/snapshot.yaml": "4d52ee125a4af5756b6487aef403d4d8b906bc220272e84ffb2cd5787c726506",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000833-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000833-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000833-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000833-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000833-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000833-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "7826f6729ebc4afca92bafc761456232df0af4a6d08e6082d754bd992e4b006c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000656-e540cc2b77f33fd3-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "f9a81021fd90498e8ad3d9fd8e18020f386ea3c828f3f824128bd7fd3d5668cd",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-0/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "9b03858b8b3968d7e30950ab392328b8fa88382fb9eb63c35d5d69fa91566096",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000537-bc147f89b461c902-rejoin-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "0906a60eebcf355e5ea45d5954d07124a0fa9a7c5b8f781ae36dad3feaa6c738",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-2/000000000743-b4419c8c85e09bcc-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000906-pre-moving/snapshot.yaml": "f2aed468aec43fe89107cb893f03f685ebb4fad5566a970e493391d4d424c313",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000906-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000906-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000906-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000906-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000906-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000906-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000782-pre-stationary/snapshot.yaml": "b3066fd9981b580d7afc1be8417b32f290c5edd8d23e51044cc2ae4a54599fe4",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000782-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000782-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000782-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000782-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000782-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000782-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-startup/active/publication-000000000491-pre-stationary/snapshot.yaml": "964b5e3f5c4d97b60639fec5b6a5ff56a5aa79a6dd41194cd1c405d1c09641b8",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/scheduled-final-startup/due/publication-000000000491-pre-stationary/snapshot.yaml": "964b5e3f5c4d97b60639fec5b6a5ff56a5aa79a6dd41194cd1c405d1c09641b8",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "f9a81021fd90498e8ad3d9fd8e18020f386ea3c828f3f824128bd7fd3d5668cd",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/000000000538-694aff0107f49702-rejoin-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/000000000479-98aa510a7596cf18-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "a76e286a92ffeac8537f11e96efdc97588c8b006684382154bfbe4ffa033aa04",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/000000000479-98aa510a7596cf18-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/000000000459-5047b1683ce09824-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml": "ad2ded2d2179bd058b1e7667c59ae6d643c1e79f7ec7de95c1f4559dbc997ea0",
+    "output/20260913-nine-state-single-r23/d1/mpcc_architecture_snapshots/000000000459-5047b1683ce09824-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+  },
+  "log": {
+    "publication_rejections": [],
+    "callback_samples": 4260,
+    "callback_max_ms": 23.498078,
+    "callback_over25": [],
+    "scheduled_publications": 522,
+    "last_publication": {
+      "dispatch": 1159,
+      "job": 1144,
+      "source": 889,
+      "index": 12,
+      "nominal": 17.444999625,
+      "before": 17.459999609,
+      "after": 17.459999609,
+      "deadline": 17.469999625,
+      "programme_input": 7879707183723717740,
+      "physical_input": 1518881227187310255,
+      "independent": 1
+    },
+    "window_violations": [],
+    "states": [
+      "spawned",
+      "grounded",
+      "ready"
+    ],
+    "post_motion_pairs": 1,
+    "post_motion_decisions": [
+      913
+    ],
+    "last_source_supply": "[mpc_controller_cpp-10] [INFO] [1789275611.895222435] [mpc_controller]: MPCC source supply: decision=4255, now=104.884997655, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=18413909542055781346, normal_submitted=2036/rejected:1729, worker=2036/1758/1758/running:0/pending:0/exceptions:0, mailbox=3782/3781/invalid:0, store=925/accepted:457/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:terminal Stop course geometry unavailable/nominal=21/inputs=20/horizon=20/wall_progress=0/wall_lower=0/wall_upper=0/wall_refinement=0/wall_diagnostic=current-physical-envelope-rejected/valid=1/feasible=1/bounds=[-4.78017,2.08087]/lateral=0.926439/heading=-0.0197616, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=10314/decision:4255/site:apply_stuck_recovery_arbitration, mailbox_result=build-rejected/geometry:18413909542055781346/detail:native initializer population identity/physical source/owners unavailable, authority=observation-only",
+    "actual_post_send_window_violations": [],
+    "rejoin_completion_events": [],
+    "incomplete_v2x_overrides": [],
+    "laps": [],
+    "game_state_transitions": [
+      "PlayStart",
+      "Ready",
+      "WaitStart",
+      "Start",
+      "Terminate"
+    ],
+    "game_start_observed": true,
+    "preparation_source_traces": [
+      "[mpc_controller_cpp-10] [INFO] [1789275523.508614294] [mpc_controller]: MPCC source supply: decision=1121, now=16.494999631, draft=available, scheduled=scheduled-busy, successor=normal-submitted, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=570/rejected:61, worker=570/444/443/running:1/pending:1/exceptions:0, mailbox=850/841/invalid:0, store=841/accepted:435/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1264/decision:963/site:reference-path-mutation, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=steering-before-drive/attempts=1/total_ms=36.826213/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=17.2779m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1608/cache_hits=18/cache_misses=2/cache_scanned=167/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requested=1/applied=1/bootstrap=1/solved=1/count=1/proof=1/1, exa, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789275524.522383423] [mpc_controller]: MPCC source supply: decision=1161, now=17.504999608, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=608/rejected:63, worker=608/466/465/running:1/pending:0/exceptions:0, mailbox=926/923/invalid:0, store=923/accepted:456/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1618/decision:1161/site:apply_stuck_recovery_arbitration, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=steering-before-drive/attempts=1/total_ms=37.173645/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=17.2809m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1608/cache_hits=19/cache_misses=1/cache_scanned=80/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requested=1/applied=1/bootstrap=1/solved=1/count=1/proof=1/1, exac, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789275525.537137620] [mpc_controller]: MPCC source supply: decision=1197, now=18.529999585, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=3957399223715686782, normal_submitted=608/rejected:99, worker=608/466/466/running:0/pending:0/exceptions:0, mailbox=926/925/invalid:0, store=925/accepted:457/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1654/decision:1197/site:apply_stuck_recovery_arbitration, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=steering-before-drive/attempts=1/total_ms=37.309440/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=17.2809m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1608/cache_hits=19/cache_misses=1/cache_scanned=80/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=accepted/requested=1/applied=1/bootstrap=1/solved=1/count=1/proof=1/1, exac, authority=observation-only"
+    ],
+    "maneuver_selections": [
+      "[mpc_controller_cpp-10] [INFO] [1789275518.320026900] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=front, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.007 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=0",
+      "[mpc_controller_cpp-10] [INFO] [1789275524.653834275] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=front, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.022 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=0",
+      "[mpc_controller_cpp-10] [INFO] [1789275530.803620951] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.004 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=0",
+      "[mpc_controller_cpp-10] [INFO] [1789275537.343722784] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=front, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.013 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=1",
+      "[mpc_controller_cpp-10] [INFO] [1789275543.630245437] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.029 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=1",
+      "[mpc_controller_cpp-10] [INFO] [1789275545.244217429] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=-0.002 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=1",
+      "[mpc_controller_cpp-10] [INFO] [1789275546.343889867] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.010 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=2",
+      "[mpc_controller_cpp-10] [INFO] [1789275552.528263099] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.032 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=2",
+      "[mpc_controller_cpp-10] [INFO] [1789275558.677622641] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.009 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=2",
+      "[mpc_controller_cpp-10] [INFO] [1789275565.260873861] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.008 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=3",
+      "[mpc_controller_cpp-10] [INFO] [1789275566.777323533] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_right, steering=-0.250 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.019 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=3",
+      "[mpc_controller_cpp-10] [INFO] [1789275572.977830008] [mpc_controller]: Stuck recovery maneuver selected: direction=Forward, primitive=forward_straight, steering=0.000 rad, wall=mixed, wall_distance=0.000 m, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, course_guard=1, course_improvement=0.010 m, rolling=0, recovery_mpc=0, mpc_desired=0.000 rad, aggressive_retry=3"
+    ],
+    "recovery_direction_records": [],
+    "actual_rejoin_lower_bound": [
+      {
+        "decision": 983,
+        "publication": {
+          "dispatch": 983,
+          "job": 982,
+          "source": 563,
+          "index": 0,
+          "nominal": 13.009999709,
+          "before": 13.009999709,
+          "after": 13.009999709,
+          "deadline": 13.034999709,
+          "programme_input": 82001840175012550,
+          "physical_input": 11039217880943841581,
+          "independent": 1
+        }
+      },
+      {
+        "decision": 1001,
+        "publication": {
+          "dispatch": 1001,
+          "job": 1000,
+          "source": 600,
+          "index": 0,
+          "nominal": 13.479999699,
+          "before": 13.494999698,
+          "after": 13.494999698,
+          "deadline": 13.504999699,
+          "programme_input": 4477727163473704211,
+          "physical_input": 7367727280334504828,
+          "independent": 1
+        }
+      },
+      {
+        "decision": 1118,
+        "publication": {
+          "dispatch": 1118,
+          "job": 1117,
+          "source": 837,
+          "index": 0,
+          "nominal": 16.414999633,
+          "before": 16.429999632,
+          "after": 16.429999632,
+          "deadline": 16.439999633,
+          "programme_input": 13113860078475767167,
+          "physical_input": 10725053756442657911,
+          "independent": 1
+        }
+      },
+      {
+        "decision": 1133,
+        "publication": {
+          "dispatch": 1133,
+          "job": 1132,
+          "source": 867,
+          "index": 0,
+          "nominal": 16.794999625,
+          "before": 16.809999624,
+          "after": 16.809999624,
+          "deadline": 16.819999625,
+          "programme_input": 11933479311520614777,
+          "physical_input": 9605096942156409719,
+          "independent": 1
+        }
+      }
+    ]
+  },
+  "public": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r23",
+    "domain": 1,
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r23/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "1c3b01b3e911a25302f8d081ecb65c3b0c0bf98d44dfb86096905baecf98b464"
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 2915,
+        "scope_source_sec": [
+          3.0099999320000004,
+          104.99999765300001
+        ],
+        "source_hz": 28.571429209866526,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 2915,
+        "scope_source_sec": [
+          3.0099999320000004,
+          104.99999765300001
+        ],
+        "source_hz": 28.571429209866526,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 2039,
+        "scope_source_sec": [
+          3.09999993,
+          104.99999765300001
+        ],
+        "source_hz": 20.000000446908743,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 5099,
+        "scope_source_sec": [
+          3.044999931,
+          105.004997652
+        ],
+        "source_hz": 50.00000111759516,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 102,
+        "scope_source_sec": [
+          4.00499991,
+          105.004997652
+        ],
+        "source_hz": 1.000000022356436,
+        "median_source_period_sec": 0.9999999780000001,
+        "max_source_gap_sec": 1.014999978,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 3687,
+        "scope_source_sec": [
+          3.0299999370000004,
+          105.019997652
+        ],
+        "source_hz": 36.14079892716664,
+        "median_source_period_sec": 0.029999999000000003,
+        "max_source_gap_sec": 0.039999999,
+        "nonpositive_source_steps": 23
+      },
+      "/clock": {
+        "rows": 20402,
+        "scope_source_sec": [
+          3.0149999320000003,
+          105.019997652
+        ],
+        "source_hz": 200.0000044703692,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "rows": 37159,
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789275517168380825,
+      "stamp_ns": 10149999773,
+      "v": 1.0513381958007812,
+      "vy": 0.032405972480773926,
+      "heading_rate": 0.188977912068367
+    },
+    "limits": [
+      "Source and recorder receipt separate; controller receipt requires this run immutable captures.",
+      "Heading rate is not IMU body yaw rate. Only angular.z supplies body r.",
+      "ROS topics describe public state; no direct force/contact/receiver application instrumentation in this run.",
+      "Frequencies cover the complete recorded source-time range per topic, including startup; no completed race inferred."
+    ]
+  },
+  "direction_replay": {
+    "status": "not-observed",
+    "authority": false,
+    "records": []
+  },
+  "limits": [
+    "No actual reverse maneuver selected; twelve forward maneuvers do not validate new small-steering reverse execution. No Unknown-direction capture, correctly not-observed.",
+    "Four selected Rejoin sends do not establish Rejoin completion; none observed. No vehicleStart/laps or M4–M6 acceptance.",
+    "Later terminal Stop geometry rejection reports valid/feasible only, not preferred-lateral containment or exact selected interval; do not infer physical clearance.",
+    "R22 andR23 have different actual worlds, no causal performance comparison. Public topics are not private physical receiver/contact truth."
+  ],
+  "next": "Replay saved r23 Rejoin537/538 and later656/743 with original world/physical guard; separate current contact, source wall rejection and missing late Stop envelope request. Obtain missing exact producer observation before modifying the producer."
+}

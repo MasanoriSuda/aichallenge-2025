@@ -1561,6 +1561,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-steering-population-validation.json",
       "replay_ready": true,
       "reason": "Exact1921original grid; bounded Recovery shape/magnitude comparison and old/corrected production selector with original8m requirements."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-recovery-sampling-live-seal-r775",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-steering-live-evidence.json",
+      "replay_ready": true,
+      "reason": "Fixed226e4f84single-r23live authority/timing, same-run public state and saved Rejoin physical failures; no Unknown-direction capture."
     }
   ],
   "experiments": [
@@ -20392,6 +20398,48 @@
         "Inline duplicate reverse selector and guidance-only restriction for fresh clear footprint."
       ],
       "revisit_condition": "New sealed world or candidate-generation implementation; moving rear-hazard input and live integration remain distinct."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-sampling-live-audit-r772",
+      "baseline_commit": "226e4f84",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-sampling-live-seal-r775"
+      ],
+      "hypothesis": "New configured reverse population is available without optional guidance while current physical/course/authority/timing contracts hold.",
+      "changed_dimension": "Fixed-source live acceptance attempt; original DLL and runtime settings.",
+      "result": "inconclusive",
+      "reason": "522normal/4selectedRejoin/max23.50ms/noactuallate, but no completion/laps and all12Recovery selectionsForward; new reverse execution unobserved.",
+      "production_impact": "No additional production change; reverse execution remains unverified and race incomplete.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed same-world producer hypothesis/fix or newly eligible reverse scene; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-sampling-public-r773",
+      "baseline_commit": "226e4f84",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-sampling-live-seal-r775"
+      ],
+      "hypothesis": "New configured reverse population is available without optional guidance while current physical/course/authority/timing contracts hold.",
+      "changed_dimension": "Fixed-source live acceptance attempt; original DLL and runtime settings.",
+      "result": "accepted",
+      "reason": "Same-run source frequencies/public max1.051338196; public observation only, no force/receiver truth.",
+      "production_impact": "No additional production change; reverse execution remains unverified and race incomplete.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed same-world producer hypothesis/fix or newly eligible reverse scene; no unchanged failed-run repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-sampling-direction-replay-r774",
+      "baseline_commit": "226e4f84",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-sampling-live-seal-r775"
+      ],
+      "hypothesis": "New configured reverse population is available without optional guidance while current physical/course/authority/timing contracts hold.",
+      "changed_dimension": "Fixed-source live acceptance attempt; original DLL and runtime settings.",
+      "result": "inconclusive",
+      "reason": "No Unknown-direction event recorded; no native trial replay applicable. Not a failure or proof of reverse execution.",
+      "production_impact": "No additional production change; reverse execution remains unverified and race incomplete.",
+      "deleted_code": [],
+      "revisit_condition": "New sealed same-world producer hypothesis/fix or newly eligible reverse scene; no unchanged failed-run repetition."
     }
   ]
 }

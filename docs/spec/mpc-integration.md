@@ -8,6 +8,15 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 後退候補修正後の単車検証（2026-09-13）
+
+226e4f84のsingle-r23は通常522送信、4260callback最大23.50ms、期限外送信ゼロ。
+認証済みRejoin送信4件以上を確認したが、復帰完了・車両Start・周回は未達。
+Recoveryの実選択12件はすべて前進で、小操舵の後退実行は未検証。方向不明の保存もなし。
+後半は停止軌道のコース形状を生成できない。保存したRejoin537/538・656/743を再生し、
+現在接触・軌道の壁拒否・後段の入力欠落を分離する。全安全条件を維持しM4–M6を継続。
+[監査・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-steering-live-audit.md)。
+
 ## Recovery後退候補と補助誘導の分離（2026-09-13）
 
 Recoveryの新規後退候補を補助MPCの有効・無効から分離し、既存設定の操舵角を探索する。

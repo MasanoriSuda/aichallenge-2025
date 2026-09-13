@@ -32,3 +32,12 @@ library can be compared here before changing source generation; zero acceleratio
 must not be described as stationary motion at this initial speed. Missing geometry,
 physical observations, current/retained bounds, r80D2actual-send and M4–M6 remain.
 [Sealed evidence](reserved-order-live-evidence.json).
+
+R747fixed four preparations on548yield3raw physical positives; longer left rejects
+wall318. The cold original-controls raw conversion rejects progress regression
+before wall, so it is not a replay of the old live719iterate. R748normal cold source
+re-solve reproduces wall720(class retained); right-drive2initial tangent lets all
+QP controls/objective remain free and passes full source state/wall/dynamic/Stop
+in81.08ms; right-drive4rejects wall957. Paired537also accepted right-drive2(R724).
+[Holdout evidence](rejoin-preparation-holdout-evidence.json). Numerical initialization
+remains diagnostic; declare bounded producer/serialization contracts before code.

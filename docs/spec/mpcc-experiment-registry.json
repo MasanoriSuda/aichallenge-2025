@@ -1525,6 +1525,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-order-live-evidence.json",
       "replay_ready": true,
       "reason": "Fixed source-order live run; original deadlines/contexts preserved, explicit missing later geometry input and complete earlierRejoin548."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-preparation-holdout-seal-r749",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-holdout-evidence.json",
+      "replay_ready": true,
+      "reason": "IndependentRejoin548world preserves hard proof; fixed preparations and paired free-QP initialization comparison."
     }
   ],
   "experiments": [
@@ -20064,6 +20070,34 @@
       "production_impact": "Local frozen-order fix remains; integrated replenishment/race acceptance not established. Do not infer late wall geometry is clear.",
       "deleted_code": [],
       "revisit_condition": "New exact missing-boundary input, validated preparation generation or structural current/clock change. No repeat without new dimension or relaxed clearance/window."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-holdout-r747",
+      "baseline_commit": "7468cf46",
+      "snapshot_ids": [
+        "20260913-nine-state-preparation-holdout-seal-r749"
+      ],
+      "hypothesis": "Coherent steering-before-drive initial tangents can supply a physically valid Rejoin nine-state solution where original tangents fail.",
+      "changed_dimension": "Same fixed R715preparation library on new548world, then paired accepted right2/right4tangents in free original problem.",
+      "result": "accepted",
+      "reason": "Same4rawpreparations: right2/right4/left2passfullstate/wall/dynamic/Stop;left4wall318. Original cold controls raw conversion fails progress regression, not a replay of original live719iterate.",
+      "production_impact": "Offline diagnostic only; no source population/model/clock/parameter or authority change.",
+      "deleted_code": [],
+      "revisit_condition": "New valid sealed world or declared numerical initialization producer. Preserve original/longer negatives; no tolerance/budget inflation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-free-seed-holdout-r748",
+      "baseline_commit": "7468cf46",
+      "snapshot_ids": [
+        "20260913-nine-state-preparation-holdout-seal-r749"
+      ],
+      "hypothesis": "Coherent steering-before-drive initial tangents can supply a physically valid Rejoin nine-state solution where original tangents fail.",
+      "changed_dimension": "Same fixed R715preparation library on new548world, then paired accepted right2/right4tangents in free original problem.",
+      "result": "accepted",
+      "reason": "Same paired original/right2/right4free-QP study on548: originalwall720,right2fullproofpass81.08ms,right4wall957. All controls/objective/boundsfree and original native source guards retained; no production adoption.",
+      "production_impact": "Offline diagnostic only; no source population/model/clock/parameter or authority change.",
+      "deleted_code": [],
+      "revisit_condition": "New valid sealed world or declared numerical initialization producer. Preserve original/longer negatives; no tolerance/budget inflation."
     }
   ]
 }

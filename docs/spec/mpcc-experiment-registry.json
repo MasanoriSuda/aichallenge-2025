@@ -1627,6 +1627,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-preference-order-validation.json",
       "replay_ready": true,
       "reason": "Original2906 full map and cropped regression, exclusive/ordered helper comparison and final code validation."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-preference-live-seal-r829",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-preference-live-evidence.json",
+      "replay_ready": false,
+      "reason": "Same-run live/public evidence; no interval/direction capture; original full-course acceptance still open."
     }
   ],
   "experiments": [
@@ -21126,6 +21132,62 @@
         "Exclusive preferred-failure branch that omitted remaining candidates"
       ],
       "revisit_condition": "New fixed-commit live scene and actual publisher/callback/gear/Rejoin acceptance; no unchanged failed replay repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-preference-live-audit-r825",
+      "baseline_commit": "7ecd0b36",
+      "snapshot_ids": [
+        "20260913-nine-state-preference-live-seal-r829"
+      ],
+      "hypothesis": "Ordered candidate producer preserves certified normal/Recovery behavior with original deadlines.",
+      "changed_dimension": "Fixed committed Recovery ordering; standard original environment.",
+      "result": "accepted",
+      "reason": "2741normal, vehicleStart and Rejoincomplete1;22presend refusals not sent, no actual late.2nonadjacent overruns retain attribution limits, no race completion.",
+      "production_impact": "Native producer fix validated; live new reverse branch and full race remain open.",
+      "deleted_code": [],
+      "revisit_condition": "New full-course coverage of revised source after vehicleStart; original actual-window failures stop run. No clock-repair claim."
+    },
+    {
+      "experiment_id": "20260913-nine-state-preference-public-r826",
+      "baseline_commit": "7ecd0b36",
+      "snapshot_ids": [
+        "20260913-nine-state-preference-live-seal-r829"
+      ],
+      "hypothesis": "Ordered candidate producer preserves certified normal/Recovery behavior with original deadlines.",
+      "changed_dimension": "Fixed committed Recovery ordering; standard original environment.",
+      "result": "accepted",
+      "reason": "Same-run public velocity/sensor/commands retained.",
+      "production_impact": "Native producer fix validated; live new reverse branch and full race remain open.",
+      "deleted_code": [],
+      "revisit_condition": "New full-course coverage of revised source after vehicleStart; original actual-window failures stop run. No clock-repair claim."
+    },
+    {
+      "experiment_id": "20260913-nine-state-preference-interval-replay-r827",
+      "baseline_commit": "7ecd0b36",
+      "snapshot_ids": [
+        "20260913-nine-state-preference-live-seal-r829"
+      ],
+      "hypothesis": "Ordered candidate producer preserves certified normal/Recovery behavior with original deadlines.",
+      "changed_dimension": "Fixed committed Recovery ordering; standard original environment.",
+      "result": "inconclusive",
+      "reason": "No interval rejection/capture; no replay.",
+      "production_impact": "Native producer fix validated; live new reverse branch and full race remain open.",
+      "deleted_code": [],
+      "revisit_condition": "New full-course coverage of revised source after vehicleStart; original actual-window failures stop run. No clock-repair claim."
+    },
+    {
+      "experiment_id": "20260913-nine-state-preference-direction-replay-r828",
+      "baseline_commit": "7ecd0b36",
+      "snapshot_ids": [
+        "20260913-nine-state-preference-live-seal-r829"
+      ],
+      "hypothesis": "Ordered candidate producer preserves certified normal/Recovery behavior with original deadlines.",
+      "changed_dimension": "Fixed committed Recovery ordering; standard original environment.",
+      "result": "inconclusive",
+      "reason": "No direction failure/capture; all5maneuverselections Forward, new reverse branch unobserved.",
+      "production_impact": "Native producer fix validated; live new reverse branch and full race remain open.",
+      "deleted_code": [],
+      "revisit_condition": "New full-course coverage of revised source after vehicleStart; original actual-window failures stop run. No clock-repair claim."
     }
   ]
 }

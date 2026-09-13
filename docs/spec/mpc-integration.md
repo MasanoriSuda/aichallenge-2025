@@ -8,6 +8,18 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 候補順序修正後のStartと全コース検証（2026-09-13）
+
+7ecd0b36のsingle-r29で車両Start、Rejoin送信5件・復帰完了1回、通常2741送信を確認。
+実期限外送信ゼロ、送信前拒否22件からの通常送信なし。4500callback中2件超過、連続なし。
+2267は28.585ms（normal join16.687/Recovery10.407ms）で送信前拒否、2286は26.109ms
+（Recovery21.738ms、全体CPU14.764ms）。後者の処理内/off-CPU詳細は未確定。
+Recoveryの実選択は前進5件だけで、修正分岐の後退実行は未観測。Startを修正効果と断定しない。
+壁区間拒否・方向不明の新記録はなし。周回・全体M4–M6は未完。
+次は同じ制御コードの全コースsingle-r30（6周/600sim秒、660host秒上限）で未到達範囲を確認。
+過去r26/r80の実送信期限問題は未修復で、同じ元のガードと失敗時の中止を維持する。
+[監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-preference-live-audit.md)。
+
 ## Recoveryの優先候補と残候補の順序修正（2026-09-13）
 
 Recoveryの前進優先を候補順序として実装し、不合格なら残りの既存候補へ進むよう修正。

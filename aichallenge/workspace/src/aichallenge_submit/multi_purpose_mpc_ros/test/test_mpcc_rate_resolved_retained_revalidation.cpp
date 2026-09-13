@@ -4521,6 +4521,101 @@ TEST(MpccScheduledDispatch, FinalIdentityRequiresTheActualSendAndKeepsBothDecisi
   fixture.owner.invalidate(); EXPECT_FALSE(dispatch.publication_identity(fixture.ledger, fixture.owner.capture()));
 }
 
+TEST(MpccScheduledDispatch, RejoinHandoffKeepsSourceDecisionAndCurrentDispatchDistinct)
+{
+  for (const int proof_route : {0, 1, 2}) {
+    SCOPED_TRACE(proof_route);
+    const bool use_domain = proof_route == 2;
+    ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Rejoin, true);
+    const auto domain = use_domain ? scheduled::StartingDomainEvidence::build(f.certificate) : nullptr;
+    if (use_domain) { ASSERT_TRUE(domain); }
+    if (proof_route != 0) {
+      f.fresh.publication_prefix->observation.initial.state.x_m += .001;
+      f.bind_next(0);
+    }
+    const auto result = scheduled::prepare_dispatch(f.certificate, f.fresh, f.context, f.owner.capture(),
+      f.ledger, *f.original_cursor, f.prior_sources, 0, domain);
+    ASSERT_TRUE(result.candidate);
+    EXPECT_EQ(bool(result.candidate->current_domain_proof()), use_domain);
+    EXPECT_EQ(bool(result.candidate->current_physical_proof()), proof_route == 1);
+    const auto &dispatch = *result.candidate;
+    const auto command = dispatch.canonical_command();
+    ASSERT_EQ(command.formulation, contract::Formulation::VelocitySteeringTireBodyProgress9State);
+    ASSERT_NE(command.decision_id, command.execution_certificate_decision_id);
+    ASSERT_EQ(command.execution_certificate_decision_id, dispatch.certificate()->suffix().decision_id);
+    const double cap = command.predicted_speed_mps;
+    ASSERT_GT(cap, 0.0);
+    const auto handoff = [&](const contract::CanonicalNormalCommand &candidate, double limit) {
+      return dispatch.rejoin_handoff_admitted(candidate, contract::ControlIntent::Rejoin, limit,
+        f.ledger, f.owner.capture(), f.fresh.decision_id, f.fresh.now_sec);
+    };
+    EXPECT_TRUE(handoff(command, cap));
+    EXPECT_FALSE(handoff(command, std::nextafter(cap, 0.0)));
+    for (const double limit : {0.0, -1.0, std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity()}) EXPECT_FALSE(handoff(command, limit));
+    for (int fault = 0; fault < 16; ++fault) {
+      SCOPED_TRACE(fault);
+      auto changed = command;
+      switch (fault) {
+        case 0: changed.decision_id++; break;
+        case 1: changed.execution_plan_id++; break;
+        case 2: changed.execution_certificate_decision_id = command.decision_id; break;
+        case 3: changed.problem_fingerprint++; break;
+        case 4: changed.solution_id++; break;
+        case 5: changed.source = contract::CanonicalNormalAuthoritySource::EmergencyStop; break;
+        case 6: changed.intent = contract::ControlIntent::Cruise; break;
+        case 7: changed.formulation = contract::Formulation::VelocitySteeringYawResponseProgress7State; break;
+        case 8: changed.retained_solution = !command.retained_solution; break;
+        case 9: changed.predicted_speed_mps = -1; break;
+        case 10: changed.acceleration_mps2 += .1; break;
+        case 11: changed.curvature_radpm += .1; break;
+        case 12: changed.steering_tire_angle_rad += .1; break;
+        case 13: changed.virtual_progress_speed_mps += .1; break;
+        case 14: changed.predicted_speed_mps = std::numeric_limits<double>::quiet_NaN(); break;
+        case 15: changed.acceleration_mps2 = std::numeric_limits<double>::infinity(); break;
+      }
+      EXPECT_FALSE(handoff(changed, cap));
+    }
+    EXPECT_FALSE(dispatch.rejoin_handoff_admitted(command, contract::ControlIntent::Stop, cap,
+      f.ledger, f.owner.capture(), f.fresh.decision_id, f.fresh.now_sec));
+    EXPECT_FALSE(dispatch.rejoin_handoff_admitted(command, contract::ControlIntent::Rejoin, cap,
+      f.ledger, f.owner.capture(), f.fresh.decision_id + 1, f.fresh.now_sec));
+    EXPECT_FALSE(dispatch.rejoin_handoff_admitted(command, contract::ControlIntent::Rejoin, cap,
+      f.ledger, f.owner.capture(), f.fresh.decision_id, 1.125000001));
+    const auto &packet = dispatch.packet();
+    ASSERT_TRUE(dispatch.matches_before_publication(f.ledger, f.owner.capture(), command.decision_id,
+      f.fresh.now_sec, packet.wire_acceleration_mps2, packet.wire_steering_rad));
+    ASSERT_TRUE(f.ledger.record(packet, f.fresh.now_sec, f.fresh.now_sec, 2, dispatch.source()));
+    const auto receipt = dispatch.publication_identity(f.ledger, f.owner.capture());
+    ASSERT_TRUE(receipt);
+    EXPECT_TRUE(receipt->matches(command));
+    EXPECT_FALSE(handoff(command, cap));  // Actual ledger changed; no second send.
+    auto rewritten = command; rewritten.execution_certificate_decision_id = rewritten.decision_id;
+    EXPECT_FALSE(receipt->matches(rewritten));
+  }
+}
+
+TEST(MpccScheduledDispatch, RejoinHandoffRejectsAnInvalidatedCurrentGeneration)
+{
+  ScheduledDispatchFixture f(1.075, false, contract::ControlIntent::Rejoin, true);
+  const auto result = f.prepare(); ASSERT_TRUE(result.candidate);
+  const auto &dispatch = *result.candidate;
+  const auto command = dispatch.canonical_command();
+  f.owner.invalidate();
+  EXPECT_FALSE(dispatch.rejoin_handoff_admitted(command, contract::ControlIntent::Rejoin,
+    command.predicted_speed_mps, f.ledger, f.owner.capture(), f.fresh.decision_id, f.fresh.now_sec));
+}
+
+TEST(MpccScheduledDispatch, RejoinHandoffCannotRelabelAnAuthenticatedTrack)
+{
+  ScheduledDispatchFixture f;
+  const auto result = f.prepare(); ASSERT_TRUE(result.candidate);
+  const auto &dispatch = *result.candidate;
+  const auto command = dispatch.canonical_command();
+  EXPECT_FALSE(dispatch.rejoin_handoff_admitted(command, contract::ControlIntent::Rejoin,
+    command.predicted_speed_mps, f.ledger, f.owner.capture(), f.fresh.decision_id, f.fresh.now_sec));
+}
+
 TEST(MpccScheduledDispatch, UsesImmutablePlanningClockWhileCurrentCheckOccursInsideTheWindow)
 {
   ScheduledDispatchFixture fixture;

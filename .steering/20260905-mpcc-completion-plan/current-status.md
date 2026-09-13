@@ -3,6 +3,18 @@
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
 **全体未完。単車はReady中に停止し、再発進・完走は未達。観測時刻と接地変動による予測誤差の修正を検証中。**
 
+最新: a865ed4eのsingle-r15は起動clock停止で有効制御なし。single-r16は候補供給が
+Rejoin中も継続し、952/source528の現在証明を受理したが旧ID一致条件が停止で上書き。
+R694で実候補から再現、R695でID書き換え案と厳密な現在dispatcher照合を比較。
+R696のテスト経路不備を保持・修正し、R697は3実証明経路の243native、source118、
+build131全26/package118合格。元証明IDと送信判断IDを保持する引き継ぎへ変更。
+次はローカルcommit固定single-r17で認証済みRejoinの実送信を確認する。
+single-r16最大21.47ms・343通常送信・期限外ゼロだがStart/周回なし。r80D2の実送信
+期限、壁/停止軌道と物理観測、M4–M6は未完。R691は記録範囲外のclock解釈を訂正。
+[現在の引き継ぎ修正・根拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rejoin-handoff-design.md)。
+
+以下の「次」は各時点の履歴。現在の次作業は上記を正本とする。
+
 通常証明の数値実装fdee0b8fは、二つの完全な入力予測範囲と、包含を確認した事前計算の座標変換。
 Build126全26/package113全2622/source112/native216合格。新規single-r11を120秒確認し、
 4255callback最大19.92ms、送信期限拒否・期限外通常送信ともゼロ。局所的な実走時間確認は通過。

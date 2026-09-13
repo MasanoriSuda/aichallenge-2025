@@ -1,0 +1,152 @@
+{
+  "baseline_commit": "a865ed4e",
+  "authority": false,
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp": "7482861e06f348a6ca92da13dd3e8a8c6e3e09f83121e33f401af42eeef9f299",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp": "6c2558496a609199da1a7738ca31d69cdb93944deba7a0d4a3f78e89f887cb57",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_execution_contract.cpp": "1f8df623f1f8fe942111afbd9007ddb792dcd7ff9da223965e53bddf10cae925",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_applied_program.cpp": "00f7563661dab3b574f0af1772dfac809006df50e1b5419bc8a25f0ef63c9721",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "5208f8072914b7365d05072552b3b996f187c8750fcba2a78ee48b0cfcc03700",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_execution_contract.cpp": "3f821aab1f0759fcff9a9995e9ef4a7027668131bd4d15fcb01d9bd13c647537",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp": "3c05bd4fbfb60a5e747cb2c071872da80d75dbb1742d3eb3c40ef91161677c0f",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py": "3bf811f94c83f28d0a72b730409d0565d50171becffba3f5495679bdc073b2d8"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-startup-player-r688/command.log": "b190bfaca422378e882b851af0cd0e469fe50e446bea65bb976a711f4e299b63",
+    "output/20260913-nine-state-startup-player-r688/result.json": "1d1b6190d23b0a55a3d02522586f5150d3362edd3eafb508d5d356c639b70736",
+    "output/20260913-nine-state-clock-phase-audit-r689/runner.py": "902e7b5cbca3c35c3218dd02c204dc05c6343a493b4d6372eef24915c8fee583",
+    "output/20260913-nine-state-clock-phase-audit-r690/dev2-r80-d2-rows.json": "dae94c1ba51ddde58fc289c1cee076a1dc7e4e562812d99745484289702b2b3c",
+    "output/20260913-nine-state-clock-phase-audit-r690/report.json": "62471918fb19dbd6b552675d4d90024262a5c18538c31085cef1863352376f32",
+    "output/20260913-nine-state-clock-phase-audit-r690/runner.py": "a815b0d6c5d42c458220c2e1b8c7b8b8fc98c9bdb84001aee3253cb9bdad25a7",
+    "output/20260913-nine-state-clock-phase-scope-r691/report.json": "79531de84b12009d094b6296bfa389f33899d0bd77f95d38334be9433d100c4a",
+    "output/20260913-nine-state-recovery-live-audit-r692/generator.py": "b8a34d496367f9ad89be85e584e10cb6250920575f2ae88d224f6d68037e72fe",
+    "output/20260913-nine-state-recovery-live-audit-r692/report.json": "b1c9eab7872099fb67ff7c09840be50c2acbd5951001972fad316bcc44477279",
+    "output/20260913-nine-state-recovery-public-r693/generator.py": "a1ac063a852882ec7cdb59a998e3e26fbded6502ef37d7c0ffb6cefd1143773d",
+    "output/20260913-nine-state-recovery-public-r693/report.json": "dfa33f1291aa6d09ceacbf3d0d43aa0b28d44c19f9158dacc102339ce08dabe9",
+    "output/20260913-nine-state-recovery-public-r693/d1.json": "a2988560bc1c52e090d61b79c9be0cb5d7599f944fc3877e890a23204967d38f",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/build-command.json": "77a5a1947dd8df8260b9d089a4b4cfbcc72d42601b78bbef9a6892e087cabaa7",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/test_mpcc_rate_resolved_retained_revalidation.log": "1b6b5c7ac3cb09fb7100c1e1127458ebfa7a8134c17a225f764a356496a5f9ab",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/build.log": "6bc4abac1d077422e45f95fa03fb4c4e8226d34020b60d8587e735eb3c476eaa",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/test_mpcc_rate_resolved_retained_revalidation.xml": "36da32053c05c16479c439644db7a332e27e29efd1ad78eeb577738d4371674e",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/result.json": "c7e87e63e769f6617a4238fdc30960226b491d0acbb0d27e656edba8f6eea563",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/runner.py": "af74e3dca04c7eaf38041e7fc1ac05e24e90870e5e0088d9f2328d0a7f9e5a6c",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/test/test_single_authority_source_contract.py": "c3912b57308de883e517d1d755c320e18894e7b3350d039e575b0ca7da5e7cd5",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/test/test_mpcc_execution_contract.cpp": "96a76d6e35bfedd4b057c3b1c04ca898574a5cf57f2d52b5d11a2ba36208a289",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/test/test_mpcc_rate_resolved_retained_revalidation.cpp": "fb51886a19ac885c2e907c2a1dff6b51aa3c8e62c211a69c2635fff9444723d9",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp": "b76666c5b036d15b1971cae10474364aa4a0c0e60bf95fb49ef981eed7511f01",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp": "666c7718747b7f77de98164c40a0378d19a4d8f3dd6cd333478fd11b1b101934",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/src/mpc_controller_cpp.cpp": "b52831bb9f994ac6ac69434e277719c09d831ad76377933a5a4d3db150cc62f2",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/src/mpcc_execution_contract.cpp": "fe371e921be40a3de6fc57416b3cb049edeb5a0881dff81fdda27b829e74a5db",
+    "output/20260913-nine-state-rejoin-handoff-before-r694/src/stuck_recovery_core.cpp": "2f0bb9f72ef2bcf5f954d49d68e2ef99476e497780e5b09a6a4c8277e919b8ca",
+    "output/20260913-nine-state-rejoin-handoff-audit-r695/report.json": "03737858d4de370b74f07e61fc501bf5611533a3c8b550021518ac0bb33a2739",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/test_mpcc_execution_contract.xml": "4cc41e3e524ef096eea7c5dff46d8cda117170dbcd3a3f42df4f929279a55a1f",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/test_mpcc_execution_contract.log": "21c177b50985919c4f6dcf8c83b1b9064d674ca575edb382abe4bb46e3e675ee",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/build-command.json": "24912cec75dad6b96776fbf371916466cfd4238e5ad123dbf3c821c07b660054",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/test_mpcc_rate_resolved_retained_revalidation.log": "f69eb414a80ff0de9b5775a4dbeb1e14fb6f91fab93727548c560ed7f6f63830",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/build.log": "00a2fa33051d9b7308cb0923b6ffe45083d8c2420d92a6902721e222d9af06b2",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/test_mpcc_rate_resolved_retained_revalidation.xml": "a5d4650511994d7092323392315f064eee1785a117da25ed9beaae01d249fd82",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/result.json": "4f86b04352f2aa795cdcd60debfd6a857e2656cfd7dd277a6c1605e350e7d3a0",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/runner.py": "cd82e0c8f2f2bb931ab1712305438433935c2a259f712a081f191cffaea8e3b7",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/test/test_single_authority_source_contract.py": "3bf811f94c83f28d0a72b730409d0565d50171becffba3f5495679bdc073b2d8",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/test/test_mpcc_execution_contract.cpp": "3f821aab1f0759fcff9a9995e9ef4a7027668131bd4d15fcb01d9bd13c647537",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/test/test_mpcc_rate_resolved_retained_revalidation.cpp": "223d03f01d1a8fa5c06f888f3ef41a3baafc652027db80cd757073241f71166a",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp": "7482861e06f348a6ca92da13dd3e8a8c6e3e09f83121e33f401af42eeef9f299",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/include/multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp": "6c2558496a609199da1a7738ca31d69cdb93944deba7a0d4a3f78e89f887cb57",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/src/mpc_controller_cpp.cpp": "5208f8072914b7365d05072552b3b996f187c8750fcba2a78ee48b0cfcc03700",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/src/mpcc_execution_contract.cpp": "1f8df623f1f8fe942111afbd9007ddb792dcd7ff9da223965e53bddf10cae925",
+    "output/20260913-nine-state-rejoin-handoff-after-r696/src/mpcc_rate_resolved_applied_program.cpp": "00f7563661dab3b574f0af1772dfac809006df50e1b5419bc8a25f0ef63c9721",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/test_mpcc_execution_contract.xml": "79aa91752c26fa712202fd57e8546e6c9a2694e34d7c5500c47d05f56e2f1251",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/test_mpcc_execution_contract.log": "d3a77c85f24da90cbbe912066a34f1589a97e88c0b390f1f8f7e14713881a078",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/build-command.json": "24912cec75dad6b96776fbf371916466cfd4238e5ad123dbf3c821c07b660054",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/test_mpcc_rate_resolved_retained_revalidation.log": "768610729c4acc57093f292bd1192d3a94dbd1c963811f8c2bde4ce206227d94",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/build.log": "b84ff31ba1f4777d8a12657d48bc2cd0fa786c0622f632fbc74d81a646b513ea",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/test_mpcc_rate_resolved_retained_revalidation.xml": "64cf6aa094b19d4a551d1a9d71f7abdbcf44a0df8d7b5ca50c861241f5586a25",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/result.json": "4d1d7a1588e2cf0ca3364bf5a3581c36ca972a783dd3353f8f1c697dcbbd9ba1",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/runner.py": "d2fdb9fffd1ded68c256a115e505ce50044f8571d7d3c9f77ce865794ffb42b8",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/test/test_single_authority_source_contract.py": "3bf811f94c83f28d0a72b730409d0565d50171becffba3f5495679bdc073b2d8",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/test/test_mpcc_execution_contract.cpp": "3f821aab1f0759fcff9a9995e9ef4a7027668131bd4d15fcb01d9bd13c647537",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/test/test_mpcc_rate_resolved_retained_revalidation.cpp": "3c05bd4fbfb60a5e747cb2c071872da80d75dbb1742d3eb3c40ef91161677c0f",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp": "7482861e06f348a6ca92da13dd3e8a8c6e3e09f83121e33f401af42eeef9f299",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/include/multi_purpose_mpc_ros/mpcc_scheduled_dispatch.hpp": "6c2558496a609199da1a7738ca31d69cdb93944deba7a0d4a3f78e89f887cb57",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/src/mpc_controller_cpp.cpp": "5208f8072914b7365d05072552b3b996f187c8750fcba2a78ee48b0cfcc03700",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/src/mpcc_execution_contract.cpp": "1f8df623f1f8fe942111afbd9007ddb792dcd7ff9da223965e53bddf10cae925",
+    "output/20260913-nine-state-rejoin-handoff-routes-r697/src/mpcc_rate_resolved_applied_program.cpp": "00f7563661dab3b574f0af1772dfac809006df50e1b5419bc8a25f0ef63c9721",
+    "output/20260913-nine-state-build131/status.json": "4b1f2c3e8566dbce602fb3daefa5c4eceff8cf586f990fdf7b537f5b4466267f",
+    "output/20260913-nine-state-build131/build.log": "5460fdd021f3232dfc404e8e6dd2d7c5f9f438e8f5a043d2ed80da519668e530",
+    "output/20260913-nine-state-build131/runner.py": "2a4367db9d32692e8827266095ad5ea5ef3479fc55a1098d64a2ce9f7ecaa309",
+    "output/20260913-nine-state-build131/manifest.json": "01bdef2da90a7a60d6d139d8de7d0078ec65d8565499e92b0b160c6cad39a88a",
+    "output/20260913-nine-state-package118/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package118/test.log": "a85e67f1172597baa1d1e3cd82e7b53c436607aaf1f8b33a9fcfd5f752363c30",
+    "output/20260913-nine-state-package118/status.json": "019d7fee12e05ac95418cadcf6879bfb85f61f35eccd4431f5f188f1e154b78c",
+    "output/20260913-nine-state-package118/test-result.log": "1265935e24e5dbe3b415569783748be25d61b39600bac1b9438c8d26c64ae4ab",
+    "output/20260913-nine-state-package118/runner.py": "2101e81a9e82a4f63e6c8d65a14e9e81208de26aeddd840130c991e28cdce272"
+  },
+  "source_tests": 118,
+  "native_tests": 243,
+  "package_summary": "Summary: 2639 tests, 0 errors, 0 failures, 0 skipped",
+  "experiments": {
+    "688": {
+      "result": "rejected",
+      "reason": "single-r15 startup produced no usable controller/bag observations. Diagnostic Player.log recovery used wrong Compose service awsim instead of simulator; no log obtained. Original failed setup retained.",
+      "path": "output/20260913-nine-state-startup-player-r688"
+    },
+    "689": {
+      "result": "rejected",
+      "reason": "Attempt to read absent single-r15 bag failed before timing analysis; no product timing verdict. R690 handles missing bag explicitly.",
+      "path": "output/20260913-nine-state-clock-phase-audit-r689"
+    },
+    "690": {
+      "result": "accepted",
+      "reason": "R80D2 recorded790unique clocks fit float32-5ms grid; ideal25ms nominal often opens one clock tick later. Diagnostic fit only. Raw bisect gaps outside recorded interval require R691 correction.",
+      "path": "output/20260913-nine-state-clock-phase-audit-r690"
+    },
+    "691": {
+      "result": "accepted",
+      "reason": "Explicitly restrict opening-lag claims to145bracketed nominals,median4999977ns. Decision593 is outside recorded interval:399999985ns raw gap is NOT appointment latency. No production clock change.",
+      "path": "output/20260913-nine-state-clock-phase-scope-r691"
+    },
+    "692": {
+      "result": "rejected",
+      "reason": "single-r16 on a865ed4e:4239callbacks,max21.468977ms,no actual post-send violation;343normal sends last884. Candidate production/current admissions resume in Rejoin but every Rejoin send still overridden; no Start/laps.",
+      "path": "output/20260913-nine-state-recovery-live-audit-r692"
+    },
+    "693": {
+      "result": "accepted",
+      "reason": "Same-run public topics: maximumabsvelocity0.941861mps; clock200Hz,pose50Hz,velocity28.57Hz,IMU20Hz. No direct physical/receiver truth or race acceptance.",
+      "path": "output/20260913-nine-state-recovery-public-r693"
+    },
+    "694": {
+      "result": "accepted",
+      "reason": "Actual native producer reproduces old handoff rejection with distinct source/current IDs; exact-send receipt rejects forging sourceID. Both configurations use original enclosing tube, not separate physical/domain routes.",
+      "path": "output/20260913-nine-state-rejoin-handoff-before-r694"
+    },
+    "695": {
+      "result": "accepted",
+      "reason": "Seal decision952 acceptedRejoin source528/job951 then RecoveryStop and compare old equality, rewrittenID and current authenticated dispatcher. Final overridden trace zeros are not pre-arbitration fields; exact952 snapshot unavailable. Initial route wording corrected by R696/R697.",
+      "path": "output/20260913-nine-state-rejoin-handoff-audit-r695"
+    },
+    "696": {
+      "result": "rejected",
+      "reason": "New handoff passes but new coverage assertions expose fixture using original tube in both configurations; full78contract+164of165retained pass. Preserve failed test; do not weaken assertions.",
+      "path": "output/20260913-nine-state-rejoin-handoff-after-r696"
+    },
+    "697": {
+      "result": "accepted",
+      "reason": "Add changed-current position and explicitly assert original tube/independent physical/domain routes. Three routes pass exact identity,cap,all command mutations,current decision/window,changed ledger,invalidated context and final source receipt. Native78contract+165retained=243pass; source118/build131/package118pass.",
+      "path": "output/20260913-nine-state-rejoin-handoff-routes-r697"
+    }
+  },
+  "review": {
+    "result": "No additional actionable defect found in changed producer/callers. Retired scalar identity heuristic and fabricated positive test. Exact value comparison is shared with final receipt; no opaque receipt is minted before actual send.",
+    "limits": "Not independent-agent review. Runtime certified Rejoin pending; physical calibration/source geometry/r80post-send window unresolved. Public ROS interfaces and DLL unchanged."
+  },
+  "remaining": "Local commit then single-r17 for actual certified Rejoin; separate timing/physical/M4–M6 completion remains."
+}

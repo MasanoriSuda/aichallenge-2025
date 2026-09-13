@@ -1616,6 +1616,30 @@ retained::contract::CanonicalNormalCommand DispatchCandidate::canonical_command(
   command.virtual_progress_speed_mps=std::max(0.0,certificate_->nominal()->proof().actuation.virtual_progress_speed_mps);
   return command;
 }
+bool DispatchCandidate::rejoin_handoff_admitted(
+    const retained::contract::CanonicalNormalCommand &command,
+    retained::contract::ControlIntent publication_intent, double speed_limit_mps,
+    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
+    std::uint64_t current_decision_id, double now_sec) const {
+  const auto original = canonical_command();
+  return original.same_command(command) &&
+    command.intent == retained::contract::ControlIntent::Rejoin &&
+    publication_intent == retained::contract::ControlIntent::Rejoin &&
+    command.formulation == retained::contract::Formulation::VelocitySteeringTireBodyProgress9State &&
+    command.source == retained::contract::CanonicalNormalAuthoritySource::RetainedCertified &&
+    command.decision_id != 0 && command.execution_plan_id != 0 &&
+    command.execution_certificate_decision_id != 0 && command.problem_fingerprint != 0 &&
+    command.solution_id != 0 &&
+    std::isfinite(speed_limit_mps) && speed_limit_mps > 0 &&
+    std::isfinite(command.predicted_speed_mps) && command.predicted_speed_mps >= 0 &&
+    command.predicted_speed_mps <= speed_limit_mps &&
+    std::isfinite(command.acceleration_mps2) && std::isfinite(command.curvature_radpm) &&
+    std::isfinite(command.steering_tire_angle_rad) &&
+    std::isfinite(command.virtual_progress_speed_mps) && command.virtual_progress_speed_mps >= 0 &&
+    matches_before_publication(ledger, current_generation, current_decision_id, now_sec,
+      packet_.wire_acceleration_mps2, packet_.wire_steering_rad);
+}
+
 std::shared_ptr<const retained::contract::PublishedScheduledIdentity> DispatchCandidate::publication_identity(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation) const {
   if (!matches_after_publication(ledger, current_generation)) return nullptr;
   return std::shared_ptr<const retained::contract::PublishedScheduledIdentity>(

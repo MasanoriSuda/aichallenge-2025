@@ -1471,6 +1471,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rejoin-supply-validation.json",
       "replay_ready": true,
       "reason": "Rejoin source starvation vs actual post-publication deadline failure; separately replayed, no authority relaxation."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-rejoin-handoff-seal-r698",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rejoin-handoff-validation.json",
+      "replay_ready": true,
+      "reason": "Native canonical dispatcher handoff provenance, sealed live admission/override and corrected clock-audit scope; no physical/timing relaxation."
     }
   ],
   "experiments": [
@@ -19314,6 +19320,148 @@
       "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
       "deleted_code": [],
       "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-startup-player-r688",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "rejected",
+      "reason": "single-r15 startup produced no usable controller/bag observations. Diagnostic Player.log recovery used wrong Compose service awsim instead of simulator; no log obtained. Original failed setup retained.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-clock-phase-audit-r689",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "rejected",
+      "reason": "Attempt to read absent single-r15 bag failed before timing analysis; no product timing verdict. R690 handles missing bag explicitly.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-clock-phase-audit-r690",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "accepted",
+      "reason": "R80D2 recorded790unique clocks fit float32-5ms grid; ideal25ms nominal often opens one clock tick later. Diagnostic fit only. Raw bisect gaps outside recorded interval require R691 correction.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-clock-phase-scope-r691",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "accepted",
+      "reason": "Explicitly restrict opening-lag claims to145bracketed nominals,median4999977ns. Decision593 is outside recorded interval:399999985ns raw gap is NOT appointment latency. No production clock change.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-live-audit-r692",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "rejected",
+      "reason": "single-r16 on a865ed4e:4239callbacks,max21.468977ms,no actual post-send violation;343normal sends last884. Candidate production/current admissions resume in Rejoin but every Rejoin send still overridden; no Start/laps.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-public-r693",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "accepted",
+      "reason": "Same-run public topics: maximumabsvelocity0.941861mps; clock200Hz,pose50Hz,velocity28.57Hz,IMU20Hz. No direct physical/receiver truth or race acceptance.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-handoff-before-r694",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "accepted",
+      "reason": "Actual native producer reproduces old handoff rejection with distinct source/current IDs; exact-send receipt rejects forging sourceID. Both configurations use original enclosing tube, not separate physical/domain routes.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-handoff-audit-r695",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "accepted",
+      "reason": "Seal decision952 acceptedRejoin source528/job951 then RecoveryStop and compare old equality, rewrittenID and current authenticated dispatcher. Final overridden trace zeros are not pre-arbitration fields; exact952 snapshot unavailable. Initial route wording corrected by R696/R697.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-handoff-after-r696",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "rejected",
+      "reason": "New handoff passes but new coverage assertions expose fixture using original tube in both configurations; full78contract+164of165retained pass. Preserve failed test; do not weaken assertions.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-handoff-routes-r697",
+      "baseline_commit": "a865ed4e",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-handoff-seal-r698"
+      ],
+      "hypothesis": "Rejoin authority handoff must authenticate current dispatch while preserving original worker certificate identity.",
+      "changed_dimension": "Only handoff identity boundary and exact command equality; physical model/source proof/solver/clock/rates unchanged.",
+      "result": "accepted",
+      "reason": "Add changed-current position and explicitly assert original tube/independent physical/domain routes. Three routes pass exact identity,cap,all command mutations,current decision/window,changed ledger,invalidated context and final source receipt. Native78contract+165retained=243pass; source118/build131/package118pass.",
+      "production_impact": "R697 current opaque dispatcher authenticates exact command/live ledger/context/current ID/original window before handoff; original publisher still checks both actual endpoints.",
+      "deleted_code": [
+        "Standalone same-ID Recovery handoff heuristic and fabricated positive fixture"
+      ],
+      "revisit_condition": "New failing invariant or changed structural dimension; no ID rewriting,deadline/tolerance/retry relaxation."
     }
   ]
 }

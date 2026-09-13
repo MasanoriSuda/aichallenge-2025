@@ -59136,9 +59136,12 @@ private:
 
     recovery_boost_suppressed_for_session_ = true;
     if (output.action.type == stuck_recovery::RecoveryActionType::LowSpeedRejoin) {
-      if (!recovery_rejoin_hold_cycle_ && normal_execution_active && normal_command &&
-        mpcc_contract::canonical_rejoin_command_within_limit(
-          *normal_command, publication_intent, output.action.rejoin_speed_limit_mps))
+      const auto dispatch = mpc_ ? mpc_->scheduled_dispatch_candidate() : nullptr;
+      if (!recovery_rejoin_hold_cycle_ && normal_execution_active && normal_command && dispatch &&
+        dispatch->rejoin_handoff_admitted(
+          *normal_command, publication_intent, output.action.rejoin_speed_limit_mps,
+          published_input_ledger_, mpc_->current_normal_context_generation(),
+          active_control_decision_id_, now().seconds()))
       {
         // Keep the solved actuation and scheduled publication proof intact.
         return false;

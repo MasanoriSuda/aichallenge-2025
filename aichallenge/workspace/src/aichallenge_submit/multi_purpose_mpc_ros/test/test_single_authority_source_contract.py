@@ -3860,8 +3860,8 @@ def test_recovery_rejoin_cannot_synthesize_a_second_normal_command():
         'const bool reverse_reported_fresh', 1
     )[0]
     assert 'u[1] = output.action.steering_tire_angle_rad / steering_gain' not in rejoin
-    assert 'canonical_rejoin_command_within_limit' in arbitration
-    assert arbitration.index('canonical_rejoin_command_within_limit') < arbitration.index(
+    assert 'rejoin_handoff_admitted' in arbitration
+    assert arbitration.index('rejoin_handoff_admitted') < arbitration.index(
         'invalidate_scheduled_context'
     )
 

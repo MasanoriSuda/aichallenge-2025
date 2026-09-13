@@ -143,6 +143,15 @@ public:
     return current_physical_proof_ ? current_physical_proof_->tube().numerical.context_fingerprint : certificate_->tube().context_fingerprint;
   }
   retained::contract::CanonicalNormalCommand canonical_command() const;
+
+  /// Additional Recovery handoff check on this current certified dispatcher.
+  /// Retain distinct worker/source and dispatch decisions; never forge a new
+  /// certificate ID. The actual publisher must still check both send endpoints.
+  bool rejoin_handoff_admitted(const retained::contract::CanonicalNormalCommand &command,
+    retained::contract::ControlIntent publication_intent, double speed_limit_mps,
+    const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation,
+    std::uint64_t current_decision_id, double now_sec) const;
+
   std::shared_ptr<const retained::contract::PublishedScheduledIdentity> publication_identity(const vehicle::PublishedInputLedger &ledger, const ContextSnapshot &current_generation) const;
 
   /// The creation clock comes from the immutable proof's original observation.

@@ -510,15 +510,10 @@ struct CanonicalNormalCommand
   /// Physical tire angle used by the bicycle model, wall certificate and wire.
   double steering_tire_angle_rad{};
   double virtual_progress_speed_mps{};
-};
 
-/// Opaque identity of one actual scheduled publication. Only the dispatcher
-/// can construct it after checking the live ledger and raw post-send bracket.
-/// Historical log evidence; it grants no permission for another command.
-class PublishedScheduledIdentity {
-public:
-  bool matches(const CanonicalNormalCommand &command) const noexcept {
-    const auto &actual=command_;
+  /// Exact values only; this comparison does not grant publication authority.
+  bool same_command(const CanonicalNormalCommand &command) const noexcept {
+    const auto &actual=*this;
     return command.decision_id==actual.decision_id && command.execution_plan_id==actual.execution_plan_id &&
       command.execution_certificate_decision_id==actual.execution_certificate_decision_id &&
       command.problem_fingerprint==actual.problem_fingerprint && command.solution_id==actual.solution_id &&
@@ -527,6 +522,16 @@ public:
       command.acceleration_mps2==actual.acceleration_mps2 && command.curvature_radpm==actual.curvature_radpm &&
       command.steering_tire_angle_rad==actual.steering_tire_angle_rad &&
       command.virtual_progress_speed_mps==actual.virtual_progress_speed_mps;
+  }
+};
+
+/// Opaque identity of one actual scheduled publication. Only the dispatcher
+/// can construct it after checking the live ledger and raw post-send bracket.
+/// Historical log evidence; it grants no permission for another command.
+class PublishedScheduledIdentity {
+public:
+  bool matches(const CanonicalNormalCommand &command) const noexcept {
+    return command_.same_command(command);
   }
 private:
   friend class mpcc_rate_resolved_scheduled::DispatchCandidate;
@@ -565,12 +570,6 @@ bool canonical_normal_command_matches_actuation(
 /// Recovery requests a normal Rejoin problem; deliberate stops keep priority.
 ControlIntent resolve_recovery_rejoin_intent(
   ControlIntent normal_intent, bool rejoin_requested) noexcept;
-
-/// Additional handoff check on an already current-world-certified command.
-/// This neither certifies a command nor permits altering its actuation values.
-bool canonical_rejoin_command_within_limit(
-  const CanonicalNormalCommand & command, ControlIntent publication_intent,
-  double speed_limit_mps) noexcept;
 
 /// Verify the physical command after calibrated serialization into the ROS
 /// control message. The canonical command remains in model/physical units;

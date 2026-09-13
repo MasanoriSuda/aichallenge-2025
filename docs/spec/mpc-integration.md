@@ -8,6 +8,22 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Rejoin引き継ぎと非同期証明ID（2026-09-13）
+
+single-r16ではRejoin候補供給が再開し、952でsource528/job951の現在証明も受理したが、
+Recoveryが停止で上書きした。元の証明判断IDと現在送信判断IDの一致を要求する旧条件が原因。
+実際の候補生成からR694で再現し、ID書き換えが実送信の記録と一致しないことも確認した。
+新しい引き継ぎは現在のopaque DispatchCandidateが指令全体・入力履歴・世代・現在判断・
+元の期限を厳密に照合する。元ID、指令、速度上限を保持し、実送信前後の確認も維持する。
+R696はテスト経路の取り違えを検出。R697は元予測内・独立物理・領域の3経路で243native合格、
+source118/build131/package118合格。次は固定commitのsingle-r17で実際のRejoin送信を確認。
+
+single-r15は起動時clock停止で有効な制御・bagなし。single-r16は4239callback最大21.47ms、
+通常343件で期限外通常送信ゼロだが、Rejoin送信・Start・周回なし。r80D2の実送信期限問題、
+壁/停止軌道・物理観測モデルと統合受入れは未解決。R691はclock記録範囲外の593について
+R690の生の時間差を遅延と解釈しないよう訂正した。時計仕様や保証は変更していない。
+[設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rejoin-handoff-design.md)。
+
 ## Rejoin認証待ちでの候補供給（2026-09-13）
 
 single-r14の10回のLowSpeedRejoinで、認証待ち停止のRecovery overrideが次の通常候補と

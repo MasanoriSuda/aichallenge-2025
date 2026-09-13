@@ -1633,6 +1633,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-preference-live-evidence.json",
       "replay_ready": false,
       "reason": "Same-run live/public evidence; no interval/direction capture; original full-course acceptance still open."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-full-course-seal-r837",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-course-current-audit-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact current interval1263 and actual deadline8440 source/history/proof-route replay."
     }
   ],
   "experiments": [
@@ -21188,6 +21194,104 @@
       "production_impact": "Native producer fix validated; live new reverse branch and full race remain open.",
       "deleted_code": [],
       "revisit_condition": "New full-course coverage of revised source after vehicleStart; original actual-window failures stop run. No clock-repair claim."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-audit-r830",
+      "baseline_commit": "521b80b90bd7538a0ac68aa5b3a6d3c3fe484add",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-seal-r837"
+      ],
+      "hypothesis": "Current full-course authority and original timing/wall invariants hold.",
+      "changed_dimension": "Longer coverage of fixed controller; replay diagnostics only.",
+      "result": "rejected",
+      "reason": "Actual normal8440 deadline failure;2420successful logs exclude that send. No laps; later sends retained.",
+      "production_impact": "No source change. Actual deadline unresolved; guarded interval result is correct.",
+      "deleted_code": [],
+      "revisit_condition": "Rendering-cap confound isolated by graphical200FPS diagnostic; do not repeat unchanged failed full-course or relax safety guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-public-r831",
+      "baseline_commit": "521b80b90bd7538a0ac68aa5b3a6d3c3fe484add",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-seal-r837"
+      ],
+      "hypothesis": "Current full-course authority and original timing/wall invariants hold.",
+      "changed_dimension": "Longer coverage of fixed controller; replay diagnostics only.",
+      "result": "accepted",
+      "reason": "Same-run public data and source-frequency evidence; not race acceptance.",
+      "production_impact": "No source change. Actual deadline unresolved; guarded interval result is correct.",
+      "deleted_code": [],
+      "revisit_condition": "Rendering-cap confound isolated by graphical200FPS diagnostic; do not repeat unchanged failed full-course or relax safety guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-interval-r832",
+      "baseline_commit": "521b80b90bd7538a0ac68aa5b3a6d3c3fe484add",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-seal-r837"
+      ],
+      "hypothesis": "Current full-course authority and original timing/wall invariants hold.",
+      "changed_dimension": "Longer coverage of fixed controller; replay diagnostics only.",
+      "result": "accepted",
+      "reason": "All original interval queries/results exact;1mm guarded boundary correctly rejects current preferred position.",
+      "production_impact": "No source change. Actual deadline unresolved; guarded interval result is correct.",
+      "deleted_code": [],
+      "revisit_condition": "Rendering-cap confound isolated by graphical200FPS diagnostic; do not repeat unchanged failed full-course or relax safety guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-direction-r833",
+      "baseline_commit": "521b80b90bd7538a0ac68aa5b3a6d3c3fe484add",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-seal-r837"
+      ],
+      "hypothesis": "Current full-course authority and original timing/wall invariants hold.",
+      "changed_dimension": "Longer coverage of fixed controller; replay diagnostics only.",
+      "result": "inconclusive",
+      "reason": "No actual direction-failure capture in this run.",
+      "production_impact": "No source change. Actual deadline unresolved; guarded interval result is correct.",
+      "deleted_code": [],
+      "revisit_condition": "Rendering-cap confound isolated by graphical200FPS diagnostic; do not repeat unchanged failed full-course or relax safety guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-post-deadline-r834",
+      "baseline_commit": "521b80b90bd7538a0ac68aa5b3a6d3c3fe484add",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-seal-r837"
+      ],
+      "hypothesis": "Current full-course authority and original timing/wall invariants hold.",
+      "changed_dimension": "Longer coverage of fixed controller; replay diagnostics only.",
+      "result": "rejected",
+      "reason": "Replay driver incorrectly demanded CurrentDomainProof for actual independent CurrentPhysicalProof; no production conclusion.",
+      "production_impact": "No source change. Actual deadline unresolved; guarded interval result is correct.",
+      "deleted_code": [],
+      "revisit_condition": "Rendering-cap confound isolated by graphical200FPS diagnostic; do not repeat unchanged failed full-course or relax safety guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-full-course-publication-clock-r835",
+      "baseline_commit": "521b80b90bd7538a0ac68aa5b3a6d3c3fe484add",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-seal-r837"
+      ],
+      "hypothesis": "Current full-course authority and original timing/wall invariants hold.",
+      "changed_dimension": "Longer coverage of fixed controller; replay diagnostics only.",
+      "result": "accepted",
+      "reason": "44830source clocks exactly fit float32 5ms ticks; immutable8440opening15ns after prior tick. No clock policy change.",
+      "production_impact": "No source change. Actual deadline unresolved; guarded interval result is correct.",
+      "deleted_code": [],
+      "revisit_condition": "Rendering-cap confound isolated by graphical200FPS diagnostic; do not repeat unchanged failed full-course or relax safety guards."
+    },
+    {
+      "experiment_id": "20260913-nine-state-proof-route-deadline-r836",
+      "baseline_commit": "521b80b90bd7538a0ac68aa5b3a6d3c3fe484add",
+      "snapshot_ids": [
+        "20260913-nine-state-full-course-seal-r837"
+      ],
+      "hypothesis": "Current full-course authority and original timing/wall invariants hold.",
+      "changed_dimension": "Longer coverage of fixed controller; replay diagnostics only.",
+      "result": "accepted",
+      "reason": "Correct original proof route/source/history/wire/epoch; beforetrue/rawfalse/afterfalse exactly reproduce8440.",
+      "production_impact": "No source change. Actual deadline unresolved; guarded interval result is correct.",
+      "deleted_code": [],
+      "revisit_condition": "Rendering-cap confound isolated by graphical200FPS diagnostic; do not repeat unchanged failed full-course or relax safety guards."
     }
   ]
 }

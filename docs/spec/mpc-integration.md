@@ -8,6 +8,18 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 現行全コースの実送信期限超過と壁区間再生（2026-09-13）
+
+single-r30は実送信8440の期限超過で中止。正常送信2420件とは別に失敗した通常送信1件を保持。
+元の入力・履歴・証明経路をR836で一致再生し、送信前許可→raw診断終了時点/送信後拒否を確認。
+8784callback中644の1件25.030ms、連続超過なし。車両Start/Rejoin復帰1回、周回は未達。
+壁区間1263は全地図・元クエリで完全一致。現在は非接触だが、1mm上側の安全余裕込み車体は
+壁セル466554に接するため、既存境界ガードの拒否は正当。壁条件を緩めない。
+原DLLの標準60FPS制限はbatchmode/nographicsでも解除される。r27は描画だけの比較ではなかった。
+次は描画を保つ--target-fps 200だけのsingle-r31（120host秒）で制限の影響を切り分ける。
+物理・時計刻み・制御・25ms期限とガードは維持。時計問題・全コース/M4–M6は未完。
+[監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/full-course-current-audit.md)。
+
 ## 候補順序修正後のStartと全コース検証（2026-09-13）
 
 7ecd0b36のsingle-r29で車両Start、Rejoin送信5件・復帰完了1回、通常2741送信を確認。

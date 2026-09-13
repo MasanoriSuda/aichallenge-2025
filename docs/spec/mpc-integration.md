@@ -8,6 +8,16 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 予約順修正後の単車検証（2026-09-13）
+
+7468cf46のsingle-r20:通常534送信、認証済みRejoin1件、4257callback最大17.98ms、
+実期限外送信ゼロ。1111は送信前拒否。復帰完了・車両Start・周回なし（ゲームStart成立）。
+予約無効13件は期限超過9/期限前4で、保存済み577/780は世代失効。期限を緩めない。
+後半は壁プロファイルと停止コース形状を生成できずStore704で停止。後段の完全入力は
+未取得のため、物理的余裕があるとは断定しない。先に保存済みRejoin548の別世界で
+固定準備候補と自由QPを比較し、生成元の修正を絞る。全体M4–M6は未完。
+[監査と証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-order-live-audit.md)。
+
 ## 予約済み区間を優先する計算順（2026-09-13）
 
 予約区間優先の候補生成順を実装。元の期限・壁・他車・停止・指令履歴の検証と、

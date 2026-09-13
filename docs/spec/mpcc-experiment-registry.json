@@ -1519,6 +1519,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-program-order-validation.json",
       "replay_ready": true,
       "reason": "Old deterministic producer-order failure, five holdouts, full native/package tests and actual archive six-source equivalence."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-order-live-seal-r746",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/reserved-order-live-evidence.json",
+      "replay_ready": true,
+      "reason": "Fixed source-order live run; original deadlines/contexts preserved, explicit missing later geometry input and complete earlierRejoin548."
     }
   ],
   "experiments": [
@@ -20030,6 +20036,34 @@
       "production_impact": "One downstream candidate-order repair, no new normal authority or parameter/timeout change. Live acceptance pending.",
       "deleted_code": [],
       "revisit_condition": "New frozen scheduled/peer/cursor context or runtime replenishment failure. Never waive original hard wall, final send or rest contract."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-order-live-audit-r744",
+      "baseline_commit": "7468cf46",
+      "snapshot_ids": [
+        "20260913-nine-state-order-live-seal-r746"
+      ],
+      "hypothesis": "Reserved-span-first producer preserves all safety contracts and improves actual replenishment.",
+      "changed_dimension": "Fixed committed producer order on new standard live world; unchanged model/parameters/clock and source/binary hashes.",
+      "result": "inconclusive",
+      "reason": "Live534normal/oneRejoin/max17.98ms/noactualdeadlinefailures;13reservation invalids separated by clocks and captured source generations. Missing later Stop profile remains.",
+      "production_impact": "Local frozen-order fix remains; integrated replenishment/race acceptance not established. Do not infer late wall geometry is clear.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing-boundary input, validated preparation generation or structural current/clock change. No repeat without new dimension or relaxed clearance/window."
+    },
+    {
+      "experiment_id": "20260913-nine-state-reserved-order-public-r745",
+      "baseline_commit": "7468cf46",
+      "snapshot_ids": [
+        "20260913-nine-state-order-live-seal-r746"
+      ],
+      "hypothesis": "Reserved-span-first producer preserves all safety contracts and improves actual replenishment.",
+      "changed_dimension": "Fixed committed producer order on new standard live world; unchanged model/parameters/clock and source/binary hashes.",
+      "result": "inconclusive",
+      "reason": "Same-run public topics/max1.07347mps; globalgameStartpresent, vehicleStart/laps absent. No direct physical/contact truth.",
+      "production_impact": "Local frozen-order fix remains; integrated replenishment/race acceptance not established. Do not infer late wall geometry is clear.",
+      "deleted_code": [],
+      "revisit_condition": "New exact missing-boundary input, validated preparation generation or structural current/clock change. No repeat without new dimension or relaxed clearance/window."
     }
   ]
 }

@@ -1621,6 +1621,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/first-interval-live-evidence.json",
       "replay_ready": true,
       "reason": "Exact first Recovery direction failure2906; original four trials and configured reverse diagnostics."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-recovery-preference-validation-r824",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-preference-order-validation.json",
+      "replay_ready": true,
+      "reason": "Original2906 full map and cropped regression, exclusive/ordered helper comparison and final code validation."
     }
   ],
   "experiments": [
@@ -21056,6 +21062,70 @@
       "production_impact": "Supports candidate-order repair tests, no authority or safety relaxation.",
       "deleted_code": [],
       "revisit_condition": "Implement/test ordering semantics, preserve all hard negatives and actual downstream V2X/gear; new structural live run."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-preference-old-r821",
+      "baseline_commit": "1e59065e",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-preference-validation-r824"
+      ],
+      "hypothesis": "Forward preference must preserve remaining original candidate evaluation after failure.",
+      "changed_dimension": "Selection ordering; identical Forward selector result reused only within same query.",
+      "result": "rejected",
+      "reason": "Exclusive preferred selection omits reverse;2of73regressions fail.",
+      "production_impact": "Existing Recovery authority only, all original safety and normal proof gates retained.",
+      "deleted_code": [
+        "Exclusive preferred-failure branch that omitted remaining candidates"
+      ],
+      "revisit_condition": "New fixed-commit live scene and actual publisher/callback/gear/Rejoin acceptance; no unchanged failed replay repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-preference-native-r822",
+      "baseline_commit": "1e59065e",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-preference-validation-r824"
+      ],
+      "hypothesis": "Forward preference must preserve remaining original candidate evaluation after failure.",
+      "changed_dimension": "Selection ordering; identical Forward selector result reused only within same query.",
+      "result": "accepted",
+      "reason": "73native cases include actual2906positive, successful preferred, disabled preference and physical/contact negatives.",
+      "production_impact": "Existing Recovery authority only, all original safety and normal proof gates retained.",
+      "deleted_code": [
+        "Exclusive preferred-failure branch that omitted remaining candidates"
+      ],
+      "revisit_condition": "New fixed-commit live scene and actual publisher/callback/gear/Rejoin acceptance; no unchanged failed replay repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-order-replay-r823",
+      "baseline_commit": "1e59065e",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-preference-validation-r824"
+      ],
+      "hypothesis": "Forward preference must preserve remaining original candidate evaluation after failure.",
+      "changed_dimension": "Selection ordering; identical Forward selector result reused only within same query.",
+      "result": "accepted",
+      "reason": "Actual full map/forward3rejections exact; current helper visits11original reverse candidates on explicit4m/8m.",
+      "production_impact": "Existing Recovery authority only, all original safety and normal proof gates retained.",
+      "deleted_code": [
+        "Exclusive preferred-failure branch that omitted remaining candidates"
+      ],
+      "revisit_condition": "New fixed-commit live scene and actual publisher/callback/gear/Rejoin acceptance; no unchanged failed replay repetition."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-preference-validation-r824",
+      "baseline_commit": "1e59065e",
+      "snapshot_ids": [
+        "20260913-nine-state-recovery-preference-validation-r824"
+      ],
+      "hypothesis": "Forward preference must preserve remaining original candidate evaluation after failure.",
+      "changed_dimension": "Selection ordering; identical Forward selector result reused only within same query.",
+      "result": "accepted",
+      "reason": "Finalsource118/build142all26/package129all2664 pass; original branch and physical bodies preserved.",
+      "production_impact": "Existing Recovery authority only, all original safety and normal proof gates retained.",
+      "deleted_code": [
+        "Exclusive preferred-failure branch that omitted remaining candidates"
+      ],
+      "revisit_condition": "New fixed-commit live scene and actual publisher/callback/gear/Rejoin acceptance; no unchanged failed replay repetition."
     }
   ]
 }

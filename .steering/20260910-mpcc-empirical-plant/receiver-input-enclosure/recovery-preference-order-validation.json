@@ -1,0 +1,544 @@
+{
+  "baseline": "1e59065e",
+  "authority": false,
+  "source_sha256": {
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_candidate_selection.hpp": "9ecd9b9e93d756d216135d4a1031505ebbd0b320ca447a966b1dc5d69692d4b4",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp": "249a1a6634d847ce8fac95a48205d7a4a1cd77729a5555c1417d0032849f9d2f",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_recovery_footprint.cpp": "d6cae76e57200234f0b0f738e7ed37df00a00f9c1a04787c1f76009acf6c3056",
+    "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_r28_recovery_direction.hpp": "8ae15d55d67e176155cae7817828a9538d13d724cd220796bbf5e615eded7581"
+  },
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-recovery-preference-old-r821/build-command.json": "778325622c20581284e12fc06222d45e56fa061eae02c36931f893ca97bffcac",
+    "output/20260913-nine-state-recovery-preference-old-r821/test_recovery_footprint.xml": "960737e862e76486838a1931e298c45036f0ea247c19985ce10e1cd3ab6167b4",
+    "output/20260913-nine-state-recovery-preference-old-r821/build.log": "3d809798b0baec44ea1dc95d63cd3506dcdc7b0904541a9056a9107146a41afb",
+    "output/20260913-nine-state-recovery-preference-old-r821/result.json": "d9737d43d6461b18680447b69f043702b3c74317fb29504d0baebd31e327233e",
+    "output/20260913-nine-state-recovery-preference-old-r821/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-recovery-preference-old-r821/runner.py": "caf5d5c2fda3077c7cb596a40c0c7732aca33bb4c22ab2ef91892e4af7c78dad",
+    "output/20260913-nine-state-recovery-preference-old-r821/test_recovery_footprint.log": "c4d8fb5e2831dd8282eba47355f8b9906c33d90dad806fde05f67d2ad419499d",
+    "output/20260913-nine-state-recovery-preference-old-r821/test/test_recovery_footprint.cpp": "d6cae76e57200234f0b0f738e7ed37df00a00f9c1a04787c1f76009acf6c3056",
+    "output/20260913-nine-state-recovery-preference-old-r821/test/fixtures/mpcc_r28_recovery_direction.hpp": "8ae15d55d67e176155cae7817828a9538d13d724cd220796bbf5e615eded7581",
+    "output/20260913-nine-state-recovery-preference-old-r821/include/multi_purpose_mpc_ros/recovery_candidate_selection.hpp": "ba17e6f798cf1b1f0c91f1ee3cb535436377046f88f49d3e4a51aab1d15e8171",
+    "output/20260913-nine-state-recovery-preference-old-r821/src/mpc_controller_cpp.cpp": "b45cd6a70d5e7621ad957937a7505b52d858b1947714fd3ec2cfc62bf168a111",
+    "output/20260913-nine-state-recovery-preference-native-r822/build-command.json": "778325622c20581284e12fc06222d45e56fa061eae02c36931f893ca97bffcac",
+    "output/20260913-nine-state-recovery-preference-native-r822/test_recovery_footprint.xml": "ce49ffbbb579150f015a87899ea4e2b485fec09ac0f66c902abed06d5ff7c072",
+    "output/20260913-nine-state-recovery-preference-native-r822/build.log": "39256cd48933dde1ddc6cfde6c782778c3734d17f22899c64f23c3277415ef74",
+    "output/20260913-nine-state-recovery-preference-native-r822/result.json": "0d77fd3c65acc6c45885fd37965d31d92da396e129e370e9916da6f482d7ca3f",
+    "output/20260913-nine-state-recovery-preference-native-r822/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-recovery-preference-native-r822/runner.py": "6d35701a59d03f7ca8dcd14d814d286b7eddaefe8a27fe535815b089d37c47e0",
+    "output/20260913-nine-state-recovery-preference-native-r822/test_recovery_footprint.log": "2e148d23758958ca290628d36f34821b08c9e623509a534f98b693b19253b6b0",
+    "output/20260913-nine-state-recovery-preference-native-r822/test/test_recovery_footprint.cpp": "d6cae76e57200234f0b0f738e7ed37df00a00f9c1a04787c1f76009acf6c3056",
+    "output/20260913-nine-state-recovery-preference-native-r822/test/fixtures/mpcc_r28_recovery_direction.hpp": "8ae15d55d67e176155cae7817828a9538d13d724cd220796bbf5e615eded7581",
+    "output/20260913-nine-state-recovery-preference-native-r822/include/multi_purpose_mpc_ros/recovery_candidate_selection.hpp": "9ecd9b9e93d756d216135d4a1031505ebbd0b320ca447a966b1dc5d69692d4b4",
+    "output/20260913-nine-state-recovery-preference-native-r822/src/mpc_controller_cpp.cpp": "b6da6a772b09c66d7c191f6e2eaa2a31cb0adbffcce217e66e21c68da4d5bdb3",
+    "output/20260913-nine-state-recovery-order-replay-r823/results.json": "e780e8b9f52c2855333328b9f62202c2900b35b2fc2c4e613e08eb9657bd46fb",
+    "output/20260913-nine-state-recovery-order-replay-r823/input-sha256.json": "80a3027db4e19151381f342b3574cb2365297dd5e659b22f51e18957e3004a71",
+    "output/20260913-nine-state-recovery-order-replay-r823/driver.cpp": "d5c1ece4b2bd80c16796c211ab5e6c2cc4e1453e463abc89016ecbb20572be4b",
+    "output/20260913-nine-state-recovery-order-replay-r823/runner.py": "656048ce414a683e916bb70474cfcacf608f8ddd59e0150b42308df708c117db",
+    "output/20260913-nine-state-recovery-order-replay-r823/declared-plan.json": "caee7153e8caa56bd125fd9c9f6c69f5d47abcf7f35a2e52bfe65fe336b46d81",
+    "output/20260913-nine-state-recovery-order-replay-r823/old/replay": "1280a99857e505a46597987d9ba63f52f5133766c07230eb60d8c2c3a889f1c0",
+    "output/20260913-nine-state-recovery-order-replay-r823/old/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-order-replay-r823/old/compile-command.json": "4369243d4c31c08f3ccd8e2d22c89211b7f4afe57db338b445c10e50dde33255",
+    "output/20260913-nine-state-recovery-order-replay-r823/old/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-recovery-order-replay-r823/old/8.0/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-order-replay-r823/old/8.0/report.yaml": "e3b0e62b937d0419b743b04209e20d1c5cb20df399d146e3bcbdaea0201a6490",
+    "output/20260913-nine-state-recovery-order-replay-r823/old/4.0/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-order-replay-r823/old/4.0/report.yaml": "06b2e6820bb96057403c4051056a795210fcf5e75ebd38ec484e9bc83b40caa1",
+    "output/20260913-nine-state-recovery-order-replay-r823/current/replay": "0dff6783e9bd4664764a999d25452261c4d72c3fd70b738f96c1786db02e8988",
+    "output/20260913-nine-state-recovery-order-replay-r823/current/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-order-replay-r823/current/compile-command.json": "2e530e4c8937d33e5c256cb96b5c3dfb0ffdfde33f794aab789d11a34b992bf2",
+    "output/20260913-nine-state-recovery-order-replay-r823/current/build-status.json": "52bc11601f828944017af38be43d76f460973e26dba309b7dd579079b04e65ba",
+    "output/20260913-nine-state-recovery-order-replay-r823/current/8.0/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-order-replay-r823/current/8.0/report.yaml": "ea5571a6bbedc2c9383db69efd6a6688e453d63f35f118f17ce3c51c7d3abd5a",
+    "output/20260913-nine-state-recovery-order-replay-r823/current/4.0/run.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/20260913-nine-state-recovery-order-replay-r823/current/4.0/report.yaml": "9f12a8ea67c86d0516945ffddb83264c00dba4b0aa37b8eea598502632731d43",
+    "output/20260913-nine-state-build142/status.json": "8bdd03e908b380f4b41e3842708eaea9a648e0d00706bbcc5fa0b26ad8c9b6ef",
+    "output/20260913-nine-state-build142/build.log": "7903686a2cea982f18af67fe336f4a34cd88799fde54d1929047ba61ce4ee59c",
+    "output/20260913-nine-state-build142/runner.py": "36fc56fca029aa91915fa04e395afc48dd1f4efe7d8426801f5f5a411c0f831a",
+    "output/20260913-nine-state-build142/manifest.json": "c23861a1d45a8d1f77dc950240c55427bb5be0dc44fd9bc518cd93cb4a4af4de",
+    "output/20260913-nine-state-package129/commands.json": "4902f6afe2b19e6bc8c137db2407b5fa31a0e6d64bfe8de63b16c23d40920c0b",
+    "output/20260913-nine-state-package129/test.log": "d25ad9d4bb27309254a1fd9b933242660f05df7d837bb0b09c4fa799b10a44ce",
+    "output/20260913-nine-state-package129/status.json": "613de9fa689befd9cd446a322af065c9972a4ff34a1ce915e252ac133b72b4b2",
+    "output/20260913-nine-state-package129/test-result.log": "2c689eb4b3440296b9a9fefe59dc3c13cd11ae0ae3151d7f5bc4ceccb858ab55",
+    "output/20260913-nine-state-package129/runner.py": "5b0c70adb48e75bc910af848c35a5461fdc7adf446a95c00db7b968425dbcc2b"
+  },
+  "old_native": {
+    "tests": 73,
+    "failed": 2
+  },
+  "native_tests": 73,
+  "source_tests": 118,
+  "build": {
+    "return_code": 0,
+    "elapsed_sec": 252.91047425800934,
+    "sources_unchanged": true
+  },
+  "package": {
+    "results": [
+      {
+        "command": [
+          "colcon",
+          "test",
+          "--packages-select",
+          "multi_purpose_mpc_ros",
+          "--return-code-on-test-failure",
+          "--event-handlers",
+          "console_direct+"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 44.52681291801855
+      },
+      {
+        "command": [
+          "colcon",
+          "test-result",
+          "--verbose",
+          "--test-result-base",
+          "build/multi_purpose_mpc_ros"
+        ],
+        "return_code": 0,
+        "elapsed_sec": 1.85302729398245
+      }
+    ],
+    "all_pass": true
+  },
+  "package_tests": 2664,
+  "full_map_comparison": [
+    {
+      "arm": "old",
+      "distance_m": 4.0,
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "grid_fingerprint": 1403875087638600848,
+        "distance_m": 4,
+        "trials": [
+          {
+            "primitive": 3,
+            "steering_rad": 0,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 20,
+            "course_accepted": false
+          },
+          {
+            "primitive": 4,
+            "steering_rad": 0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 0.44999999999999996,
+            "checked_pose_count": 19,
+            "course_accepted": false
+          },
+          {
+            "primitive": 5,
+            "steering_rad": -0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 25,
+            "course_accepted": false
+          }
+        ],
+        "selected": false,
+        "forward_calls": 1,
+        "reverse_calls": 0,
+        "elapsed_ms_10_repetitions": [
+          0.214553,
+          0.124635,
+          0.123743,
+          0.123342,
+          0.123492,
+          0.127811,
+          0.123502,
+          0.123252,
+          0.123312,
+          0.123512
+        ]
+      }
+    },
+    {
+      "arm": "old",
+      "distance_m": 8.0,
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "grid_fingerprint": 1403875087638600848,
+        "distance_m": 8,
+        "trials": [
+          {
+            "primitive": 3,
+            "steering_rad": 0,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 20,
+            "course_accepted": false
+          },
+          {
+            "primitive": 4,
+            "steering_rad": 0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 0.44999999999999996,
+            "checked_pose_count": 19,
+            "course_accepted": false
+          },
+          {
+            "primitive": 5,
+            "steering_rad": -0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 25,
+            "course_accepted": false
+          }
+        ],
+        "selected": false,
+        "forward_calls": 1,
+        "reverse_calls": 0,
+        "elapsed_ms_10_repetitions": [
+          0.225764,
+          0.119215,
+          0.123592,
+          0.117852,
+          0.117561,
+          0.11703,
+          0.11713,
+          0.117602,
+          0.11747,
+          0.117681
+        ]
+      }
+    },
+    {
+      "arm": "current",
+      "distance_m": 4.0,
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "grid_fingerprint": 1403875087638600848,
+        "distance_m": 4,
+        "trials": [
+          {
+            "primitive": 3,
+            "steering_rad": 0,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 20,
+            "course_accepted": false
+          },
+          {
+            "primitive": 4,
+            "steering_rad": 0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 0.44999999999999996,
+            "checked_pose_count": 19,
+            "course_accepted": false
+          },
+          {
+            "primitive": 5,
+            "steering_rad": -0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 25,
+            "course_accepted": false
+          },
+          {
+            "primitive": 0,
+            "steering_rad": 0,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 127,
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.05,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.2,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "course_accepted": true
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.05,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 161,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.2,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.925,
+            "checked_pose_count": 158,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.825,
+            "checked_pose_count": 154,
+            "course_accepted": false
+          }
+        ],
+        "selected": true,
+        "forward_calls": 1,
+        "reverse_calls": 1,
+        "selected_steering_rad": 0.15,
+        "selected_distance_m": 4,
+        "selected_course_improvement_m": 0.9121903878523696,
+        "elapsed_ms_10_repetitions": [
+          1.200677,
+          0.959315,
+          0.944115,
+          0.9358,
+          0.926622,
+          0.916043,
+          0.902717,
+          0.899652,
+          0.896065,
+          0.895704
+        ]
+      }
+    },
+    {
+      "arm": "current",
+      "distance_m": 8.0,
+      "return_code": 0,
+      "result": {
+        "authority": false,
+        "grid_fingerprint": 1403875087638600848,
+        "distance_m": 8,
+        "trials": [
+          {
+            "primitive": 3,
+            "steering_rad": 0,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 20,
+            "course_accepted": false
+          },
+          {
+            "primitive": 4,
+            "steering_rad": 0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 0.44999999999999996,
+            "checked_pose_count": 19,
+            "course_accepted": false
+          },
+          {
+            "primitive": 5,
+            "steering_rad": -0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 25,
+            "course_accepted": false
+          },
+          {
+            "primitive": 0,
+            "steering_rad": 0,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.3,
+            "checked_pose_count": 136,
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.05,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.5,
+            "checked_pose_count": 181,
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.1,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 321,
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.15,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 321,
+            "course_accepted": true
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.2,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 321,
+            "course_accepted": false
+          },
+          {
+            "primitive": 1,
+            "steering_rad": 0.25,
+            "physical_accepted": true,
+            "reason": "none",
+            "rejected_distance_m": 0,
+            "checked_pose_count": 321,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.05,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.125,
+            "checked_pose_count": 166,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.1,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.025,
+            "checked_pose_count": 162,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.15,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 4.074999999999999,
+            "checked_pose_count": 164,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.2,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.925,
+            "checked_pose_count": 158,
+            "course_accepted": false
+          },
+          {
+            "primitive": 2,
+            "steering_rad": -0.25,
+            "physical_accepted": false,
+            "reason": "collision",
+            "rejected_distance_m": 3.825,
+            "checked_pose_count": 154,
+            "course_accepted": false
+          }
+        ],
+        "selected": true,
+        "forward_calls": 1,
+        "reverse_calls": 1,
+        "selected_steering_rad": 0.1,
+        "selected_distance_m": 8,
+        "selected_course_improvement_m": 0.21774165360480247,
+        "elapsed_ms_10_repetitions": [
+          2.423337,
+          2.295677,
+          2.471778,
+          2.202972,
+          2.163548,
+          2.160542,
+          2.160924,
+          2.332135,
+          2.356462,
+          2.279936
+        ]
+      }
+    }
+  ],
+  "original_forward_body_and_remaining_branch_bodies_unchanged": true,
+  "review": [
+    "Old exclusive preferred selector reproduces two failures; current ordered helper preserves preferred success, absent preference and hard rejection.",
+    "All remaining branch bodies and forward selection computation match old text after local result renaming/indentation. Prefix and code after selection are unchanged.",
+    "Identical select_forward_deadlock_fallback result memoized once only within current immutable evaluation; separate stepwise/contact Forward evaluators retain original permissions and inputs. No cross-tick cache.",
+    "R822 covers final helper/fixtures but precedes final node memo wrapper. Finalsource118/build142/package129 include exact final source hashes.",
+    "No normal authority, physics/course/V2X, gear, steering ranking, distance, retry, solver or deadline change."
+  ],
+  "limits": [
+    "Native4m/8m reverse queries are explicit configured diagnostics; actual unattempted distance2906 unavailable.",
+    "Actual new branch, full callback/publication timing and Rejoin require fixed-commit single-r29. Earlier normal stop and r26/r80 timing remain open."
+  ]
+}

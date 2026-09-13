@@ -3,6 +3,15 @@
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
 **全体未完。ゲームStart・車両Start・Rejoin復帰は確認済み。周回・統合受入れは未達。**
 
+Recoveryの前進優先を候補順序として実装し、不合格なら残りの既存候補へ進むよう修正。
+元の前進評価と接触・段階的・後退の分岐内容を保持。同一クエリ内の同じ前進評価だけ
+結果を再利用する。R821旧版2失敗→R822native73、最終source118、R823全地図の比較、
+build142全26/package129全2664tests合格。次は固定commitのsingle-r29で実行・時間・復帰を確認。
+未評価だった元の後退距離の完全再生、先行通常停止・期限問題・全コース/M4–M6は未完。
+[設計・検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-preference-order-design.md)。
+
+以下は候補順序修正前の履歴。
+
 7f263cc2の標準描画single-r28は通常675送信、Rejoin送信3件・復帰完了1回、実期限外送信ゼロ。
 4271callback中495の1件25.218ms（初期化14.746ms/Recovery6.402ms）、連続超過なし。
 2771は送信前拒否。ゲームStart成立、車両Start・周回は未達。壁区間拒否は発生せず観測なし。

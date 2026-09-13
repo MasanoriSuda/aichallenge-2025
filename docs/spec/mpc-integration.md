@@ -8,6 +8,15 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Recoveryの優先候補と残候補の順序修正（2026-09-13）
+
+Recoveryの前進優先を候補順序として実装し、不合格なら残りの既存候補へ進むよう修正。
+元の前進評価と接触・段階的・後退の分岐内容を保持。同一クエリ内の同じ前進評価だけ
+結果を再利用する。R821旧版2失敗→R822native73、最終source118、R823全地図の比較、
+build142全26/package129全2664tests合格。次は固定commitのsingle-r29で実行・時間・復帰を確認。
+未評価だった元の後退距離の完全再生、先行通常停止・期限問題・全コース/M4–M6は未完。
+[設計・検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-preference-order-design.md)。
+
 ## Recoveryの候補順序と評価省略（2026-09-13）
 
 7f263cc2の標準描画single-r28は通常675送信、Rejoin送信3件・復帰完了1回、実期限外送信ゼロ。

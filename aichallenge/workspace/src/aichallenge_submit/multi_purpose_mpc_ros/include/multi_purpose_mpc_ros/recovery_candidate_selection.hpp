@@ -10,6 +10,17 @@
 namespace multi_purpose_mpc_ros::recovery_footprint
 {
 
+/// Candidate preference changes evaluation order, never physical acceptance.
+template<class Preferred, class Remaining>
+std::optional<FeasibilityResult> select_preferred_then_remaining(
+  const bool prefer, Preferred && preferred, Remaining && remaining)
+{
+  if (prefer) {
+    if (auto selected = preferred()) return selected;
+  }
+  return remaining();
+}
+
 struct HeadingAlignedReverseRequest
 {
   double initial_yaw_rad{};

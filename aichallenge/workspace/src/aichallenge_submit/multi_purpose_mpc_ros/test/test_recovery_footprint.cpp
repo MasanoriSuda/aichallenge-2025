@@ -1,6 +1,7 @@
 #include "multi_purpose_mpc_ros/recovery_footprint.hpp"
 #include "fixtures/mpcc_r75_initial_corridor.hpp"
 #include "fixtures/mpcc_r22_recovery_direction.hpp"
+#include "fixtures/mpcc_r28_recovery_direction.hpp"
 #include "multi_purpose_mpc_ros/recovery_candidate_selection.hpp"
 #include "multi_purpose_mpc_ros/stuck_recovery_core.hpp"
 
@@ -209,6 +210,100 @@ TEST(RecoveryReverseSelection, OptionalGuidanceStillRanksTheSamePhysicalPopulati
   ASSERT_TRUE(contact_mode.selected);
   EXPECT_DOUBLE_EQ(contact_mode.selected->steering_angle_rad, -0.10);
   EXPECT_EQ(scene.attempted, 11U);
+}
+
+struct ActualRecoveryPreference
+{
+  recovery::OccupancyGrid grid{mpcc_r28_recovery_fixture::grid()};
+  recovery::FootprintExtents footprint{1.615, 0.51, 0.768, 0.768, 0.05};
+  recovery::Pose2D pose{89632.17661300967, 43126.89925497018, 3.0856927874182296};
+  double lateral{1.1556087602949818};
+  double heading{0.6402488576678098};
+  std::size_t forward_calls{}, reverse_calls{};
+
+  bool course_allowed(const recovery::FeasibilityResult & result) const
+  {
+    if (!result.feasible || result.rollout.empty()) return false;
+    const auto & e = result.rollout.back().pose;
+    const auto progress = multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_course_progress(
+      {lateral, pose.yaw_rad, heading, e.x_m-pose.x_m, e.y_m-pose.y_m, 0.5, 0.02});
+    return progress.valid && progress.candidate_allowed;
+  }
+  std::optional<recovery::FeasibilityResult> forward()
+  {
+    ++forward_calls;
+    for (const auto primitive : {recovery::ReversePrimitive::ForwardStraight,
+        recovery::ReversePrimitive::ForwardLeft, recovery::ReversePrimitive::ForwardRight})
+    {
+      auto result = recovery::evaluate_recovery_candidate(grid, footprint, pose, primitive,
+        {0.6, 0.05, 0.05, 1.087, 0.25}, recovery::ContactEscapePolicy::RequireClear, 0.0);
+      if (course_allowed(result)) return result;
+    }
+    return std::nullopt;
+  }
+  std::optional<recovery::FeasibilityResult> reverse()
+  {
+    ++reverse_calls;
+    return recovery::select_heading_aligned_reverse(
+      {pose.yaw_rad, heading, 0.25, 5U, true, false, {}, {}},
+      [&](auto primitive, double magnitude) {
+        return recovery::evaluate_recovery_candidate(grid, footprint, pose, primitive,
+          {4.0, 0.05, 0.05, 1.087, magnitude}, recovery::ContactEscapePolicy::RequireClear, 0.0);
+      }, [&](const auto & result) {return course_allowed(result);}).selected;
+  }
+  std::optional<recovery::FeasibilityResult> select(bool prefer)
+  {
+    return recovery::select_preferred_then_remaining(
+      prefer, [&]() {return forward();}, [&]() {return reverse();});
+  }
+};
+
+TEST(RecoveryCandidatePreference, Actual2906FailedForwardStillEvaluatesOriginalReverse)
+{
+  ActualRecoveryPreference scene;
+  ASSERT_FALSE(scene.forward());
+  scene.forward_calls = 0;
+  const auto result = scene.select(true);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(result->primitive, recovery::ReversePrimitive::Left);
+  EXPECT_DOUBLE_EQ(result->steering_angle_rad, 0.15);
+  EXPECT_DOUBLE_EQ(result->rollout.back().reverse_distance_m, 4.0);
+  EXPECT_TRUE(scene.course_allowed(*result));
+  EXPECT_EQ(scene.forward_calls, 1U);
+  EXPECT_EQ(scene.reverse_calls, 1U);
+}
+
+TEST(RecoveryCandidatePreference, AcceptedPreferredKeepsItsIdentityAndSkipsRemaining)
+{
+  ActualRecoveryPreference scene;
+  scene.lateral = scene.heading = 0.0;
+  const auto result = scene.select(true);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(result->primitive, recovery::ReversePrimitive::ForwardStraight);
+  EXPECT_DOUBLE_EQ(result->rollout.back().reverse_distance_m, 0.6);
+  EXPECT_EQ(scene.forward_calls, 1U);
+  EXPECT_EQ(scene.reverse_calls, 0U);
+}
+
+TEST(RecoveryCandidatePreference, DisabledPreferenceKeepsRemainingPopulation)
+{
+  ActualRecoveryPreference scene;
+  const auto result = scene.select(false);
+  ASSERT_TRUE(result);
+  EXPECT_DOUBLE_EQ(result->steering_angle_rad, 0.15);
+  EXPECT_EQ(scene.forward_calls, 0U);
+  EXPECT_EQ(scene.reverse_calls, 1U);
+}
+
+TEST(RecoveryCandidatePreference, FailedPhysicalCandidatesNeverProduceSelection)
+{
+  ActualRecoveryPreference scene;
+  const auto cell = scene.grid.world_to_grid(scene.pose.x_m, scene.pose.y_m);
+  ASSERT_TRUE(cell);
+  scene.grid.cells[cell->row * scene.grid.width + cell->column] = recovery::CellState::Occupied;
+  EXPECT_FALSE(scene.select(true));
+  EXPECT_EQ(scene.forward_calls, 1U);
+  EXPECT_EQ(scene.reverse_calls, 1U);
 }
 
 recovery::OccupancyGrid make_grid(

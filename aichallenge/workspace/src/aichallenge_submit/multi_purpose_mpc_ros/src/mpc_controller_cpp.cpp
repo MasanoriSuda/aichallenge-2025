@@ -59902,7 +59902,13 @@ private:
       recovery_command_active || !enable_control_ ||
       executed_solution_wall_hold_active);
     const auto publication_successor_started = SteadyClock::now();
-    if (!recovery_command_active && enable_control_) {
+    // A Rejoin waiting for its certificate still publishes the bounded Stop.
+    // That actual serialized predecessor can seed the next normal candidate;
+    // planning must not require the normal publication it is meant to produce.
+    const bool normal_planning_allowed = !recovery_command_active ||
+      (recovery_output && stuck_recovery::rejoin_planning_allowed(
+        recovery_rejoin_requested, *recovery_output));
+    if (normal_planning_allowed && enable_control_) {
       const auto post_send_clock = now();
       const auto post_send = predict_observed_vehicle(pose,rclcpp::Time(odom_->header.stamp).seconds(),
         post_send_clock.seconds(),SteadyClock::now());
@@ -59912,7 +59918,7 @@ private:
       active_control_decision_id_, u[0], acc, u[1],
       published_steering.value(),
       current_time.seconds(),
-      !recovery_command_active &&
+      normal_planning_allowed &&
       (!mpc_fallback_active || canonical_emergency_stop));
     callback_timing.publication_successor_ms = std::chrono::duration<double, std::milli>(
       SteadyClock::now() - publication_successor_started).count();

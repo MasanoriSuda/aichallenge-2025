@@ -1147,6 +1147,10 @@ struct CoreOutput
   bool actuation_allowed{false};
 };
 
+/// Permit computation during a current Rejoin wait; this grants no publication
+/// authority. The solve must already have requested Rejoin before supervision.
+bool rejoin_planning_allowed(bool requested_at_solve, const CoreOutput & output) noexcept;
+
 class StuckRecoveryCore
 {
 public:

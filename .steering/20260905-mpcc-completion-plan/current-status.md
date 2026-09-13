@@ -39,6 +39,15 @@ source壁問題・物理観測誤差・全M4–M6は未完。追加確認は不�
 [設計と局所検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-session-rejoin-design.md)、
 [停止source比較](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-cell-native-feasibility-audit.md)。
 
+ea14f80aのsingle-r14は4234callback最大21.13ms、通常送信355件で期限外送信ゼロ。
+台数1とV2X完全性が成立し、Recovery前進・Rejoinまで進んだが、認証待ちの停止が
+次候補供給も抑止する循環をR681で確認。10回のRejoin中通常送信ゼロ、Store/worker
+供給が止まり最後はattempt limitでSafeStop。公開権限を維持した候補計算の配線修正は、R685Core151/source118、build130/package117合格。次は固定版single-r15で実際の供給再開を確認。
+同一版dev2-r80は両Domain台数2・相手IDを受信し空publisherなし。ただしD2decision593で
+送信中に元期限を約5ms超えたため停止。成功送信ログだけの集計からゼロと判断しない。
+R686は元のsource/証明/履歴/実送信を保って送信前合格・後拒否を再現。実送信期限問題は未解決。Start/周回/統合受入れは未完。
+[現在の候補供給設計と実走根拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rejoin-supply-design.md)。
+
 以下は先行runの履歴。現在の次作業は上記とする。
 
 この変更前の実装検証はbuild123全26、package110全2618、source106合格。

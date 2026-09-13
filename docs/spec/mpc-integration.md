@@ -8,6 +8,21 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Rejoin認証待ちでの候補供給（2026-09-13）
+
+single-r14の10回のLowSpeedRejoinで、認証待ち停止のRecovery overrideが次の通常候補と
+現在worldへの接続計算まで抑止していた。新しい計算許可は、最適化開始時点でRejoinを
+要求し、現在の有効なRecovery出力もLowSpeedRejoin状態・動作を維持する場合に限る。
+実際にserializeした停止指令を前入力として、次候補の生成と接続を計算できる。
+初回状態遷移の旧intent、HoldStop/SafeStop/gear/reverse、shadow/無効出力は許可しない。
+通常送信は従来どおり現在の認証済みRejoin/Stop原指令だけで、計算許可に公開権限はない。
+R683旧配線失敗、R685全151Core/source118、build130/package117合格。実走復帰は未確認。
+
+dev2-r80では両Domainに台数2と正しい相手IDが届いたが、D2decision593で実送信中に
+元の25ms窓を約5ms超えた。R686は元証明・履歴・実送信を保ち、送信前合格/送信後拒否を
+再現する。この期限失敗は今回の候補供給修正では解消しておらず、統合受入れは未完。
+[設計・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rejoin-supply-design.md)。
+
 ## 標準起動へのRecovery台数伝播（2026-09-13）
 
 single-r13では停止確認の保持と厳格なV2X拒否は動いたが、標準起動のMPC XMLが

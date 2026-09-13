@@ -1,0 +1,125 @@
+{
+  "authority": false,
+  "baseline": "ea14f80a",
+  "single": "single-r14",
+  "producer": "MPCControllerCpp::control, post-publication scheduling and normal serialized-successor submission both gate on !recovery_command_active.",
+  "consequence": "Certified Rejoin required to clear the override, but its source generation and scheduled joining cannot run while the override holds; first Rejoin963normal_submitted409 and worker409remain fixed.",
+  "normal_model_unchanged": true,
+  "dev2": "dev2-r80",
+  "actual_publication_violations": [
+    "[mpc_controller_cpp-10] [ERROR] [1789257692.939174198] [mpc_controller]: MPCC publication window violated: decision=593, nominal=2.604999947, before=2.629999941, after=2.634999941, deadline=2.629999947, guard_end=2.629999941, raw_end=2.629999941, call_wall_ms=0.015969/0.009799/2.853515"
+  ],
+  "dev2_snapshot": "output/20260913-nine-state-dev2-r80/d2/mpcc_architecture_snapshots/publication-000000000593-post-stationary/snapshot.yaml",
+  "audit_correction": "R679window_violations checks successful scheduled publication log rows only. It omits rejected after-publication sends. D2actually has one explicit post-publication violation593; never report zero actual out-of-window sends for this run.",
+  "v2x": {
+    "authority": false,
+    "run_id": "20260913-nine-state-dev2-r80",
+    "results": [
+      {
+        "domain": "d1",
+        "messages": 72,
+        "frames": {
+          "map": 72
+        },
+        "id_sets": {
+          "d2": 72
+        },
+        "nonempty": 72,
+        "nonpositive_stamp": 0,
+        "nonpositive_step": 0,
+        "first": {
+          "record_ns": 1789257693505377810,
+          "stamp_sec": 3.184535213,
+          "frame": "map",
+          "ids": [
+            "d2"
+          ]
+        },
+        "last": {
+          "record_ns": 1789257697705803726,
+          "stamp_sec": 7.403498264,
+          "frame": "map",
+          "ids": [
+            "d2"
+          ]
+        },
+        "median_period_sec": 0.06666398299999976,
+        "bag_sha256": {
+          "/output/20260913-nine-state-dev2-r80/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "33ed34fd1b12d7723ffcfc65ece4aea26e943ba095f22862bc4e01e7ec972d0e"
+        }
+      },
+      {
+        "domain": "d2",
+        "messages": 65,
+        "frames": {
+          "map": 65
+        },
+        "id_sets": {
+          "d1": 65
+        },
+        "nonempty": 65,
+        "nonpositive_stamp": 0,
+        "nonpositive_step": 0,
+        "first": {
+          "record_ns": 1789257693419587743,
+          "stamp_sec": 3.117845763,
+          "frame": "map",
+          "ids": [
+            "d1"
+          ]
+        },
+        "last": {
+          "record_ns": 1789257697234523639,
+          "stamp_sec": 6.9368164530000005,
+          "frame": "map",
+          "ids": [
+            "d1"
+          ]
+        },
+        "median_period_sec": 0.06666561050000008,
+        "bag_sha256": {
+          "/output/20260913-nine-state-dev2-r80/d2/rosbag2_autoware/rosbag2_autoware_0.mcap": "93e9bb52644a73ca6befd96d862f3b998feb4f9f4b538d79adf4cb0b0eaa7b27"
+        }
+      }
+    ]
+  },
+  "source_sha256": "8510b3e537a6e568e629e9e44ecf8fca3208a3ee3e345e42bf7d1eda4c8a1b78",
+  "payload_sha256": {
+    "output/20260913-nine-state-recovery-live-audit-r677/generator.py": "53e49094c2a177717e0b50b460573f5d7d47b497533cfa8892cae6cd6d5320fe",
+    "output/20260913-nine-state-recovery-live-audit-r677/report.json": "6a7509a68c5732c5101a9ae2979e5d9a5014cdbff4fd9d84e378bfe000022968",
+    "output/20260913-nine-state-recovery-public-r678/generator.py": "3b74a925af84b8986d8c2bc00191825343d87edb36173ca465c4b38c22c0c2b6",
+    "output/20260913-nine-state-recovery-public-r678/report.json": "20f45aec1bb1ce7695d6d27b2051e160cd7b674f9b14fa24e3654f3d25b0cfb3",
+    "output/20260913-nine-state-recovery-public-r678/d1.json": "9409fc4c5ef9c871f1a2fa7da9e228a38e80031844ea57496a9e093b40919f6a",
+    "output/20260913-nine-state-recovery-dev2-audit-r679/report.json": "bf82cb6251adde10e0ce07c3344b63219a068853b675bf54e0530fb34383a9fc",
+    "output/20260913-nine-state-recovery-dev2-audit-r679/runner.py": "3e50d178af0186f0acea1b04180c0d45ff4d7a9500c1b8009b59d0823acef7ae",
+    "output/20260913-nine-state-recovery-dev2-v2x-r680/d1-rows.json": "afdf8cf6917c49b40cdc9a1cb24c7e8ee2c0c7a8133f67ed9afa775cfbb36c4d",
+    "output/20260913-nine-state-recovery-dev2-v2x-r680/d2-rows.json": "dc4acfaa910d5eead61b170810163f389293d8718d66afea99b3869aec5f1c20",
+    "output/20260913-nine-state-recovery-dev2-v2x-r680/report.json": "a5ddd3fd3ae4fc62681ef58f7ab1b0e1988acfbfc64d1054660fcf0a20ba198d",
+    "output/20260913-nine-state-recovery-dev2-v2x-r680/runner.py": "3b11a6916e8203e9ee518e3184750b58fd50c230c1b8ad7eae2f737b88bbc270",
+    "output/20260913-nine-state-single-r14/manifest.json": "6ef0dc6ed95fa3393fb1e02bb1eb92b0c35267061bb90357234c399f10fd77e0",
+    "output/20260913-nine-state-single-r14/monitor-summary.json": "2ae49164e2e39c476feb91d258c1dc13bea86ee745eee88ed99512dbe717556c",
+    "output/20260913-nine-state-single-r14/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-dev2-r80/manifest.json": "05c54f150138922f12555ee3745cfab34e563742e8973a2bd678bad407ffbc90",
+    "output/20260913-nine-state-dev2-r80/monitor-summary.json": "2e8d508dbb3858c5fe335f3c0296f8946e1db48726f2cf11b5f292834ecf7c6b",
+    "output/20260913-nine-state-dev2-r80/artifact-restoration.json": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c",
+    "output/20260913-nine-state-dev2-r80/d2/mpcc_architecture_snapshots/publication-000000000593-post-stationary/snapshot.yaml": "a5ee52a260fc03e989b0497445964891b573d44ee95a354d9562719e3effbbe7"
+  },
+  "spans": 10,
+  "rejoin_normal_publications": 0,
+  "first_span": {
+    "begin": "[mpc_controller_cpp-10] [INFO] [1789257538.053206412] [mpc_controller]: Stuck recovery: mode=active, state=LOW_SPEED_REJOIN, action=LowSpeedRejoin, reason=forward_escape_confirmed, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=17, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Forward, primitive=forward_right, steering=-0.250, course_guard=1, course_rejected=0, course_improvement=-0.011 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.211 m, clear_forward=0.211 m, episode_distance=0.211 m, stopping_reserve=0.000 m, incident=1/1.62 s/0.211/0.000/0.211 m/0 retry/0 gear, runtime_motion=0.019/0.144 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=1, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.276 rad, e_y=0.881 m, e_psi=0.075 rad",
+    "end": "[mpc_controller_cpp-10] [INFO] [1789257543.093173575] [mpc_controller]: Stuck recovery: mode=active, state=STOP_AND_CONFIRM, action=HoldStop, reason=rejoin_timed_out, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=17, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.001, direction=Forward, primitive=forward_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=-0.006 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.211 m, clear_forward=0.211 m, episode_distance=0.211 m, stopping_reserve=0.000 m, incident=1/6.66 s/0.211/0.000/0.211 m/0 retry/0 gear, runtime_motion=0.019/0.144 m, escape_direction=Forward, escape_target=0.300 m, escape_confirmed=1, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.886 m, e_psi=0.061 rad",
+    "supply": [
+      "[mpc_controller_cpp-10] [INFO] [1789257538.169877987] [mpc_controller]: MPCC source supply: decision=963, now=12.404999722, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=409/rejected:64, worker=409/386/386/running:0/pending:0/exceptions:0, mailbox=529/528/invalid:0, store=528/accepted:384/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1263/decision:959/site:reference-path-mutation, mailbox_result=solved/geometry:15741568466272881844/detail:native-initialization/policy=reference-rest/attempts=1/total_ms=49.507464/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=15.5215m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1672/cache_hits=1/cache_misses=19/cache_scanned=1592/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, ex, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789257539.171250376] [mpc_controller]: MPCC source supply: decision=999, now=13.414999700, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=409/rejected:100, worker=409/386/386/running:0/pending:0/exceptions:0, mailbox=529/528/invalid:0, store=528/accepted:384/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1263/decision:959/site:reference-path-mutation, mailbox_result=solved/geometry:15741568466272881844/detail:native-initialization/policy=reference-rest/attempts=1/total_ms=49.507464/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=15.5215m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1672/cache_hits=1/cache_misses=19/cache_scanned=1592/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, ex, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789257540.187433801] [mpc_controller]: MPCC source supply: decision=1035, now=14.429999677, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=409/rejected:136, worker=409/386/386/running:0/pending:0/exceptions:0, mailbox=529/528/invalid:0, store=528/accepted:384/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1263/decision:959/site:reference-path-mutation, mailbox_result=solved/geometry:15741568466272881844/detail:native-initialization/policy=reference-rest/attempts=1/total_ms=49.507464/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=15.5215m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1672/cache_hits=1/cache_misses=19/cache_scanned=1592/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, ex, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789257541.204131506] [mpc_controller]: MPCC source supply: decision=1071, now=15.444999654, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=409/rejected:172, worker=409/386/386/running:0/pending:0/exceptions:0, mailbox=529/528/invalid:0, store=528/accepted:384/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1263/decision:959/site:reference-path-mutation, mailbox_result=solved/geometry:15741568466272881844/detail:native-initialization/policy=reference-rest/attempts=1/total_ms=49.507464/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=15.5215m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1672/cache_hits=1/cache_misses=19/cache_scanned=1592/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, ex, authority=observation-only",
+      "[mpc_controller_cpp-10] [INFO] [1789257542.411249137] [mpc_controller]: MPCC source supply: decision=1107, now=16.459999632, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=409/rejected:208, worker=409/386/386/running:0/pending:0/exceptions:0, mailbox=529/528/invalid:0, store=528/accepted:384/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=1263/decision:959/site:reference-path-mutation, mailbox_result=solved/geometry:15741568466272881844/detail:native-initialization/policy=reference-rest/attempts=1/total_ms=49.507464/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=15.5215m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1672/cache_hits=1/cache_misses=19/cache_scanned=1592/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, ex, authority=observation-only"
+    ],
+    "publications": [],
+    "authority": [
+      "[mpc_controller_cpp-10] [WARN] [1789257538.086583328] [mpc_controller]: Overtake control decision: decision=960, episode=0, generation=0, target=<none>, side=0, phase=Idle, action=cruise, canonical_intent=cruise/cruise-during-race-session, lateral_owner=racing-line, longitudinal_owner=racing-line, path_source=racing-line, path_age=infs, speed_window=inf/inf/0.00, floor_request=0.00/adjusted=0, front=inf/safety=inf/protected=infm, closing_ref=infm/s, conflict=none, transition=\"no active vehicles\", block=\"none\", corridor_min=6.73@7.00m, wall_min=nanm, valid_until=0.00/0.00m, rear_clear=infm, wall_contract=inf/0.33m, wp_id=31, control_source=failsafe, actual=0.41m/s, command=0.00m/s/-3.00m/s2/-0.14rad, published_steering=-0.20rad, published=1, solver=\"canonical-stop-emergency/requested=rejoin/scheduled current evidence unavailable/lateral=track-reference-path\", output=\"stuck-recovery-arbitration\", MPCC execution contract: decision=960, authority=emergency-override, source=failsafe, intent=stop, formulation=unresolved, problem=none, solution=0, plan=0, execution_certificate_decision=0, canonical_source=emergency-stop, retained=0, identity=complete, canonical=satisfied, reason=explicit-supervisor-override, contract_join=1",
+      "[mpc_controller_cpp-10] [WARN] [1789257538.387102552] [mpc_controller]: Overtake control decision: decision=971, episode=0, generation=0, target=<none>, side=0, phase=Idle, action=cruise, canonical_intent=cruise/cruise-during-race-session, lateral_owner=racing-line, longitudinal_owner=racing-line, path_source=racing-line, path_age=infs, speed_window=inf/inf/0.00, floor_request=0.00/adjusted=0, front=inf/safety=inf/protected=infm, closing_ref=infm/s, conflict=none, transition=\"no active vehicles\", block=\"none\", corridor_min=6.73@7.00m, wall_min=nanm, valid_until=0.00/0.00m, rear_clear=infm, wall_contract=inf/0.32m, wp_id=31, control_source=failsafe, actual=0.12m/s, command=0.00m/s/-3.00m/s2/0.00rad, published_steering=0.00rad, published=1, solver=\"canonical-stop-emergency/requested=rejoin/scheduled current evidence unavailable/lateral=hold-at-rest\", output=\"stuck-recovery-arbitration\", MPCC execution contract: decision=971, authority=emergency-override, source=failsafe, intent=stop, formulation=unresolved, problem=none, solution=0, plan=0, execution_certificate_decision=0, canonical_source=emergency-stop, retained=0, identity=complete, canonical=satisfied, reason=explicit-supervisor-override, contract_join=1"
+    ]
+  }
+}

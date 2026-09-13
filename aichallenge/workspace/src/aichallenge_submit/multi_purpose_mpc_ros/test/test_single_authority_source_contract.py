@@ -583,8 +583,10 @@ def test_rate_resolved_successor_is_bound_only_after_exact_publication() -> None
     assert publish < successor
     successor_call = control[successor : successor + 450]
     assert "u[0], acc, u[1]" in successor_call
+    # The actual serialized command binds the next candidate even when current
+    # Rejoin certification is pending. Publication itself remains guarded above.
     assert (
-        "!recovery_command_active &&\n"
+        "normal_planning_allowed &&\n"
         "      (!mpc_fallback_active || canonical_emergency_stop)"
         in successor_call
     )
@@ -3910,3 +3912,20 @@ def test_declared_recovery_topology_keeps_message_freshness_and_epoch_guards():
     assert 'v2x_self_filter_mode == "excluded" ? 1U : 0U' in topology
     assert 'has_complete_message(ros_now_sec, expected_count)' in topology
     assert 'has_complete_tracked_set(ros_now_sec, expected_count)' in topology
+
+
+def test_rejoin_wait_can_plan_without_changing_final_publication_authority():
+    callback = _cpp_function('void control(const char *forced_failsafe')
+    assert 'stuck_recovery::rejoin_planning_allowed(' in callback
+    planning = callback.split('const auto publication_successor_started', 1)[1]
+    planning = planning[:planning.index('callback_timing.publication_successor_ms')]
+    assert 'if (normal_planning_allowed && enable_control_)' in planning
+    source = planning.split('record_rate_resolved_publication_successor(', 1)[1]
+    assert 'normal_planning_allowed &&' in source
+    assert '(!mpc_fallback_active || canonical_emergency_stop)' in source
+    # Planning eligibility must not be used to claim a current normal send.
+    publication = callback.split('const auto published_steering = publish_control_command(', 1)[1]
+    publication = publication[:publication.index('const auto publication_successor_started')]
+    assert 'canonical_normal_execution_active && !recovery_command_active' in publication
+    assert 'record_final_published_authority(' in publication
+    assert 'recovery_command_active || !enable_control_' in publication

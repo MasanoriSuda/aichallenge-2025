@@ -1465,6 +1465,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-launch-entry-evidence.json",
       "replay_ready": true,
       "reason": "single-r13actual launch coverage failure and actual XML entry old/new regression."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-rejoin-supply-seal-r687",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/recovery-rejoin-supply-validation.json",
+      "replay_ready": true,
+      "reason": "Rejoin source starvation vs actual post-publication deadline failure; separately replayed, no authority relaxation."
     }
   ],
   "experiments": [
@@ -19166,6 +19172,148 @@
       "production_impact": "Launch binding only; existing strict clearance and canonical normal controller unchanged.",
       "deleted_code": [],
       "revisit_condition": "A changed entry/parameter consumer or a failing actual launch/live regression."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-live-audit-r677",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "rejected",
+      "reason": "single-r14: declared1/complete V2X and bounded Recovery forward motion/Rejoin.4234callbacks<=21.133ms,355normal sends then10Rejoin spans without normal resumption; attempt-limit SafeStop/no Start/laps.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-public-r678",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "accepted",
+      "reason": "Same-run public maximumspeed1.056758mps and stable source frequencies; no private physical/model accuracy claim.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-dev2-audit-r679",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "rejected",
+      "reason": "dev2-r80declared2on both Domains/no empty publisher; actual D2post-send violation593stops campaign. Successful publication rows alone omit this send; R681explicitly corrects that audit scope.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-recovery-dev2-v2x-r680",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "accepted",
+      "reason": "D1receives72fresh ordered map arrays with d2; D2receives65with d1; positive source stamps,~15Hz median period. Topology propagation only, not driving acceptance.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-supply-audit-r681",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "accepted",
+      "reason": "All10Rejoin spans lack normal publications; ready drafts repeatedly blocked at normal-successor-disallowed. Capture both post-send scheduling and serialized-source gates plus separate593actual send evidence.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-supply-before-r682",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "rejected",
+      "reason": "Diagnostic setup only: unrelated host launch_testing collection import failed; no target test verdict. Fixed explicit test environment in R683.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-supply-before-r683",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "accepted",
+      "reason": "Target source regression fails on original shared publication/planning gate with proper isolated test collection.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-supply-after-r684",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "rejected",
+      "reason": "Diagnostic test compile failed: missing CoreOutput/helper using declarations; no native test verdict. R685fixes test declarations.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-supply-after-r685",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "accepted",
+      "reason": "Separate current Rejoin planning permission from final authority; preserve actual predecessor/guards.151Core and118source/architecture pass; full build130/package117pass.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [
+        "Shared blanket Recovery publication/planning veto at post-publication scheduling and normal source submission"
+      ],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
+    },
+    {
+      "experiment_id": "20260913-nine-state-dev2-post-deadline-r686",
+      "baseline_commit": "ea14f80a",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-supply-seal-r687"
+      ],
+      "hypothesis": "Candidate production cannot depend on the current normal publication it is meant to establish; actual send deadlines remain separate.",
+      "changed_dimension": "Rejoin candidate planning eligibility at both serialized publication producers; no publisher authority or numerical change.",
+      "result": "accepted",
+      "reason": "Exact D2decision593source/domain/history/actual source+wire replay reproduces before-pass/after-reject, preserving actual sent ledger record. Timing cause is not repaired by this slice.",
+      "production_impact": "R685allows candidate computation only in already-requested, currently active/actuation-allowed LowSpeedRejoin; normal command still needs exact current certification.",
+      "deleted_code": [],
+      "revisit_condition": "Changed causal dimension or new failing invariant; no deadline/tolerance/hold/retry relaxation."
     }
   ]
 }

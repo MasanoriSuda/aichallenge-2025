@@ -13,6 +13,8 @@ namespace
 
 using multi_purpose_mpc_ros::stuck_recovery::CoreConfig;
 using multi_purpose_mpc_ros::stuck_recovery::CoreInput;
+using multi_purpose_mpc_ros::stuck_recovery::CoreOutput;
+using multi_purpose_mpc_ros::stuck_recovery::rejoin_planning_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::CollisionDeliberateStopOverrideRequest;
 using multi_purpose_mpc_ros::stuck_recovery::ClearForwardEscapeProgressTracker;
 using multi_purpose_mpc_ros::stuck_recovery::ClearForwardEscapeProgressUpdate;
@@ -4364,4 +4366,53 @@ TEST(StuckRecoveryCore, ConfirmedObservationSurvivesItsOwnNormalCancellation)
   input.detector.now_sec = 1.68;
   input.recovery.hard_stop_requested = true;
   EXPECT_EQ(core.update(input).state, RecoveryState::SafeStop);
+}
+
+TEST(StuckRecoveryPlanning, CapturedRejoinWaitDoesNotRequireItsFutureNormalCommand)
+{
+  CoreOutput waiting;
+  waiting.execution_mode = ExecutionMode::Active;
+  waiting.actuation_allowed = true;
+  waiting.state = RecoveryState::LowSpeedRejoin;
+  waiting.action.type = RecoveryActionType::LowSpeedRejoin;
+  // single-r14: the current serialized command is the bounded emergency Stop.
+  // Source admission and joining may run without a yet-to-be-produced command.
+  EXPECT_TRUE(rejoin_planning_allowed(true, waiting));
+  EXPECT_EQ(waiting.action.type, RecoveryActionType::LowSpeedRejoin);
+  EXPECT_DOUBLE_EQ(waiting.action.acceleration_magnitude_mps2, 0.0);
+}
+
+TEST(StuckRecoveryPlanning, RejectsEntryDraftAndInterruptedRejoin)
+{
+  CoreOutput waiting;
+  waiting.execution_mode = ExecutionMode::Active;
+  waiting.actuation_allowed = true;
+  waiting.state = RecoveryState::LowSpeedRejoin;
+  waiting.action.type = RecoveryActionType::LowSpeedRejoin;
+  // A transition after solve cannot relabel an earlier Cruise/Reverse draft.
+  EXPECT_FALSE(rejoin_planning_allowed(false, waiting));
+  waiting.action.type = RecoveryActionType::HoldStop;
+  EXPECT_FALSE(rejoin_planning_allowed(true, waiting));
+  waiting.action.type = RecoveryActionType::LowSpeedRejoin;
+  waiting.state = RecoveryState::SafeStop;
+  EXPECT_FALSE(rejoin_planning_allowed(true, waiting));
+  waiting.state = RecoveryState::ReverseManeuver;
+  EXPECT_FALSE(rejoin_planning_allowed(true, waiting));
+}
+
+TEST(StuckRecoveryPlanning, InactiveSupervisionCannotGrantPlanningPermission)
+{
+  CoreOutput waiting;
+  waiting.state = RecoveryState::LowSpeedRejoin;
+  waiting.action.type = RecoveryActionType::LowSpeedRejoin;
+  waiting.actuation_allowed = true;
+  for (const auto mode : {ExecutionMode::Disabled, ExecutionMode::Shadow,
+      ExecutionMode::SimulationOnlyBlocked})
+  {
+    waiting.execution_mode = mode;
+    EXPECT_FALSE(rejoin_planning_allowed(true, waiting));
+  }
+  waiting.execution_mode = ExecutionMode::Active;
+  waiting.actuation_allowed = false;
+  EXPECT_FALSE(rejoin_planning_allowed(true, waiting));
 }

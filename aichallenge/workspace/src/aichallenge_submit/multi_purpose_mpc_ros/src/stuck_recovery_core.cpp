@@ -16,6 +16,13 @@ bool operating_session_active(const OperatingSessionRequest & request) noexcept
          request.ready_state && request.prepared_ready_rollout);
 }
 
+bool rejoin_planning_allowed(const bool requested_at_solve, const CoreOutput & output) noexcept
+{
+  return requested_at_solve && output.execution_mode == ExecutionMode::Active &&
+         output.actuation_allowed && output.state == RecoveryState::LowSpeedRejoin &&
+         output.action.type == RecoveryActionType::LowSpeedRejoin;
+}
+
 namespace
 {
 

@@ -38,3 +38,11 @@ recovers the prior controller text exactly. Full precision saved-grid replays
 preserve clear/disconnected/invalid cases; overflow remains incomplete and duplicate
 write preserves the original. Next fixed-commit single-r25, then exact native replay.
 [Validation](current-wall-interval-observation-validation.json).
+
+R795–R798: single-r25 reached vehicleStart and continued normal supply for the
+declared120hostsec. No interval rejection occurred, so the observation remains
+unverified. Revise retirement explicitly: retain this one-shot capture only through
+the newly justified full-course6laps/600simsec single-r26 attempt, then review removal.
+It never fired and cannot explain the different driving outcome. No approval gate.
+See [live audit](current-wall-interval-live-audit.md). Callback3646 exceeds25ms while
+its actual send remains in-window; timing budgets stay unchanged.

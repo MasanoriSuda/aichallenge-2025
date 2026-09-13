@@ -1,7 +1,17 @@
 # Current status and remaining completion work
 
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
-**全体未完。ゲームStart・Rejoin復帰は確認済み。車両Start・周回・統合受入れは未達。**
+**全体未完。ゲームStart・車両Start・Rejoin復帰は確認済み。周回・統合受入れは未達。**
+
+38a562eeのsingle-r25で車両Startを初確認。通常3321送信、実期限外送信ゼロ。
+4573callback中3646の1件が26.73ms（現在検証24.63ms）。その送信は元の期限内で、
+送信前拒否19件からの通常送信はない。壁区間拒否・観測・Recovery操縦・Rejoinは未発生。
+観測追加の効果とは断定しない。120秒内の周回は未確認。次は同じ制御sourceで
+6周・600sim秒、660host秒上限のsingle-r26へ進み、全コースと時間・結果を検証する。
+callback超過・未再現の壁区間原因・多車両を含むM4–M6は未完。
+[実走結果と全コース検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/current-wall-interval-live-audit.md)。
+
+以下は実走前の履歴。
 
 現在の壁区間が拒否される最初の実入力を、通常走行の認証済み送信後に一度だけ保存する
 観測を追加。地図・姿勢・元の区間計算・preferred containmentを保持し、走行判断は維持。

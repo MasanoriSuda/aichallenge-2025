@@ -1,0 +1,305 @@
+{
+  "authority": false,
+  "baseline": "38a562ee",
+  "run_id": "20260913-nine-state-single-r25",
+  "source_and_binary_unchanged": true,
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-current-interval-live-audit-r795/generator.py": "9c815fc72ca731a8967f1c65af411fc904e35d0e8a3176946cb2be22d77f1044",
+    "output/20260913-nine-state-current-interval-live-audit-r795/report.json": "47b7848823afbdd95600c37b4f9979875ce3182e5dd1edc61fb36382271fa669",
+    "output/20260913-nine-state-current-interval-public-r796/generator.py": "8aa1aa522850bb1a6bedb311cbc8753afd5e3a5b153088d85a9de8922b30b854",
+    "output/20260913-nine-state-current-interval-public-r796/report.json": "95a15c52d4183a977bfcad7c47dab375da186f642092d4d4ca2bab6e4bbdee72",
+    "output/20260913-nine-state-current-interval-public-r796/d1.json": "4ac1e82680be9fd99445cef8a5d8604e71e044a7851e27b5bc1f0be8a6f53026",
+    "output/20260913-nine-state-current-wall-interval-replay-r797/results.json": "8e13485e3a1035cb45d8d7ffed32998db58be9002ea13600ed6ef774645b9ff2",
+    "output/20260913-nine-state-current-wall-interval-replay-r797/driver.cpp": "71a7bcbf4373766fe84f28b056a72ac06971ea7ca046efe0c2934a8437c131cf",
+    "output/20260913-nine-state-current-wall-interval-replay-r797/runner.py": "293ff95689fd4ba21b50a4bb39ba301c6018d0fa8a31e758d35cc415acae4abe",
+    "output/20260913-nine-state-current-wall-interval-replay-r797/declared-plan.json": "7516559e53d30fb8cf203d1065bde386b1052010093b16a96f84f4b79ff7d591",
+    "output/20260913-nine-state-single-r25/manifest.json": "a3b101fbc26bc70b5ad05dd24bcc57e7d496badf2c0d9ebc650dec4037e07538",
+    "output/20260913-nine-state-single-r25/monitor-summary.json": "be4af5f753226c537c7e7bb083318283599705867239107e8ac64be5dd5699a4",
+    "output/20260913-nine-state-single-r25/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-single-r25/unity-player.log": "b615b54c7a05c9d814a21ef9a6be7381af90b9179ae4ef74fe242ab230ae0794",
+    "output/20260913-nine-state-single-r25/d1/autoware.log": "0e38f9d28035da2b1a3a6cafc4203611c5c6289b63ba9d04f387bd55267a6a46",
+    "output/20260913-nine-state-single-r25/run_campaign.py": "503338fa4f82e932522df2ce1db892258fd99ade7fce7c74b529b2532665c5e1",
+    "output/20260913-nine-state-single-r25/build.log": "e1775cde457e12c21c76187deac1f0885ad2541876cded85ce994ebce147d9bd",
+    "output/20260913-nine-state-single-r25/package.log": "4622c8946d126d37c700ad3fa6258eba50e6cfd5a78b7e762c814fe2608a37b4",
+    "output/20260913-nine-state-single-r25/dev-six-lap.sh": "a12e68dcec9fa176d08d8628cb3478f17f094889f4db469eb3332d552d5d6127",
+    "output/20260913-nine-state-single-r25/compose-six-lap.yml": "d30a20f5bd6906e6a21a6395caf131d898676556a37f21ae246f098cf52b8b6d",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000491-pre-stationary/snapshot.yaml": "92da0497d0a8b98122f0eb0b85679ce05b4c5ac2d36c39f8a8b35ef15d71cdbf",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000491-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000491-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000491-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000486-pre-stationary/snapshot.yaml": "9a343f39861c55d7493c953f4b9167d3b3f81bda3eb398b756d5330567f4d995",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000486-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000486-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000486-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000746-pre-stationary/snapshot.yaml": "ff1d00da5493046d964775c3476739c50448b9ee25b65273b6765cd56e24455a",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000001080-pre-stationary/snapshot.yaml": "686f5597eb01e582a0447ba6a0e12ff37b444d1a3bf3e09bce9fb322562d1cbc",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000001062-pre-moving/snapshot.yaml": "c5591234b2459ce65dc5a0d60d17e4edbb2b8e9f5a375124392b8ff586e307dc",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000001062-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000001062-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000001062-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000001062-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000001062-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000001062-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000746-pre-stationary/snapshot.yaml": "ff1d00da5493046d964775c3476739c50448b9ee25b65273b6765cd56e24455a",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/due/after-normal-motion/publication-000000001080-pre-stationary/snapshot.yaml": "686f5597eb01e582a0447ba6a0e12ff37b444d1a3bf3e09bce9fb322562d1cbc",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000001062-pre-moving/snapshot.yaml": "32ed599e0d4aacdf84950ac0c897b25ec3f6801822c0f1bf30336e9f7b58eaf1",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000001018-pre-moving/snapshot.yaml": "c866dc2e16b39e8ec3865a658ba8349bbc02152379755f0b3e19f25f5d2e5959",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000001018-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000001018-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000001018-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000001018-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000001018-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000001018-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000007780-60bed14df7c43587-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml": "2e59f25eb3119e6b54f3604482a7cda4f7032fb824504661687853a6b63af3e7",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/after-post-motion-final-loss/initializer-1/000000007780-60bed14df7c43587-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000001061-pre-moving/snapshot.yaml": "7d00a0a89c4e666a0376fcd3100076b9dbad596a6ea3658ad5cad95edca20f15",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000001061-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000001061-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000001061-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000001061-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000001061-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000001061-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000746-pre-stationary/snapshot.yaml": "9dfbe8691f39363d74c31bdf55118f55c23fc0ecf48e5da43f7d15fcc180bee3",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000746-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000746-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000746-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000001062-pre-moving/snapshot.yaml": "da415a9f66d6ffc0e92fc2a902c03bb00d7c8a8d26a768bc6bf79bd25ced10c5",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000001062-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000001062-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000001062-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000001062-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000001062-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000001062-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-startup/active/publication-000000000482-pre-stationary/snapshot.yaml": "6d95d71a060b2523ea99c493a6db8003ab74014e5b52dcf237216f9258973618",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/scheduled-final-startup/due/publication-000000000482-pre-stationary/snapshot.yaml": "6d95d71a060b2523ea99c493a6db8003ab74014e5b52dcf237216f9258973618",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000000953-pre-stationary/snapshot.yaml": "15e4a3764fad8187bb7d463bcc1da9a93fa0c039b7a38af7bb6f962abebf27ec",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000000953-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000000953-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000000953-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000000953-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000000953-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/publication-000000000953-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/000000007780-60bed14df7c43587-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml": "2e59f25eb3119e6b54f3604482a7cda4f7032fb824504661687853a6b63af3e7",
+    "output/20260913-nine-state-single-r25/d1/mpcc_architecture_snapshots/000000007780-60bed14df7c43587-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+  },
+  "log": {
+    "publication_rejections": [
+      "[mpc_controller_cpp-10] [ERROR] [1789279529.752118261] [mpc_controller]: MPCC scheduled publication rejected: dispatch=953, job=950, index=2, nominal=13.534999699, decision_clock=13.539999697, before=13.564999696, deadline=13.559999699",
+      "[mpc_controller_cpp-10] [ERROR] [1789279532.777794670] [mpc_controller]: MPCC scheduled publication rejected: dispatch=1061, job=1058, index=0, nominal=16.314999683, decision_clock=16.324999635, before=16.359999634, deadline=16.339999683",
+      "[mpc_controller_cpp-10] [ERROR] [1789279538.405942290] [mpc_controller]: MPCC scheduled publication rejected: dispatch=1284, job=1280, index=1, nominal=21.999999618, decision_clock=22.004999508, before=22.034999507, deadline=22.024999618",
+      "[mpc_controller_cpp-10] [ERROR] [1789279542.540111615] [mpc_controller]: MPCC scheduled publication rejected: dispatch=1447, job=1444, index=0, nominal=26.134999499, decision_clock=26.139999415, before=26.164999415, deadline=26.159999499",
+      "[mpc_controller_cpp-10] [ERROR] [1789279544.221897006] [mpc_controller]: MPCC scheduled publication rejected: dispatch=1512, job=1508, index=1, nominal=27.819999404, decision_clock=27.824999378, before=27.849999377, deadline=27.844999404",
+      "[mpc_controller_cpp-10] [ERROR] [1789279546.957292279] [mpc_controller]: MPCC scheduled publication rejected: dispatch=1620, job=1616, index=1, nominal=30.554999372, decision_clock=30.559999316, before=30.584999316, deadline=30.579999372",
+      "[mpc_controller_cpp-10] [ERROR] [1789279549.089751144] [mpc_controller]: MPCC scheduled publication rejected: dispatch=1704, job=1701, index=0, nominal=32.684999311, decision_clock=32.689999269, before=32.714999268, deadline=32.709999311",
+      "[mpc_controller_cpp-10] [ERROR] [1789279558.692741775] [mpc_controller]: MPCC scheduled publication rejected: dispatch=2086, job=2082, index=1, nominal=42.284999225, decision_clock=42.289999054, before=42.314999054, deadline=42.309999225",
+      "[mpc_controller_cpp-10] [ERROR] [1789279560.394832905] [mpc_controller]: MPCC scheduled publication rejected: dispatch=2152, job=2147, index=2, nominal=43.984999045, decision_clock=43.994999016, before=44.019999016, deadline=44.009999045",
+      "[mpc_controller_cpp-10] [ERROR] [1789279569.613026265] [mpc_controller]: MPCC scheduled publication rejected: dispatch=2516, job=2511, index=2, nominal=53.204998998, decision_clock=53.209998810, before=53.234998810, deadline=53.229998998",
+      "[mpc_controller_cpp-10] [ERROR] [1789279577.381146911] [mpc_controller]: MPCC scheduled publication rejected: dispatch=2825, job=2820, index=2, nominal=60.979998802, decision_clock=60.984998636, before=61.009998636, deadline=61.004998802",
+      "[mpc_controller_cpp-10] [ERROR] [1789279584.181608134] [mpc_controller]: MPCC scheduled publication rejected: dispatch=3095, job=3092, index=0, nominal=67.779998627, decision_clock=67.784998484, before=67.809998484, deadline=67.804998627",
+      "[mpc_controller_cpp-10] [ERROR] [1789279584.647141028] [mpc_controller]: MPCC scheduled publication rejected: dispatch=3112, job=3108, index=1, nominal=68.244998477, decision_clock=68.249998474, before=68.274998473, deadline=68.269998477",
+      "[mpc_controller_cpp-10] [ERROR] [1789279588.149455159] [mpc_controller]: MPCC scheduled publication rejected: dispatch=3251, job=3248, index=0, nominal=71.739998471, decision_clock=71.744998396, before=71.774998395, deadline=71.764998471",
+      "[mpc_controller_cpp-10] [ERROR] [1789279591.665904403] [mpc_controller]: MPCC scheduled publication rejected: dispatch=3390, job=3387, index=0, nominal=75.259998388, decision_clock=75.264998317, before=75.289998317, deadline=75.284998388",
+      "[mpc_controller_cpp-10] [ERROR] [1789279595.018113020] [mpc_controller]: MPCC scheduled publication rejected: dispatch=3523, job=3516, index=4, nominal=78.614998312, decision_clock=78.619998242, before=78.644998242, deadline=78.639998312",
+      "[mpc_controller_cpp-10] [ERROR] [1789279598.172868155] [mpc_controller]: MPCC scheduled publication rejected: dispatch=3647, job=3643, index=1, nominal=81.764998233, decision_clock=81.769998172, before=81.794998171, deadline=81.789998233",
+      "[mpc_controller_cpp-10] [ERROR] [1789279603.852423247] [mpc_controller]: MPCC scheduled publication rejected: dispatch=3873, job=3869, index=1, nominal=87.449998166, decision_clock=87.454998045, before=87.479998044, deadline=87.474998166",
+      "[mpc_controller_cpp-10] [ERROR] [1789279616.051203611] [mpc_controller]: MPCC scheduled publication rejected: dispatch=4359, job=4356, index=0, nominal=99.644998037, decision_clock=99.649997772, before=99.674997772, deadline=99.669998037"
+    ],
+    "callback_samples": 4573,
+    "callback_max_ms": 26.727315,
+    "callback_over25": [
+      [
+        3646,
+        26.727315
+      ]
+    ],
+    "scheduled_publications": 3321,
+    "last_publication": {
+      "dispatch": 4560,
+      "job": 4555,
+      "source": 7776,
+      "index": 2,
+      "nominal": 104.714997764,
+      "before": 104.729997659,
+      "after": 104.729997659,
+      "deadline": 104.739997764,
+      "programme_input": 12488696490927918892,
+      "physical_input": 2110444392357120375,
+      "independent": 1
+    },
+    "window_violations": [],
+    "states": [
+      "spawned",
+      "grounded",
+      "ready",
+      "start"
+    ],
+    "post_motion_pairs": 1,
+    "post_motion_decisions": [
+      1080
+    ],
+    "last_source_supply": "[mpc_controller_cpp-10] [INFO] [1789279620.620227905] [mpc_controller]: MPCC source supply: decision=4541, now=104.244997669, draft=available, scheduled=missing-dependency-or-draft, successor=normal-submitted, plans=0/contexts_rejected:0/requests:0, geometry=17596939947602111389, normal_submitted=4010/rejected:13, worker=4010/3967/3966/running:1/pending:1/exceptions:0, mailbox=7757/7752/invalid:0, store=7752/accepted:3966/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=884/decision:4359/site:reset_osqp_history, mailbox_result=solved/geometry:17596939947602111389/detail:native-initialization/policy=reference-rest/attempts=1/total_ms=20.810329/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=17.0828m, complete_wall_feedback=accepted/stage=-1/corrections=0, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1198/cache_hits=19/cache_misses=1/cache_scanned=57/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=, authority=observation-only",
+    "actual_post_send_window_violations": [],
+    "rejoin_completion_events": [],
+    "incomplete_v2x_overrides": [],
+    "laps": [],
+    "game_state_transitions": [
+      "PlayStart",
+      "Ready",
+      "WaitStart",
+      "Start",
+      "Terminate"
+    ],
+    "game_start_observed": true,
+    "preparation_source_traces": [],
+    "maneuver_selections": [],
+    "recovery_direction_records": [],
+    "current_wall_interval_records": []
+  },
+  "overrun3646": [
+    "[mpc_controller_cpp-10] [INFO] [1789279598.143792035] [mpc_controller]: MPCC scheduled admission: dispatch=3646, job=3643, source=5966, index=0, reason=0/current:0/context:0/measurement:5/prefix:0/world:0/physical:0, source_geometry=1280777745603840601, current_geometry=1280777745603840601, source_intent=cruise, proposed=cruise, worker_ms=56.009, request_ms=0.043351, current_ms=24.633799, current_cpu_ms=24.594274, domain_use=5, domain_worker_ms=29.567251",
+    "[mpc_controller_cpp-10] [INFO] [1789279598.143992711] [mpc_controller]: MPCC scheduled publication: dispatch=3646, job=3643, source=5966, index=0, nominal=81.739998233, before=81.759998172, after=81.759998172, deadline=81.764998233, programme_input=6151780194013524804, physical_input=9822057206717972938, independent=1, starting_domain=0, guard_end=81.759998172, raw_end=81.759998172, call_wall_ms=0.001673/0.003938/0.097062",
+    "[mpc_controller_cpp-10] [WARN] [1789279598.144338580] [mpc_controller]: Control callback overrun detail: decision=3646, total=26.727ms/budget=25.000ms, regions=pre_mpc:0.063/mpc:26.200/post_mpc:0.002/recovery:0.011/publish:0.451/unattributed:0.001ms, checkpoint=complete, nested=problem_initialization:1.334/publication_successor:0.253/prediction_marker:0.000ms/points:0, normal_join=primary:24.846/stop_lattice:0.000/stop_successor:0.000/output:0.000/snapshots:0.000ms, primary_proof=applied:0.000/continuation:0.000ms, thread_cpu_ms=26.689231, publication_failed=0, ros=entry:81.744998172/mpc_begin:81.744998172/mpc_end:81.759998172/recovery_begin:81.759998172/recovery_end:81.759998172, observation_only=1",
+    "[mpc_controller_cpp-10] [WARN] [1789279598.144381149] [mpc_controller]: MPCC scheduled phase: decision=3646, intervals=entry->mailbox:wall=0.002144/cpu=0.002134/voluntary=0/involuntary=0/usage_valid=1;mailbox->consider_begin:wall=0.004569/cpu=0.004679/voluntary=0/involuntary=0/usage_valid=1;consider_begin->request_begin:wall=0.001362/cpu=0.001252/voluntary=0/involuntary=0/usage_valid=1;request_begin->proof_begin:wall=0.043161/cpu=0.043221/voluntary=0/involuntary=0/usage_valid=1;proof_begin->proof_end_log_begin:wall=24.635282/cpu=24.596879/voluntary=0/involuntary=4/usage_valid=1;proof_end_log_begin->admission_log_end:wall=0.071284/cpu=0.071364/voluntary=0/involuntary=0/usage_valid=1;admission_log_end->candidate_bound:wall=0.002645/cpu=0.002475/voluntary=0/involuntary=0/usage_valid=1;candidate_bound->selected:wall=0.001903/cpu=0.002004/voluntary=0/involuntary=0/usage_valid=1;, observation_only=1"
+  ],
+  "pre_send_refused_decisions": [
+    953,
+    1061,
+    1284,
+    1447,
+    1512,
+    1620,
+    1704,
+    2086,
+    2152,
+    2516,
+    2825,
+    3095,
+    3112,
+    3251,
+    3390,
+    3523,
+    3647,
+    3873,
+    4359
+  ],
+  "refused_decisions_have_no_actual_normal_send": true,
+  "public": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r25",
+    "domain": 1,
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r25/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "22e3f6ec5d16e77c2154f6651c6356185f184b1e5e3101ea93fa1a085fd368c8"
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 2916,
+        "scope_source_sec": [
+          3.0099999320000004,
+          105.034997652
+        ],
+        "source_hz": 28.571429209927555,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 2917,
+        "scope_source_sec": [
+          2.9749999330000003,
+          105.034997652
+        ],
+        "source_hz": 28.571429209988537,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 2042,
+        "scope_source_sec": [
+          2.999999932,
+          105.04999765100001
+        ],
+        "source_hz": 20.000000447035777,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 5098,
+        "scope_source_sec": [
+          3.064999931,
+          105.06499765100001
+        ],
+        "source_hz": 49.97058935228376,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 102,
+        "scope_source_sec": [
+          4.00499991,
+          105.004997652
+        ],
+        "source_hz": 1.000000022356436,
+        "median_source_period_sec": 0.9999999780000001,
+        "max_source_gap_sec": 1.009999977,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 4008,
+        "scope_source_sec": [
+          3.0149999320000003,
+          105.06499765100001
+        ],
+        "source_hz": 39.2650670216915,
+        "median_source_period_sec": 0.025,
+        "max_source_gap_sec": 0.049999998000000004,
+        "nonpositive_source_steps": 16
+      },
+      "/clock": {
+        "rows": 20410,
+        "scope_source_sec": [
+          3.019999932,
+          105.06499765100001
+        ],
+        "source_hz": 200.0000044705768,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "rows": 37493,
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789279595016036045,
+      "stamp_ns": 78644998242,
+      "v": 2.5880565643310547,
+      "vy": 0.016553759574890137,
+      "heading_rate": 0.1347825825214386
+    },
+    "limits": [
+      "Source and recorder receipt separate; controller receipt requires this run immutable captures.",
+      "Heading rate is not IMU body yaw rate. Only angular.z supplies body r.",
+      "ROS topics describe public state; no direct force/contact/receiver application instrumentation in this run.",
+      "Frequencies cover the complete recorded source-time range per topic, including startup; no completed race inferred."
+    ]
+  },
+  "interval_replay": {
+    "status": "not-observed",
+    "authority": false,
+    "records": []
+  },
+  "limits": [
+    "First vehicleStart observed; no completed lap in this120hostsec window. Source record/actual receiver truth remain distinct.",
+    "No interval rejection, no maneuver selection, no Rejoin. Observer is not validated against actual failing query, and cannot be credited with progress because it never fired.",
+    "3646callback26.727315ms exceeds25ms; original current proof24.633799ms/CPU24.594274. Actual publication81.759998172 is within nominal81.739998233/deadline81.764998233. Exact current request for3646 not captured; no unmeasured performance fix inferred.",
+    "Independent runtime worlds differ from r24. Recovery current interval, rear hazards, physical model/current velocity, older r80D2 actual deadline and M4–M6 remain open."
+  ],
+  "next": "Newly achieved Start and continued normal sources justify a declared full-course single-r26 acceptance attempt at unchanged source38a562ee, standard6laps/600simsec,660hostsec ceiling to include teardown. Stop on actual publication-window/launch failure. Keep one-shot interval observer for this newly reached course range; review retirement after full-course coverage. Obtain exact timing input before any timing fix; no guard/budget changes."
+}

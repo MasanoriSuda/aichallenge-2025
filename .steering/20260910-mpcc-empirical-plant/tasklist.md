@@ -720,3 +720,11 @@ R793native220/source118、build140全26、package127全2658tests合格。
 次は固定commitのsingle-r25で実入力を取得し、元の地図・安全条件のまま一致再生する。
 壁区間の原因は未確定。車両Start・周回・全体M4–M6は未完。
 See receiver-input-enclosure/current-wall-interval-observation-design.md and validation.json.
+
+2026-09-13 R795–R798: 38a562eeのsingle-r25で車両Startを初確認。通常3321送信、実期限外送信ゼロ。
+4573callback中3646の1件が26.73ms（現在検証24.63ms）。その送信は元の期限内で、
+送信前拒否19件からの通常送信はない。壁区間拒否・観測・Recovery操縦・Rejoinは未発生。
+観測追加の効果とは断定しない。120秒内の周回は未確認。次は同じ制御sourceで
+6周・600sim秒、660host秒上限のsingle-r26へ進み、全コースと時間・結果を検証する。
+callback超過・未再現の壁区間原因・多車両を含むM4–M6は未完。
+See receiver-input-enclosure/current-wall-interval-live-audit.md and evidence.json.

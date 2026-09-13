@@ -8,6 +8,16 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## 車両Startと全コース検証への移行（2026-09-13）
+
+38a562eeのsingle-r25で車両Startを初確認。通常3321送信、実期限外送信ゼロ。
+4573callback中3646の1件が26.73ms（現在検証24.63ms）。その送信は元の期限内で、
+送信前拒否19件からの通常送信はない。壁区間拒否・観測・Recovery操縦・Rejoinは未発生。
+観測追加の効果とは断定しない。120秒内の周回は未確認。次は同じ制御sourceで
+6周・600sim秒、660host秒上限のsingle-r26へ進み、全コースと時間・結果を検証する。
+callback超過・未再現の壁区間原因・多車両を含むM4–M6は未完。
+[監査・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/current-wall-interval-live-audit.md)。
+
 ## 現在の物理壁区間の実入力観測（2026-09-13）
 
 現在の壁区間が拒否される最初の実入力を、通常走行の認証済み送信後に一度だけ保存する

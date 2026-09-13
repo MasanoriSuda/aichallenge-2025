@@ -1,0 +1,443 @@
+{
+  "baseline": "6f42d134",
+  "run_id": "20260913-nine-state-single-r21",
+  "authority": false,
+  "source_and_binary_unchanged": true,
+  "protected_sha256": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "payload_sha256": {
+    "output/20260913-nine-state-rejoin-preparation-live-audit-r757/generator.py": "2de3b3ca4458ab4b33a4ca9b59098d717fb29ba5080a20580563abc200feaadc",
+    "output/20260913-nine-state-rejoin-preparation-live-audit-r757/report.json": "3af80b1e17dcf334f8881fb1183c8e25a1b9a03f7e69bd4fbcfa91b6287b2b36",
+    "output/20260913-nine-state-rejoin-preparation-public-r758/generator.py": "3872ae441cd391649ef15eb987e1b8f6bba1480915300fe5cf4b5ca236e3b903",
+    "output/20260913-nine-state-rejoin-preparation-public-r758/report.json": "28659863393fb1e5c30025779c76e857d1f772f2ce6d44edeea7016e5872a7f6",
+    "output/20260913-nine-state-rejoin-preparation-public-r758/d1.json": "7a66eacf4cfa22bd0ab1d80e94a4d01a23755d685adec80acc43b41748161289",
+    "output/20260913-nine-state-single-r21/manifest.json": "6df62271c5e85fc7e37e474db02120534e7114a2c23fee48e5b3ee092e2bded0",
+    "output/20260913-nine-state-single-r21/monitor-summary.json": "599f6feffe47b6ebacb09bdfc09597eb8dde14be0a4aed0bca47b11c561b8e10",
+    "output/20260913-nine-state-single-r21/artifact-restoration.json": "23f90726e45601c55dee7296b9048e0685f2c02f1dbbe5f7c92bd3abdd7a6ef5",
+    "output/20260913-nine-state-single-r21/unity-player.log": "922568372d96780f8d15398acd5492a79a7a1c3e774189f4f05fd925656084e9",
+    "output/20260913-nine-state-single-r21/d1/autoware.log": "7c09f7b3ce2ac12be5493e21df1f377330edfe94a318abb8508723699740b740",
+    "output/20260913-nine-state-single-r21/run_campaign.py": "30b3574d9cff973c2332b962f9fe00e468ec0d97275a2d6859ef766fb973620e",
+    "output/20260913-nine-state-single-r21/build.log": "6f08827f6c991fe339c37ade40c049e72dcbe5bc24ca9f1364a49c028855f02b",
+    "output/20260913-nine-state-single-r21/package.log": "1778af650073bcd3a558af672de328eddd28e5360b4a0c15dc03f277c711a832",
+    "output/20260913-nine-state-single-r21/dev-six-lap.sh": "1785283086c3ba392f60892c2a3e31ccb6f0e91aca62cde6306aae43b5e3f7f2",
+    "output/20260913-nine-state-single-r21/compose-six-lap.yml": "af9f82db828b95989851d0b6a6b21312b2ea0dcf6b7c46028649633226b513ae",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000492-pre-stationary/snapshot.yaml": "96850e37d94e1ee1f4aa0a2fba0c3f7f480f275b50fc4ef60477df9a2a53f3ed",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000492-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000492-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000492-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000489-pre-stationary/snapshot.yaml": "56d2e6e17e28b239dc6e61b4da32f87868c55ef64eb843cf621863d3c6e83d9c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000489-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000489-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-proof-startup/publication-000000000489-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000914-pre-moving/snapshot.yaml": "902d91e1b784ef703398b616271cff6cae8f59e5280f5db74e9f5b3ac94901dc",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000914-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000914-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000914-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000914-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000914-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000914-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000786-pre-stationary/snapshot.yaml": "c08d869fffddd023c623fdf8b10e806914767c718bcb0555941e37cd8ab07642",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000786-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000786-pre-stationary/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000786-pre-stationary/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000786-pre-stationary/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000786-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/publication-000000000786-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/active/after-normal-motion/publication-000000000921-pre-stationary/snapshot.yaml": "93edd4571d5298aab33d33554b05b2eb8b23806223ed8025e8143b04765fb3ce",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000914-pre-moving/snapshot.yaml": "da371a2b559bf7d301243fcf5eef8c8eb4847f12682b0616771fd305f100b157",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/due/publication-000000000786-pre-stationary/snapshot.yaml": "73a90c0113e2b89c15dd98a24b2f488e4c3a7176484eaa51dd03a159fe24c7df",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-active/due/after-normal-motion/publication-000000000921-pre-stationary/snapshot.yaml": "93edd4571d5298aab33d33554b05b2eb8b23806223ed8025e8143b04765fb3ce",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000878-pre-moving/snapshot.yaml": "e02ce61465e36b76e1ddba9fab4d5232de41ec2e2a9debd5a7396dc2db9148a6",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000878-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000878-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-proof-active/publication-000000000878-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000828-pre-moving/snapshot.yaml": "e399fe50a4324724f0c2634dcfc3a690a911b8d18ac237667c8d876042489430",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000828-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000828-pre-moving/inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000828-pre-moving/revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000828-pre-moving/inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000828-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-context-active/publication-000000000828-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/000000000477-5bd8ce9aa723435d-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml": "6867ece1b8717d40e938cd4d664002347bf32e4b25ab76191b3303328f303d1e",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/000000000477-5bd8ce9aa723435d-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000914-pre-moving/snapshot.yaml": "b3dc99300014fdee37fd6787afe29aae37bf5d92089146bb0aa20ef65796c7df",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000914-pre-moving/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000914-pre-moving/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000914-pre-moving/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000786-pre-stationary/snapshot.yaml": "7b8febe180396d3ad43b9a5584f1643ade1f5085cdc9f76961fa7042bca5ee62",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000786-pre-stationary/scheduled-inspected-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000786-pre-stationary/scheduled-inspected-certified-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000786-pre-stationary/scheduled-revalidation-wall-grid.bin": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-startup/active/publication-000000000486-pre-stationary/snapshot.yaml": "e4c16e400d8019ceaa9f2309e494148876d90081c91fb4fd9db39c00e6daf05a",
+    "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-final-startup/due/publication-000000000486-pre-stationary/snapshot.yaml": "e4c16e400d8019ceaa9f2309e494148876d90081c91fb4fd9db39c00e6daf05a"
+  },
+  "log": {
+    "publication_rejections": [],
+    "callback_samples": 4248,
+    "callback_max_ms": 19.529216,
+    "callback_over25": [],
+    "scheduled_publications": 408,
+    "last_publication": {
+      "dispatch": 912,
+      "job": 909,
+      "source": 543,
+      "index": 0,
+      "nominal": 10.964999824,
+      "before": 10.969999754,
+      "after": 10.969999754,
+      "deadline": 10.989999824,
+      "programme_input": 14791236647648383478,
+      "physical_input": 14174480117736408157,
+      "independent": 1
+    },
+    "window_violations": [],
+    "states": [
+      "spawned",
+      "grounded",
+      "ready"
+    ],
+    "post_motion_pairs": 1,
+    "post_motion_decisions": [
+      921
+    ],
+    "last_source_supply": "[mpc_controller_cpp-10] [INFO] [1789271964.616211207] [mpc_controller]: MPCC source supply: decision=4240, now=104.969997653, draft=available, scheduled=post-send-not-reached, successor=normal-successor-disallowed, plans=0/contexts_rejected:0/requests:0, geometry=7297210173200458920, normal_submitted=427/rejected:3328, worker=427/396/396/running:0/pending:0/exceptions:0, mailbox=554/553/invalid:0, store=553/accepted:394/cert_rejected:0/invalid:0/stale:0/reason:0, last_solver=unobserved/physical:not-evaluated, source_missing=0/0/0, generation_rejected=0/invalid:0, invalidation=4177/decision:4240/site:apply_stuck_recovery_arbitration, mailbox_result=solved/geometry:7297210173200458920/detail:native-initialization/policy=reference-rest/attempts=1/total_ms=24.431182/certified=1, pipeline=accepted, progress_wall=accepted/applied=1/solved=1/mismatch=16.3683m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1645/cache_hits=7/cache_misses=13/cache_scanned=1058/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, ex, authority=observation-only",
+    "actual_post_send_window_violations": [],
+    "actual_rejoin_publications": [],
+    "rejoin_completion_events": [],
+    "recovery_events": [
+      "[mpc_controller_cpp-10] [INFO] [1789271846.701745592] [mpc_controller]: Stuck recovery: mode=active, reverse_actuation=enabled, simulation_only=true",
+      "[mpc_controller_cpp-10] [INFO] [1789271859.901842425] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=race_inactive, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=161, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Reverse, primitive=reverse_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=0.689 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=0/0.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=1.034 m, e_psi=-0.290 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271862.353263172] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=race_inactive, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=161, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Reverse, primitive=reverse_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=0.691 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=0/0.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.154 rad, e_y=1.032 m, e_psi=-0.289 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271867.456898528] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=solver_unsafe, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=161, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Reverse, primitive=reverse_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=0.691 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=0/0.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.350 rad, e_y=1.033 m, e_psi=-0.290 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271868.140452503] [mpc_controller]: Stuck recovery: mode=active, state=SUSPECT_STUCK, action=NormalControl, reason=stuck_suspected, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=0, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Unknown, primitive=none, steering=0.000, course_guard=0, course_rejected=0, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/0.00 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=0, rejoin_static=not_evaluated, rejoin_reject_at=0.000 m, rejoin_steering=0.350 rad, e_y=0.999 m, e_psi=-0.253 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271868.158966535] [mpc_controller]: Stuck recovery: mode=active, state=NORMAL, action=NormalControl, reason=awaiting_stuck_confirmation, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=161, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=none, wall_distance=inf, direction=Reverse, primitive=reverse_right, steering=-0.250, course_guard=1, course_rejected=1, course_improvement=0.846 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.187 m, incident=1/0.02 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=0.350 rad, e_y=0.996 m, e_psi=-0.249 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271870.640734734] [mpc_controller]: Stuck recovery: mode=active, state=SUSPECT_STUCK, action=HoldStop, reason=stuck_confirmed, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=0, boost_inactive=0, v2x_message_complete=0, corridor_v2x_clear=0, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Unknown, primitive=none, steering=0.000, course_guard=0, course_rejected=0, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/2.50 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=0, rejoin_static=not_evaluated, rejoin_reject_at=0.000 m, rejoin_steering=-0.082 rad, e_y=0.876 m, e_psi=0.108 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271870.674414842] [mpc_controller]: Stuck recovery: mode=active, state=WAIT_AWSIM_RECOVERY, action=HoldStop, reason=awsim_recovery_waiting, coordinated=0, reverse_only=0, retry_force_reverse=0, forward_probe=0, static=none, static_contacts=0/0/0, static_reject_at=0.000 m, checked=132, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Reverse, primitive=reverse_straight, steering=0.000, course_guard=1, course_rejected=1, course_improvement=0.437 m, stepwise=0, continuous=1, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.151 m, incident=1/2.53 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Reverse, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.055 rad, e_y=0.874 m, e_psi=0.109 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271870.975040247] [mpc_controller]: Stuck recovery: mode=active, state=STOP_AND_CONFIRM, action=HoldStop, reason=stop_confirmation_pending, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Unknown, primitive=none, steering=0.000, course_guard=1, course_rejected=1, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/2.84 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.878 m, e_psi=0.107 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271871.123708321] [mpc_controller]: Stuck recovery: mode=active, state=CHECK_CLEARANCE, action=HoldStop, reason=clearance_check, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Unknown, primitive=none, steering=0.000, course_guard=1, course_rejected=1, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/2.98 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.877 m, e_psi=0.107 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271871.156707156] [mpc_controller]: Stuck recovery: mode=active, state=SAFE_STOP, action=SafeStop, reason=maneuver_direction_unknown, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Unknown, primitive=none, steering=0.000, course_guard=1, course_rejected=1, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=0, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/3.02 s/0.000/0.000/0.000 m/0 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.877 m, e_psi=0.107 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271871.374393256] [mpc_controller]: Stuck recovery: mode=active, state=STOP_AND_CONFIRM, action=HoldStop, reason=aggressive_retry, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Unknown, primitive=none, steering=0.000, course_guard=1, course_rejected=1, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=1, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/3.23 s/0.000/0.000/0.000 m/1 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=4.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.876 m, e_psi=0.106 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271871.523465430] [mpc_controller]: Stuck recovery: mode=active, state=CHECK_CLEARANCE, action=HoldStop, reason=clearance_check, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Unknown, primitive=none, steering=0.000, course_guard=1, course_rejected=1, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=1, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/3.38 s/0.000/0.000/0.000 m/1 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=8.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.876 m, e_psi=0.106 rad",
+      "[mpc_controller_cpp-10] [INFO] [1789271871.555909631] [mpc_controller]: Stuck recovery: mode=active, state=SAFE_STOP, action=SafeStop, reason=maneuver_direction_unknown, coordinated=0, reverse_only=1, retry_force_reverse=0, forward_probe=0, static=not_evaluated, static_contacts=0/0/0, static_reject_at=0.000 m, checked=0, runtime_contact=none, current_contacts=0, corridor_complete=1, boost_inactive=1, v2x_message_complete=1, corridor_v2x_clear=1, forced_candidate=0, v2x_override=0, v2x_blocker=, v2x_gate=none/none, v2x_clearance=inf/inf/inf m, v2x_reject_at=0.000 m, wall=front, wall_distance=0.000, direction=Unknown, primitive=none, steering=0.000, course_guard=1, course_rejected=1, course_improvement=0.000 m, stepwise=0, continuous=0, brake=0, adaptive_retry=1, contact_reduction=0, step=0/10, maneuver_distance=0.000 m, clear_forward=0.000 m, episode_distance=0.000 m, stopping_reserve=0.000 m, incident=1/3.42 s/0.000/0.000/0.000 m/1 retry/0 gear, runtime_motion=0.000/0.000 m, escape_direction=Unknown, escape_target=8.000 m, escape_confirmed=0, rejoin_safe=1, rejoin_path_clear=1, rejoin_static=none, rejoin_reject_at=0.000 m, rejoin_steering=-0.026 rad, e_y=0.876 m, e_psi=0.106 rad"
+    ],
+    "rejoin_events": [],
+    "gear_events": [],
+    "rejoin_authority_traces": [],
+    "incomplete_v2x_overrides": [],
+    "laps": [],
+    "game_state_transitions": [
+      "PlayStart",
+      "Ready",
+      "WaitStart",
+      "Start",
+      "Terminate"
+    ],
+    "game_start_observed": true,
+    "preparation_source_traces": []
+  },
+  "public": {
+    "authority": false,
+    "run_id": "20260913-nine-state-single-r21",
+    "domain": 1,
+    "bag_sha256": {
+      "/output/20260913-nine-state-single-r21/d1/rosbag2_autoware/rosbag2_autoware_0.mcap": "b0f4efd604e685ae19d14dad0320d78a73229e009c7ce222b030b923f7507413"
+    },
+    "frequencies": {
+      "/vehicle/status/velocity_status": {
+        "rows": 2915,
+        "scope_source_sec": [
+          3.1849999280000003,
+          105.174997649
+        ],
+        "source_hz": 28.571429209866526,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/vehicle/status/steering_status": {
+        "rows": 2915,
+        "scope_source_sec": [
+          3.1849999280000003,
+          105.174997649
+        ],
+        "source_hz": 28.571429209866526,
+        "median_source_period_sec": 0.034999999000000004,
+        "max_source_gap_sec": 0.035,
+        "nonpositive_source_steps": 0
+      },
+      "/sensing/imu/imu_raw": {
+        "rows": 2039,
+        "scope_source_sec": [
+          3.249999927,
+          105.149997649
+        ],
+        "source_hz": 20.000000447105016,
+        "median_source_period_sec": 0.049999999,
+        "max_source_gap_sec": 0.049999999,
+        "nonpositive_source_steps": 0
+      },
+      "/localization/kinematic_state": {
+        "rows": 5099,
+        "scope_source_sec": [
+          3.2049999280000003,
+          105.164997649
+        ],
+        "source_hz": 50.00000111759516,
+        "median_source_period_sec": 0.02,
+        "max_source_gap_sec": 0.034999999000000004,
+        "nonpositive_source_steps": 0
+      },
+      "/planning/scenario_planning/trajectory": {
+        "rows": 102,
+        "scope_source_sec": [
+          4.00499991,
+          105.004997652
+        ],
+        "source_hz": 1.000000022356436,
+        "median_source_period_sec": 0.9999999780000001,
+        "max_source_gap_sec": 1.004999978,
+        "nonpositive_source_steps": 0
+      },
+      "/control/command/control_cmd": {
+        "rows": 3669,
+        "scope_source_sec": [
+          3.204999936,
+          105.179997649
+        ],
+        "source_hz": 35.969601198945604,
+        "median_source_period_sec": 0.029999999000000003,
+        "max_source_gap_sec": 0.039999999,
+        "nonpositive_source_steps": 22
+      },
+      "/clock": {
+        "rows": 20399,
+        "scope_source_sec": [
+          3.189999928,
+          105.179997649
+        ],
+        "source_hz": 200.0000044690657,
+        "median_source_period_sec": 0.005,
+        "max_source_gap_sec": 0.005,
+        "nonpositive_source_steps": 0
+      }
+    },
+    "rows": 37138,
+    "maximum_abs_velocity": {
+      "topic": "/vehicle/status/velocity_status",
+      "record_ns": 1789271869755058659,
+      "stamp_ns": 10114999773,
+      "v": 1.1519378423690796,
+      "vy": 0.03417438268661499,
+      "heading_rate": 0.20682108402252197
+    },
+    "limits": [
+      "Source and recorder receipt separate; controller receipt requires this run immutable captures.",
+      "Heading rate is not IMU body yaw rate. Only angular.z supplies body r.",
+      "ROS topics describe public state; no direct force/contact/receiver application instrumentation in this run.",
+      "Frequencies cover the complete recorded source-time range per topic, including startup; no completed race inferred."
+    ]
+  },
+  "reservation_rejections": [
+    {
+      "dispatch": 492.0,
+      "job": 490.0,
+      "prior": 0.0,
+      "now": 0.42499999,
+      "first": 0.394999991,
+      "deadline": 0.419999991,
+      "prefix": 4.0,
+      "worker_ms": 29.9,
+      "late": true
+    },
+    {
+      "dispatch": 494.0,
+      "job": 492.0,
+      "prior": 0.0,
+      "now": 0.479999989,
+      "first": 0.44999999,
+      "deadline": 0.47499999,
+      "prefix": 4.0,
+      "worker_ms": 35.334,
+      "late": true
+    },
+    {
+      "dispatch": 496.0,
+      "job": 494.0,
+      "prior": 0.0,
+      "now": 0.534999988,
+      "first": 0.504999989,
+      "deadline": 0.529999989,
+      "prefix": 4.0,
+      "worker_ms": 32.007,
+      "late": true
+    },
+    {
+      "dispatch": 583.0,
+      "job": 581.0,
+      "prior": 2.0,
+      "now": 2.714999939,
+      "first": 2.734999988,
+      "deadline": 2.759999988,
+      "prefix": 4.0,
+      "worker_ms": 37.225,
+      "late": false
+    },
+    {
+      "dispatch": 587.0,
+      "job": 585.0,
+      "prior": 0.0,
+      "now": 2.829999936,
+      "first": 2.794999938,
+      "deadline": 2.819999938,
+      "prefix": 4.0,
+      "worker_ms": 34.125,
+      "late": true
+    },
+    {
+      "dispatch": 786.0,
+      "job": 783.0,
+      "prior": 2.0,
+      "now": 7.809999825,
+      "first": 7.804999936,
+      "deadline": 7.829999936,
+      "prefix": 0.0,
+      "worker_ms": 39.344,
+      "late": false
+    },
+    {
+      "dispatch": 914.0,
+      "job": 912.0,
+      "prior": 2.0,
+      "now": 11.024999753,
+      "first": 11.039999824,
+      "deadline": 11.064999824,
+      "prefix": 4.0,
+      "worker_ms": 42.323,
+      "late": false
+    }
+  ],
+  "reservation_captures": [
+    {
+      "path": "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000786-pre-stationary/snapshot.yaml",
+      "sha256": "7b8febe180396d3ad43b9a5584f1643ade1f5085cdc9f76961fa7042bca5ee62",
+      "boundary": {
+        "decision_id": 786,
+        "nominal_sec": 7.804999936,
+        "decision_clock_sec": 0,
+        "before_clock_sec": 0,
+        "after_clock_sec": 0,
+        "wire_acceleration_mps2": 0,
+        "wire_steering_rad": 0,
+        "after_publication": false,
+        "moving": false,
+        "publication_bracket_admitted": false,
+        "planning_clock_sec": 7.739999826,
+        "dispatch_clock_sec": 0,
+        "deadline_sec": 7.829999936
+      },
+      "scheduled": {
+        "source_context_active_at_capture": false,
+        "source_context_active_at_write": false,
+        "current_check": [
+          1,
+          3,
+          1,
+          0,
+          1,
+          4
+        ],
+        "detail": "Original reserved clock/generation/actual-prefix progress invalid",
+        "worker_elapsed_ms": 39.344095,
+        "starting_domain_ms": 19.43734,
+        "prior_index": 1,
+        "preceding_packet_count": 2,
+        "planned_control_origin_sec": 7.934999936
+      }
+    },
+    {
+      "path": "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-active/publication-000000000914-pre-moving/snapshot.yaml",
+      "sha256": "b3dc99300014fdee37fd6787afe29aae37bf5d92089146bb0aa20ef65796c7df",
+      "boundary": {
+        "decision_id": 914,
+        "nominal_sec": 11.039999824,
+        "decision_clock_sec": 0,
+        "before_clock_sec": 0,
+        "after_clock_sec": 0,
+        "wire_acceleration_mps2": 0,
+        "wire_steering_rad": 0,
+        "after_publication": false,
+        "moving": true,
+        "publication_bracket_admitted": false,
+        "planning_clock_sec": 10.969999754,
+        "dispatch_clock_sec": 0,
+        "deadline_sec": 11.064999824
+      },
+      "scheduled": {
+        "source_context_active_at_capture": false,
+        "source_context_active_at_write": false,
+        "current_check": [
+          1,
+          3,
+          1,
+          4,
+          1,
+          4
+        ],
+        "detail": "Original reserved clock/generation/actual-prefix progress invalid",
+        "worker_elapsed_ms": 42.322972,
+        "starting_domain_ms": 21.087507,
+        "prior_index": 1,
+        "preceding_packet_count": 2,
+        "planned_control_origin_sec": 11.169999824
+      }
+    },
+    {
+      "path": "output/20260913-nine-state-single-r21/d1/mpcc_architecture_snapshots/scheduled-admission-startup/publication-000000000492-pre-stationary/snapshot.yaml",
+      "sha256": "96850e37d94e1ee1f4aa0a2fba0c3f7f480f275b50fc4ef60477df9a2a53f3ed",
+      "boundary": {
+        "decision_id": 492,
+        "nominal_sec": 0.394999991,
+        "decision_clock_sec": 0,
+        "before_clock_sec": 0,
+        "after_clock_sec": 0,
+        "wire_acceleration_mps2": 0,
+        "wire_steering_rad": 0,
+        "after_publication": false,
+        "moving": false,
+        "publication_bracket_admitted": false,
+        "planning_clock_sec": 0.384999991,
+        "dispatch_clock_sec": 0,
+        "deadline_sec": 0.419999991
+      },
+      "scheduled": {
+        "source_context_active_at_capture": true,
+        "source_context_active_at_write": true,
+        "current_check": [
+          1,
+          3,
+          1,
+          4,
+          1,
+          4
+        ],
+        "detail": "Original reserved clock/generation/actual-prefix progress invalid",
+        "worker_elapsed_ms": 29.899675,
+        "starting_domain_ms": 9.587525,
+        "prior_index": 1,
+        "preceding_packet_count": 0,
+        "planned_control_origin_sec": 0.524999991
+      }
+    }
+  ],
+  "limits": [
+    "No deterministic pairing with r20; Rejoin initialization eligibility is never reached in this world, so the run is inconclusive for preparation adoption and race acceptance.",
+    "Recovery first stops at913 after actual normal912. Timely reserved914 has inactive source generation and actual-prefix mismatch; this is downstream of the override, not an expired computation.",
+    "ManeuverDirectionUnknown follows candidate selection with course rejection. Aggregated current_contact=0 and course_rejected=1 do not provide each actual candidate, its full world and rejection owner. Do not waive physical/course guards or assume infeasibility.",
+    "Public peak1.15194mps at10.114999773 is not the detector state at913. Existing detector uses odometry speed and0.25s stopped confirmation; incident elapsed2.50s is not its confirmation duration. No detector defect inferred from those different quantities.",
+    "Current/retained speed, physical observation truth, r80D2actual deadline, late geometry and all M4–M6 remain open."
+  ],
+  "next": "Capture/replay complete original Recovery direction candidates and state/world at the first unknown-direction failure; preserve upstream final/publication input and original guards. Do not rerun unchanged campaign or modify detector thresholds."
+}

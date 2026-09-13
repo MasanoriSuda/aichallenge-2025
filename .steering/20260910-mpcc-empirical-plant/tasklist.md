@@ -652,3 +652,10 @@ R754recursive-policy inapplicability and R755optional capture metadata assertion
 R756 validates existing per-case evidence. Next localcommit/original-DLL single-r21;
 actual source admission, callback/final-send windows and remaining M4–M6 stay open.
 See receiver-input-enclosure/rejoin-preparation-design.md and validation JSON.
+
+2026-09-13R757–R759:single-r21/6f42d134normal408/max19.53ms/noactualdeadlinefailures.
+Recovery913thenunknown-directionSafeStop; no Rejoin initialization eligibility or
+laps. Seven invalid reservations=4latezero-prior/3timelyreserved,914inactive/prefix
+mismatch follows override. Capture exact Recovery candidate population/world before
+any producer fix; source physical positives do not authorize unknown geometry or
+detector threshold changes. All M4–M6 remain. See rejoin-preparation-live-audit/evidence.

@@ -1537,6 +1537,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-validation.json",
       "replay_ready": true,
       "reason": "Original failures, native regression tests, actual repository preparation source replays and full build/package verification."
+    },
+    {
+      "snapshot_id": "20260913-nine-state-rejoin-live-seal-r759",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-live-evidence.json",
+      "replay_ready": true,
+      "reason": "Original-DLL fixed-source live input, unchanged hashes, actual final publication/reservation/Recovery boundary; exact direction candidate input still absent."
     }
   ],
   "experiments": [
@@ -20204,6 +20210,34 @@
       "production_impact": "Bounded source initialization only; full fixed-source runtime acceptance pending.",
       "deleted_code": [],
       "revisit_condition": "New sealed source/world or fixed-source runtime result; retain original and physically rejected alternatives, without increasing solver budget or relaxing safety."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-live-audit-r757",
+      "baseline_commit": "6f42d134",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-live-seal-r759"
+      ],
+      "hypothesis": "New bounded Rejoin initial tangent can produce actual certified Rejoin and sustained normal movement.",
+      "changed_dimension": "Fixed Rejoin initialization source slice on new standard live world; all original model/clock/physical/Recovery requirements retained.",
+      "result": "inconclusive",
+      "reason": "4248callbacks max19.53ms/408normal/noactualdeadlinefailure. Recovery direction failure precedes Rejoin eligibility; new preparation live adoption untested.",
+      "production_impact": "Offline structural repair remains; live eligibility not reached, full acceptance stays open.",
+      "deleted_code": [],
+      "revisit_condition": "New exact failed Recovery candidate input or supported structural producer repair; no unchanged campaign repeat or safety/threshold waiver."
+    },
+    {
+      "experiment_id": "20260913-nine-state-rejoin-preparation-public-r758",
+      "baseline_commit": "6f42d134",
+      "snapshot_ids": [
+        "20260913-nine-state-rejoin-live-seal-r759"
+      ],
+      "hypothesis": "New bounded Rejoin initial tangent can produce actual certified Rejoin and sustained normal movement.",
+      "changed_dimension": "Fixed Rejoin initialization source slice on new standard live world; all original model/clock/physical/Recovery requirements retained.",
+      "result": "inconclusive",
+      "reason": "Same-run public peak1.15194mps, gameStartpresent, vehicleStart/laps absent. Separate odometry/detector from public velocity peak.",
+      "production_impact": "Offline structural repair remains; live eligibility not reached, full acceptance stays open.",
+      "deleted_code": [],
+      "revisit_condition": "New exact failed Recovery candidate input or supported structural producer repair; no unchanged campaign repeat or safety/threshold waiver."
     }
   ]
 }

@@ -8,6 +8,15 @@
 
 `multi_purpose_mpc_ros` は `aichallenge_submit` に統合済み。`reference.launch.xml` の `control_method` 引数で `mpc` / `pure_pursuit` / `tiny_lidar_net` / `pilot_net` / `joycon` を切り替えられる。デフォルトは `mpc`。MPC の通常実行ノードは Python 版から C++ 版の `mpc_controller_cpp` に移行済みで、Python 実装と補助スクリプトは比較・生成ツール用途として残している。
 
+## Rejoin準備実装後の単車検証（2026-09-13）
+
+6f42d134のsingle-r21:通常408送信、4248callback最大19.53ms、期限外送信ゼロ。
+913のRecovery停止後、方向候補を選べずSafeStop。Rejoin準備は適用場面に到達せず、
+実走採用は未検証。予約無効7件は期限超過4/期限前3で、914は停止後の世代・履歴拒否。
+ゲームStart成立、車両Start・周回は未達。次はRecovery方向候補の完全入力と各拒否を
+取得・再生し、元の壁・コース検証を維持して生成元を調べる。M4–M6は未完。
+[監査・証拠](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-live-audit.md)。
+
 ## Rejoinの数値初期化（2026-09-13）
 
 対象車なし・左右中立・前進目的のRejoinでは、既存の2つのsolver ownerを使い、

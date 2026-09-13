@@ -3,6 +3,15 @@
 2026-09-13 JST。M1–M6を追加確認なしで自律実行。必要分をローカルcommit、pushなし。
 **全体未完。ゲームStart・Rejoin復帰は確認済み。車両Start・周回・統合受入れは未達。**
 
+6f42d134のsingle-r21:通常408送信、4248callback最大19.53ms、期限外送信ゼロ。
+913のRecovery停止後、方向候補を選べずSafeStop。Rejoin準備は適用場面に到達せず、
+実走採用は未検証。予約無効7件は期限超過4/期限前3で、914は停止後の世代・履歴拒否。
+ゲームStart成立、車両Start・周回は未達。次はRecovery方向候補の完全入力と各拒否を
+取得・再生し、元の壁・コース検証を維持して生成元を調べる。M4–M6は未完。
+[監査と次の観測](../20260910-mpcc-empirical-plant/receiver-input-enclosure/rejoin-preparation-live-audit.md)。
+
+以下は今回の実走前の履歴。
+
 Rejoinの数値初期化を、操舵準備から加速へ進む候補と元の候補の2件に接続した。
 QPの入力・状態制約・目的関数・物理証明・送信期限は維持。R753native208/source118、
 build136全26/package123合格。実装で保存537/548の完全物理証明が成立し、元候補と
